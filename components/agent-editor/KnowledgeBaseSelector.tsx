@@ -304,7 +304,6 @@ export function KnowledgeBaseSelector({
                 <select
                   value={itemsPerPage}
                   className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  readOnly
                 >
                   <option>10条/页</option>
                 </select>
