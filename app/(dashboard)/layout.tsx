@@ -13,6 +13,7 @@ import {
   Puzzle,
   Tag,
   Workflow,
+  BookA,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -38,7 +39,7 @@ interface MenuGroup {
 
 const menuGroups: MenuGroup[] = [
   {
-    title: "Project Dev",
+    title: "项目开发",
     items: [
       {
         key: "AppMarketplace",
@@ -55,7 +56,7 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    title: "Resource",
+    title: "资源管理",
     items: [
       {
         key: "MCPManagement",
@@ -87,10 +88,16 @@ const menuGroups: MenuGroup[] = [
         icon: Database,
         href: "/database",
       },
+      {
+        key: "TermBank",
+        label: "术语库",
+        icon: BookA,
+        href: "/term-bank",
+      },
     ],
   },
   {
-    title: "Workspace",
+    title: "工作空间",
     items: [
       {
         key: "ApiKey",
@@ -112,18 +119,18 @@ function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <div className="fixed left-0 top-0 h-screen w-60 bg-[#001529] text-white">
+    <div className="fixed left-0 top-[60px] h-[calc(100vh-60px)] w-60 bg-[#001529] text-white">
       <div className="flex h-full flex-col">
         {/* Logo/Title */}
         <div className="flex h-16 items-center border-b border-white/10 px-6">
-          <h1 className="text-lg font-semibold">管理后台</h1>
+          <h1 className="text-lg font-semibold">AppForge</h1>
         </div>
 
         {/* Menu */}
         <nav className="flex-1 overflow-y-auto px-4 py-6">
           {menuGroups.map((group) => (
             <div key={group.title} className="mb-8">
-              <div className="mb-3 px-3 text-xs font-medium text-white/60 uppercase tracking-wider">
+              <div className="mb-3 px-3 text-xs font-medium text-white/60 tracking-wider">
                 {group.title}
               </div>
               <div className="space-y-1">
@@ -180,7 +187,7 @@ function Header() {
   });
 
   return (
-    <header className="fixed left-60 right-0 top-0 z-10 h-16 border-b bg-white">
+    <header className="fixed left-60 right-0 top-[60px] z-10 h-16 border-b bg-white">
       <div className="flex h-full items-center px-6">
         <Breadcrumb>
           <BreadcrumbList>
@@ -217,7 +224,7 @@ export default function DashboardLayout({
 }) {
   return (
     <>
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen pt-[60px]">
         <Sidebar />
         <div className="ml-60 flex-1">
           <Header />

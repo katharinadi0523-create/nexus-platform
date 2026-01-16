@@ -50,8 +50,8 @@ export default function AgentEditorPage() {
   const [modelParams, setModelParams] = useState<ModelParams>({
     temperature: 0.01,
     topP: 0.01,
-    maxToken: 4096,
-    historyRounds: 5,
+    topK: 20,
+    history: 5,
   });
   const [selectedWorkflows, setSelectedWorkflows] = useState<WorkflowType[]>([]);
   const [selectedPlugins, setSelectedPlugins] = useState<Plugin[]>([]);
@@ -180,7 +180,7 @@ export default function AgentEditorPage() {
   }, [openingStatement]);
 
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-screen flex flex-col bg-white pt-[60px]">
       {/* Header */}
       <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
         {/* Left: Back + Name */}
