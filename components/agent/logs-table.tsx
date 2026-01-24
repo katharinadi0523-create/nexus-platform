@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ThumbsUp, ThumbsDown, ChevronDown, Filter } from "lucide-react";
 import {
   Table,
@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { LogEntry as SFTLogEntry, AgentType } from "@/lib/agent-data";
+import type { LogEntry as SFTLogEntry, AgentType, Message } from "@/lib/agent-data";
 
 // LogEntry 类型定义
 export type LogEntry = {
@@ -25,6 +25,7 @@ export type LogEntry = {
   userFeedback: "like" | "dislike" | null; // 用户反馈
   adminFeedback: "good" | "bad" | null; // 管理员反馈 (可交互)
   status: "pending" | "adopted"; // 操作状态
+  fullMessages?: Message[]; // 完整的对话历史（用于详情页展示）
 };
 
 interface LogsTableProps {
@@ -37,6 +38,11 @@ interface LogsTableProps {
 export function LogsTable({ data, onExportClick, rawLogs, agentType }: LogsTableProps) {
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>(data);
+
+  // 同步 data prop 的变化到内部状态
+  useEffect(() => {
+    setLogs(data);
+  }, [data]);
 
   const handleAdminFeedback = (logId: string, feedback: "good" | "bad") => {
     setLogs((prevLogs) =>
@@ -228,36 +234,94 @@ export function LogsTable({ data, onExportClick, rawLogs, agentType }: LogsTable
 
       {/* 详情弹窗 */}
       <Dialog open={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>日志详情</DialogTitle>
             <DialogDescription>会话ID: {selectedLog?.id}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 mt-4">
+          
+          {/* 元信息 */}
+          <div className="grid grid-cols-2 gap-4 text-sm mb-4 pb-4 border-b">
             <div>
-              <h4 className="text-sm font-medium text-slate-900 mb-2">输入</h4>
-              <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg">
-                {selectedLog?.input}
-              </p>
+              <span className="text-slate-500">请求时间:</span>
+              <span className="ml-2 text-slate-700">{selectedLog?.timestamp}</span>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-slate-900 mb-2">输出</h4>
-              <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg">
-                {selectedLog?.output}
-              </p>
+              <span className="text-slate-500">渠道来源:</span>
+              <Badge variant={getSourceBadgeVariant(selectedLog?.source || "应用广场")} className="ml-2">
+                {selectedLog?.source}
+              </Badge>
             </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-slate-500">请求时间:</span>
-                <span className="ml-2 text-slate-700">{selectedLog?.timestamp}</span>
+          </div>
+
+          {/* 对话历史 */}
+          <div className="flex-1 overflow-y-auto space-y-4">
+            {selectedLog?.fullMessages && selectedLog.fullMessages.length > 0 ? (
+              // 显示完整的对话历史（聊天气泡样式）
+              <div className="space-y-4">
+                {selectedLog.fullMessages.map((message, index) => {
+                  if (message.role === "system") {
+                    // System 消息：显示为顶部灰色提示框
+                    return (
+                      <div
+                        key={index}
+                        className="bg-slate-100 border border-slate-200 rounded-lg p-3 text-sm text-slate-600"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-medium text-slate-500">系统提示</span>
+                        </div>
+                        <p className="whitespace-pre-wrap">{message.content}</p>
+                      </div>
+                    );
+                  } else if (message.role === "user") {
+                    // User 消息：右侧蓝色气泡
+                    return (
+                      <div key={index} className="flex justify-end mb-3">
+                        <div className="max-w-[75%]">
+                          <div className="bg-blue-500 text-white rounded-2xl rounded-tr-sm p-4 shadow-sm">
+                            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                              {message.content}
+                            </p>
+                          </div>
+                          <span className="text-xs text-slate-400 mt-1.5 block text-right px-1">用户</span>
+                        </div>
+                      </div>
+                    );
+                  } else if (message.role === "assistant") {
+                    // Assistant 消息：左侧灰色/白色气泡
+                    return (
+                      <div key={index} className="flex justify-start mb-3">
+                        <div className="max-w-[75%]">
+                          <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm p-4 shadow-sm">
+                            <p className="text-sm text-slate-800 whitespace-pre-wrap break-words leading-relaxed">
+                              {message.content}
+                            </p>
+                          </div>
+                          <span className="text-xs text-slate-400 mt-1.5 block px-1">助手</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
               </div>
-              <div>
-                <span className="text-slate-500">渠道来源:</span>
-                <Badge variant={getSourceBadgeVariant(selectedLog?.source || "应用广场")} className="ml-2">
-                  {selectedLog?.source}
-                </Badge>
+            ) : (
+              // Fallback: 如果没有完整消息历史，显示原来的 input/output
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium text-slate-900 mb-2">输入</h4>
+                  <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg">
+                    {selectedLog?.input}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-slate-900 mb-2">输出</h4>
+                  <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg">
+                    {selectedLog?.output}
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

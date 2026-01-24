@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, RefreshCcw, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -276,6 +276,13 @@ export default function AgentLogsPage() {
   const sftLogs = getLogsByAgentId(agentId);
   const tableLogs = convertLogsToTableFormat(sftLogs, agent?.type);
 
+  // 当切换智能体时，重置分页和搜索状态
+  useEffect(() => {
+    setCurrentPage(1);
+    setSearchKeyword("");
+    setDateRange({ start: "", end: "" });
+    setSelectedLogs(new Set());
+  }, [agentId]);
 
   if (!agent) {
     return (

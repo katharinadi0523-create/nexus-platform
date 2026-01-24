@@ -480,11 +480,65 @@ export function convertToTableLogEntry(
 }
 
 /**
- * 批量转换日志格式
+ * 批量转换日志格式（带数据膨胀和随机化）
  */
 export function convertLogsToTableFormat(
   logs: LogEntry[],
   agentType?: AgentType
 ): TableLogEntry[] {
-  return logs.map((log) => convertToTableLogEntry(log, agentType));
+  const inflatedLogs: TableLogEntry[] = [];
+  const sources: TableLogEntry["source"][] = [
+    "应用广场",
+    "API调用",
+    "网页端体验",
+    "预览与调试",
+  ];
+
+  // 循环 5 次以填充表格
+  for (let i = 0; i < 5; i++) {
+    logs.forEach((log) => {
+      // 1. Random Source
+      const randomSource =
+        sources[Math.floor(Math.random() * sources.length)];
+
+      // 2. Random Feedback (10% like, 5% dislike, 85% null)
+      const rand = Math.random();
+      const feedback: "like" | "dislike" | null =
+        rand > 0.9 ? "like" : rand > 0.85 ? "dislike" : null;
+
+      // 3. Time Shift (faking history - 随机减去 0-48 小时)
+      const originalDate = new Date(log.createdAt);
+      // 每次循环从原始时间随机减去 0-48 小时，让时间错落有致
+      const hoursToSubtract = Math.floor(Math.random() * 48);
+      originalDate.setHours(originalDate.getHours() - hoursToSubtract);
+      
+      // 格式化为 YYYY-MM-DD HH:mm:ss
+      const year = originalDate.getFullYear();
+      const month = String(originalDate.getMonth() + 1).padStart(2, "0");
+      const day = String(originalDate.getDate()).padStart(2, "0");
+      const hours = String(originalDate.getHours()).padStart(2, "0");
+      const minutes = String(originalDate.getMinutes()).padStart(2, "0");
+      const seconds = String(originalDate.getSeconds()).padStart(2, "0");
+      const timeStr = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+
+      // 4. Construct Table Entry
+      const baseEntry = convertToTableLogEntry(log, agentType);
+      // 生成唯一ID：原始ID + 循环索引 + 随机字符串（确保唯一性）
+      const uniqueId = `${log.id}-copy-${i}-${Math.random().toString(36).substring(2, 7)}`;
+      inflatedLogs.push({
+        ...baseEntry,
+        id: uniqueId, // Unique ID
+        source: randomSource, // Overwrite source
+        userFeedback: feedback, // Overwrite feedback
+        timestamp: timeStr, // Overwrite time
+        fullMessages: log.messages, // Pass the full conversation history
+      });
+    });
+  }
+
+  // 按时间倒序排列（最新的在前）
+  return inflatedLogs.sort(
+    (a, b) =>
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
 }
