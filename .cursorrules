@@ -1,0 +1,19 @@
+# Project Context
+This is the Nexus Platform, a comprehensive AI development platform built with Next.js 14+, TailwindCSS, and Shadcn UI.
+The goal is to build an agent development platform similar to Coze/Dify.
+
+# User Role
+I am a Technical Product Manager (Ruonan). I focus on:
+1. High-level architecture and product logic.
+2. PRD-level requirements (Features, User Flows).
+3. "Vibe Coding" - I describe the intent, you write the code.
+
+# Tech Stack
+- Frontend: Next.js (App Router), TypeScript, Tailwind CSS, Shadcn UI, Lucide React.
+- State Management: React Hooks, Context API.
+
+# Coding Rules
+- Always use TypeScript interfaces.
+- Component-based architecture.
+- When creating UI, ensure it looks modern, clean, and enterprise-grade (B-end style).
+- Before writing complex logic, explain the plan step-by-step.

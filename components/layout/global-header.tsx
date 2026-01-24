@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Sparkles, ChevronRight, Search } from "lucide-react";
+import { Sparkles, ChevronRight, Search, HelpCircle, AlertCircle, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -61,13 +61,21 @@ const defaultContext = {
 };
 
 // Platform navigation items
-const platformNavItems = [
-  { key: "app-dev", label: "应用开发平台", href: "/" },
-  { key: "model-dev", label: "模型开发平台", href: "/model-dev" },
-  { key: "data-gov", label: "多模态数据治理平台", href: "/data-gov" },
-  { key: "vision", label: "视觉应用平台", href: "/vision" },
-  { key: "office", label: "办公应用", href: "/office" },
-  { key: "base-control", label: "基础管控平台", href: "/base-control" },
+interface PlatformNavItem {
+  key: string;
+  label: string;
+  href: string;
+  external?: boolean;
+}
+
+const platformNavItems: PlatformNavItem[] = [
+  { key: "ai-assets", label: "AI资产库", href: "/ai-assets" },
+  { key: "procurement", label: "采购管理", href: "/procurement" },
+  { key: "vision", label: "多模态视觉", href: "/vision" },
+  { key: "app-dev", label: "应用开发", href: "/" },
+  { key: "model-dev", label: "模型开发", href: "/model-dev" },
+  { key: "data-gov", label: "多模态数据治理", href: "https://mdp.mydemo.top/", external: true },
+  { key: "platform-mgmt", label: "平台管理", href: "/platform-mgmt" },
 ];
 
 export function GlobalHeader() {
@@ -102,8 +110,9 @@ export function GlobalHeader() {
     if (pathname.startsWith("/model-dev")) return "model-dev";
     if (pathname.startsWith("/data-gov")) return "data-gov";
     if (pathname.startsWith("/vision")) return "vision";
-    if (pathname.startsWith("/office")) return "office";
-    if (pathname.startsWith("/base-control")) return "base-control";
+    if (pathname.startsWith("/ai-assets")) return "ai-assets";
+    if (pathname.startsWith("/procurement")) return "procurement";
+    if (pathname.startsWith("/platform-mgmt")) return "platform-mgmt";
     return "app-dev";
   };
 
@@ -121,92 +130,47 @@ export function GlobalHeader() {
       <div className="flex h-full items-center px-6 gap-6">
         {/* A. Branding Area */}
         <div className="flex items-center gap-2">
-          <Sparkles className="h-6 w-6 text-yellow-500" />
-          <span className="text-lg font-bold text-gray-900">新星-AI平台</span>
+          <img 
+            src="/icons/cecloud.png" 
+            alt="中国电子云" 
+            className="h-6 w-auto"
+          />
+          <span className="text-base font-semibold text-gray-900">中国电子云 | AI平台</span>
         </div>
 
-        {/* B. Context Switcher */}
-        <Popover open={isContextSwitcherOpen} onOpenChange={setIsContextSwitcherOpen}>
-          <PopoverTrigger asChild>
-            <button className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-full hover:border-gray-400 transition-colors">
-              <span className="text-sm text-gray-700">
-                {selectedProject?.name || "选择项目"}
-              </span>
-              <Search className="h-4 w-4 text-gray-500" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            className="w-[600px] p-0"
-            align="start"
-            sideOffset={8}
-          >
-            <div className="flex">
-              {/* Left Pane - Organizations */}
-              <div className="w-1/2 border-r border-gray-200">
-                <div className="p-2">
-                  {organizations.map((org) => (
-                    <div
-                      key={org.id}
-                      className={cn(
-                        "flex items-center justify-between px-3 py-2 rounded-md cursor-pointer transition-colors",
-                        selectedOrg?.id === org.id
-                          ? "bg-blue-50 text-blue-700"
-                          : "hover:bg-gray-50 text-gray-700"
-                      )}
-                      onMouseEnter={() => setSelectedOrg(org)}
-                    >
-                      <span className="text-sm">{org.name}</span>
-                      {org.projects.length > 0 && (
-                        <ChevronRight className="h-4 w-4 text-gray-400" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Right Pane - Projects */}
-              <div className="w-1/2">
-                <div className="p-2">
-                  {selectedOrg && selectedOrg.projects.length > 0 ? (
-                    selectedOrg.projects.map((project) => (
-                      <div
-                        key={project.id}
-                        className={cn(
-                          "px-3 py-2 rounded-md cursor-pointer transition-colors",
-                          selectedProject?.id === project.id
-                            ? "bg-blue-50 text-blue-700 font-medium"
-                            : "hover:bg-gray-50 text-gray-700"
-                        )}
-                        onClick={() => handleProjectSelect(selectedOrg, project)}
-                      >
-                        <span className="text-sm">{project.name}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-3 py-2 text-sm text-gray-500">
-                      {selectedOrg?.name || "选择组织"}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-
-        {/* C. Platform Navigation Menu */}
+        {/* B. Platform Navigation Menu */}
         <nav className="flex-1 flex items-center gap-1">
           {platformNavItems.map((item) => {
             const isActive = activePlatform === item.key;
+            const linkClassName = cn(
+              "px-4 py-2 text-sm font-medium transition-colors relative",
+              isActive
+                ? "text-blue-600 font-semibold"
+                : "text-gray-600 hover:text-gray-900"
+            );
+            
+            if (item.external) {
+              return (
+                <a
+                  key={item.key}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={linkClassName}
+                >
+                  {item.label}
+                  {isActive && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+                  )}
+                </a>
+              );
+            }
+            
             return (
               <Link
                 key={item.key}
                 href={item.href}
-                className={cn(
-                  "px-4 py-2 text-sm font-medium transition-colors relative",
-                  isActive
-                    ? "text-blue-600 font-semibold"
-                    : "text-gray-600 hover:text-gray-900"
-                )}
+                className={linkClassName}
               >
                 {item.label}
                 {isActive && (
@@ -216,6 +180,26 @@ export function GlobalHeader() {
             );
           })}
         </nav>
+
+        {/* C. Right Side Utilities */}
+        <div className="flex items-center gap-4">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="p-2 text-gray-600 hover:text-gray-900 transition-colors">
+                <AlertCircle className="h-5 w-5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 p-3 text-sm text-slate-700" side="bottom" align="end">
+              INTERNAL PROTOTYPE - DEMO ONLY。部分功能仅作界面预览，实际能力以正式发布为准。
+            </PopoverContent>
+          </Popover>
+          <button className="p-2 text-gray-600 hover:text-gray-900 transition-colors" title="帮助手册">
+            <HelpCircle className="h-5 w-5" />
+          </button>
+          <button className="flex items-center justify-center h-8 w-8 rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors" title="用户">
+            <User className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </header>
   );

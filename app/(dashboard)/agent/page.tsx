@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Search, Plus, Bot, Workflow, RefreshCw, Copy, Edit, Trash2, Grid2x2, Network } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -25,106 +26,123 @@ import { Button } from "@/components/ui/button";
 interface Agent {
   id: string;
   name: string;
-  type: "autonomous" | "workflow";
-  publishStatus: "published" | "unpublished";
-  description: string;
-  updateTime: string;
+  type: string;
+  status: string;
+  desc: string;
+  updatedAt: string;
 }
 
-const mockAgents: Agent[] = [
+const AGENTS_MOCK_DATA: Agent[] = [
   {
-    id: "1",
-    name: "多智能体写作",
-    type: "workflow",
-    publishStatus: "unpublished",
-    description: "智能体应用描述",
-    updateTime: "2026-01-07 10:30:00",
-  },
-  {
-    id: "2",
-    name: "文件内容提取",
-    type: "workflow",
-    publishStatus: "unpublished",
-    description: "智能体应用描述",
-    updateTime: "2026-01-06 14:20:00",
-  },
-  {
-    id: "3",
+    id: "osint-01",
     name: "OSINT开源情报整编",
-    type: "autonomous",
-    publishStatus: "unpublished",
-    description: "智能体应用描述",
-    updateTime: "2026-01-05 09:15:00",
+    type: "自主规划智能体",
+    status: "未发布",
+    desc: "基于全网开源数据的深度情报挖掘与关联分析。",
+    updatedAt: "2026-01-05 09:15:00",
   },
   {
-    id: "4",
-    name: "高血压病大模型",
-    type: "workflow",
-    publishStatus: "unpublished",
-    description: "智能体应用描述",
-    updateTime: "2026-01-04 16:45:00",
+    id: "code-02",
+    name: "CodeMaster 架构师",
+    type: "自主规划智能体",
+    status: "未发布",
+    desc: "专注于代码审查、重构建议和技术方案设计。",
+    updatedAt: "2026-01-07 10:30:00",
   },
   {
-    id: "5",
+    id: "device-03",
     name: "设备维修判断与预测",
-    type: "workflow",
-    publishStatus: "published",
-    description: "感知Sensor当前参数、结合历史维保记录与设...",
-    updateTime: "2026-01-03 11:00:00",
+    type: "自主规划智能体",
+    status: "已发布",
+    desc: "基于传感器数据和历史维修记录，预测设备故障概率。",
+    updatedAt: "2026-01-03 11:00:00",
   },
   {
-    id: "6",
+    id: "flow-01",
+    name: "数据清洗工作流",
+    type: "工作流智能体",
+    status: "未发布",
+    desc: "自动化数据清洗和预处理工作流，支持多数据源输入和标准化输出。",
+    updatedAt: "2026-01-08 14:20:00",
+  },
+  {
+    id: "writing-04",
+    name: "多智能体写作",
+    type: "工作流智能体",
+    status: "未发布",
+    desc: "智能体应用描述",
+    updatedAt: "2026-01-07 10:30:00",
+  },
+  {
+    id: "extract-05",
+    name: "文件内容提取",
+    type: "工作流智能体",
+    status: "未发布",
+    desc: "智能体应用描述",
+    updatedAt: "2026-01-06 14:20:00",
+  },
+  {
+    id: "hypertension-06",
+    name: "高血压病大模型",
+    type: "工作流智能体",
+    status: "未发布",
+    desc: "智能体应用描述",
+    updatedAt: "2026-01-04 16:45:00",
+  },
+  {
+    id: "anti-fl-07",
     name: "反FL分析智能体",
-    type: "workflow",
-    publishStatus: "published",
-    description: "智能体应用描述",
-    updateTime: "2026-01-02 13:30:00",
+    type: "工作流智能体",
+    status: "已发布",
+    desc: "智能体应用描述",
+    updatedAt: "2026-01-02 13:30:00",
   },
   {
-    id: "7",
+    id: "data-analysis-08",
     name: "数据分析工作流",
-    type: "workflow",
-    publishStatus: "unpublished",
-    description: "自动化数据分析流程，支持多数据源整合",
-    updateTime: "2026-01-01 10:20:00",
+    type: "工作流智能体",
+    status: "未发布",
+    desc: "自动化数据分析流程，支持多数据源整合",
+    updatedAt: "2026-01-01 10:20:00",
   },
   {
-    id: "8",
+    id: "kb-qa-09",
     name: "知识库问答",
-    type: "autonomous",
-    publishStatus: "unpublished",
-    description: "基于知识库的智能问答系统",
-    updateTime: "2025-12-31 15:45:00",
+    type: "自主规划智能体",
+    status: "未发布",
+    desc: "基于知识库的智能问答系统",
+    updatedAt: "2025-12-31 15:45:00",
   },
   {
-    id: "9",
+    id: "approval-10",
     name: "审批流程智能体",
-    type: "workflow",
-    publishStatus: "unpublished",
-    description: "企业审批流程自动化处理",
-    updateTime: "2025-12-30 09:30:00",
+    type: "工作流智能体",
+    status: "未发布",
+    desc: "企业审批流程自动化处理",
+    updatedAt: "2025-12-30 09:30:00",
   },
   {
-    id: "10",
+    id: "report-11",
     name: "报表生成工作流",
-    type: "workflow",
-    publishStatus: "unpublished",
-    description: "自动生成各类业务报表",
-    updateTime: "2025-12-30 08:15:00",
+    type: "工作流智能体",
+    status: "未发布",
+    desc: "自动生成各类业务报表",
+    updatedAt: "2025-12-30 08:15:00",
   },
 ];
 
 const ITEMS_PER_PAGE = 20;
 
 export default function AgentPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const [agents] = useState<Agent[]>(mockAgents);
+  const [agents] = useState<Agent[]>(AGENTS_MOCK_DATA);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
 
   const filteredAgents = agents.filter((agent) =>
     agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    agent.description.toLowerCase().includes(searchQuery.toLowerCase())
+    agent.desc.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const totalPages = Math.ceil(filteredAgents.length / itemsPerPage);
@@ -212,7 +230,7 @@ export default function AgentPage() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => toast.info("功能开发中")}
+                onClick={() => router.push("/agent/flow-01")}
                 className="flex items-center gap-2 cursor-pointer"
               >
                 <Workflow className="h-4 w-4" />
@@ -244,84 +262,89 @@ export default function AgentPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedAgents.map((agent) => (
-                <TableRow key={agent.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {agent.type === "autonomous" ? (
-                        <Network className="h-4 w-4 text-blue-600" />
-                      ) : (
-                        <Grid2x2 className="h-4 w-4 text-blue-600" />
-                      )}
-                      <span className="font-medium">{agent.name}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={agent.type === "autonomous" ? "secondary" : "default"}
-                      className={
-                        agent.type === "autonomous"
-                          ? "bg-purple-100 text-purple-800 border-purple-200"
-                          : "bg-blue-100 text-blue-800 border-blue-200"
-                      }
-                    >
-                      {agent.type === "autonomous" ? (
-                        <>
-                          <Network className="mr-1 h-3 w-3" />
-                          自主规划智能体
-                        </>
-                      ) : (
-                        <>
-                          <Workflow className="mr-1 h-3 w-3" />
-                          工作流智能体
-                        </>
-                      )}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`h-2 w-2 rounded-full ${
-                          agent.publishStatus === "published"
-                            ? "bg-green-500"
-                            : "bg-gray-400"
-                        }`}
-                      />
-                      <span className="text-sm">
-                        {agent.publishStatus === "published" ? "已发布" : "未发布"}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {agent.description}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {agent.updateTime}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-4">
-                      <button
-                        onClick={() => handleCopy(agent)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
+              paginatedAgents.map((agent) => {
+                const isAutonomous = agent.type === "自主规划智能体";
+                const isPublished = agent.status === "已发布";
+                return (
+                  <TableRow key={agent.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {isAutonomous ? (
+                          <Network className="h-4 w-4 text-blue-600" />
+                        ) : (
+                          <Grid2x2 className="h-4 w-4 text-blue-600" />
+                        )}
+                        <Link
+                          href={`/agent/${agent.id}`}
+                          className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {agent.name}
+                        </Link>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={isAutonomous ? "secondary" : "default"}
+                        className={
+                          isAutonomous
+                            ? "bg-purple-100 text-purple-800 border-purple-200"
+                            : "bg-blue-100 text-blue-800 border-blue-200"
+                        }
                       >
-                        复制
-                      </button>
-                      <Link
-                        href="/agent-editor"
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        编辑
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(agent)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                      >
-                        删除
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+                        {isAutonomous ? (
+                          <>
+                            <Network className="mr-1 h-3 w-3" />
+                            {agent.type}
+                          </>
+                        ) : (
+                          <>
+                            <Workflow className="mr-1 h-3 w-3" />
+                            {agent.type}
+                          </>
+                        )}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`h-2 w-2 rounded-full ${
+                            isPublished ? "bg-green-500" : "bg-gray-400"
+                          }`}
+                        />
+                        <span className="text-sm">{agent.status}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {agent.desc}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {agent.updatedAt}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={() => handleCopy(agent)}
+                          className="text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          复制
+                        </button>
+                        <Link
+                          href={`/agent/${agent.id}`}
+                          className="text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          编辑
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(agent)}
+                          className="text-blue-600 hover:text-blue-800 text-sm"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

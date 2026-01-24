@@ -14,22 +14,18 @@ import {
   Tag,
   Workflow,
   BookA,
+  History,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { GlobalHeader } from "@/components/layout/global-header";
 
 interface MenuItem {
   key: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   href: string;
+  external?: boolean;
 }
 
 interface MenuGroup {
@@ -111,6 +107,12 @@ const menuGroups: MenuGroup[] = [
         icon: Tag,
         href: "/tag-management",
       },
+      {
+        key: "Trace",
+        label: "Trace",
+        icon: History,
+        href: "/trace",
+      },
     ],
   },
 ];
@@ -119,101 +121,57 @@ function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <div className="fixed left-0 top-[60px] h-[calc(100vh-60px)] w-60 bg-[#001529] text-white">
-      <div className="flex h-full flex-col">
-        {/* Logo/Title */}
-        <div className="flex h-16 items-center border-b border-white/10 px-6">
-          <h1 className="text-lg font-semibold">AppForge</h1>
-        </div>
-
-        {/* Menu */}
-        <nav className="flex-1 overflow-y-auto px-4 py-6">
-          {menuGroups.map((group) => (
-            <div key={group.title} className="mb-8">
-              <div className="mb-3 px-3 text-xs font-medium text-white/60 tracking-wider">
-                {group.title}
-              </div>
-              <div className="space-y-1">
-                {group.items.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = pathname === item.href;
+    <div className="flex h-full flex-col">
+      {/* Menu */}
+      <nav className="flex-1 overflow-y-auto px-4 py-4">
+        {menuGroups.map((group) => (
+          <div key={group.title} className="mb-6">
+            <div className="mb-2 px-3 text-xs font-medium text-gray-500 tracking-wider">
+              {group.title}
+            </div>
+            <div className="space-y-1">
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                const linkClassName = cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-blue-50 text-blue-600"
+                    : "text-gray-700 hover:bg-gray-50"
+                );
+                
+                if (item.external) {
                   return (
-                    <Link
+                    <a
                       key={item.key}
                       href={item.href}
-                      className={cn(
-                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                        isActive
-                          ? "bg-blue-600 text-white"
-                          : "text-white/80 hover:bg-white/10 hover:text-white"
-                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={linkClassName}
                     >
-                      <Icon className="h-4 w-4" />
+                      <Icon className={cn("h-4 w-4", isActive ? "text-blue-600" : "text-gray-500")} />
                       <span>{item.label}</span>
-                    </Link>
+                      <ExternalLink className="h-3 w-3 ml-auto text-gray-400" />
+                    </a>
                   );
-                })}
-              </div>
+                }
+                
+                return (
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    className={linkClassName}
+                  >
+                    <Icon className={cn("h-4 w-4", isActive ? "text-blue-600" : "text-gray-500")} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
             </div>
-          ))}
-        </nav>
-      </div>
+          </div>
+        ))}
+      </nav>
     </div>
-  );
-}
-
-function Header() {
-  const pathname = usePathname();
-
-  // Generate breadcrumb from pathname
-  const pathSegments = pathname.split("/").filter(Boolean);
-  const breadcrumbItems = pathSegments.map((segment, index) => {
-    const href = "/" + pathSegments.slice(0, index + 1).join("/");
-    const label = segment
-      .split("-")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-
-    // Find menu item label
-    const menuItem = menuGroups
-      .flatMap((group) => group.items)
-      .find((item) => item.href === href);
-
-    return {
-      href,
-      label: menuItem?.label || label,
-      isLast: index === pathSegments.length - 1,
-    };
-  });
-
-  return (
-    <header className="fixed left-60 right-0 top-[60px] z-10 h-16 border-b bg-white">
-      <div className="flex h-full items-center px-6">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink asChild>
-                <Link href="/">首页</Link>
-              </BreadcrumbLink>
-            </BreadcrumbItem>
-            {breadcrumbItems.map((item, index) => (
-              <div key={item.href} className="flex items-center">
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  {item.isLast ? (
-                    <BreadcrumbPage>{item.label}</BreadcrumbPage>
-                  ) : (
-                    <BreadcrumbLink asChild>
-                      <Link href={item.href}>{item.label}</Link>
-                    </BreadcrumbLink>
-                  )}
-                </BreadcrumbItem>
-              </div>
-            ))}
-          </BreadcrumbList>
-        </Breadcrumb>
-      </div>
-    </header>
   );
 }
 
@@ -224,12 +182,19 @@ export default function DashboardLayout({
 }) {
   return (
     <>
-      <div className="flex min-h-screen pt-[60px]">
-        <Sidebar />
-        <div className="ml-60 flex-1">
-          <Header />
-          <main className="mt-16 p-6">{children}</main>
-        </div>
+      <GlobalHeader />
+      <div className="flex h-screen overflow-hidden bg-slate-50 pt-[60px]">
+        {/* 左侧侧边栏: 固定宽度 220px, z-50 */}
+        <aside className="w-[220px] flex-none z-50 border-r bg-white h-[calc(100vh-60px)] hidden md:block">
+          <Sidebar />
+        </aside>
+        {/* 右侧主体: 自动填满剩余空间 */}
+        <main className="flex-1 flex flex-col h-[calc(100vh-60px)] overflow-hidden relative">
+          {/* 页面内容滚动区 */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {children}
+          </div>
+        </main>
       </div>
       <Toaster position="top-right" />
     </>

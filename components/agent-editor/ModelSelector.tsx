@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Image from "next/image";
 import {
   Sparkles,
   ChevronDown,
   Check,
   HelpCircle,
   AlertTriangle,
+  Box,
+  ExternalLink,
 } from "lucide-react";
 import {
   Popover,
@@ -179,6 +182,33 @@ const TOOLTIP_CONTENT = {
     "传入大模型上下文的前序对话轮数（一问一答计为一轮）。数值越大，模型对历史记忆越完整，但模型上下文压力相应增大。",
 };
 
+// 获取模型图标
+const getModelIcon = (modelName: string) => {
+  if (modelName.includes("DeepSeek")) {
+    return (
+      <Image
+        src="/icons/deepseek.png"
+        alt="DeepSeek"
+        width={20}
+        height={20}
+        className="object-contain"
+      />
+    );
+  }
+  if (modelName.includes("Qwen")) {
+    return (
+      <Image
+        src="/icons/qwen.png"
+        alt="Qwen"
+        width={20}
+        height={20}
+        className="object-contain"
+      />
+    );
+  }
+  return <Box className="w-5 h-5 text-slate-500" />;
+};
+
 export function ModelSelector({
   selectedModel = "DeepSeek-R2",
   modelParams,
@@ -309,7 +339,7 @@ export function ModelSelector({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-          <Sparkles className="w-4 h-4 text-slate-600" />
+          {getModelIcon(currentModel)}
           <span className="font-medium">{currentModel}</span>
           <ChevronDown className="w-4 h-4 text-slate-500" />
         </button>
@@ -320,64 +350,110 @@ export function ModelSelector({
         sideOffset={8}
       >
         <div className="p-4">
-          {/* Model Selection Tabs */}
-          <Tabs
-            value={activeTab}
-            onValueChange={(v) => setActiveTab(v as "preset" | "exclusive")}
-            className="w-full"
-          >
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="preset">预置模型</TabsTrigger>
-              <TabsTrigger value="exclusive">我的模型</TabsTrigger>
-            </TabsList>
+          {/* Section 1: 模型服务选择 */}
+          <div className="mb-4">
+            <h3 className="text-sm font-medium text-slate-900 mb-2">
+              模型服务选择
+            </h3>
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as "preset" | "exclusive")}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="preset">预置模型服务</TabsTrigger>
+                <TabsTrigger value="exclusive">
+                  <span className="inline-flex items-center gap-1">
+                    我的模型服务
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="cursor-help inline-flex"
+                          onClick={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          aria-label="我的模型服务说明"
+                        >
+                          <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                        </span>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        className="w-72 p-3 text-xs text-slate-700"
+                        side="bottom"
+                        align="center"
+                        sideOffset={8}
+                      >
+                        本项目在模型开发平台「在线服务」中部署的大语言模型。若该模型不支持深度思考或工具调用，Agent 的规划与执行能力可能受限，输出效果可能不稳定
+                      </PopoverContent>
+                    </Popover>
+                  </span>
+                </TabsTrigger>
+              </TabsList>
 
-            {/* Preset Models */}
-            <TabsContent value="preset" className="mt-4 space-y-1">
-              {presetModels.map((model) => (
-                <button
-                  key={model}
-                  onClick={() => handleModelSelect(model)}
-                  className={cn(
-                    "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
-                    currentModel === model && "bg-blue-50"
-                  )}
-                >
-                  <span className="text-sm text-slate-900">{model}</span>
-                  {currentModel === model && (
-                    <Check className="w-4 h-4 text-blue-600" />
-                  )}
-                </button>
-              ))}
-            </TabsContent>
+              {/* Preset Models */}
+              <TabsContent value="preset" className="mt-4 space-y-1">
+                {presetModels.map((model) => (
+                  <button
+                    key={model}
+                    onClick={() => handleModelSelect(model)}
+                    className={cn(
+                      "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
+                      currentModel === model && "bg-blue-50"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      {getModelIcon(model)}
+                      <span className="text-sm text-slate-900">{model}</span>
+                    </div>
+                    {currentModel === model && (
+                      <Check className="w-4 h-4 text-blue-600" />
+                    )}
+                  </button>
+                ))}
+              </TabsContent>
 
-            {/* Exclusive Models */}
-            <TabsContent value="exclusive" className="mt-4 space-y-1">
-              {exclusiveModels.map((model) => (
-                <button
-                  key={model}
-                  onClick={() => handleModelSelect(model)}
-                  className={cn(
-                    "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
-                    currentModel === model && "bg-blue-50"
-                  )}
-                >
-                  <span className="text-sm text-slate-900">{model}</span>
-                  {currentModel === model && (
-                    <Check className="w-4 h-4 text-blue-600" />
-                  )}
-                </button>
-              ))}
-            </TabsContent>
-          </Tabs>
+              {/* Exclusive Models */}
+              <TabsContent value="exclusive" className="mt-4 space-y-1">
+                {exclusiveModels.map((model) => (
+                  <button
+                    key={model}
+                    onClick={() => handleModelSelect(model)}
+                    className={cn(
+                      "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
+                      currentModel === model && "bg-blue-50"
+                    )}
+                  >
+                    <span className="text-sm text-slate-900">{model}</span>
+                    {currentModel === model && (
+                      <Check className="w-4 h-4 text-blue-600" />
+                    )}
+                  </button>
+                ))}
+                
+                {/* 在线模型服务链接 */}
+                <div className="mt-4 pt-4 border-t border-slate-200">
+                  <a
+                    href="/model-dev/online-services"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>在线模型服务</span>
+                  </a>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
 
-          {/* Separator */}
-          <Separator className="my-4" />
-
-          {/* Parameters Configuration */}
-          <div className="space-y-4">
-            <Label className="text-sm font-semibold text-slate-900">
+          {/* Section 2: 参数配置 */}
+          <div className="mt-4">
+            <h3 className="text-sm font-medium text-slate-900 mb-2">
               参数配置
-            </Label>
+            </h3>
+            <div className="space-y-4">
 
             {/* Temperature */}
             {renderParamField("temperature", "温度", 0, 1, 0.01, (val) =>
@@ -402,8 +478,9 @@ export function ModelSelector({
             {/* Top K - 新增参数 */}
             {renderParamField("topK", "Top K", 0, 100, 1)}
 
-            {/* History Rounds */}
-            {renderParamField("history", "对话轮数", 0, 10, 1)}
+              {/* History Rounds */}
+              {renderParamField("history", "对话轮数", 0, 10, 1)}
+            </div>
           </div>
         </div>
       </PopoverContent>

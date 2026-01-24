@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { GlobalHeader } from "@/components/layout/global-header";
 
 // Use system fonts instead of Google Fonts to avoid build-time network issues
 const geistSans = {
@@ -26,7 +25,6 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <GlobalHeader />
         {children}
       </body>
     </html>

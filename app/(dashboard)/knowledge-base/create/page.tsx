@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Sparkles, HelpCircle } from "lucide-react";
+import { FileText, Sparkles, HelpCircle, Upload, X, CheckCircle2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +19,14 @@ import { SelectableCard } from "@/components/knowledge-base/SelectableCard";
 import { FileUpload } from "@/components/knowledge-base/FileUpload";
 import { TagTreeSelector, type TagTreeItem } from "@/components/knowledge-base/TagTreeSelector";
 import { MultiSelect } from "@/components/knowledge-base/MultiSelect";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Popover,
   PopoverContent,
@@ -77,6 +85,14 @@ const formSchema = z
     documentTags: z.array(z.string()).optional(),
     chunkTagsEnabled: z.boolean().default(false),
     chunkTags: z.array(z.string()).optional(),
+
+    // Table-specific fields
+    tableHeaderRow: z.number().min(1).default(1),
+    tableDataStartRow: z.number().min(1).default(2),
+    tableColumns: z.array(z.object({
+      name: z.string().min(1, "列名不能为空"),
+      description: z.string().max(30, "描述不能超过30个字符").optional(),
+    })).optional(),
   })
   .refine(
     (data) => {
@@ -131,6 +147,18 @@ const formSchema = z
       message: "请选择图片解析模式",
       path: ["imageParsingMode"],
     }
+  )
+  .refine(
+    (data) => {
+      if (data.fileType === "table") {
+        return data.tableColumns && data.tableColumns.length > 0;
+      }
+      return true;
+    },
+    {
+      message: "请至少配置一列",
+      path: ["tableColumns"],
+    }
   );
 
 type FormData = z.infer<typeof formSchema>;
@@ -156,10 +184,25 @@ const mockTagTree: TagTreeItem[] = [
   },
 ];
 
+// Mock table columns data
+const mockTableColumns = [
+  { name: "公告日期", description: "" },
+  { name: "采购单位", description: "" },
+  { name: "项目名称", description: "" },
+  { name: "中标企业", description: "" },
+  { name: "厂商系", description: "3" },
+  { name: "中标金额(万元)", description: "8" },
+  { name: "细分赛道", description: "" },
+  { name: "场景/说明", description: "" },
+];
+
 export default function CreateKnowledgeBasePage() {
   const router = useRouter();
   const [charCount, setCharCount] = useState({ name: 0, description: 0 });
   const [regexCharCount, setRegexCharCount] = useState(0);
+  const [tableFileUploaded, setTableFileUploaded] = useState(false);
+  const [tableColumnDescriptions, setTableColumnDescriptions] = useState<Record<number, string>>({});
+  const [isDragging, setIsDragging] = useState(false);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -175,14 +218,78 @@ export default function CreateKnowledgeBasePage() {
       maxChunkLength: 600,
       chunkOverlapLength: 15,
       chunkTagsEnabled: false,
+      tableHeaderRow: 1,
+      tableDataStartRow: 2,
+      tableColumns: [],
     },
   });
+
+  const fileType = form.watch("fileType");
+  const files = form.watch("files");
+  const tableColumns = form.watch("tableColumns") || [];
 
   const chunkingStrategy = form.watch("chunkingStrategy");
   const chunkTagsEnabled = form.watch("chunkTagsEnabled");
   const parsingStrategies: Array<"text-recognition" | "image-understanding" | "table-parsing" | "formula-parsing"> = 
     form.watch("parsingStrategies") || [];
   const imageParsingMode = form.watch("imageParsingMode");
+
+  // Handle table file upload
+  const handleTableFileUpload = (uploadedFiles: File[]) => {
+    form.setValue("files", uploadedFiles);
+    if (uploadedFiles.length > 0 && !tableFileUploaded) {
+      setTableFileUploaded(true);
+      // Auto-fill mock columns when file is uploaded
+      form.setValue("tableColumns", mockTableColumns);
+      // Initialize description states
+      const descMap: Record<number, string> = {};
+      mockTableColumns.forEach((col, idx) => {
+        if (col.description) {
+          descMap[idx] = col.description;
+        }
+      });
+      setTableColumnDescriptions(descMap);
+    }
+  };
+
+  // Handle table file removal
+  const handleTableFileRemove = () => {
+    form.setValue("files", []);
+    form.setValue("tableColumns", []);
+    setTableFileUploaded(false);
+    setTableColumnDescriptions({});
+  };
+
+  // Handle table column description change
+  const handleColumnDescriptionChange = (index: number, value: string) => {
+    const newDesc = { ...tableColumnDescriptions, [index]: value };
+    setTableColumnDescriptions(newDesc);
+    const updatedColumns = [...tableColumns];
+    updatedColumns[index] = {
+      ...updatedColumns[index],
+      description: value,
+    };
+    form.setValue("tableColumns", updatedColumns);
+  };
+
+  // Handle table column removal
+  const handleColumnRemove = (index: number) => {
+    const updatedColumns = tableColumns.filter((_, i) => i !== index);
+    form.setValue("tableColumns", updatedColumns);
+    const newDesc = { ...tableColumnDescriptions };
+    delete newDesc[index];
+    setTableColumnDescriptions(newDesc);
+  };
+
+  // Handle file type change
+  const handleFileTypeChange = (value: "text" | "table") => {
+    form.setValue("fileType", value);
+    if (value === "text") {
+      setTableFileUploaded(false);
+      form.setValue("tableColumns", []);
+      setTableColumnDescriptions({});
+    }
+  };
 
   // Handle parsing strategy toggle (multi-select)
   const handleParsingStrategyToggle = (
@@ -322,39 +429,44 @@ export default function CreateKnowledgeBasePage() {
               )}
             </div>
 
-            {/* File Type */}
-            <div className="space-y-2">
-              <Label>文件类型</Label>
-              <Tabs
-                value={form.watch("fileType")}
-                onValueChange={(value) =>
-                  form.setValue("fileType", value as "text" | "table")
-                }
-              >
-                <TabsList>
-                  <TabsTrigger value="text">文本型数据</TabsTrigger>
-                  <TabsTrigger value="table">表格型数据</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-
-            {/* File Upload */}
-            <div className="space-y-2">
-              <Label>文件上传</Label>
-              <FileUpload
-                value={form.watch("files")}
-                onChange={(files) => form.setValue("files", files)}
-              />
-              {form.formState.errors.files && (
-                <p className="text-xs text-red-500">
-                  {form.formState.errors.files.message}
-                </p>
-              )}
-            </div>
           </CardContent>
         </Card>
 
-        {/* Strategy Card */}
+        {/* Conditional Content Based on File Type */}
+        {fileType === "text" ? (
+          <>
+            {/* File Upload for Text Type */}
+            <Card>
+              <CardHeader>
+                <CardTitle>文件上传</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* File Type Toggle */}
+                <div className="flex items-center gap-3">
+                  <Label className="text-sm font-medium">文件类型：</Label>
+                  <Tabs
+                    value={fileType}
+                    onValueChange={(value) => handleFileTypeChange(value as "text" | "table")}
+                  >
+                    <TabsList>
+                      <TabsTrigger value="text">文本型数据</TabsTrigger>
+                      <TabsTrigger value="table">表格型数据</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+                <FileUpload
+                  value={files}
+                  onChange={(files) => form.setValue("files", files)}
+                />
+                {form.formState.errors.files && (
+                  <p className="text-xs text-red-500 mt-2">
+                    {form.formState.errors.files.message}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Strategy Card */}
         <Card>
           <CardHeader>
             <CardTitle>策略配置</CardTitle>
@@ -708,6 +820,238 @@ export default function CreateKnowledgeBasePage() {
             </div>
           </CardContent>
         </Card>
+          </>
+        ) : (
+          <>
+            {/* Table File Upload */}
+            <Card>
+              <CardHeader>
+                <CardTitle>文件上传</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* File Type Toggle */}
+                <div className="flex items-center gap-3">
+                  <Label className="text-sm font-medium">文件类型：</Label>
+                  <Tabs
+                    value={fileType}
+                    onValueChange={(value) => handleFileTypeChange(value as "text" | "table")}
+                  >
+                    <TabsList>
+                      <TabsTrigger value="text">文本型数据</TabsTrigger>
+                      <TabsTrigger value="table">表格型数据</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+                {!tableFileUploaded ? (
+                  <div className="space-y-3">
+                    <div
+                      onClick={() => {
+                        const input = document.createElement("input");
+                        input.type = "file";
+                        input.accept = ".xlsx,.csv";
+                        input.onchange = (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0];
+                          if (file) {
+                            handleTableFileUpload([file]);
+                          }
+                        };
+                        input.click();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                        const file = e.dataTransfer.files[0];
+                        if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.csv'))) {
+                          handleTableFileUpload([file]);
+                        }
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDragging(true);
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                      }}
+                      className={`relative flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors ${
+                        isDragging
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-slate-100"
+                      }`}
+                    >
+                      <Upload className="mb-4 h-12 w-12 text-slate-400" />
+                      <p className="mb-2 text-sm font-medium text-slate-700">
+                        将文件拖拽到此处或点击上传
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        支持上传 .xlsx、.csv 文件；单次至多上传 1 个文件；每个文件不超过 50MB；最多 30,000 行；每行最多 5,000 字符
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {files.map((file, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between rounded-md border border-green-200 bg-green-50 p-3"
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-slate-900">{file.name}</p>
+                            <p className="text-xs text-slate-500">
+                              {(file.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              const input = document.createElement("input");
+                              input.type = "file";
+                              input.accept = ".xlsx,.csv";
+                              input.onchange = (e) => {
+                                const file = (e.target as HTMLInputElement).files?.[0];
+                                if (file) {
+                                  handleTableFileUpload([file]);
+                                }
+                              };
+                              input.click();
+                            }}
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={handleTableFileRemove}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {form.formState.errors.files && (
+                  <p className="text-xs text-red-500">
+                    {form.formState.errors.files.message}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Table Structure Configuration */}
+            {tableFileUploaded && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>表结构配置</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Configuration Row */}
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm font-medium whitespace-nowrap">
+                        <span className="text-red-500">*</span>表头：
+                      </Label>
+                      <Input
+                        type="number"
+                        value={form.watch("tableHeaderRow")}
+                        onChange={(e) =>
+                          form.setValue("tableHeaderRow", parseInt(e.target.value) || 1)
+                        }
+                        className="w-24"
+                        min={1}
+                      />
+                      <span className="text-sm text-slate-600">行</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm font-medium whitespace-nowrap">
+                        <span className="text-red-500">*</span>数据起始行：
+                      </Label>
+                      <Input
+                        type="number"
+                        value={form.watch("tableDataStartRow")}
+                        onChange={(e) =>
+                          form.setValue("tableDataStartRow", parseInt(e.target.value) || 2)
+                        }
+                        className="w-24"
+                        min={1}
+                      />
+                      <span className="text-sm text-slate-600">行</span>
+                    </div>
+                  </div>
+
+                  {/* Columns Table */}
+                  <div className="border rounded-lg">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[200px]">列名</TableHead>
+                          <TableHead>描述</TableHead>
+                          <TableHead className="w-[100px]">操作</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {tableColumns.map((column, index) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">{column.name}</TableCell>
+                            <TableCell>
+                              <div className="relative">
+                                <Input
+                                  value={tableColumnDescriptions[index] || ""}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    if (value.length <= 30) {
+                                      handleColumnDescriptionChange(index, value);
+                                    }
+                                  }}
+                                  placeholder="请输入描述"
+                                  maxLength={30}
+                                  className="w-full"
+                                />
+                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+                                  {(tableColumnDescriptions[index] || "").length}/30
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-400">
+                                  {(tableColumnDescriptions[index] || "").length}/100
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleColumnRemove(index)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  删除
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {form.formState.errors.tableColumns && (
+                    <p className="text-xs text-red-500">
+                      {form.formState.errors.tableColumns.message}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
 
         {/* Tags Card */}
         <Card>
