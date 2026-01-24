@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import type { LogEntry as SFTLogEntry, AgentType } from "@/lib/agent-data";
 
 // LogEntry 类型定义
 export type LogEntry = {
@@ -28,14 +29,12 @@ export type LogEntry = {
 
 interface LogsTableProps {
   data: LogEntry[];
-}
-
-interface LogsTableProps {
-  data: LogEntry[];
   onExportClick?: () => void;
+  rawLogs?: SFTLogEntry[]; // SFT 格式的原始日志，用于导出
+  agentType?: AgentType; // 智能体类型，用于决定导出格式
 }
 
-export function LogsTable({ data, onExportClick }: LogsTableProps) {
+export function LogsTable({ data, onExportClick, rawLogs, agentType }: LogsTableProps) {
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>(data);
 

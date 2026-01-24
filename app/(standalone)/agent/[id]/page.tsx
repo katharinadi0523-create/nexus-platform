@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { AgentLogsView } from "@/components/agent/agent-logs-view";
 import { WorkflowEditor } from "@/components/workflow/workflow-editor";
 import { AutonomousEditor } from "@/components/agent/autonomous-editor";
+import { getAgentById } from "@/lib/agent-data";
 
 // 定义详细数据源
 interface AgentDetailData {
@@ -102,9 +103,10 @@ export default function AgentDetailPage() {
 
   // Load agent data based on ID - synchronous lookup
   const agentData = agentId ? AGENTS_DETAIL_DATA[agentId] || null : null;
-
-  // Determine agent type - check data first, then fallback to ID pattern
-  const isWorkflow = agentData?.type === "workflow" || agentId?.startsWith("flow-");
+  
+  // Get agent type from agent-data.ts (source of truth)
+  const agentProfile = agentId ? getAgentById(agentId) : null;
+  const isWorkflow = agentProfile?.type === "workflow";
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
@@ -121,7 +123,7 @@ export default function AgentDetailPage() {
             <span className="text-sm font-medium">返回</span>
           </Button>
           <div className="h-6 w-px bg-border" />
-          <span className="font-semibold text-base">{agentData?.name || "加载中..."}</span>
+          <span className="font-semibold text-base">{agentData?.name || agentProfile?.name || "加载中..."}</span>
         </div>
 
         {/* Center: Tab Switcher (Absolutely Centered) */}

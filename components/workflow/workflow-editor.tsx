@@ -22,6 +22,10 @@ import { EndNode } from "./nodes/end-node";
 import { LLMNode } from "./nodes/llm-node";
 import { KnowledgeNode } from "./nodes/knowledge-node";
 import { ObjectQueryNode } from "./nodes/object-query-node";
+import { TableSelectNode } from "./nodes/data/table-select-node";
+import { DataClarifyNode } from "./nodes/data/data-clarify-node";
+import { DataQueryNode } from "./nodes/data/data-query-node";
+import { DataVisualizeNode } from "./nodes/data/data-visualize-node";
 import { GenericNode } from "./nodes/generic-node";
 import { NodeConfigPanel } from "./node-config-panel";
 import { NodeLibraryMenu } from "./node-library-menu";
@@ -37,12 +41,13 @@ const nodeTypes = {
   end: EndNode,
   llm: LLMNode,
   knowledge: KnowledgeNode,
-  // 新节点类型 - 暂时使用 GenericNode
+  // 数据节点
+  "table-select": TableSelectNode,
+  "data-clarify": DataClarifyNode,
+  "data-query": DataQueryNode,
+  "data-visualize": DataVisualizeNode,
+  // 其他节点类型 - 暂时使用 GenericNode
   agent: GenericNode,
-  "table-select": GenericNode,
-  "data-clarify": GenericNode,
-  "data-query": GenericNode,
-  "data-visualize": GenericNode,
   branch: GenericNode,
   "intent-recognize": GenericNode,
   code: GenericNode,
@@ -217,6 +222,11 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
                   case "llm":
                     return "#3b82f6";
                   case "knowledge":
+                  case "object-query":
+                  case "table-select":
+                  case "data-clarify":
+                  case "data-query":
+                  case "data-visualize":
                     return "#a855f7";
                   default:
                     return "#94a3b8";

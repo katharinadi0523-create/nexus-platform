@@ -55,10 +55,10 @@ const nodeCategories: NodeCategory[] = [
     id: "data",
     label: "数据",
     items: [
-      { id: "table-select", label: "选表", icon: Table, color: "text-slate-600" },
-      { id: "data-clarify", label: "数据澄清", icon: Filter, color: "text-slate-600" },
-      { id: "data-query", label: "数据查询", icon: Database, color: "text-slate-600" },
-      { id: "data-visualize", label: "数据可视化", icon: BarChart3, color: "text-slate-600" },
+      { id: "table-select", label: "选表", icon: Table, color: "text-purple-600" },
+      { id: "data-clarify", label: "数据澄清", icon: Filter, color: "text-purple-600" },
+      { id: "data-query", label: "数据查询", icon: Database, color: "text-purple-600" },
+      { id: "data-visualize", label: "数据可视化", icon: BarChart3, color: "text-purple-600" },
     ],
   },
   {

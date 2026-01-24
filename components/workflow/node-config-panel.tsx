@@ -1,13 +1,16 @@
 "use client";
 
 import { Node } from "reactflow";
-import { X, Play, StopCircle, Sparkles, BookOpen } from "lucide-react";
+import { X, Play, StopCircle, Sparkles, BookOpen, Network, Table, Filter, Database, BarChart3 } from "lucide-react";
 import { StartNodeConfig } from "./configs/start-node-config";
 import { LLMNodeConfig } from "./configs/llm-node-config";
 import { KnowledgeNodeConfig } from "./configs/knowledge-node-config";
 import { EndNodeConfig } from "./configs/end-node-config";
 import { ObjectQueryNodeConfig } from "./configs/object-query-node-config";
-import { Network } from "lucide-react";
+import { TableSelectNodeConfig } from "./configs/data/table-select-node-config";
+import { DataClarifyNodeConfig } from "./configs/data/data-clarify-node-config";
+import { DataQueryNodeConfig } from "./configs/data/data-query-node-config";
+import { DataVisualizeNodeConfig } from "./configs/data/data-visualize-node-config";
 import { cn } from "@/lib/utils";
 
 interface NodeConfigPanelProps {
@@ -28,6 +31,14 @@ const getNodeIcon = (type: string | undefined) => {
       return BookOpen;
     case "object-query":
       return Network;
+    case "table-select":
+      return Table;
+    case "data-clarify":
+      return Filter;
+    case "data-query":
+      return Database;
+    case "data-visualize":
+      return BarChart3;
     default:
       return Play;
   }
@@ -45,6 +56,14 @@ const getNodeLabel = (type: string | undefined) => {
       return "知识检索";
     case "object-query":
       return "对象查询";
+    case "table-select":
+      return "选表";
+    case "data-clarify":
+      return "数据澄清";
+    case "data-query":
+      return "数据查询";
+    case "data-visualize":
+      return "数据可视化";
     default:
       return "节点";
   }
@@ -61,6 +80,11 @@ const getNodeColor = (type: string | undefined) => {
     case "knowledge":
       return "text-purple-600";
     case "object-query":
+      return "text-purple-600";
+    case "table-select":
+    case "data-clarify":
+    case "data-query":
+    case "data-visualize":
       return "text-purple-600";
     default:
       return "text-slate-600";
@@ -126,6 +150,30 @@ export function NodeConfigPanel({
         )}
         {selectedNode.type === "object-query" && (
           <ObjectQueryNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+          />
+        )}
+        {selectedNode.type === "table-select" && (
+          <TableSelectNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+          />
+        )}
+        {selectedNode.type === "data-clarify" && (
+          <DataClarifyNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+          />
+        )}
+        {selectedNode.type === "data-query" && (
+          <DataQueryNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+          />
+        )}
+        {selectedNode.type === "data-visualize" && (
+          <DataVisualizeNodeConfig
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
           />
