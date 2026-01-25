@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { LogsTable, type LogEntry } from "@/components/agent/logs-table";
 import { InterventionList } from "@/components/agent/intervention-list";
 import { ExportLogsDialog } from "@/components/agent/export-logs-dialog";
+import { ExportRecordsDialog } from "@/components/agent/export-records-dialog";
 import {
   getAgentById,
   getLogsByAgentId,
@@ -51,6 +52,7 @@ function LogsContent({
   agentType,
 }: LogsContentProps) {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportRecordsDialogOpen, setExportRecordsDialogOpen] = useState(false);
 
   // 根据搜索和日期范围过滤日志
   const filteredLogs = logs.filter((log) => {
@@ -133,14 +135,23 @@ function LogsContent({
 
               {/* Action Buttons */}
               <div className="ml-auto flex items-center gap-2">
-                <Button variant="outline" size="icon">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    setCurrentPage(1);
+                    // 模拟刷新效果
+                  }}
+                  className="h-9 w-9"
+                  title="刷新"
+                >
                   <RefreshCcw className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon">
-                  <Download className="h-4 w-4" />
                 </Button>
                 <Button variant="outline" disabled={selectedLogs.size === 0}>
                   批量采纳
+                </Button>
+                <Button variant="outline" onClick={() => setExportRecordsDialogOpen(true)}>
+                  导出记录
                 </Button>
                 <Button onClick={() => setExportDialogOpen(true)}>导出</Button>
               </div>
@@ -164,6 +175,12 @@ function LogsContent({
             dateRange={dateRange}
             logs={sftLogs}
             agentType={agentType}
+          />
+
+          {/* Export Records Dialog */}
+          <ExportRecordsDialog
+            open={exportRecordsDialogOpen}
+            onOpenChange={setExportRecordsDialogOpen}
           />
 
           {/* Pagination */}

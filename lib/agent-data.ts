@@ -7,6 +7,7 @@ export type Role = 'system' | 'user' | 'assistant';
 export interface Message {
   role: Role;
   content: string;
+  imageUrl?: string; // <--- 新增：用于存储用户上传的图片路径
 }
 
 export interface LogEntry {
@@ -37,6 +38,31 @@ export interface AgentProfile {
 const SYSTEM_PROMPT = '你是一名资深开源情报(OSINT)分析师。你的任务是根据用户提供的零散信息，结合知识库，输出逻辑严密的分析报告。请保持客观、中立，并注明信息可信度。';
 
 const MOCK_LOGS_OSINT: LogEntry[] = [
+  // lib/mock/agent-data.ts -> MOCK_LOGS_OSINT 数组
+
+  {
+    id: 'log-osint-multimodal-01',
+    createdAt: '2026-01-25 16:45:00', // 最近的时间
+    tokens: 3400,
+    latency: 4200,
+    messages: [
+      {
+        role: 'system',
+        content: '你是一名资深开源情报(OSINT)分析师。你的任务是根据用户提供的零散信息，结合知识库，输出逻辑严密的分析报告。请保持客观、中立，并注明信息可信度。'
+      },
+      {
+        role: 'user',
+        content: '这是刚刚通过商业卫星获取的 T-72 区域高分辨率图像。请分析画面中的异常活动，并识别潜在的军事设施部署。',
+        // 用户发图：模拟上传了一张卫星图
+        imageUrl: '/mock/satellite-input.png'
+      },
+      {
+        role: 'assistant',
+        content: '收到图像。正在通过 Computer Vision 模型进行特征比对...\n\n根据图像的光谱特征和几何形状分析，我发现了以下关键情报：\n\n1. **伪装网覆盖**：在坐标 (34.5, 69.2) 处发现大面积伪装网，覆盖面积约 400 平方米。\n2. **热源异常**：红外波段显示该区域有未冷却的发动机热源。\n\n以下是目标的自动标注与识别结果：\n<appforgeimg src="/mock/analysis-result.png" />\n\n**结论**：该区域极有可能是处于战备状态的前线补给站，建议调用 SAR 雷达进行二次确认。'
+      }
+    ]
+  },
+  // ... 原有的其他数据保持在后面
   // ------------------------------------------------------
   // 记录 1 (最新): 第三轮对话
   // 上下文包含: System + 第一轮 + 第二轮

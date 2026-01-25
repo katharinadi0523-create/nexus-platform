@@ -42,6 +42,7 @@ type MessageRole = "system" | "user" | "assistant";
 interface Message {
   role: MessageRole;
   content: string;
+  imageUrl?: string; // 用户上传的图片路径
 }
 
 // 扩展的日志条目，包含完整的对话历史
@@ -324,6 +325,7 @@ export function ExportLogsDialog({
         messages: log.messages.map((msg) => ({
           role: msg.role as MessageRole,
           content: msg.content,
+          imageUrl: msg.imageUrl, // 传递 imageUrl
         })),
         timestamp: log.createdAt,
         source,
@@ -723,6 +725,11 @@ export function ExportLogsDialog({
                                         <span className="break-words">
                                           {msg.content}
                                         </span>
+                                        {msg.imageUrl && (
+                                          <div className="text-slate-500 mt-1">
+                                            imageUrl: '{msg.imageUrl}'
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })}

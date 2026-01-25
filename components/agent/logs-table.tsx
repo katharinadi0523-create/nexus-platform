@@ -15,6 +15,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from "@/lib/utils";
 import type { LogEntry as SFTLogEntry, AgentType, Message } from "@/lib/agent-data";
 
+// 将包含 <appforgeimg /> 的字符串拆分为 React 节点数组
+const parseAgentContent = (content: string) => {
+  // 正则匹配 <appforgeimg src="..." />
+  const parts = content.split(/(<appforgeimg src="[^"]+" \/>)/g);
+  
+  return parts.map((part, index) => {
+    const match = part.match(/<appforgeimg src="([^"]+)" \/>/);
+    if (match) {
+      return (
+        <img 
+          key={index} 
+          src={match[1]} 
+          alt="Agent Generated" 
+          className="my-2 max-w-full rounded-lg border border-gray-200 shadow-sm" 
+        />
+      );
+    }
+    // 普通文本，保留换行符
+    return <span key={index} className="whitespace-pre-wrap">{part}</span>;
+  });
+};
+
 // LogEntry 类型定义
 export type LogEntry = {
   id: string; // 会话ID (显示前8位)
@@ -279,9 +301,28 @@ export function LogsTable({ data, onExportClick, rawLogs, agentType }: LogsTable
                       <div key={index} className="flex justify-end mb-3">
                         <div className="max-w-[75%]">
                           <div className="bg-blue-500 text-white rounded-2xl rounded-tr-sm p-4 shadow-sm">
-                            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-                              {message.content}
-                            </p>
+                            {message.content && (
+                              <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                                {message.content}
+                              </p>
+                            )}
+                            {message.imageUrl && (
+                              <div className={message.content ? "mt-2" : ""}>
+                                <img 
+                                  src={message.imageUrl} 
+                                  alt="User Upload" 
+                                  className="max-w-[300px] w-full h-auto rounded-lg border-2 border-white/30 shadow-md bg-white/10 object-contain" 
+                                  onError={(e) => {
+                                    console.error("Failed to load image:", message.imageUrl);
+                                    // 显示占位符而不是隐藏
+                                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='150'%3E%3Crect fill='%23ccc' width='200' height='150'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999'%3E图片加载失败%3C/text%3E%3C/svg%3E";
+                                  }}
+                                  onLoad={() => {
+                                    console.log("Image loaded successfully:", message.imageUrl);
+                                  }}
+                                />
+                              </div>
+                            )}
                           </div>
                           <span className="text-xs text-slate-400 mt-1.5 block text-right px-1">用户</span>
                         </div>
@@ -293,9 +334,9 @@ export function LogsTable({ data, onExportClick, rawLogs, agentType }: LogsTable
                       <div key={index} className="flex justify-start mb-3">
                         <div className="max-w-[75%]">
                           <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm p-4 shadow-sm">
-                            <p className="text-sm text-slate-800 whitespace-pre-wrap break-words leading-relaxed">
-                              {message.content}
-                            </p>
+                            <div className="text-sm text-slate-800 break-words leading-relaxed">
+                              {parseAgentContent(message.content)}
+                            </div>
                           </div>
                           <span className="text-xs text-slate-400 mt-1.5 block px-1">助手</span>
                         </div>
