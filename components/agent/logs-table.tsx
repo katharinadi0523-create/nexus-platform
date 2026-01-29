@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ThumbsUp, ThumbsDown, ChevronDown, Filter } from "lucide-react";
+import { ThumbsUp, ThumbsDown, ChevronDown, Filter, AlertCircle } from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -12,8 +12,9 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import type { LogEntry as SFTLogEntry, AgentType, Message } from "@/lib/agent-data";
+import type { LogEntry as SFTLogEntry, AgentType, Message, FeedbackDetail } from "@/lib/agent-data";
 
 // 将包含 <appforgeimg /> 的字符串拆分为 React 节点数组
 const parseAgentContent = (content: string) => {
@@ -44,8 +45,8 @@ export type LogEntry = {
   output: string; // 输出 (截断)
   timestamp: string; // 请求发起时间 (YYYY-MM-DD HH:mm:ss)
   source: "应用广场" | "API调用" | "网页端体验" | "预览与调试"; // 渠道来源
-  userFeedback: "like" | "dislike" | null; // 用户反馈
-  adminFeedback: "good" | "bad" | null; // 管理员反馈 (可交互)
+  userFeedback: FeedbackDetail; // 用户反馈
+  adminFeedback: FeedbackDetail; // 管理员反馈
   status: "pending" | "adopted"; // 操作状态
   fullMessages?: Message[]; // 完整的对话历史（用于详情页展示）
 };
@@ -70,8 +71,13 @@ export function LogsTable({ data, onExportClick, rawLogs, agentType }: LogsTable
     setLogs((prevLogs) =>
       prevLogs.map((log) => {
         if (log.id === logId) {
+          // 将 "good" 映射为 "like"，"bad" 映射为 "dislike"
+          const feedbackStatus: "like" | "dislike" = feedback === "good" ? "like" : "dislike";
           // 如果点击的是当前反馈，则取消反馈；否则设置新反馈
-          const newFeedback = log.adminFeedback === feedback ? null : feedback;
+          const newFeedback: FeedbackDetail = 
+            log.adminFeedback.status === feedbackStatus 
+              ? { status: null }
+              : { status: feedbackStatus };
           return { ...log, adminFeedback: newFeedback };
         }
         return log;
@@ -186,10 +192,49 @@ export function LogsTable({ data, onExportClick, rawLogs, agentType }: LogsTable
 
                   {/* 用户反馈 */}
                   <TableCell className="text-sm">
-                    {log.userFeedback === "like" ? (
+                    {log.userFeedback.status === "like" ? (
                       <span className="text-green-600">👍</span>
-                    ) : log.userFeedback === "dislike" ? (
-                      <span className="text-red-600">👎</span>
+                    ) : log.userFeedback.status === "dislike" ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-red-600">👎</span>
+                        {(log.userFeedback.tags && log.userFeedback.tags.length > 0) || log.userFeedback.content ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button type="button" className="cursor-help">
+                                <AlertCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              className="w-64 p-3 text-xs text-slate-700"
+                              side="right"
+                              sideOffset={8}
+                            >
+                              <div className="space-y-2">
+                                {log.userFeedback.tags && log.userFeedback.tags.length > 0 && (
+                                  <div>
+                                    <div className="font-medium text-slate-900 mb-1">点踩原因：</div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {log.userFeedback.tags.map((tag, index) => (
+                                        <Badge key={index} variant="secondary" className="text-xs">
+                                          {tag}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {log.userFeedback.content && (
+                                  <div>
+                                    <div className="font-medium text-slate-900 mb-1">反馈内容：</div>
+                                    <div className="text-slate-600 whitespace-pre-wrap">
+                                      {log.userFeedback.content}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        ) : null}
+                      </div>
                     ) : (
                       "-"
                     )}
@@ -202,7 +247,7 @@ export function LogsTable({ data, onExportClick, rawLogs, agentType }: LogsTable
                         onClick={() => handleAdminFeedback(log.id, "good")}
                         className={cn(
                           "p-1 rounded hover:bg-slate-100 transition-colors",
-                          log.adminFeedback === "good"
+                          log.adminFeedback.status === "like"
                             ? "text-yellow-600"
                             : "text-slate-400"
                         )}
@@ -214,7 +259,7 @@ export function LogsTable({ data, onExportClick, rawLogs, agentType }: LogsTable
                         onClick={() => handleAdminFeedback(log.id, "bad")}
                         className={cn(
                           "p-1 rounded hover:bg-slate-100 transition-colors",
-                          log.adminFeedback === "bad"
+                          log.adminFeedback.status === "dislike"
                             ? "text-slate-600"
                             : "text-slate-400"
                         )}

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 interface BaseNodeProps {
   icon: LucideIcon;
   label: string;
-  color: "green" | "red" | "blue" | "purple";
+  color: "green" | "red" | "blue" | "purple" | "orange";
   selected?: boolean;
   children: ReactNode;
   showTargetHandle?: boolean;
@@ -37,6 +37,11 @@ const colorMap = {
     bg: "bg-purple-100",
     icon: "text-purple-600",
     border: "border-purple-500",
+  },
+  orange: {
+    bg: "bg-orange-100",
+    icon: "text-orange-600",
+    border: "border-orange-500",
   },
 };
 

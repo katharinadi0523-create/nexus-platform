@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   Sparkles,
@@ -21,37 +21,20 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-
-// 支持的参数类型
-export type ParamType = "temperature" | "topP" | "maxToken" | "topK" | "history";
-
-// 模型参数配置接口
-export interface ModelParamConfig {
-  supportedParams: ParamType[];
-  maxToken?: {
-    min: number;
-    max: number;
-    default: number;
-  };
-  topK?: {
-    default: number;
-  };
-}
-
-// 模型配置映射
-export interface ModelConfig {
-  [modelName: string]: ModelParamConfig;
-}
+import {
+  EXCLUSIVE_MODEL_IDS,
+  PRESET_MODEL_IDS,
+  getDefaultModelParams,
+  getModelSchema,
+  type ModelParamKey,
+  type ModelParamSchema,
+  type ModelParamValues,
+} from "@/lib/model-schemas";
 
 // 模型参数值接口
-export interface ModelParams {
-  temperature?: number;
-  topP?: number;
-  maxToken?: number;
-  topK?: number;
-  history?: number;
-}
+export type ModelParams = ModelParamValues;
 
 export interface ModelSelectorProps {
   selectedModel?: string;
@@ -60,125 +43,23 @@ export interface ModelSelectorProps {
   onParamsChange?: (params: ModelParams) => void;
 }
 
-// 模型配置常量
-export const MODEL_CONFIGS: ModelConfig = {
-  // 预置模型 - 标准配置
-  "Qwen3-32B": {
-    supportedParams: ["temperature", "topP", "maxToken", "topK", "history"],
-    maxToken: {
-      min: 1,
-      max: 8192,
-      default: 8192,
-    },
-    topK: {
-      default: 20,
-    },
-  },
-  "Qwen3-8B": {
-    supportedParams: ["temperature", "topP", "maxToken", "topK", "history"],
-    maxToken: {
-      min: 1,
-      max: 8192,
-      default: 8192,
-    },
-    topK: {
-      default: 20,
-    },
-  },
-  "DeepSeek V3": {
-    supportedParams: ["temperature", "topP", "maxToken", "topK", "history"],
-    maxToken: {
-      min: 1,
-      max: 8192,
-      default: 8192,
-    },
-    topK: {
-      default: 20,
-    },
-  },
-  // DeepSeek R1 - 推理模型，不支持 temperature 和 topP
-  "DeepSeek-R1": {
-    supportedParams: ["maxToken", "topK", "history"],
-    maxToken: {
-      min: 1,
-      max: 32768,
-      default: 32768,
-    },
-    topK: {
-      default: 20,
-    },
-  },
-  // 我的模型 - 不支持 maxToken
-  "Qwen3-DPO": {
-    supportedParams: ["temperature", "topP", "topK", "history"],
-    topK: {
-      default: 20,
-    },
-  },
-  "微调多模态感知大模型": {
-    supportedParams: ["temperature", "topP", "topK", "history"],
-    topK: {
-      default: 20,
-    },
-  },
-  "DeepSeek-R2": {
-    supportedParams: ["temperature", "topP", "topK", "history"],
-    topK: {
-      default: 20,
-    },
-  },
-};
-
-// 默认参数值
-const getDefaultParams = (model: string): ModelParams => {
-  const config = MODEL_CONFIGS[model];
-  if (!config) {
-    return {
-      temperature: 0.01,
-      topP: 0.01,
-      maxToken: 4096,
-      topK: 20,
-      history: 5,
-    };
-  }
-
-  const params: ModelParams = {};
-
-  if (config.supportedParams.includes("temperature")) {
-    params.temperature = 0.01;
-  }
-  if (config.supportedParams.includes("topP")) {
-    params.topP = 0.01;
-  }
-  if (config.supportedParams.includes("maxToken") && config.maxToken) {
-    params.maxToken = config.maxToken.default;
-  }
-  if (config.supportedParams.includes("topK") && config.topK) {
-    params.topK = config.topK.default;
-  }
-  if (config.supportedParams.includes("history")) {
-    params.history = 5;
-  }
-
-  return params;
-};
-
-const presetModels = ["Qwen3-32B", "DeepSeek-R1", "Qwen3-8B"];
-const exclusiveModels = [
-  "Qwen3-DPO",
-  "微调多模态感知大模型",
-  "DeepSeek-R2",
-];
+const presetModels = PRESET_MODEL_IDS;
+const exclusiveModels = EXCLUSIVE_MODEL_IDS;
 
 // Tooltip 文案
-const TOOLTIP_CONTENT = {
+const TOOLTIP_CONTENT: Partial<Record<ModelParamKey, string>> = {
   temperature:
-    "控制生成随机性和多样性，数值越高，输出越发散、创意性越强；数值越低，输出越稳定、严谨。",
-  topP: "控制参与采样的概率范围，仅从累计概率不超过 P 的候选词中进行生成。数值越小，输出越稳定；数值越大，多样性越高。",
-  topK: "控制采样候选集大小。数值越小采样范围越窄，关注高频词；数值越大用词越丰富。",
-  maxToken:
+    "控制生成随机性，数值越高，输出越发散、创意性越强；数值越低，输出越稳定、严谨。",
+  top_p:
+    "累计概率：控制参与采样的概率范围，仅从累计概率不超过 P 的候选词中进行生成。数值越小，输出越稳定；数值越大，多样性越高。建议不要与温度同时调整",
+  top_k:
+    "控制采样候选集大小。数值越小采样范围越窄，关注高频词；数值越大用词越丰富。",
+  max_tokens:
     "限制模型单次输出的最大长度，包括思考和输出内容两部分。",
-  history:
+  frequency_penalty:
+    "当该值为正时，会阻止模型频繁使用相同的词汇和短语，从而增加输出内容的多样性。",
+  deep_thinking: "开启后模型展示深思考过程，提升逻辑准确性。",
+  context_turns:
     "传入大模型上下文的前序对话轮数（一问一答计为一轮）。数值越大，模型对历史记忆越完整，但模型上下文压力相应增大。",
 };
 
@@ -221,25 +102,26 @@ export function ModelSelector({
   );
   const [currentModel, setCurrentModel] = useState(selectedModel);
 
-  // 获取当前模型的配置
-  const currentConfig = useMemo(() => {
-    return MODEL_CONFIGS[currentModel] || MODEL_CONFIGS["DeepSeek-R2"];
-  }, [currentModel]);
+  const currentSchema = useMemo(() => getModelSchema(currentModel), [currentModel]);
 
   // 合并默认参数和传入的参数
   const defaultParams = useMemo(
-    () => getDefaultParams(currentModel),
+    () => getDefaultModelParams(currentModel),
     [currentModel]
   );
 
-  const [params, setParams] = useState<ModelParams>(
-    modelParams || defaultParams
-  );
+  const [params, setParams] = useState<ModelParams>(modelParams || defaultParams);
+
+  // Keep controlled prop in sync
+  useEffect(() => {
+    if (!modelParams) return;
+    setParams(modelParams);
+  }, [modelParams]);
 
   // 当模型改变时，重置参数为默认值
   const handleModelSelect = (model: string) => {
     setCurrentModel(model);
-    const newDefaultParams = getDefaultParams(model);
+    const newDefaultParams = getDefaultModelParams(model);
     setParams(newDefaultParams);
     onModelChange?.(model);
     onParamsChange?.(newDefaultParams);
@@ -252,37 +134,36 @@ export function ModelSelector({
     }
   };
 
-  const handleParamChange = (key: keyof ModelParams, value: number) => {
-    const newParams = { ...params, [key]: value };
+  const handleParamChange = (key: ModelParamKey, value: number | boolean) => {
+    let newParams = { ...params, [key]: value };
+
+    // Qwen3 deep_thinking linkage (authoritative recommended presets)
+    // - deep_thinking=true  => temperature=0.6, top_p=0.95, top_k=20
+    // - deep_thinking=false => temperature=0.7, top_p=0.8,  top_k=20
+    if (
+      (currentModel === "Qwen3-32B" || currentModel === "Qwen3-8B") &&
+      key === "deep_thinking"
+    ) {
+      const enabled = Boolean(value);
+      newParams = {
+        ...newParams,
+        temperature: enabled ? 0.6 : 0.7,
+        top_p: enabled ? 0.95 : 0.8,
+        top_k: 20,
+      };
+    }
+
     setParams(newParams);
     onParamsChange?.(newParams);
   };
 
-  // 检查是否支持某个参数
-  const isParamSupported = (param: ParamType): boolean => {
-    return currentConfig.supportedParams.includes(param);
-  };
-
-  // 渲染参数配置项
-  const renderParamField = (
-    param: ParamType,
-    label: string,
-    min: number,
-    max: number,
-    step: number,
-    formatValue?: (val: number) => string
-  ) => {
-    if (!isParamSupported(param)) {
-      return null;
-    }
-
-    const value = params[param] ?? 0;
-    const displayValue = formatValue ? formatValue(value) : value.toString();
-
+  const renderNumberParam = (param: Extract<ModelParamSchema, { type: "number" }>) => {
+    const value = (params[param.key] as number | undefined) ?? param.defaultValue;
+    const displayValue = param.format ? param.format(value) : value.toString();
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-1.5">
-          <Label className="text-xs text-slate-700">{label}</Label>
+          <Label className="text-xs text-slate-700">{param.label}</Label>
           <Popover>
             <PopoverTrigger asChild>
               <button type="button" className="cursor-help">
@@ -294,17 +175,17 @@ export function ModelSelector({
               side="right"
               sideOffset={8}
             >
-              {TOOLTIP_CONTENT[param]}
+              {param.description || TOOLTIP_CONTENT[param.key]}
             </PopoverContent>
           </Popover>
         </div>
         <div className="flex items-center gap-3">
           <Slider
             value={[value]}
-            onValueChange={([val]) => handleParamChange(param, val)}
-            min={min}
-            max={max}
-            step={step}
+            onValueChange={([val]) => handleParamChange(param.key, val)}
+            min={param.min}
+            max={param.max}
+            step={param.step}
             className="flex-1"
           />
           <Input
@@ -312,25 +193,68 @@ export function ModelSelector({
             value={displayValue}
             onChange={(e) => {
               const val = parseFloat(e.target.value);
-              if (!isNaN(val) && val >= min && val <= max) {
-                handleParamChange(param, val);
+              if (!isNaN(val) && val >= param.min && val <= param.max) {
+                handleParamChange(param.key, val);
               }
             }}
-            step={step}
-            min={min}
-            max={max}
+            step={param.step}
+            min={param.min}
+            max={param.max}
             className="w-20 h-8 text-xs"
           />
         </div>
-        {/* Max Token 警告提示 */}
-        {param === "maxToken" && value < 1024 && (
+        {/* max_tokens 警告提示 */}
+        {param.key === "max_tokens" && value < 1024 && (
           <div className="flex items-start gap-2 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-700">
             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>
-              当前设定值过小，可能导致思考中断、工具调用失败或输出中断。
+              ⚠️ 当前设定值过小，可能导致思考中断、工具调用失败或输出中断。
             </span>
           </div>
         )}
+        {/* frequency_penalty < 0 风险提示 */}
+        {param.key === "frequency_penalty" && value < 0 && (
+          <div className="flex items-start gap-2 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-700">
+            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>
+              ⚠️ 负值惩罚会鼓励模型重复输出，可能导致调用插件知识库等功能超时！
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderParam = (param: ModelParamSchema) => {
+    if (param.type === "number") return renderNumberParam(param);
+    // boolean toggle: label + switch on one row
+    const value = (params[param.key] as boolean | undefined) ?? param.defaultValue;
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5">
+            <Label className="text-xs text-slate-700">{param.label}</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className="cursor-help">
+                  <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-64 p-3 text-xs text-slate-700"
+                side="right"
+                sideOffset={8}
+              >
+                {param.description || TOOLTIP_CONTENT[param.key]}
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <Switch
+            checked={value}
+            onCheckedChange={(checked) => handleParamChange(param.key, checked)}
+          />
+        </div>
       </div>
     );
   };
@@ -454,32 +378,9 @@ export function ModelSelector({
               参数配置
             </h3>
             <div className="space-y-4">
-
-            {/* Temperature */}
-            {renderParamField("temperature", "温度", 0, 1, 0.01, (val) =>
-              val.toFixed(4)
-            )}
-
-            {/* Top P */}
-            {renderParamField("topP", "Top P", 0, 1, 0.01, (val) =>
-              val.toFixed(4)
-            )}
-
-            {/* Max Token - 动态范围和可见性 */}
-            {currentConfig.maxToken &&
-              renderParamField(
-                "maxToken",
-                "最大输出Token数",
-                currentConfig.maxToken.min,
-                currentConfig.maxToken.max,
-                128
-              )}
-
-            {/* Top K - 新增参数 */}
-            {renderParamField("topK", "Top K", 0, 100, 1)}
-
-              {/* History Rounds */}
-              {renderParamField("history", "对话轮数", 0, 10, 1)}
+              {currentSchema.supportedParams.map((p) => (
+                <div key={p.key}>{renderParam(p)}</div>
+              ))}
             </div>
           </div>
         </div>

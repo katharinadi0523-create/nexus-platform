@@ -8,6 +8,7 @@ import { AgentLogsView } from "@/components/agent/agent-logs-view";
 import { WorkflowEditor } from "@/components/workflow/workflow-editor";
 import { AutonomousEditor } from "@/components/agent/autonomous-editor";
 import { getAgentById } from "@/lib/agent-data";
+import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBadge";
 
 // 定义详细数据源
 interface AgentDetailData {
@@ -152,6 +153,11 @@ export default function AgentDetailPage() {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-4">
+          <ProtectionStatusBadge
+            protectionTaskName="GF专属防护"
+            protectionTaskId="1"
+            protectionTypes={["policy", "lexicon"]}
+          />
           <Button className="bg-slate-900 text-white hover:bg-slate-800">
             <Rocket className="w-4 h-4" />
             发布

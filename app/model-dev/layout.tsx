@@ -155,18 +155,18 @@ function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Menu */}
+      <div className="flex h-full flex-col">
+        {/* Menu */}
       <nav className="flex-1 overflow-y-auto px-4 py-4">
-        {menuGroups.map((group) => (
+          {menuGroups.map((group) => (
           <div key={group.title} className="mb-6">
             <div className="mb-2 px-3 text-xs font-medium text-gray-500 tracking-wider">
-              {group.title}
-            </div>
-            <div className="space-y-1">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                {group.title}
+              </div>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                 const linkClassName = cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   isActive
@@ -174,21 +174,21 @@ function Sidebar() {
                     : "text-gray-700 hover:bg-gray-50"
                 );
                 
-                return (
-                  <Link
-                    key={item.key}
-                    href={item.href}
+                  return (
+                    <Link
+                      key={item.key}
+                      href={item.href}
                     className={linkClassName}
-                  >
+                    >
                     <Icon className={cn("h-4 w-4", isActive ? "text-blue-600" : "text-gray-500")} />
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-      </nav>
+          ))}
+        </nav>
     </div>
   );
 }
@@ -215,14 +215,14 @@ export default function ModelDevLayout({
       <div className="flex h-screen overflow-hidden bg-slate-50 pt-[60px]">
         {/* 左侧侧边栏: 固定宽度 220px, z-50 */}
         <aside className="w-[220px] flex-none z-50 border-r bg-white h-[calc(100vh-60px)] hidden md:block">
-          <Sidebar />
+        <Sidebar />
         </aside>
         {/* 右侧主体: 自动填满剩余空间 */}
         <main className="flex-1 flex flex-col h-[calc(100vh-60px)] overflow-hidden relative">
           {/* 页面内容滚动区 */}
           <div className="flex-1 overflow-y-auto p-6">
             {children}
-          </div>
+        </div>
         </main>
       </div>
       <Toaster position="top-right" />

@@ -1,17 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { HelpCircle, Maximize2 } from "lucide-react";
+import { HelpCircle, Maximize2, Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Node, Edge } from "reactflow";
+import { VariableSelector } from "../../variable-selector";
 
 interface DataClarifyNodeData {
   description?: string;
-  inputVariables?: Array<{ name: string; value: string }>;
+  inputVariables?: Array<{ name: string; type: string; value?: string }>;
   clarificationMode?: "single" | "multiple";
   prompt?: string;
 }
@@ -19,17 +22,34 @@ interface DataClarifyNodeData {
 interface DataClarifyNodeConfigProps {
   nodeData?: DataClarifyNodeData;
   onUpdate: (data: DataClarifyNodeData) => void;
+  currentNodeId?: string;
+  nodes?: Node[];
+  edges?: Edge[];
 }
+
+const typeOptions = [
+  { value: "string", label: "string" },
+  { value: "number", label: "number" },
+  { value: "boolean", label: "boolean" },
+  { value: "array[string]", label: "array[string]" },
+  { value: "array[number]", label: "array[number]" },
+  { value: "array[boolean]", label: "array[boolean]" },
+  { value: "array[object]", label: "array[object]" },
+  { value: "object", label: "object" },
+];
 
 export function DataClarifyNodeConfig({
   nodeData,
   onUpdate,
+  currentNodeId = "",
+  nodes = [],
+  edges = [],
 }: DataClarifyNodeConfigProps) {
   const [description, setDescription] = useState(nodeData?.description || "");
   const [inputVariables, setInputVariables] = useState<
-    Array<{ name: string; value: string }>
+    Array<{ name: string; type: string; value?: string }>
   >(
-    nodeData?.inputVariables || [{ name: "dataList", value: "" }]
+    nodeData?.inputVariables || [{ name: "dataList", type: "array[object]", value: "" }]
   );
   const [clarificationMode, setClarificationMode] = useState<"single" | "multiple">(
     nodeData?.clarificationMode || "single"
@@ -38,11 +58,32 @@ export function DataClarifyNodeConfig({
 
   const handleUpdateInputVariable = (
     index: number,
-    field: "name" | "value",
+    field: "name" | "type" | "value",
     value: string
   ) => {
     const updated = inputVariables.map((v, i) =>
       i === index ? { ...v, [field]: value } : v
+    );
+    setInputVariables(updated);
+    onUpdate({ ...nodeData, inputVariables: updated });
+  };
+
+  const handleAddInputVariable = () => {
+    const newVariable = { name: "", type: "string", value: "" };
+    const updated = [...inputVariables, newVariable];
+    setInputVariables(updated);
+    onUpdate({ ...nodeData, inputVariables: updated });
+  };
+
+  const handleRemoveInputVariable = (index: number) => {
+    const updated = inputVariables.filter((_, i) => i !== index);
+    setInputVariables(updated);
+    onUpdate({ ...nodeData, inputVariables: updated });
+  };
+
+  const handleSelectInputVariable = (index: number, variablePath: string) => {
+    const updated = inputVariables.map((v, i) =>
+      i === index ? { ...v, value: variablePath } : v
     );
     setInputVariables(updated);
     onUpdate({ ...nodeData, inputVariables: updated });
@@ -66,30 +107,63 @@ export function DataClarifyNodeConfig({
       {/* 输入变量 */}
       <div className="space-y-2">
         <h3 className="text-sm font-medium text-slate-900">输入变量</h3>
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-2 text-xs text-slate-500 mb-2 px-2">
-            <div>变量名</div>
-            <div>变量值</div>
-          </div>
-          {inputVariables.map((variable, index) => (
-            <div
-              key={index}
-              className="grid grid-cols-2 gap-2 bg-slate-50 rounded-lg p-2"
-            >
-              <div className="text-sm text-slate-700">{variable.name} array...</div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full justify-start text-sm text-slate-600"
-                onClick={() => {
-                  // TODO: 打开变量选择器
-                }}
+        {inputVariables.length > 0 ? (
+          <div className="space-y-2">
+            {inputVariables.map((variable, index) => (
+              <div
+                key={index}
+                className="space-y-2 bg-slate-50 rounded-lg p-2"
               >
-                设置变量值
-              </Button>
-            </div>
-          ))}
-        </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={variable.name}
+                    onChange={(e) =>
+                      handleUpdateInputVariable(index, "name", e.target.value)
+                    }
+                    placeholder="变量名"
+                    className="flex-1 text-sm"
+                  />
+                  <Select
+                    value={variable.type}
+                    onValueChange={(value) =>
+                      handleUpdateInputVariable(index, "type", value)
+                    }
+                    options={typeOptions}
+                    className="w-[140px] text-sm"
+                  />
+                  <button
+                    onClick={() => handleRemoveInputVariable(index)}
+                    className="p-1 hover:bg-slate-200 rounded transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4 text-slate-500" />
+                  </button>
+                </div>
+                <VariableSelector
+                  nodes={nodes}
+                  edges={edges}
+                  currentNodeId={currentNodeId}
+                  value={variable.value}
+                  onSelect={(path) => handleSelectInputVariable(index, path)}
+                  placeholder="选择上游节点输出"
+                  className="text-sm"
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-slate-50 rounded-lg p-3 text-center text-sm text-slate-500">
+            未配置变量
+          </div>
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleAddInputVariable}
+          className="w-full gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          添加输入变量
+        </Button>
       </div>
 
       {/* 澄清模式 */}

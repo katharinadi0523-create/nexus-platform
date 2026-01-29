@@ -28,7 +28,11 @@ import { MCPSelector, type MCP } from "@/components/agent-editor/MCPSelector";
 import { OntologyConfigDialog, type OntologyConfig } from "@/components/agent-editor/OntologyConfigDialog";
 import { TerminologySelector, type Terminology } from "@/components/agent-editor/TerminologySelector";
 import { Button } from "@/components/ui/button";
+import { checkSensitiveContent } from "@/lib/content-filter";
+import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBadge";
 import { LogsTable, type LogEntry } from "@/components/agent/logs-table";
+import { useModelCompatibility } from "@/lib/useModelCompatibility";
+import { CompatibilityIndicator } from "@/components/agent-editor/CompatibilityIndicator";
 
 // Mock 预览与调试日志数据（模拟用户在创建过程中进行的对话测试）
 const MOCK_PREVIEW_LOGS: LogEntry[] = [
@@ -38,8 +42,8 @@ const MOCK_PREVIEW_LOGS: LogEntry[] = [
     output: "您好！我是自主规划智能体，可以帮助您进行任务规划、决策分析和问题解决。我可以理解复杂需求，制定执行计划，并逐步完成目标。",
     timestamp: "2025-01-15 15:30:22",
     source: "预览与调试",
-    userFeedback: null,
-    adminFeedback: null,
+    userFeedback: { status: null },
+    adminFeedback: { status: null },
     status: "pending",
   },
   {
@@ -48,8 +52,8 @@ const MOCK_PREVIEW_LOGS: LogEntry[] = [
     output: "优化检索效果可以从以下几个方面入手：1. 调整检索策略，使用混合检索结合关键词和语义检索；2. 优化Top-K参数，平衡召回率和精确率；3. 使用重排序模型对初步结果进行精细化打分；4. 优化向量模型和索引结构。",
     timestamp: "2025-01-15 15:28:15",
     source: "预览与调试",
-    userFeedback: "like",
-    adminFeedback: "good",
+    userFeedback: { status: "like" },
+    adminFeedback: { status: "like" },
     status: "pending",
   },
   {
@@ -58,8 +62,8 @@ const MOCK_PREVIEW_LOGS: LogEntry[] = [
     output: "RAG技术的主要优势包括：1. 减少幻觉，通过检索外部知识库确保回答基于经过验证的信息；2. 知识更新灵活，无需重新训练模型即可更新知识库；3. 可追溯性，可以查看回答的来源文档；4. 成本效益，相比微调大模型更加经济。",
     timestamp: "2025-01-15 15:25:08",
     source: "预览与调试",
-    userFeedback: null,
-    adminFeedback: null,
+    userFeedback: { status: null },
+    adminFeedback: { status: null },
     status: "pending",
   },
   {
@@ -68,8 +72,12 @@ const MOCK_PREVIEW_LOGS: LogEntry[] = [
     output: "我理解您的问题。对于长文本输入，我会先进行问题分解，识别关键信息和子问题，然后逐一处理。对于复杂场景，我会分析各个要素之间的关系，制定分步骤的执行计划。",
     timestamp: "2025-01-15 15:20:45",
     source: "预览与调试",
-    userFeedback: "dislike",
-    adminFeedback: null,
+    userFeedback: { 
+      status: "dislike",
+      tags: ["逻辑问题", "其他"],
+      content: "理解错误，没有正确理解问题。"
+    },
+    adminFeedback: { status: null },
     status: "pending",
   },
   {
@@ -78,8 +86,8 @@ const MOCK_PREVIEW_LOGS: LogEntry[] = [
     output: "ReAct模式结合了推理（Reasoning）和行动（Acting），通过交替执行思考和行动来解决问题。Agent首先思考下一步应该做什么，然后执行相应的行动，观察结果，再继续思考，形成推理-行动-观察的循环。",
     timestamp: "2025-01-15 15:18:32",
     source: "预览与调试",
-    userFeedback: "like",
-    adminFeedback: "good",
+    userFeedback: { status: "like" },
+    adminFeedback: { status: "like" },
     status: "adopted",
   },
 ];
@@ -113,10 +121,11 @@ export default function AgentEditorPage() {
   const [selectedModel, setSelectedModel] = useState("DeepSeek-R2");
   const [modelParams, setModelParams] = useState<ModelParams>({
     temperature: 0.01,
-    topP: 0.01,
-    topK: 20,
-    history: 5,
+    top_p: 0.01,
+    top_k: 20,
+    context_turns: 5,
   });
+  const compatibility = useModelCompatibility(selectedModel);
   const [selectedWorkflows, setSelectedWorkflows] = useState<WorkflowType[]>([]);
   const [selectedPlugins, setSelectedPlugins] = useState<Plugin[]>([]);
   const [selectedMCPs, setSelectedMCPs] = useState<MCP[]>([]);
@@ -231,6 +240,22 @@ export default function AgentEditorPage() {
     setChatHistory((prev) => [...prev, userMessage]);
     setShowSuggestedChips(false);
 
+    // 检测敏感词
+    const blockedResponse = checkSensitiveContent(message);
+    
+    if (blockedResponse) {
+      // 如果包含敏感词，直接返回拦截响应
+      setTimeout(() => {
+        const aiMessage = {
+          role: "assistant" as const,
+          content: blockedResponse,
+          timestamp: new Date().toLocaleTimeString(),
+        };
+        setChatHistory((prev) => [...prev, aiMessage]);
+      }, 500);
+      return;
+    }
+
     // Mock AI response
     setTimeout(() => {
       const aiMessage = {
@@ -309,6 +334,11 @@ export default function AgentEditorPage() {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-4">
+          <ProtectionStatusBadge
+            protectionTaskName="GF专属防护"
+            protectionTaskId="1"
+            protectionTypes={["policy", "lexicon"]}
+          />
           <Button className="bg-slate-900 text-white hover:bg-slate-800">
           <Rocket className="w-4 h-4" />
           发布
@@ -362,7 +392,20 @@ export default function AgentEditorPage() {
               >
                 <div className="flex items-center gap-3">
                   <BookOpen className="w-5 h-5 text-slate-600" />
-                  <span className="font-medium text-slate-900">知识库</span>
+                  <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                    知识库
+                    <CompatibilityIndicator
+                      status={
+                        compatibility.items.knowledge_base.status === "limited"
+                          ? "limited"
+                          : compatibility.items.knowledge_base.status === "unsupported"
+                            ? "unsupported"
+                            : "unknown"
+                      }
+                      shortLabel={compatibility.items.knowledge_base.shortLabel}
+                      tooltip={compatibility.items.knowledge_base.tooltip}
+                    />
+                  </span>
                 </div>
                 {expandedSections.knowledge ? (
                   <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -448,7 +491,20 @@ export default function AgentEditorPage() {
               >
                 <div className="flex items-center gap-3">
                   <Network className="w-5 h-5 text-slate-600" />
-                  <span className="font-medium text-slate-900">本体</span>
+                  <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                    本体
+                    <CompatibilityIndicator
+                      status={
+                        compatibility.items.ontology.status === "limited"
+                          ? "limited"
+                          : compatibility.items.ontology.status === "unsupported"
+                            ? "unsupported"
+                            : "unknown"
+                      }
+                      shortLabel={compatibility.items.ontology.shortLabel}
+                      tooltip={compatibility.items.ontology.tooltip}
+                    />
+                  </span>
                 </div>
                 {expandedSections.ontology ? (
                   <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -515,7 +571,20 @@ export default function AgentEditorPage() {
               >
                 <div className="flex items-center gap-3">
                   <BookA className="w-5 h-5 text-slate-600" />
-                  <span className="font-medium text-slate-900">术语库</span>
+                  <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                    术语库
+                    <CompatibilityIndicator
+                      status={
+                        compatibility.items.terminology.status === "limited"
+                          ? "limited"
+                          : compatibility.items.terminology.status === "unsupported"
+                            ? "unsupported"
+                            : "unknown"
+                      }
+                      shortLabel={compatibility.items.terminology.shortLabel}
+                      tooltip={compatibility.items.terminology.tooltip}
+                    />
+                  </span>
                 </div>
                 {expandedSections.terminology ? (
                   <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -581,7 +650,20 @@ export default function AgentEditorPage() {
                 >
                   <div className="flex items-center gap-3">
                     <Workflow className="w-5 h-5 text-slate-600" />
-                    <span className="font-medium text-slate-900">工作流</span>
+                    <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                      工作流
+                      <CompatibilityIndicator
+                        status={
+                          compatibility.items.workflow.status === "limited"
+                            ? "limited"
+                            : compatibility.items.workflow.status === "unsupported"
+                              ? "unsupported"
+                              : "unknown"
+                        }
+                        shortLabel={compatibility.items.workflow.shortLabel}
+                        tooltip={compatibility.items.workflow.tooltip}
+                      />
+                    </span>
                   </div>
                   {expandedSections.workflow ? (
                     <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -657,7 +739,20 @@ export default function AgentEditorPage() {
                 >
                   <div className="flex items-center gap-3">
                     <Puzzle className="w-5 h-5 text-slate-600" />
-                    <span className="font-medium text-slate-900">插件</span>
+                    <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                      插件
+                      <CompatibilityIndicator
+                        status={
+                          compatibility.items.plugins.status === "limited"
+                            ? "limited"
+                            : compatibility.items.plugins.status === "unsupported"
+                              ? "unsupported"
+                              : "unknown"
+                        }
+                        shortLabel={compatibility.items.plugins.shortLabel}
+                        tooltip={compatibility.items.plugins.tooltip}
+                      />
+                    </span>
                   </div>
                   {expandedSections.plugins ? (
                     <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -735,7 +830,20 @@ export default function AgentEditorPage() {
                 >
                   <div className="flex items-center gap-3">
                     <Puzzle className="w-5 h-5 text-slate-600" />
-                    <span className="font-medium text-slate-900">MCP</span>
+                    <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                      MCP
+                      <CompatibilityIndicator
+                        status={
+                          compatibility.items.mcp.status === "limited"
+                            ? "limited"
+                            : compatibility.items.mcp.status === "unsupported"
+                              ? "unsupported"
+                              : "unknown"
+                        }
+                        shortLabel={compatibility.items.mcp.shortLabel}
+                        tooltip={compatibility.items.mcp.tooltip}
+                      />
+                    </span>
                   </div>
                   {expandedSections.mcp ? (
                     <ChevronUp className="w-5 h-5 text-slate-400" />

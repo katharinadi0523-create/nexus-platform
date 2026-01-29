@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 export interface OntologyConfig {
   ontology: string; // Level 1
   objectType: string; // Level 2
+  property: string; // Level 3
   queryRewrite: boolean;
   retrievalMethod: "full" | "semantic";
   retrievalVector?: string;
@@ -37,43 +38,31 @@ interface OntologyConfigDialogProps {
   onSave?: (config: OntologyConfig) => void;
 }
 
-// 级联选择数据
-const ontologyData = {
-  "海上态势感知": [
-    "战斗机",
-    "航空母舰",
-    "海军陆战队",
-    "无人机",
-    "运输机",
-    "运输船",
-    "哨塔",
-  ],
-  "装备维修检测": [
-    "战斗机",
-    "无人机",
-    "坦克",
-    "海底石油开采",
-    "侦察机",
-  ],
-};
-
-// 注入字段配置（根据对象类型）
-const injectionFieldsMap: Record<string, string[]> = {
-  战斗机: ["驾驶员", "载重", "时速", "位置(经纬度)", "所属空军基地", "服役年限"],
-  坦克: ["装甲厚度", "主炮口径", "越野速度"],
-  无人机: ["续航时间", "最大航程", "载重", "控制方式"],
-  航空母舰: ["排水量", "舰载机数量", "最大航速", "服役年限"],
-  海军陆战队: ["人数", "装备类型", "部署位置"],
-  运输机: ["载重", "航程", "最大速度"],
-  运输船: ["载重", "航速", "船型"],
-  哨塔: ["位置", "高度", "装备"],
-  侦察机: ["侦察设备", "航程", "最大速度"],
-  "海底石油开采": ["开采深度", "日产量", "设备类型"],
+// 三级级联选择数据：本体 -> 对象类型 -> 属性
+const ontologyData: Record<string, Record<string, string[]>> = {
+  "海上态势感知": {
+    战斗机: ["驾驶员", "载重", "时速", "位置(经纬度)", "所属空军基地", "服役年限"],
+    航空母舰: ["排水量", "舰载机数量", "最大航速", "服役年限"],
+    海军陆战队: ["人数", "装备类型", "部署位置"],
+    无人机: ["续航时间", "最大航程", "载重", "控制方式"],
+    运输机: ["载重", "航程", "最大速度"],
+    运输船: ["载重", "航速", "船型"],
+    哨塔: ["位置", "高度", "装备"],
+    战例: ["战舰", "航迹", "时间", "意图", "作战区域", "参战兵力", "作战结果", "战术类型"],
+  },
+  "装备维修检测": {
+    战斗机: ["驾驶员", "载重", "时速", "位置(经纬度)", "所属空军基地", "服役年限"],
+    无人机: ["续航时间", "最大航程", "载重", "控制方式"],
+    坦克: ["装甲厚度", "主炮口径", "越野速度"],
+    "海底石油开采": ["开采深度", "日产量", "设备类型"],
+    侦察机: ["侦察设备", "航程", "最大速度"],
+  },
 };
 
 const defaultConfig: OntologyConfig = {
   ontology: "",
   objectType: "",
+  property: "",
   queryRewrite: true,
   retrievalMethod: "full",
   topK: 20,
@@ -100,18 +89,23 @@ export function OntologyConfigDialog({
   };
 
   const availableObjects = config.ontology
-    ? ontologyData[config.ontology as keyof typeof ontologyData] || []
+    ? Object.keys(ontologyData[config.ontology] || {})
     : [];
 
-  const availableFields = config.objectType
-    ? injectionFieldsMap[config.objectType] || []
+  const availableProperties = config.ontology && config.objectType
+    ? ontologyData[config.ontology]?.[config.objectType] || []
     : [];
+
+  // 注入字段现在就是选中的属性，但为了兼容性，我们仍然使用 injectionFields
+  // 实际上，当选择了属性后，该属性会自动添加到 injectionFields
+  const availableFields = availableProperties;
 
   const handleOntologyChange = (value: string) => {
     setConfig({
       ...config,
       ontology: value,
       objectType: "", // 重置对象类型
+      property: "", // 重置属性
       injectionFields: [], // 重置注入字段
     });
   };
@@ -120,7 +114,19 @@ export function OntologyConfigDialog({
     setConfig({
       ...config,
       objectType: value,
+      property: "", // 重置属性
       injectionFields: [], // 重置注入字段
+    });
+  };
+
+  const handlePropertyChange = (value: string) => {
+    setConfig({
+      ...config,
+      property: value,
+      // 当选择属性时，自动将其添加到注入字段（如果还没有的话）
+      injectionFields: config.injectionFields.includes(value)
+        ? config.injectionFields
+        : [...config.injectionFields, value],
     });
   };
 
@@ -141,13 +147,13 @@ export function OntologyConfigDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* A. 对象类型 - 级联选择 */}
+          {/* A. 检索对象 - 三级级联选择 */}
           <div className="space-y-3">
-            <Label className="text-sm font-medium">对象类型</Label>
-            <div className="grid grid-cols-2 gap-3">
+            <Label className="text-sm font-medium">检索对象</Label>
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs text-slate-500 mb-2 block">
-                  本体
+                  <span className="text-red-500">*</span> 本体
                 </Label>
                 <Select
                   value={config.ontology}
@@ -161,17 +167,32 @@ export function OntologyConfigDialog({
               </div>
               <div>
                 <Label className="text-xs text-slate-500 mb-2 block">
-                  对象
+                  <span className="text-red-500">*</span> 检索对象
                 </Label>
                 <Select
                   value={config.objectType}
                   onValueChange={handleObjectTypeChange}
-                  placeholder="请选择对象"
+                  placeholder="请选择检索对象"
                   options={availableObjects.map((obj) => ({
                     value: obj,
                     label: obj,
                   }))}
                   className={!config.ontology ? "opacity-50" : ""}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-slate-500 mb-2 block">
+                  属性
+                </Label>
+                <Select
+                  value={config.property}
+                  onValueChange={handlePropertyChange}
+                  placeholder="请选择属性"
+                  options={availableProperties.map((prop) => ({
+                    value: prop,
+                    label: prop,
+                  }))}
+                  className={!config.objectType ? "opacity-50" : ""}
                 />
               </div>
             </div>
@@ -339,26 +360,32 @@ export function OntologyConfigDialog({
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="grid grid-cols-3 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                {availableFields.map((field) => (
-                  <div
-                    key={field}
-                    className="flex items-center gap-2"
-                  >
-                    <Checkbox
-                      id={field}
-                      checked={config.injectionFields.includes(field)}
-                      onCheckedChange={() => handleInjectionFieldToggle(field)}
-                    />
-                    <Label
-                      htmlFor={field}
-                      className="text-sm text-slate-700 cursor-pointer"
+              {availableFields.length > 0 ? (
+                <div className="grid grid-cols-3 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  {availableFields.map((field) => (
+                    <div
+                      key={field}
+                      className="flex items-center gap-2"
                     >
-                      {field}
-                    </Label>
-                  </div>
-                ))}
-              </div>
+                      <Checkbox
+                        id={field}
+                        checked={config.injectionFields.includes(field)}
+                        onCheckedChange={() => handleInjectionFieldToggle(field)}
+                      />
+                      <Label
+                        htmlFor={field}
+                        className="text-sm text-slate-700 cursor-pointer"
+                      >
+                        {field}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-500 text-center">
+                  请先选择对象类型和属性
+                </div>
+              )}
             </div>
           )}
         </div>

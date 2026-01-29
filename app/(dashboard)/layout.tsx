@@ -16,6 +16,8 @@ import {
   BookA,
   History,
   ExternalLink,
+  Shield,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalHeader } from "@/components/layout/global-header";
@@ -112,6 +114,23 @@ const menuGroups: MenuGroup[] = [
         label: "Trace",
         icon: History,
         href: "/trace",
+      },
+    ],
+  },
+  {
+    title: "安全防护",
+    items: [
+      {
+        key: "KeywordLibrary",
+        label: "安全词库",
+        icon: FileText,
+        href: "/security/keyword-library",
+      },
+      {
+        key: "ProtectionTask",
+        label: "防护任务",
+        icon: Shield,
+        href: "/security/protection-task",
       },
     ],
   },

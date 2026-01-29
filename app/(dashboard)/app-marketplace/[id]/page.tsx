@@ -34,6 +34,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { checkSensitiveContent } from "@/lib/content-filter";
 
 interface AppDetail {
   id: string;
@@ -403,6 +404,23 @@ export default function AppDetailPage() {
     setMessages((prev) => [...prev, userMessage]);
     const userQuery = inputValue.trim();
     setInputValue("");
+
+    // 检测敏感词
+    const blockedResponse = checkSensitiveContent(userQuery);
+    
+    if (blockedResponse) {
+      // 如果包含敏感词，直接返回拦截响应
+      setTimeout(() => {
+        const aiMessage: Message = {
+          id: `msg-${Date.now()}`,
+          role: "assistant",
+          content: blockedResponse,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, aiMessage]);
+      }, 500);
+      return;
+    }
 
     // Generate intelligent mock response for first few apps
     const isIntelligentApp = ["4", "5", "6", "7"].includes(app.id);

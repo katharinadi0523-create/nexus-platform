@@ -24,6 +24,9 @@ import { PluginSelector, type Plugin } from "@/components/agent-editor/PluginSel
 import { MCPSelector, type MCP } from "@/components/agent-editor/MCPSelector";
 import { OntologyConfigDialog, type OntologyConfig } from "@/components/agent-editor/OntologyConfigDialog";
 import { TerminologySelector, type Terminology } from "@/components/agent-editor/TerminologySelector";
+import { checkSensitiveContent } from "@/lib/content-filter";
+import { useModelCompatibility } from "@/lib/useModelCompatibility";
+import { CompatibilityIndicator } from "@/components/agent-editor/CompatibilityIndicator";
 
 // 定义详细数据源
 interface AgentDetailData {
@@ -133,8 +136,11 @@ function normalizeOntologies(input: unknown): OntologyConfig[] {
       const name = typeof obj.name === "string" ? obj.name : "";
       const desc = typeof obj.description === "string" ? obj.description : "";
 
-      // name example: "海上态势感知 - 无人机"
-      const [ontology, objectType] = name.split(" - ").map((s) => s.trim());
+      // name example: "海上态势感知 - 无人机" or "海上态势感知 - 无人机 - 续航时间"
+      const parts = name.split(" - ").map((s) => s.trim());
+      const ontology = parts[0] || "";
+      const objectType = parts[1] || "";
+      const property = parts[2] || "";
 
       // desc example: "语义检索 (战斗风格_向量)"
       const isSemantic = desc.includes("语义检索");
@@ -146,12 +152,13 @@ function normalizeOntologies(input: unknown): OntologyConfig[] {
       const normalized: OntologyConfig = {
         ontology,
         objectType,
+        property,
         queryRewrite: true,
         retrievalMethod: isSemantic ? "semantic" : "full",
         retrievalVector: isSemantic ? retrievalVector : undefined,
         topK: 20,
         threshold: 0.6,
-        injectionFields: [],
+        injectionFields: property ? [property] : [],
       };
 
       return normalized;
@@ -233,10 +240,11 @@ export function AutonomousEditor({
   const [selectedModel, setSelectedModel] = useState("DeepSeek-R2");
   const [modelParams, setModelParams] = useState<ModelParams>({
     temperature: 0.01,
-    topP: 0.01,
-    topK: 20,
-    history: 5,
+    top_p: 0.01,
+    top_k: 20,
+    context_turns: 5,
   });
+  const compatibility = useModelCompatibility(selectedModel);
   const [selectedWorkflows, setSelectedWorkflows] = useState<WorkflowType[]>([]);
   const [selectedPlugins, setSelectedPlugins] = useState<Plugin[]>(
     () => normalizePlugins((initialAgentData as any)?.plugins)
@@ -409,6 +417,22 @@ export function AutonomousEditor({
     setChatHistory((prev) => [...prev, userMessage]);
     setShowSuggestedChips(false);
 
+    // 检测敏感词
+    const blockedResponse = checkSensitiveContent(message);
+    
+    if (blockedResponse) {
+      // 如果包含敏感词，直接返回拦截响应
+      setTimeout(() => {
+        const aiMessage = {
+          role: "assistant" as const,
+          content: blockedResponse,
+          timestamp: new Date().toLocaleTimeString(),
+        };
+        setChatHistory((prev) => [...prev, aiMessage]);
+      }, 500);
+      return;
+    }
+
     // 根据当前的 id，从 AGENTS_DETAIL_DATA[id].mockReply 获取模拟回复内容
     const mockReply = agentData?.mockReply || "您好，有什么可以帮您？";
 
@@ -492,7 +516,20 @@ export function AutonomousEditor({
             >
               <div className="flex items-center gap-3">
                 <BookOpen className="w-5 h-5 text-slate-600" />
-                <span className="font-medium text-slate-900">知识库</span>
+                <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                  知识库
+                  <CompatibilityIndicator
+                    status={
+                      compatibility.items.knowledge_base.status === "limited"
+                        ? "limited"
+                        : compatibility.items.knowledge_base.status === "unsupported"
+                          ? "unsupported"
+                          : "unknown"
+                    }
+                    shortLabel={compatibility.items.knowledge_base.shortLabel}
+                    tooltip={compatibility.items.knowledge_base.tooltip}
+                  />
+                </span>
               </div>
               {expandedSections.knowledge ? (
                 <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -578,7 +615,20 @@ export function AutonomousEditor({
             >
               <div className="flex items-center gap-3">
                 <Network className="w-5 h-5 text-slate-600" />
-                <span className="font-medium text-slate-900">本体</span>
+              <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                本体
+                <CompatibilityIndicator
+                  status={
+                    compatibility.items.ontology.status === "limited"
+                      ? "limited"
+                      : compatibility.items.ontology.status === "unsupported"
+                        ? "unsupported"
+                        : "unknown"
+                  }
+                  shortLabel={compatibility.items.ontology.shortLabel}
+                  tooltip={compatibility.items.ontology.tooltip}
+                />
+              </span>
               </div>
               {expandedSections.ontology ? (
                 <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -615,6 +665,7 @@ export function AutonomousEditor({
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-slate-900">
                         {ontology.ontology} - {ontology.objectType}
+                        {ontology.property && ` - ${ontology.property}`}
                       </div>
                       <div className="text-xs text-slate-500 mt-0.5">
                         {ontology.retrievalMethod === "semantic"
@@ -645,7 +696,20 @@ export function AutonomousEditor({
             >
               <div className="flex items-center gap-3">
                 <BookA className="w-5 h-5 text-slate-600" />
-                <span className="font-medium text-slate-900">术语库</span>
+              <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                术语库
+                <CompatibilityIndicator
+                  status={
+                    compatibility.items.terminology.status === "limited"
+                      ? "limited"
+                      : compatibility.items.terminology.status === "unsupported"
+                        ? "unsupported"
+                        : "unknown"
+                  }
+                  shortLabel={compatibility.items.terminology.shortLabel}
+                  tooltip={compatibility.items.terminology.tooltip}
+                />
+              </span>
               </div>
               {expandedSections.terminology ? (
                 <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -711,7 +775,20 @@ export function AutonomousEditor({
               >
                 <div className="flex items-center gap-3">
                   <Workflow className="w-5 h-5 text-slate-600" />
-                  <span className="font-medium text-slate-900">工作流</span>
+                  <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                    工作流
+                    <CompatibilityIndicator
+                      status={
+                        compatibility.items.workflow.status === "limited"
+                          ? "limited"
+                          : compatibility.items.workflow.status === "unsupported"
+                            ? "unsupported"
+                            : "unknown"
+                      }
+                      shortLabel={compatibility.items.workflow.shortLabel}
+                      tooltip={compatibility.items.workflow.tooltip}
+                    />
+                  </span>
                 </div>
                 {expandedSections.workflow ? (
                   <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -787,7 +864,20 @@ export function AutonomousEditor({
               >
                 <div className="flex items-center gap-3">
                   <Puzzle className="w-5 h-5 text-slate-600" />
-                  <span className="font-medium text-slate-900">插件</span>
+                <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                  插件
+                  <CompatibilityIndicator
+                    status={
+                      compatibility.items.plugins.status === "limited"
+                        ? "limited"
+                        : compatibility.items.plugins.status === "unsupported"
+                          ? "unsupported"
+                          : "unknown"
+                    }
+                    shortLabel={compatibility.items.plugins.shortLabel}
+                    tooltip={compatibility.items.plugins.tooltip}
+                  />
+                </span>
                 </div>
                 {expandedSections.plugins ? (
                   <ChevronUp className="w-5 h-5 text-slate-400" />
@@ -865,7 +955,20 @@ export function AutonomousEditor({
               >
                 <div className="flex items-center gap-3">
                   <Puzzle className="w-5 h-5 text-slate-600" />
-                  <span className="font-medium text-slate-900">MCP</span>
+                <span className="font-medium text-slate-900 inline-flex items-center gap-2">
+                  MCP
+                  <CompatibilityIndicator
+                      status={
+                        compatibility.items.mcp.status === "limited"
+                          ? "limited"
+                          : compatibility.items.mcp.status === "unsupported"
+                            ? "unsupported"
+                            : "unknown"
+                      }
+                      shortLabel={compatibility.items.mcp.shortLabel}
+                    tooltip={compatibility.items.mcp.tooltip}
+                  />
+                </span>
                 </div>
                 {expandedSections.mcp ? (
                   <ChevronUp className="w-5 h-5 text-slate-400" />

@@ -1,7 +1,7 @@
 "use client";
 
-import { Node } from "reactflow";
-import { X, Play, StopCircle, Sparkles, BookOpen, Network, Table, Filter, Database, BarChart3 } from "lucide-react";
+import { Node, Edge } from "reactflow";
+import { X, Play, StopCircle, Sparkles, BookOpen, Network, Table, Filter, Database, BarChart3, Bot, GitBranch, Eye, Code } from "lucide-react";
 import { StartNodeConfig } from "./configs/start-node-config";
 import { LLMNodeConfig } from "./configs/llm-node-config";
 import { KnowledgeNodeConfig } from "./configs/knowledge-node-config";
@@ -11,12 +11,18 @@ import { TableSelectNodeConfig } from "./configs/data/table-select-node-config";
 import { DataClarifyNodeConfig } from "./configs/data/data-clarify-node-config";
 import { DataQueryNodeConfig } from "./configs/data/data-query-node-config";
 import { DataVisualizeNodeConfig } from "./configs/data/data-visualize-node-config";
+import { AgentNodeConfig } from "./configs/agent-node-config";
+import { BranchNodeConfig } from "./configs/branch-node-config";
+import { IntentRecognizeNodeConfig } from "./configs/intent-recognize-node-config";
+import { CodeNodeConfig } from "./configs/code-node-config";
 import { cn } from "@/lib/utils";
 
 interface NodeConfigPanelProps {
   selectedNode: Node | null;
   onUpdateNode: (nodeId: string, data: any) => void;
   onClose: () => void;
+  nodes?: Node[];
+  edges?: Edge[];
 }
 
 const getNodeIcon = (type: string | undefined) => {
@@ -39,6 +45,14 @@ const getNodeIcon = (type: string | undefined) => {
       return Database;
     case "data-visualize":
       return BarChart3;
+    case "agent":
+      return Bot;
+    case "branch":
+      return GitBranch;
+    case "intent-recognize":
+      return Eye;
+    case "code":
+      return Code;
     default:
       return Play;
   }
@@ -64,6 +78,14 @@ const getNodeLabel = (type: string | undefined) => {
       return "数据查询";
     case "data-visualize":
       return "数据可视化";
+    case "agent":
+      return "智能体";
+    case "branch":
+      return "分支器";
+    case "intent-recognize":
+      return "意图识别";
+    case "code":
+      return "代码";
     default:
       return "节点";
   }
@@ -86,6 +108,14 @@ const getNodeColor = (type: string | undefined) => {
     case "data-query":
     case "data-visualize":
       return "text-purple-600";
+    case "agent":
+      return "text-blue-600";
+    case "branch":
+      return "text-orange-600";
+    case "intent-recognize":
+      return "text-blue-600";
+    case "code":
+      return "text-orange-600";
     default:
       return "text-slate-600";
   }
@@ -95,6 +125,8 @@ export function NodeConfigPanel({
   selectedNode,
   onUpdateNode,
   onClose,
+  nodes = [],
+  edges = [],
 }: NodeConfigPanelProps) {
   if (!selectedNode) return null;
 
@@ -134,12 +166,18 @@ export function NodeConfigPanel({
           <LLMNodeConfig
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
           />
         )}
         {selectedNode.type === "knowledge" && (
           <KnowledgeNodeConfig
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
           />
         )}
         {selectedNode.type === "end" && (
@@ -158,24 +196,72 @@ export function NodeConfigPanel({
           <TableSelectNodeConfig
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
           />
         )}
         {selectedNode.type === "data-clarify" && (
           <DataClarifyNodeConfig
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
           />
         )}
         {selectedNode.type === "data-query" && (
           <DataQueryNodeConfig
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
           />
         )}
         {selectedNode.type === "data-visualize" && (
           <DataVisualizeNodeConfig
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
+          />
+        )}
+        {selectedNode.type === "agent" && (
+          <AgentNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
+          />
+        )}
+        {selectedNode.type === "branch" && (
+          <BranchNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
+          />
+        )}
+        {selectedNode.type === "intent-recognize" && (
+          <IntentRecognizeNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
+          />
+        )}
+        {selectedNode.type === "code" && (
+          <CodeNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
           />
         )}
       </div>

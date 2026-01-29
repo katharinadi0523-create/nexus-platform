@@ -26,10 +26,16 @@ import { TableSelectNode } from "./nodes/data/table-select-node";
 import { DataClarifyNode } from "./nodes/data/data-clarify-node";
 import { DataQueryNode } from "./nodes/data/data-query-node";
 import { DataVisualizeNode } from "./nodes/data/data-visualize-node";
+import { AgentNode } from "./nodes/agent-node";
+import { BranchNode } from "./nodes/branch-node";
+import { IntentRecognizeNode } from "./nodes/intent-recognize-node";
+import { CodeNode } from "./nodes/code-node";
 import { GenericNode } from "./nodes/generic-node";
 import { NodeConfigPanel } from "./node-config-panel";
 import { NodeLibraryMenu } from "./node-library-menu";
 import { BasicConfigSheet } from "./basic-config-sheet";
+import { executeWorkflow, FlowRuntimeResult } from "./workflow-runner";
+import { WorkflowResultPanel } from "./workflow-result-panel";
 
 interface WorkflowEditorProps {
   agentId: string;
@@ -46,11 +52,11 @@ const nodeTypes = {
   "data-clarify": DataClarifyNode,
   "data-query": DataQueryNode,
   "data-visualize": DataVisualizeNode,
-  // 其他节点类型 - 暂时使用 GenericNode
-  agent: GenericNode,
-  branch: GenericNode,
-  "intent-recognize": GenericNode,
-  code: GenericNode,
+  // 其他节点类型
+  agent: AgentNode,
+  branch: BranchNode,
+  "intent-recognize": IntentRecognizeNode,
+  code: CodeNode,
   mcp: GenericNode,
   api: GenericNode,
   message: GenericNode,
@@ -63,19 +69,29 @@ const initialNodes: Node[] = [
     id: "start-1",
     type: "start",
     position: { x: 100, y: 250 },
-    data: {},
+    data: {
+      // 开始节点没有输出，只有输入变量可以被下游引用
+    },
   },
   {
     id: "knowledge-1",
     type: "knowledge",
     position: { x: 400, y: 250 },
-    data: {},
+    data: {
+      outputVariables: [
+        { name: "result", type: "array[object]" },
+      ],
+    },
   },
   {
     id: "llm-1",
     type: "llm",
     position: { x: 700, y: 250 },
-    data: {},
+    data: {
+      outputVariables: [
+        { name: "text", type: "string" },
+      ],
+    },
   },
   {
     id: "end-1",
@@ -116,6 +132,9 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodeLibraryOpen, setNodeLibraryOpen] = useState(false);
   const [basicConfigOpen, setBasicConfigOpen] = useState(false);
+  const [runResult, setRunResult] = useState<FlowRuntimeResult | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [runResultOpen, setRunResultOpen] = useState(false);
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
 
   const selectedNode = useMemo(
@@ -175,12 +194,54 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
     reactFlowInstance.current = instance;
   }, []);
 
+  const handleRun = useCallback(async () => {
+    setIsExecuting(true);
+    setRunResultOpen(true);
+    setRunResult(null); // 清空之前的结果
+    
+    try {
+      const result = await executeWorkflow(
+        nodes,
+        edges,
+        (partialResult) => {
+          // 实时更新运行结果，显示执行进度
+          setRunResult({
+            ...partialResult,
+            endedAt: partialResult.endedAt || Date.now(),
+          } as FlowRuntimeResult);
+        }
+      );
+      setRunResult(result);
+    } catch (error) {
+      console.error("工作流执行失败:", error);
+      setRunResult({
+        status: "failed",
+        startedAt: Date.now(),
+        endedAt: Date.now(),
+        nodeResults: {},
+        nodeOrder: [],
+        finalOutput: null,
+        warnings: [`执行失败: ${error instanceof Error ? error.message : String(error)}`],
+      });
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [nodes, edges]);
+
+  const handleNodeClickFromResult = useCallback((nodeId: string) => {
+    // 点击结果面板中的节点时，高亮画布上的对应节点
+    setSelectedNodeId(nodeId);
+    // 可以在这里添加更多的高亮逻辑
+  }, []);
+
   return (
     <div className="flex h-screen w-full overflow-hidden">
       {/* 中间画布区 */}
       <div
         className="flex-1 bg-slate-50 relative transition-all"
-        style={{ marginRight: selectedNode ? "400px" : "0" }}
+        style={{
+          marginRight: selectedNode || runResult ? "400px" : "0",
+        }}
       >
         {/* 顶部工具栏 */}
         <div className="absolute top-4 left-4 right-4 flex items-center z-10">
@@ -220,6 +281,8 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
                   case "end":
                     return "#ef4444";
                   case "llm":
+                  case "agent":
+                  case "intent-recognize":
                     return "#3b82f6";
                   case "knowledge":
                   case "object-query":
@@ -228,6 +291,9 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
                   case "data-query":
                   case "data-visualize":
                     return "#a855f7";
+                  case "branch":
+                  case "code":
+                    return "#f97316";
                   default:
                     return "#94a3b8";
                 }
@@ -263,18 +329,38 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
           <Button variant="outline" size="sm">
             100%
           </Button>
-          <Button variant="default" size="sm" className="gap-2 bg-green-600 hover:bg-green-700">
+          <Button
+            variant="default"
+            size="sm"
+            className="gap-2 bg-green-600 hover:bg-green-700"
+            onClick={handleRun}
+            disabled={isExecuting}
+          >
             <Bug className="h-4 w-4" />
-            调试
+            {isExecuting ? "执行中..." : "运行"}
           </Button>
         </div>
 
         {/* Node Config Panel */}
-        <NodeConfigPanel
-          selectedNode={selectedNode}
-          onUpdateNode={handleUpdateNode}
-          onClose={() => setSelectedNodeId(null)}
-        />
+        {selectedNode && !runResult && (
+          <NodeConfigPanel
+            selectedNode={selectedNode}
+            onUpdateNode={handleUpdateNode}
+            onClose={() => setSelectedNodeId(null)}
+            nodes={nodes}
+            edges={edges}
+          />
+        )}
+
+        {/* Workflow Result Panel */}
+        {runResult && (
+          <WorkflowResultPanel
+            result={runResult}
+            onClose={() => setRunResult(null)}
+            onNodeClick={handleNodeClickFromResult}
+            isExecuting={isExecuting}
+          />
+        )}
       </div>
 
       {/* Basic Config Sheet */}

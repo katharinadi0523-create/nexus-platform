@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Minus, ChevronDown, HardDrive, Database, FileJson, X } from "lucide-react";
+import { Plus, Minus, ChevronDown, HardDrive, Database, FileJson, X, AlertCircle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,9 +32,11 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Badge } from "@/components/ui/badge";
 
 import type { LogEntry } from "@/components/agent/logs-table";
-import type { LogEntry as SFTLogEntry, AgentType } from "@/lib/agent-data";
+import type { LogEntry as SFTLogEntry, AgentType, FeedbackDetail } from "@/lib/agent-data";
 
 // OpenAI Messages 格式
 type MessageRole = "system" | "user" | "assistant";
@@ -61,7 +63,7 @@ interface ExportLogsDialogProps {
   searchKeyword?: string;
   dateRange?: { start: string; end: string };
   logs?: SFTLogEntry[]; // SFT 格式的日志
-  agentType?: AgentType; // 智能体类型，用于决定是否显示 System 列
+  agentType?: AgentType; // 智能体类型（保留用于其他用途）
 }
 
 const FIELD_OPTIONS = [
@@ -85,8 +87,8 @@ const FEEDBACK_OPTIONS = [
 ];
 
 const ADMIN_FEEDBACK_OPTIONS = [
-  { value: "good", label: "点赞" },
-  { value: "bad", label: "点踩" },
+  { value: "like", label: "点赞" },
+  { value: "dislike", label: "点踩" },
 ];
 
 // Mock 数据目录
@@ -153,17 +155,64 @@ const separateMessages = (messages: Message[]): SeparatedData => {
 // Generate preview data
 const generatePreviewData = (
   mockLogs: ExtendedLogEntry[],
+  filteredLogs: LogEntry[] = [],
   maxCount: number = 10
 ) => {
+  // 优先使用 SFT 格式的 logs（mockLogs），因为它们已经是去重的、按对话轮次切片的
+  // 然后通过匹配完整的 messages 来从 filteredLogs 中获取反馈信息
+  
+  // 创建 filteredLogs 的映射，以完整的 messages 为 key
+  const feedbackMap = new Map<string, { userFeedback: LogEntry["userFeedback"]; adminFeedback: LogEntry["adminFeedback"] }>();
+  
+  filteredLogs.forEach((log) => {
+    if (log.fullMessages && log.fullMessages.length > 0) {
+      // 使用 messages 的 JSON 字符串作为 key
+      const messagesKey = JSON.stringify(
+        log.fullMessages.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }))
+      );
+      feedbackMap.set(messagesKey, {
+        userFeedback: log.userFeedback,
+        adminFeedback: log.adminFeedback,
+      });
+    }
+  });
+
   return mockLogs.slice(0, maxCount).map((log, index) => {
     const separated = separateMessages(log.messages);
+    
+    // 尝试从 filteredLogs 中通过匹配完整的 messages 来找到对应的反馈信息
+    let feedback: {
+      userFeedback: FeedbackDetail;
+      adminFeedback: FeedbackDetail;
+    } = {
+      userFeedback: { status: null },
+      adminFeedback: { status: null },
+    };
+    
+    // 使用 messages 的 JSON 字符串作为 key 来查找
+    const messagesKey = JSON.stringify(
+      log.messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }))
+    );
+    
+    const matchedFeedback = feedbackMap.get(messagesKey);
+    if (matchedFeedback) {
+      feedback = matchedFeedback;
+    }
+    
     return {
-      id: index + 1,
-      system: separated.system,
+    id: index + 1,
       input: separated.input,
       output: separated.output,
       messages: separated.messages,
       logId: log.id,
+      userFeedback: feedback.userFeedback,
+      adminFeedback: feedback.adminFeedback,
     };
   });
 };
@@ -275,6 +324,7 @@ export function ExportLogsDialog({
   agentType,
 }: ExportLogsDialogProps) {
   const [exportMethod, setExportMethod] = useState<"local" | "catalog">("local");
+  const [exportFormat, setExportFormat] = useState<"jsonl" | "xlsx" | "csv">("jsonl");
   const [conditions, setConditions] = useState<Array<{ id: string; field: string; value: string }>>([]);
   
   // 三级级联菜单状态
@@ -337,23 +387,9 @@ export function ExportLogsDialog({
   const extendedLogs = logs.length > 0 ? convertSFTToExtended(logs) : [];
   const previewData = generatePreviewData(
     extendedLogs,
+    filteredLogs,
     Math.min(10, totalCount)
   );
-
-  // 根据 agentType 和实际 logs 内容决定是否显示 System 列
-  // 规则：autonomous 类型显示 System 列，或者 logs 中确实包含 system 消息
-  const hasSystemInLogs = logs.length > 0 &&
-    logs.some((log) =>
-      log.messages.some((msg) => msg.role === "system")
-    );
-  
-  // 强制显示 System 列的条件：
-  // 1. agentType 明确为 'autonomous'（字符串严格相等）
-  // 2. 或者 logs 中确实包含 system 消息
-  // 3. 或者 previewData 中有 system 内容（作为后备检查）
-  const hasSystemFromAgentType = agentType === "autonomous";
-  const hasSystemFromPreviewData = previewData.some((item) => item.system !== null);
-  const hasSystem = hasSystemFromAgentType || hasSystemInLogs || hasSystemFromPreviewData;
   
   // 切换展开/收起状态
   const toggleExpand = (rowId: number, column: "input" | "output") => {
@@ -529,15 +565,132 @@ export function ExportLogsDialog({
       })),
     }));
 
-    // 默认导出为 jsonl 格式
-    const jsonlContent = exportData
-      .map((item) => JSON.stringify(item))
-      .join("\n");
-    const blob = new Blob([jsonlContent], { type: "text/plain" });
+    let blob: Blob;
+    let filename: string;
+    let mimeType: string;
+
+    if (exportMethod === "local") {
+      // 导出至本地，根据选择的格式导出
+      if (exportFormat === "jsonl") {
+        const jsonlContent = exportData
+          .map((item) => JSON.stringify(item))
+          .join("\n");
+        blob = new Blob([jsonlContent], { type: "text/plain" });
+        filename = `exported-logs-${Date.now()}.jsonl`;
+        mimeType = "text/plain";
+      } else if (exportFormat === "csv") {
+        // CSV 格式：将每条记录转换为 CSV 行
+        // 表头：序号,Input,Output,用户反馈,管理员反馈
+        const csvRows: string[] = [];
+        csvRows.push("序号,Input,Output,用户反馈,管理员反馈");
+        
+        previewData.forEach((item) => {
+          const inputText = item.input.map((msg) => `${msg.role}: ${msg.content}`).join(" | ");
+          const outputText = item.output || "";
+          const userFeedbackText = item.userFeedback.status === "like" ? "点赞" : 
+                                   item.userFeedback.status === "dislike" ? "点踩" : "";
+          const adminFeedbackText = item.adminFeedback.status === "like" ? "点赞" : 
+                                   item.adminFeedback.status === "dislike" ? "点踩" : "";
+          
+          // 转义 CSV 中的逗号和引号
+          const escapeCsv = (text: string) => {
+            if (text.includes(",") || text.includes('"') || text.includes("\n")) {
+              return `"${text.replace(/"/g, '""')}"`;
+            }
+            return text;
+          };
+          
+          csvRows.push([
+            item.id.toString(),
+            escapeCsv(inputText),
+            escapeCsv(outputText),
+            escapeCsv(userFeedbackText),
+            escapeCsv(adminFeedbackText),
+          ].join(","));
+        });
+        
+        blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+        filename = `exported-logs-${Date.now()}.csv`;
+        mimeType = "text/csv";
+      } else if (exportFormat === "xlsx") {
+        // XLSX 格式：暂时导出为 CSV 格式（真正的 XLSX 需要第三方库）
+        // 或者提示用户使用 CSV 格式
+        alert("XLSX 格式导出功能开发中，请暂时使用 CSV 或 JSONL 格式");
+        return;
+      } else {
+        // 默认 JSONL
+        const jsonlContent = exportData
+          .map((item) => JSON.stringify(item))
+          .join("\n");
+        blob = new Blob([jsonlContent], { type: "text/plain" });
+        filename = `exported-logs-${Date.now()}.jsonl`;
+        mimeType = "text/plain";
+      }
+    } else {
+      // 导出至数据目录，根据选择的格式导出
+      const baseFileName = fileName || `exported-logs-${Date.now()}`;
+      
+      if (exportFormat === "jsonl") {
+        const jsonlContent = exportData
+          .map((item) => JSON.stringify(item))
+          .join("\n");
+        blob = new Blob([jsonlContent], { type: "text/plain" });
+        filename = `${baseFileName}.jsonl`;
+        mimeType = "text/plain";
+      } else if (exportFormat === "csv") {
+        // CSV 格式：将每条记录转换为 CSV 行
+        // 表头：序号,Input,Output,用户反馈,管理员反馈
+        const csvRows: string[] = [];
+        csvRows.push("序号,Input,Output,用户反馈,管理员反馈");
+        
+        previewData.forEach((item) => {
+          const inputText = item.input.map((msg) => `${msg.role}: ${msg.content}`).join(" | ");
+          const outputText = item.output || "";
+          const userFeedbackText = item.userFeedback.status === "like" ? "点赞" : 
+                                   item.userFeedback.status === "dislike" ? "点踩" : "";
+          const adminFeedbackText = item.adminFeedback.status === "like" ? "点赞" : 
+                                   item.adminFeedback.status === "dislike" ? "点踩" : "";
+          
+          // 转义 CSV 中的逗号和引号
+          const escapeCsv = (text: string) => {
+            if (text.includes(",") || text.includes('"') || text.includes("\n")) {
+              return `"${text.replace(/"/g, '""')}"`;
+            }
+            return text;
+          };
+          
+          csvRows.push([
+            item.id.toString(),
+            escapeCsv(inputText),
+            escapeCsv(outputText),
+            escapeCsv(userFeedbackText),
+            escapeCsv(adminFeedbackText),
+          ].join(","));
+        });
+        
+        blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+        filename = `${baseFileName}.csv`;
+        mimeType = "text/csv";
+      } else if (exportFormat === "xlsx") {
+        // XLSX 格式：暂时导出为 CSV 格式（真正的 XLSX 需要第三方库）
+        // 或者提示用户使用 CSV 格式
+        alert("XLSX 格式导出功能开发中，请暂时使用 CSV 或 JSONL 格式");
+        return;
+      } else {
+        // 默认 JSONL
+        const jsonlContent = exportData
+          .map((item) => JSON.stringify(item))
+          .join("\n");
+        blob = new Blob([jsonlContent], { type: "text/plain" });
+        filename = `${baseFileName}.jsonl`;
+        mimeType = "text/plain";
+      }
+    }
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `exported-logs-${Date.now()}.jsonl`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -556,57 +709,57 @@ export function ExportLogsDialog({
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto p-6 pt-2">
           <div className="flex flex-col gap-6">
-            {/* 导出方式 */}
-            <div className="space-y-3">
+          {/* 导出方式 */}
+          <div className="space-y-3">
               <Label className="font-medium text-sm text-gray-700 mb-2 block">
                 导出方式
               </Label>
-              <RadioGroup
-                value={exportMethod}
+            <RadioGroup
+              value={exportMethod}
                 onValueChange={(value) => setExportMethod(value as "local" | "catalog")}
-                className="flex flex-row gap-6"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="local" id="local" />
-                  <Label htmlFor="local" className="cursor-pointer font-normal">
-                    导出至本地
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
+              className="flex flex-row gap-6"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="local" id="local" />
+                <Label htmlFor="local" className="cursor-pointer font-normal">
+                  导出至本地
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
                   <RadioGroupItem value="catalog" id="catalog" />
                   <Label htmlFor="catalog" className="cursor-pointer font-normal">
-                    导出至数据目录
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
+                  导出至数据目录
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
 
-            {/* 筛选条件 */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
+          {/* 筛选条件 */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
                 <Label className="font-medium text-sm text-gray-700 mb-2 block">
                   筛选条件
                 </Label>
-                <button
-                  onClick={handleAddCondition}
-                  disabled={conditions.length >= 5}
-                  className="text-sm text-blue-600 hover:text-blue-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-1"
-                >
-                  <Plus className="h-4 w-4" />
-                  添加条件({conditions.length}/5)
-                </button>
-              </div>
+              <button
+                onClick={handleAddCondition}
+                disabled={conditions.length >= 5}
+                className="text-sm text-blue-600 hover:text-blue-700 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-1"
+              >
+                <Plus className="h-4 w-4" />
+                添加条件({conditions.length}/5)
+              </button>
+            </div>
 
-              {conditions.length === 0 ? (
-                <div className="text-sm text-slate-500 py-2">
-                  暂无筛选条件，点击上方按钮添加
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {conditions.map((condition) => (
-                    <div key={condition.id} className="flex items-center gap-2">
+            {conditions.length === 0 ? (
+              <div className="text-sm text-slate-500 py-2">
+                暂无筛选条件，点击上方按钮添加
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {conditions.map((condition) => (
+                  <div key={condition.id} className="flex items-center gap-2">
                       <select
-                        value={condition.field}
+                      value={condition.field}
                         onChange={(e) =>
                           handleConditionFieldChange(condition.id, e.target.value)
                         }
@@ -619,167 +772,283 @@ export function ExportLogsDialog({
                           </option>
                         ))}
                       </select>
-                      {renderValueInput(condition)}
-                      <button
-                        onClick={() => handleRemoveCondition(condition.id)}
-                        className="p-1.5 hover:bg-slate-100 rounded transition-colors shrink-0"
-                        title="删除"
-                      >
-                        <Minus className="h-4 w-4 text-slate-500" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    {renderValueInput(condition)}
+                    <button
+                      onClick={() => handleRemoveCondition(condition.id)}
+                      className="p-1.5 hover:bg-slate-100 rounded transition-colors shrink-0"
+                      title="删除"
+                    >
+                      <Minus className="h-4 w-4 text-slate-500" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
             <Separator className="my-2" />
 
             {/* 表格预览 */}
             <div className="flex flex-col min-h-[300px]">
               <div className="text-sm text-muted-foreground mb-2">
-                共 {totalCount.toLocaleString()} 条问答对（支持预览10条）
-              </div>
-              <div className="border rounded-md overflow-hidden">
-                <div className="max-h-[400px] overflow-y-auto">
-                <Table className="table-fixed w-full">
-                  <TableHeader className="sticky top-0 bg-white z-10">
-                    <TableRow>
-                      <TableHead className="w-[8%]">序号</TableHead>
-                      {hasSystem && (
-                        <TableHead className="w-[18%]">System / 角色指令</TableHead>
-                      )}
-                      <TableHead className={hasSystem ? "w-[37%]" : "w-[46%]"}>
-                        Input / 输入
-                      </TableHead>
-                      <TableHead className={hasSystem ? "w-[37%]" : "w-[46%]"}>
-                        Output / 输出
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+              共 {totalCount.toLocaleString()} 条问答对（支持预览10条）
+            </div>
+            <div className="border rounded-md overflow-hidden">
+              <div className="max-h-[400px] overflow-y-auto">
+                  <div className="relative w-full overflow-x-auto">
+                    <table className="table-fixed w-full caption-bottom text-sm">
+                      <thead className="sticky top-0 bg-white z-20 border-b shadow-sm [&_tr]:border-b">
+                        <tr className="hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors">
+                          <th className="w-[6%] bg-white text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap">序号</th>
+                          <th className="w-[35%] bg-white text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap">
+                            Input / 输入
+                          </th>
+                          <th className="w-[35%] bg-white text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap">
+                            Output / 输出
+                          </th>
+                          <th className="w-[12%] bg-white text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap">用户反馈</th>
+                          <th className="w-[12%] bg-white text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap">管理员反馈</th>
+                        </tr>
+                      </thead>
+                      <tbody className="[&_tr:last-child]:border-0">
                     {previewData.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={hasSystem ? 4 : 3}
-                          className="text-center text-sm text-slate-500 py-8"
-                        >
-                          暂无数据
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      previewData.map((item) => {
-                        const isInputExpanded = getExpandedState(item.id, "input");
-                        const isOutputExpanded = getExpandedState(item.id, "output");
-                        
-                        return (
-                          <TableRow key={item.id}>
-                            {/* 序号 */}
-                            <TableCell className="text-sm">{item.id}</TableCell>
+                          <tr className="hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors">
+                            <td
+                              colSpan={5}
+                              className="text-center text-sm text-slate-500 py-8 p-2 align-middle whitespace-nowrap"
+                            >
+                              暂无数据
+                            </td>
+                          </tr>
+                        ) : (
+                          previewData.map((item) => {
+                            const isInputExpanded = getExpandedState(item.id, "input");
+                            const isOutputExpanded = getExpandedState(item.id, "output");
+                            
+                            return (
+                              <tr key={item.id} className="hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors">
+                                {/* 序号 */}
+                                <td className="text-sm p-2 align-middle whitespace-nowrap">{item.id}</td>
 
-                            {/* System 列（仅当 hasSystem 为 true 时显示） */}
-                            {hasSystem && (
-                              <TableCell className="text-sm">
-                                {item.system ? (
-                                  <div className="max-h-20 overflow-hidden">
-                                    <p className="line-clamp-2 text-slate-600 text-ellipsis break-words">
-                                      {item.system}
-                                    </p>
-                                  </div>
-                                ) : null}
-                              </TableCell>
-                            )}
-
-                            {/* Input 列 - 显示对话流，支持展开/收起 */}
-                            <TableCell className="text-sm">
-                              <div className="space-y-1">
-                                <div
-                                  className={`${
-                                    isInputExpanded
-                                      ? "whitespace-pre-wrap"
-                                      : "line-clamp-3"
-                                  } text-xs`}
-                                >
-                                  {item.input.map((msg, idx) => {
-                                    const isLastUser =
-                                      idx === item.input.length - 1 &&
-                                      msg.role === "user";
-                                    return (
-                                      <div
-                                        key={idx}
-                                        className={`${
-                                          isLastUser
-                                            ? "font-semibold text-slate-900"
-                                            : "text-slate-600"
-                                        } ${idx > 0 ? "mt-1" : ""}`}
-                                      >
-                                        <span
-                                          className={
-                                            msg.role === "user"
-                                              ? "text-blue-600 font-bold"
-                                              : "text-green-600 font-bold"
-                                          }
-                                        >
-                                          {msg.role === "user" ? "User" : "Assistant"}
-                                        </span>{" "}
-                                        <span className="break-words">
-                                          {msg.content}
-                                        </span>
-                                        {msg.imageUrl && (
-                                          <div className="text-slate-500 mt-1">
-                                            imageUrl: '{msg.imageUrl}'
+                                {/* Input 列 - 显示对话流，支持展开/收起 */}
+                                <td className="text-sm p-2 align-middle">
+                                  <div className="space-y-1">
+                                    <div
+                                      className={`${
+                                        isInputExpanded
+                                          ? "whitespace-pre-wrap"
+                                          : "line-clamp-3"
+                                      } text-xs`}
+                                    >
+                                      {item.input.map((msg, idx) => {
+                                        const isLastUser =
+                                          idx === item.input.length - 1 &&
+                                          msg.role === "user";
+                                        return (
+                                          <div
+                                            key={idx}
+                                            className={`${
+                                              isLastUser
+                                                ? "font-semibold text-slate-900"
+                                                : "text-slate-600"
+                                            } ${idx > 0 ? "mt-1" : ""}`}
+                                          >
+                                            <span
+                                              className={
+                                                msg.role === "user"
+                                                  ? "text-blue-600 font-bold"
+                                                  : "text-green-600 font-bold"
+                                              }
+                                            >
+                                              {msg.role === "user" ? "User" : "Assistant"}
+                                            </span>{" "}
+                                            <span className="break-words">
+                                              {msg.content}
+                                            </span>
+                                            {msg.imageUrl && (
+                                              <div className="text-slate-500 mt-1">
+                                                imageUrl: '{msg.imageUrl}'
+                                              </div>
+                                            )}
                                           </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                                {item.input.length > 0 && (
-                                  <button
-                                    onClick={() => toggleExpand(item.id, "input")}
-                                    className="text-xs text-blue-500 hover:text-blue-600 hover:underline transition-colors"
-                                  >
-                                    {isInputExpanded ? "收起" : "展开"}
-                                  </button>
-                                )}
-                              </div>
-                            </TableCell>
-
-                            {/* Output 列 - 支持展开/收起 */}
-                            <TableCell className="text-sm">
-                              {item.output ? (
-                                <div className="space-y-1">
-                                  <div
-                                    className={`${
-                                      isOutputExpanded
-                                        ? "whitespace-pre-wrap"
-                                        : "line-clamp-3"
-                                    } text-slate-900 text-ellipsis break-words`}
-                                  >
-                                    {item.output}
+                                        );
+                                      })}
+                                    </div>
+                                    {item.input.length > 0 && (
+                                      <button
+                                        onClick={() => toggleExpand(item.id, "input")}
+                                        className="text-xs text-blue-500 hover:text-blue-600 hover:underline transition-colors"
+                                      >
+                                        {isInputExpanded ? "收起" : "展开"}
+                                      </button>
+                                    )}
                                   </div>
-                                  <button
-                                    onClick={() => toggleExpand(item.id, "output")}
-                                    className="text-xs text-blue-500 hover:text-blue-600 hover:underline transition-colors"
-                                  >
-                                    {isOutputExpanded ? "收起" : "展开"}
-                                  </button>
-                                </div>
-                              ) : null}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
+                                </td>
+
+                                {/* Output 列 - 支持展开/收起 */}
+                                <td className="text-sm p-2 align-middle">
+                                  {item.output ? (
+                                    <div className="space-y-1">
+                                      <div
+                                        className={`${
+                                          isOutputExpanded
+                                            ? "whitespace-pre-wrap"
+                                            : "line-clamp-3"
+                                        } text-slate-900 text-ellipsis break-words`}
+                                      >
+                                        {item.output}
+                                      </div>
+                                      <button
+                                        onClick={() => toggleExpand(item.id, "output")}
+                                        className="text-xs text-blue-500 hover:text-blue-600 hover:underline transition-colors"
+                                      >
+                                        {isOutputExpanded ? "收起" : "展开"}
+                                      </button>
+                                    </div>
+                                  ) : null}
+                                </td>
+
+                                {/* 用户反馈列 */}
+                                <td className="text-sm p-2 align-middle">
+                                  {item.userFeedback.status === "like" ? (
+                                    <span className="text-green-600">👍 点赞</span>
+                                  ) : item.userFeedback.status === "dislike" ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-red-600">👎 点踩</span>
+                                      {(item.userFeedback.tags && item.userFeedback.tags.length > 0) || item.userFeedback.content ? (
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <button type="button" className="cursor-help">
+                                              <AlertCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                                            </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent
+                                            className="w-64 p-3 text-xs text-slate-700"
+                                            side="right"
+                                            sideOffset={8}
+                                          >
+                                            <div className="space-y-2">
+                                              {item.userFeedback.tags && item.userFeedback.tags.length > 0 && (
+                                                <div>
+                                                  <div className="font-medium text-slate-900 mb-1">点踩原因：</div>
+                                                  <div className="flex flex-wrap gap-1">
+                                                    {item.userFeedback.tags.map((tag, index) => (
+                                                      <Badge key={index} variant="secondary" className="text-xs">
+                                                        {tag}
+                                                      </Badge>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {item.userFeedback.content && (
+                                                <div>
+                                                  <div className="font-medium text-slate-900 mb-1">反馈内容：</div>
+                                                  <div className="text-slate-600 whitespace-pre-wrap">
+                                                    {item.userFeedback.content}
+                                                  </div>
+                                                </div>
+                                              )}
+                            </div>
+                                          </PopoverContent>
+                                        </Popover>
+                                      ) : null}
+                            </div>
+                                  ) : (
+                                    <span className="text-slate-400">-</span>
+                                  )}
+                                </td>
+
+                                {/* 管理员反馈列 */}
+                                <td className="text-sm p-2 align-middle whitespace-nowrap">
+                                  {item.adminFeedback.status === "like" ? (
+                                    <span className="text-green-600">👍 点赞</span>
+                                  ) : item.adminFeedback.status === "dislike" ? (
+                                    <span className="text-red-600">👎 点踩</span>
+                                  ) : (
+                                    <span className="text-slate-400">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
+          {/* 导出至本地时的导出格式选项（放在表格预览之后） */}
+          {exportMethod === "local" && (
+            <div className="flex flex-col gap-4 mt-4">
+              <div className="space-y-2">
+                <Label className="font-medium text-sm text-gray-700 mb-2 block">
+                  导出格式
+                </Label>
+            <RadioGroup
+              value={exportFormat}
+                  onValueChange={(value) => setExportFormat(value as "jsonl" | "xlsx" | "csv")}
+              className="flex flex-row gap-6"
+            >
+              <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="jsonl" id="format-jsonl" />
+                    <Label htmlFor="format-jsonl" className="cursor-pointer font-normal">
+                      JSONL
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="xlsx" id="format-xlsx" />
+                    <Label htmlFor="format-xlsx" className="cursor-pointer font-normal">
+                      XLSX
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="csv" id="format-csv" />
+                    <Label htmlFor="format-csv" className="cursor-pointer font-normal">
+                      CSV
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+            </div>
+          )}
+
           {/* 导出至数据目录时的三级级联菜单（放在表格预览之后） */}
           {exportMethod === "catalog" && (
             <div className="flex flex-col gap-4 mt-4">
+              {/* 导出格式选项 */}
+              <div className="space-y-2">
+                <Label className="font-medium text-sm text-gray-700 mb-2 block">
+                  导出格式
+                </Label>
+                <RadioGroup
+                  value={exportFormat}
+                  onValueChange={(value) => setExportFormat(value as "jsonl" | "xlsx" | "csv")}
+                  className="flex flex-row gap-6"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="jsonl" id="catalog-format-jsonl" />
+                    <Label htmlFor="catalog-format-jsonl" className="cursor-pointer font-normal">
+                      JSONL
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="xlsx" id="catalog-format-xlsx" />
+                    <Label htmlFor="catalog-format-xlsx" className="cursor-pointer font-normal">
+                      XLSX
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="csv" id="catalog-format-csv" />
+                    <Label htmlFor="catalog-format-csv" className="cursor-pointer font-normal">
+                      CSV
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
               {/* 三级级联菜单选择器 */}
               <div className="space-y-2">
                 <Label className="font-medium text-sm text-gray-700 mb-2 block">
@@ -790,14 +1059,14 @@ export function ExportLogsDialog({
                   onSelect={handlePathSelect}
                   onCreateNew={handleCreateNewVolume}
                 />
-              </div>
+          </div>
 
               {/* 新建数据卷输入框（当选择新建时显示） */}
               {selectedPath?.volume === "new" && (
-                <div className="space-y-2">
+            <div className="space-y-2">
                   <Label className="font-medium text-sm text-gray-700 mb-2 block">
                     <span className="text-red-500">*</span> 新数据卷名称
-                  </Label>
+              </Label>
                   <Input
                     type="text"
                     value={newVolumeName}
@@ -823,15 +1092,13 @@ export function ExportLogsDialog({
                       className="flex-1"
                     />
                     <span className="text-sm text-slate-500 px-3 py-2 bg-slate-100 rounded-md border border-slate-200">
-                      .jsonl
+                      {exportFormat === "jsonl" ? ".jsonl" : exportFormat === "xlsx" ? ".xlsx" : ".csv"}
                     </span>
                   </div>
                 </div>
               )}
             </div>
           )}
-
-          </div>
         </div>
 
         <DialogFooter className="p-6 pt-2 border-t bg-white">

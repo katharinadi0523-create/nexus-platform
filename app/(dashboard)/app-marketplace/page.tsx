@@ -85,7 +85,7 @@ const featuredApps: FeaturedApp[] = [
     },
     badge: "HOT",
     cardStyle: "gradient",
-    externalLink: "https://writing.andywork.top/",
+    externalLink: "https://nexus-ai-writing.vercel.app/",
     specialTags: [{ label: "MVP版，升级迭代ing", style: "mvp" }],
   },
   {
@@ -360,13 +360,13 @@ export default function AppMarketplacePage() {
             />
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           </div>
-        </div>
+      </div>
       </section>
 
       {/* Main Content Area */}
       <section className="max-w-[1400px] mx-auto px-6 pb-12 space-y-12">
 
-        {/* Featured Agents Section */}
+      {/* Featured Agents Section */}
         <div className="mb-10 overflow-x-hidden min-w-0">
           <div className="mb-4">
             <h2 className="text-lg">
@@ -414,7 +414,7 @@ export default function AppMarketplacePage() {
                       }px, 0, 0)`,
               }}
             >
-              {featuredApps.map((app) => {
+          {featuredApps.map((app) => {
             const Icon = app.icon;
             return (
               <Card
@@ -505,8 +505,8 @@ export default function AppMarketplacePage() {
                   {/* Title/Author (对齐) */}
                   <div className="mb-3 min-h-[52px]">
                     <h3 className="mb-1 text-xl font-extrabold text-blue-600 leading-tight">
-                      {app.title}
-                    </h3>
+                    {app.title}
+                  </h3>
                     <p className="text-sm text-gray-500">{app.author}</p>
                   </div>
 
@@ -543,15 +543,15 @@ export default function AppMarketplacePage() {
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <div className="flex items-center gap-1">
-                        <TrendingUp className="h-4 w-4" />
-                        <span>{app.stats.downloads}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Heart className="h-4 w-4" />
-                        <span>{app.stats.favorites}</span>
-                      </div>
+                  <div className="flex items-center gap-4 text-sm text-gray-500">
+                    <div className="flex items-center gap-1">
+                      <TrendingUp className="h-4 w-4" />
+                      <span>{app.stats.downloads}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Heart className="h-4 w-4" />
+                      <span>{app.stats.favorites}</span>
+                    </div>
                     </div>
                     <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
                       <Share2 className="h-4 w-4" />
@@ -559,8 +559,8 @@ export default function AppMarketplacePage() {
                   </div>
                 </div>
               </Card>
-              );
-            })}
+            );
+          })}
             </div>
           </div>
 
@@ -581,10 +581,10 @@ export default function AppMarketplacePage() {
             ))}
           </div>
         </div>
-        </div>
+      </div>
 
-        {/* Navigation Bar */}
-        <div className="mb-6 space-y-4">
+      {/* Navigation Bar */}
+      <div className="mb-6 space-y-4">
         {/* First Level - Tabs */}
         <div className="flex items-center justify-between border-b border-gray-200">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -624,15 +624,15 @@ export default function AppMarketplacePage() {
             </TabsList>
           </Tabs>
           <div className="flex items-center gap-3">
-            <div className="relative w-64">
-              <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input
-                type="search"
-                placeholder="搜索应用"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+          <div className="relative w-64">
+            <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              type="search"
+              placeholder="搜索应用"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
                 className="pr-10 border-gray-300"
-              />
+            />
             </div>
             <select className="h-9 px-3 border border-gray-300 rounded-md text-sm bg-white">
               <option>最新</option>

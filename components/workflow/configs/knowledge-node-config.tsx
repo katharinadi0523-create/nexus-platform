@@ -5,6 +5,8 @@ import { Plus, List, BookOpen } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { KnowledgeBaseSelector, type KnowledgeBase } from "@/components/agent-editor/KnowledgeBaseSelector";
+import { Node, Edge } from "reactflow";
+import { VariableSelector } from "../variable-selector";
 
 interface KnowledgeNodeData {
   description?: string;
@@ -16,11 +18,17 @@ interface KnowledgeNodeData {
 interface KnowledgeNodeConfigProps {
   nodeData?: KnowledgeNodeData;
   onUpdate: (data: KnowledgeNodeData) => void;
+  currentNodeId?: string;
+  nodes?: Node[];
+  edges?: Edge[];
 }
 
 export function KnowledgeNodeConfig({
   nodeData,
   onUpdate,
+  currentNodeId = "",
+  nodes = [],
+  edges = [],
 }: KnowledgeNodeConfigProps) {
   const [description, setDescription] = useState(nodeData?.description || "");
   const [kbSelectorOpen, setKbSelectorOpen] = useState(false);
@@ -100,15 +108,18 @@ export function KnowledgeNodeConfig({
           {inputVariables.map((variable, index) => (
             <div
               key={index}
-              className="grid grid-cols-2 gap-2 bg-slate-50 rounded-lg p-2"
+              className="space-y-2 bg-slate-50 rounded-lg p-2"
             >
               <div className="text-sm text-slate-700">{variable.name}</div>
-              <Input
+              <VariableSelector
+                nodes={nodes}
+                edges={edges}
+                currentNodeId={currentNodeId}
                 value={variable.value}
-                onChange={(e) =>
-                  handleUpdateInputVariable(index, "value", e.target.value)
-                }
-                placeholder="变量值"
+                onSelect={(path) => {
+                  handleUpdateInputVariable(index, "value", path);
+                }}
+                placeholder="选择上游节点输出"
                 className="text-sm"
               />
             </div>

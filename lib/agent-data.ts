@@ -30,6 +30,16 @@ export interface AgentProfile {
 }
 
 // ==========================================
+// 反馈详情接口
+// ==========================================
+
+export interface FeedbackDetail {
+  status: 'like' | 'dislike' | null;
+  tags?: string[];   // e.g. ["事实错误", "逻辑问题"]
+  content?: string;  // e.g. "回答重复，答案还不准确。"
+}
+
+// ==========================================
 // 场景 1: 自主规划智能体 (OSINT 情报分析)
 // 特征: 包含 system 角色，侧重人设和推理
 // 数据逻辑: 模拟 SFT 训练数据构建，将一次多轮对话切片为多条记录
@@ -499,8 +509,8 @@ export function convertToTableLogEntry(
     output,
     timestamp: log.createdAt,
     source,
-    userFeedback: null,
-    adminFeedback: null,
+    userFeedback: { status: null },
+    adminFeedback: { status: null },
     status: "pending",
   };
 }
@@ -529,8 +539,48 @@ export function convertLogsToTableFormat(
 
       // 2. Random Feedback (10% like, 5% dislike, 85% null)
       const rand = Math.random();
-      const feedback: "like" | "dislike" | null =
+      const feedbackStatus: "like" | "dislike" | null =
         rand > 0.9 ? "like" : rand > 0.85 ? "dislike" : null;
+      
+      // 生成用户反馈详情
+      let userFeedback: FeedbackDetail = { status: feedbackStatus };
+      if (feedbackStatus === "dislike") {
+        // Tags 池
+        const tagsPool = ['事实错误', '逻辑问题', '安全合规', '其他'];
+        // Content 池
+        const contentPool = ['回答重复，答案还不准确。', '数据过时，需要更新。', '理解错误，没有正确理解问题。', '答案不完整，缺少关键信息。'];
+        
+        // 随机生成 1-2 个 Tags
+        const numTags = Math.floor(Math.random() * 2) + 1; // 1 或 2
+        const selectedTags = [];
+        const availableTags = [...tagsPool];
+        for (let j = 0; j < numTags && availableTags.length > 0; j++) {
+          const tagIndex = Math.floor(Math.random() * availableTags.length);
+          selectedTags.push(availableTags[tagIndex]);
+          availableTags.splice(tagIndex, 1);
+        }
+        
+        // 随机选择一个 Content
+        const selectedContent = contentPool[Math.floor(Math.random() * contentPool.length)];
+        
+        userFeedback = {
+          status: "dislike",
+          tags: selectedTags,
+          content: selectedContent,
+        };
+      }
+      
+      // 生成管理员反馈（随机生成少量数据以便测试）
+      let adminFeedback: FeedbackDetail = { status: null };
+      const adminRand = Math.random();
+      if (adminRand > 0.95) {
+        // 5% 概率生成管理员反馈
+        adminFeedback = {
+          status: adminRand > 0.975 ? "like" : "dislike",
+          tags: adminRand > 0.975 ? undefined : ['事实错误'],
+          content: adminRand > 0.975 ? undefined : '需要人工审核。',
+        };
+      }
 
       // 3. Time Shift (faking history - 随机减去 0-48 小时)
       const originalDate = new Date(log.createdAt);
@@ -555,7 +605,8 @@ export function convertLogsToTableFormat(
         ...baseEntry,
         id: uniqueId, // Unique ID
         source: randomSource, // Overwrite source
-        userFeedback: feedback, // Overwrite feedback
+        userFeedback: userFeedback, // Overwrite feedback with detailed structure
+        adminFeedback: adminFeedback, // Overwrite admin feedback
         timestamp: timeStr, // Overwrite time
         fullMessages: log.messages, // Pass the full conversation history
       });
