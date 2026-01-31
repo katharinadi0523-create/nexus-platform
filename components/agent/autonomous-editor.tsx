@@ -22,11 +22,15 @@ import { ModelSelector, type ModelParams } from "@/components/agent-editor/Model
 import { WorkflowSelector, type Workflow as WorkflowType } from "@/components/agent-editor/WorkflowSelector";
 import { PluginSelector, type Plugin } from "@/components/agent-editor/PluginSelector";
 import { MCPSelector, type MCP } from "@/components/agent-editor/MCPSelector";
+import { Package } from "lucide-react";
+import { getAllActions } from "@/lib/mock/mock-mcp-actions";
 import { OntologyConfigDialog, type OntologyConfig } from "@/components/agent-editor/OntologyConfigDialog";
 import { TerminologySelector, type Terminology } from "@/components/agent-editor/TerminologySelector";
 import { checkSensitiveContent } from "@/lib/content-filter";
 import { useModelCompatibility } from "@/lib/useModelCompatibility";
 import { CompatibilityIndicator } from "@/components/agent-editor/CompatibilityIndicator";
+import { TraceView } from "@/components/agent/trace-view";
+import type { ExecutionStep } from "@/lib/agent-data";
 
 // 定义详细数据源
 interface AgentDetailData {
@@ -39,6 +43,7 @@ interface AgentDetailData {
   plugins?: unknown;
   ontologies?: Array<{ id: string; name: string; description?: string }>;
   terminologies?: Array<{ id: string; name: string }>;
+  mcps?: Array<{ id: string; name: string; description?: string; actionId?: string }>;
   mockReply: string;
 }
 
@@ -96,6 +101,47 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
     plugins: ["Data Processor", "Schema Validator"],
     mockReply: "工作流已启动。正在执行数据清洗步骤... [步骤 1/5] 数据读取完成。",
   },
+  "agent-situational": {
+    type: "autonomous",
+    name: "态势感知智能体",
+    description: "实时分析海面目标的身份与威胁等级，支持本体查询和视觉特征分析。",
+    prompt: "你是一个海战态势感知智能体，负责实时分析海面目标的身份与威胁等级。",
+    openingStatement: "你好，我是态势感知智能体。我可以进行实时态势分析和威胁评估，请提供目标信息。",
+    suggestedQuestions: [
+      "实时分析海面目标的身份与威胁等级",
+    ],
+    ontologies: [
+      {
+        id: "onto-situational-1",
+        name: "TH态势感知与情报快判 - 情报报告",
+        description: "语义检索 (向量)",
+      },
+    ],
+    plugins: [
+      {
+        id: "plugin-vision-1",
+        name: "视觉特征分析",
+        description: "分析目标的主炮状态、垂发系统、甲板活动等关键特征",
+        icon: "Eye",
+        type: "plugin",
+      },
+    ],
+    mcps: [
+      {
+        id: "mcp-transit-event",
+        name: "TransitEvent MDP",
+        description: "过航事件相关的操作",
+        actionId: "action-transit-update-identity",
+      },
+      {
+        id: "mcp-transit-event-2",
+        name: "TransitEvent MDP",
+        description: "过航事件相关的操作",
+        actionId: "action-transit-update-threat",
+      },
+    ],
+    mockReply: "我可以进行实时态势分析和威胁评估。请提供目标信息（如位置、特征等），我会：\n1. 通过本体查询关联情报对象\n2. 进行身份识别和融合\n3. 调用视觉模型分析目标状态\n4. 综合评估威胁等级并生成研判报告。",
+  },
 };
 
 interface AutonomousEditorProps {
@@ -125,6 +171,43 @@ function normalizeTerminologies(input: unknown): Terminology[] {
       return null;
     })
     .filter((x): x is Terminology => !!x);
+}
+
+function normalizeMCPs(input: unknown): MCP[] {
+  if (!Array.isArray(input)) return [];
+  const allActions = getAllActions();
+  
+  return input
+    .map((m) => {
+      if (!m || typeof m !== "object") return null;
+      const obj = m as { id?: unknown; name?: unknown; description?: unknown; actionId?: unknown };
+      
+      // If it's an ontology action (has actionId), find the action and create MCP
+      if (typeof obj.actionId === "string") {
+        const action = allActions.find((a: any) => a.id === obj.actionId);
+        if (action) {
+          return {
+            id: action.id,
+            name: action.name,
+            description: action.description,
+            icon: <Package className="w-5 h-5 text-green-600" />,
+          } satisfies MCP;
+        }
+      }
+      
+      // Otherwise, treat as regular MCP
+      if (typeof obj.id === "string" && typeof obj.name === "string") {
+        return {
+          id: obj.id,
+          name: obj.name,
+          description: typeof obj.description === "string" ? obj.description : "",
+          icon: <Package className="w-5 h-5 text-green-600" />,
+        } satisfies MCP;
+      }
+      
+      return null;
+    })
+    .filter((x): x is MCP => !!x);
 }
 
 function normalizeOntologies(input: unknown): OntologyConfig[] {
@@ -237,7 +320,7 @@ export function AutonomousEditor({
     scoreThreshold: 0.1,
     autoTagFilterEnabled: false,
   });
-  const [selectedModel, setSelectedModel] = useState("DeepSeek-R2");
+  const [selectedModel, setSelectedModel] = useState("Qwen3-32B");
   const [modelParams, setModelParams] = useState<ModelParams>({
     temperature: 0.01,
     top_p: 0.01,
@@ -265,7 +348,12 @@ export function AutonomousEditor({
   const [openingStatement, setOpeningStatement] = useState("");
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([""]);
   const [chatHistory, setChatHistory] = useState<
-    Array<{ role: "user" | "assistant"; content: string; timestamp: string }>
+    Array<{ 
+      role: "user" | "assistant"; 
+      content: string; 
+      timestamp: string;
+      traceSteps?: ExecutionStep[]; // 执行链路步骤
+    }>
   >([]);
   const [showSuggestedChips, setShowSuggestedChips] = useState(true);
 
@@ -277,6 +365,7 @@ export function AutonomousEditor({
     const nextOntologies = normalizeOntologies((initialAgentData as any).ontologies);
     const nextTerminologies = normalizeTerminologies((initialAgentData as any).terminologies);
     const nextPlugins = normalizePlugins((initialAgentData as any).plugins);
+    const nextMCPs = normalizeMCPs((initialAgentData as any).mcps);
 
     // Only overwrite when we actually have incoming presets.
     if (nextOntologies.length > 0) {
@@ -290,6 +379,10 @@ export function AutonomousEditor({
     if (nextPlugins.length > 0) {
       setSelectedPlugins(nextPlugins);
       setExpandedSections((prev) => ({ ...prev, plugins: true }));
+    }
+    if (nextMCPs.length > 0) {
+      setSelectedMCPs(nextMCPs);
+      setExpandedSections((prev) => ({ ...prev, mcp: true }));
     }
   }, [initialAgentData]);
 
@@ -433,15 +526,214 @@ export function AutonomousEditor({
       return;
     }
 
-    // 根据当前的 id，从 AGENTS_DETAIL_DATA[id].mockReply 获取模拟回复内容
-    const mockReply = agentData?.mockReply || "您好，有什么可以帮您？";
+    // 生成智能回复和执行链路（基于用户消息和智能体配置）
+    const generateResponse = (userMsg: string): string => {
+      const msg = userMsg.toLowerCase();
+      
+      // ========== 优先级最高：态势感知相关 ==========
+      if (msg.includes("态势") || msg.includes("威胁") || msg.includes("身份") || msg.includes("评估") || msg.includes("分析") || msg.includes("海面") || msg.includes("目标")) {
+        // 返回空字符串，研判报告只在执行链路的最后一步（final_answer）中显示
+        return "";
+      }
+      
+      // 根据当前的 id，从 AGENTS_DETAIL_DATA[id].mockReply 获取模拟回复内容
+      return agentData?.mockReply || "您好，有什么可以帮您？";
+    };
+
+    // 生成执行链路（基于用户消息和智能体配置）
+    const generateTraceSteps = (userMsg: string): ExecutionStep[] => {
+      const msg = userMsg.toLowerCase();
+      const now = new Date();
+      const baseTime = now.getTime();
+      let stepIndex = 0;
+      const steps: ExecutionStep[] = [];
+
+      // 如果涉及态势感知、威胁评估相关
+      if (msg.includes("威胁") || msg.includes("态势") || msg.includes("身份") || msg.includes("评估") || msg.includes("分析") || msg.includes("海面") || msg.includes("目标")) {
+        let currentTime = baseTime;
+        
+        // Step 1: 初始思考
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: 'Step 1: 场景分析与规划',
+          stepType: 'thought',
+          status: 'success',
+          startTime: new Date(currentTime).toLocaleTimeString(),
+          endTime: new Date(currentTime + 1500).toLocaleTimeString(),
+          duration: 1500,
+          input: '',
+          output: '监测到台海区域出现不明目标组合 (1驱+1测)。\n基于常识判断，目标来源极可能是冲绳或佐世保基地。\n>> 规划：检索 MDP 情报库中符合 [地点+舰型] 的近期情报。'
+        });
+        currentTime += 1500;
+
+        // Step 2: 本体查询
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: '本体查询: 关联情报对象',
+          stepType: 'ontology_query',
+          status: 'success',
+          startTime: new Date(currentTime).toLocaleTimeString(),
+          endTime: new Date(currentTime + 2500).toLocaleTimeString(),
+          duration: 2500,
+          input: { 
+            objectType: 'IntelligenceReport', 
+            filter: { 
+              loc: ['Okinawa', 'Sasebo'], 
+              keywords: ['Destroyer', 'Survey'], 
+              time: '-72h' 
+            } 
+          },
+          output: { 
+            matched: [{ 
+              id: 'Report_088', 
+              content: '冲绳集结: 菲恩号(DDG-113), 鲍迪奇号(TAGS-62)...' 
+            }] 
+          }
+        });
+        currentTime += 2500;
+
+        // Step 3: 融合思考 (Fusion)
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: 'Step 2: 情报融合与锁定',
+          stepType: 'thought',
+          status: 'success',
+          startTime: new Date(currentTime).toLocaleTimeString(),
+          endTime: new Date(currentTime + 1000).toLocaleTimeString(),
+          duration: 1000,
+          input: '',
+          output: '查询结果 Report_088 中的编队构成与现场观测完美匹配。\n>> 结论：锁定身份为美海军"菲恩"号编队。\n>> 行动：更新事件实体的身份属性。'
+        });
+        currentTime += 1000;
+
+        // Step 4: 写动作
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: '动作: 更新事件身份',
+          stepType: 'tool_call',
+          status: 'success',
+          startTime: new Date(currentTime).toLocaleTimeString(),
+          endTime: new Date(currentTime + 800).toLocaleTimeString(),
+          duration: 800,
+          input: { 
+            action: 'Update_Entity', 
+            target: 'TransitEvent_001', 
+            updates: { 
+              identity: ['US-DDG-113', 'US-TAGS-62'] 
+            } 
+          },
+          output: { 
+            success: true, 
+            snapshot_id: 'evt_v2' 
+          }
+        });
+        currentTime += 800;
+
+        // Step 5: 态势评估思考 (Reasoning)
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: 'Step 3: 态势评估策略 (Reasoning)',
+          stepType: 'thought',
+          status: 'success',
+          startTime: new Date(currentTime).toLocaleTimeString(),
+          endTime: new Date(currentTime + 1500).toLocaleTimeString(),
+          duration: 1500,
+          input: '',
+          output: '身份已确认。下一步需评估其威胁等级。\n>> 规划：读取关联的传感器图像 (SensorData)，调用视觉模型分析 主炮状态 与 垂发盖板 开启情况。'
+        });
+        currentTime += 1500;
+
+        // Step 6: 视觉动作
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: '调用: 视觉态势分析',
+          stepType: 'tool_call',
+          status: 'success',
+          startTime: new Date(currentTime).toLocaleTimeString(),
+          endTime: new Date(currentTime + 3000).toLocaleTimeString(),
+          duration: 3000,
+          input: { 
+            image_id: 'Sensor_Img_001', 
+            targets: ['Main_Gun', 'VLS_Hatch'] 
+          },
+          output: { 
+            gun: 'Stowed (归零)', 
+            vls: 'Closed', 
+            deck: 'Clear', 
+            conclusion: 'Non-Aggressive' 
+          }
+        });
+        currentTime += 3000;
+
+        // Step 7: 最终决策思考 (Decision)
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: 'Step 4: 综合决策 (Decision)',
+          stepType: 'thought',
+          status: 'success',
+          startTime: new Date(currentTime).toLocaleTimeString(),
+          endTime: new Date(currentTime + 1500).toLocaleTimeString(),
+          duration: 1500,
+          input: '',
+          output: '综合研判：\n1. 高能力 (DDG-113 具备区域防空能力)\n2. 低姿态 (主炮归零，无攻击征候)\n>> 结论：判定威胁等级为 Medium (常态化巡航)。\n>> 行动：更新事件威胁等级，并生成报告。'
+        });
+        currentTime += 1500;
+
+        // Step 8: 更新威胁等级动作
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: '动作: 更新威胁等级 (Update Threat Level)',
+          stepType: 'tool_call',
+          status: 'success',
+          startTime: new Date(currentTime).toLocaleTimeString(),
+          endTime: new Date(currentTime + 1000).toLocaleTimeString(),
+          duration: 1000,
+          input: { 
+            action: 'Update_Entity', 
+            target: 'TransitEvent_001', 
+            updates: { 
+              threat_level: 'Medium', 
+              risk_factor: 'Non-Aggressive' 
+            } 
+          },
+          output: { 
+            success: true, 
+            timestamp: new Date(currentTime + 1000).toLocaleTimeString()
+          }
+        });
+        currentTime += 1000;
+
+        // Step 9: 最终答案生成
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: 'Step 5: 生成研判报告',
+          stepType: 'final_answer',
+          status: 'success',
+          startTime: new Date(currentTime).toLocaleTimeString(),
+          endTime: new Date(currentTime + 2000).toLocaleTimeString(),
+          duration: 2000,
+          input: {
+            intelligenceData: '已关联冲绳基地 HUMINT 情报 (Report_088)',
+            visualAnalysis: '主炮归零、垂发关闭、甲板无异常活动',
+            threatLevel: '中等 - 常态化巡航'
+          },
+          output: '### 研判报告\n\n**1. 身份确认**\n* 目标 I: USS John Finn (DDG-113)\n* 目标 II: USNS Bowditch (TAGS-62)\n* 依据: 关联冲绳基地 HUMINT 情报 (Report_088)，编队构成与离港时间完全匹配。\n\n**2. 威胁评估: [中等 - 常态化巡航]**\n* 视觉征候: 经传感器图像分析，目标主炮处于归零位置 (Stowed)，垂发盖板关闭，甲板无舰载机起降作业。\n* 结论: 判定为过航执行测量任务，未发现即时攻击意图。'
+        });
+      }
+
+      return steps;
+    };
 
     // 设置 1.5秒 的 setTimeout 来模拟网络请求延迟
     setTimeout(() => {
+      const response = generateResponse(message);
+      const traceSteps = generateTraceSteps(message);
+      
       const aiMessage = {
         role: "assistant" as const,
-        content: mockReply,
+        content: response,
         timestamp: new Date().toLocaleTimeString(),
+        traceSteps: traceSteps.length > 0 ? traceSteps : undefined,
       };
       setChatHistory((prev) => [...prev, aiMessage]);
     }, 1500);
@@ -614,7 +906,7 @@ export function AutonomousEditor({
               className="flex-1 flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
-                <Network className="w-5 h-5 text-slate-600" />
+                <Network className="w-5 h-5" style={{ color: '#ea580c' }} />
               <span className="font-medium text-slate-900 inline-flex items-center gap-2">
                 本体
                 <CompatibilityIndicator
@@ -659,8 +951,8 @@ export function AutonomousEditor({
                     key={index}
                     className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center gap-3"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                      <Network className="w-4 h-4 text-blue-600" />
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#ffedd5' }}>
+                      <Network className="w-4 h-4" style={{ color: '#ea580c' }} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-slate-900">
@@ -1009,7 +1301,7 @@ export function AutonomousEditor({
                         key={mcp.id}
                         className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center gap-3"
                       >
-                        <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0 text-orange-600">
+                        <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center shrink-0 text-green-600">
                           {mcp.icon}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -1154,15 +1446,32 @@ export function AutonomousEditor({
                   )}
                   <div className={`flex-1 ${message.role === "user" ? "flex justify-end" : ""}`}>
                     <div>
-                      <div
-                        className={`rounded-lg p-3 max-w-[80%] ${
-                          message.role === "user"
-                            ? "bg-slate-900 text-white ml-auto"
-                            : "bg-slate-100 text-slate-700"
-                        }`}
-                      >
-                        <p className="text-sm">{message.content}</p>
-                      </div>
+                      {/* 只有当 content 不为空时才显示消息气泡 */}
+                      {message.content.trim() && (
+                        <div
+                          className={`rounded-lg p-3 max-w-[80%] ${
+                            message.role === "user"
+                              ? "bg-slate-900 text-white ml-auto"
+                              : "bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        </div>
+                      )}
+                      {/* 执行链路展示 */}
+                      {message.role === "assistant" && message.traceSteps && message.traceSteps.length > 0 && (
+                        <div className="mt-3 max-w-[80%]">
+                          <div className="bg-white border-2 border-blue-200 rounded-lg p-4 shadow-sm">
+                            <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                              <span>执行链路</span>
+                              <span className="text-xs font-normal text-blue-600">
+                                ({message.traceSteps.length} 个步骤)
+                              </span>
+                            </h4>
+                            <TraceView steps={message.traceSteps} />
+                          </div>
+                        </div>
+                      )}
                       <p
                         className={`text-xs text-slate-400 mt-1 ${
                           message.role === "user" ? "mr-1 text-right" : "ml-1"

@@ -47,7 +47,7 @@ export function LLMNodeConfig({
   edges = [],
 }: LLMNodeConfigProps) {
   const [description, setDescription] = useState(nodeData?.description || "");
-  const [model, setModel] = useState(nodeData?.model || "DeepSeek-R2");
+  const [model, setModel] = useState(nodeData?.model || "Qwen3-32B");
   const [modelParams, setModelParams] = useState<ModelParams>(
     nodeData?.modelParams || {}
   );

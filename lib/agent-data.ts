@@ -16,6 +16,8 @@ export interface LogEntry {
   createdAt: string;
   tokens: number;
   latency: number; // ms
+  runConfig?: RunConfigSnapshot; // 运行时配置快照
+  traceSteps?: ExecutionStep[]; // 执行链路步骤
 }
 
 export type AgentType = 'autonomous' | 'workflow';
@@ -37,6 +39,67 @@ export interface FeedbackDetail {
   status: 'like' | 'dislike' | null;
   tags?: string[];   // e.g. ["事实错误", "逻辑问题"]
   content?: string;  // e.g. "回答重复，答案还不准确。"
+}
+
+// ==========================================
+// 执行链路与配置快照类型定义
+// ==========================================
+
+/**
+ * 运行时配置快照
+ * 用于记录 Agent 执行某次任务时的瞬时配置（解决多租户/缓存隔离问题）
+ */
+export interface RunConfigSnapshot {
+  model: string;
+  temperature: number;
+  tools: Array<{
+    name: string;
+    description: string;
+  }>;
+  knowledgeBases: Array<{
+    id: string;
+    version?: string;
+  }>;
+}
+
+/**
+ * 引用来源（用于 RAG 步骤）
+ */
+export interface Citation {
+  sourceName: string;
+  url?: string;
+  content: string;
+}
+
+/**
+ * 执行步骤类型
+ */
+export type ExecutionStepType = 'thought' | 'tool_call' | 'rag_retrieval' | 'ontology_query' | 'final_answer';
+
+/**
+ * 执行步骤状态
+ */
+export type ExecutionStepStatus = 'running' | 'success' | 'failed';
+
+/**
+ * 执行步骤/链路
+ * 用于记录 React 循环中的每一个原子操作
+ */
+export interface ExecutionStep {
+  id: string;
+  stepType: ExecutionStepType;
+  stepName: string; // e.g., "Step 1: 规划", "调用: Google Search", "本体查询: 车辆对象"
+  status: ExecutionStepStatus;
+  input: any; // 可展开查看的入参，如 JSON
+  // 当 stepType === 'ontology_query' 时：
+  // input example: { objectType: "Vehicle", filter: { license_plate: "京A88888" } }
+  output: any; // 可展开查看的出参，如 Tool Result 或 RAG Chunks
+  // 当 stepType === 'ontology_query' 时：
+  // output example: { id: "obj_123", type: "Vehicle", properties: { color: "Black", owner: "Zhang San" }, links: [...] }
+  citations?: Citation[]; // 仅针对 RAG 步骤
+  startTime: string;
+  endTime: string;
+  duration: number; // ms
 }
 
 // ==========================================
@@ -254,11 +317,206 @@ const MOCK_LOGS_WRITER: LogEntry[] = [
     messages: [
       {
         role: 'user',
-        content: '请根据主题“人工智能的未来”写一个开头段落，风格要宏大。'
+        content: '请根据主题"人工智能的未来"写一个开头段落，风格要宏大。'
       },
       {
         role: 'assistant',
         content: '在星辰大海的征途上，人工智能不仅是工具的进化，更是人类智慧的延伸。站在21世纪的十字路口，我们看到的不再是冰冷的代码，而是即将被重塑的文明图景。从微观的神经元模拟到宏观的星际探索，AI 正以前所未有的速度，编织着属于未来的金色丝线。'
+      }
+    ]
+  }
+];
+
+// ==========================================
+// 场景 4: 态势感知智能体 (Situational Awareness)
+// 特征: 包含完整的执行链路和配置快照，展示本体查询和视觉分析流程
+// ==========================================
+
+const MOCK_LOGS_SITUATIONAL: LogEntry[] = [
+  {
+    id: 'log-sit-01',
+    createdAt: '2026-02-01 09:15:00',
+    tokens: 4500,
+    latency: 3200,
+    // 1. 运行时快照
+    runConfig: {
+      model: 'GPT-4-Turbo-Military',
+      temperature: 0.1,
+      knowledgeBases: [{ id: 'kb-naval-01', version: '2026.01' }],
+      tools: [
+        { name: 'MDP_Graph_Read', description: '读取本体对象（本体查询）' },
+        { name: 'Entity_Update', description: '更新实体属性（身份、威胁等级）' },
+        { name: 'Vision_Analyzer', description: '视觉特征提取（视觉态势分析）' }
+      ]
+    },
+    // 2. 完整执行链路（严格按照"思考 -> 行动 -> 思考 -> 行动"的顺序）
+    traceSteps: [
+      // --- 1. 初始思考 ---
+      {
+        id: 'step-01',
+        stepName: 'Step 1: 场景分析与规划',
+        stepType: 'thought',
+        status: 'success',
+        startTime: '09:15:00',
+        endTime: '09:15:01',
+        duration: 1500,
+        input: '', // Thought 类型不需要结构化 input
+        // Thought 只有内容，没有结构化 IO
+        output: '监测到台海区域出现不明目标组合 (1驱+1测)。\n基于常识判断，目标来源极可能是冲绳或佐世保基地。\n>> 规划：检索 MDP 情报库中符合 [地点+舰型] 的近期情报。'
+      },
+      // --- 2. 本体查询 ---
+      {
+        id: 'step-02',
+        stepName: '本体查询: 关联情报对象',
+        stepType: 'ontology_query',
+        status: 'success',
+        startTime: '09:15:02',
+        endTime: '09:15:04',
+        duration: 2500,
+        input: { 
+          objectType: 'IntelligenceReport', 
+          filter: { 
+            loc: ['Okinawa', 'Sasebo'], 
+            keywords: ['Destroyer', 'Survey'], 
+            time: '-72h' 
+          } 
+        },
+        output: { 
+          matched: [{ 
+            id: 'Report_088', 
+            content: '冲绳集结: 菲恩号(DDG-113), 鲍迪奇号(TAGS-62)...' 
+          }] 
+        }
+      },
+      // --- 3. 融合思考 ---
+      {
+        id: 'step-03',
+        stepName: 'Step 2: 情报融合与锁定',
+        stepType: 'thought',
+        status: 'success',
+        startTime: '09:15:05',
+        endTime: '09:15:06',
+        duration: 1000,
+        input: '', // Thought 类型不需要结构化 input
+        output: '查询结果 Report_088 中的编队构成与现场观测完美匹配。\n>> 结论：锁定身份为美海军"菲恩"号编队。\n>> 行动：更新事件实体的身份属性。'
+      },
+      // --- 4. 写动作 ---
+      {
+        id: 'step-04',
+        stepName: '动作: 更新事件身份',
+        stepType: 'tool_call',
+        status: 'success',
+        startTime: '09:15:06',
+        endTime: '09:15:07',
+        duration: 800,
+        input: { 
+          action: 'Update_Entity', 
+          target: 'TransitEvent_001', 
+          updates: { 
+            identity: ['US-DDG-113', 'US-TAGS-62'] 
+          } 
+        },
+        output: { 
+          success: true, 
+          snapshot_id: 'evt_v2' 
+        }
+      },
+      // --- 5. 态势评估思考 (Reasoning) ---
+      {
+        id: 'step-05',
+        stepName: 'Step 3: 态势评估策略 (Reasoning)',
+        stepType: 'thought',
+        status: 'success',
+        startTime: '09:15:07',
+        endTime: '09:15:08',
+        duration: 1500,
+        input: '', // Thought 类型不需要结构化 input
+        output: '身份已确认。下一步需评估其威胁等级。\n>> 规划：读取关联的传感器图像 (SensorData)，调用视觉模型分析 主炮状态 与 垂发盖板 开启情况。'
+      },
+      // --- 6. 视觉动作 ---
+      {
+        id: 'step-06',
+        stepName: '调用: 视觉态势分析',
+        stepType: 'tool_call',
+        status: 'success',
+        startTime: '09:15:09',
+        endTime: '09:15:12',
+        duration: 3000,
+        input: { 
+          image_id: 'Sensor_Img_001', 
+          targets: ['Main_Gun', 'VLS_Hatch'] 
+        },
+        output: { 
+          gun: 'Stowed (归零)', 
+          vls: 'Closed', 
+          deck: 'Clear', 
+          conclusion: 'Non-Aggressive' 
+        }
+      },
+      // --- 7. 最终决策思考 (Decision) ---
+      {
+        id: 'step-07',
+        stepName: 'Step 4: 综合决策 (Decision)',
+        stepType: 'thought',
+        status: 'success',
+        startTime: '09:15:12',
+        endTime: '09:15:13',
+        duration: 1500,
+        input: '', // Thought 类型不需要结构化 input
+        output: '综合研判：\n1. 高能力 (DDG-113 具备区域防空能力)\n2. 低姿态 (主炮归零，无攻击征候)\n>> 结论：判定威胁等级为 Medium (常态化巡航)。\n>> 行动：更新事件威胁等级，并生成报告。'
+      },
+      // --- 8. 更新威胁等级动作 ---
+      {
+        id: 'step-08',
+        stepName: '动作: 更新威胁等级 (Update Threat Level)',
+        stepType: 'tool_call',
+        status: 'success',
+        startTime: '09:15:13',
+        endTime: '09:15:14',
+        duration: 1000,
+        input: { 
+          action: 'Update_Entity', 
+          target: 'TransitEvent_001', 
+          updates: { 
+            threat_level: 'Medium', 
+            risk_factor: 'Non-Aggressive' 
+          } 
+        },
+        output: { 
+          success: true, 
+          timestamp: '09:15:14' 
+        }
+      },
+      // --- 9. 最终答案生成 ---
+      {
+        id: 'step-09',
+        stepName: 'Step 5: 生成研判报告',
+        stepType: 'final_answer',
+        status: 'success',
+        startTime: '09:15:14',
+        endTime: '09:15:16',
+        duration: 2000,
+        input: {
+          intelligenceData: '已关联冲绳基地 HUMINT 情报 (Report_088)',
+          visualAnalysis: '主炮归零、垂发关闭、甲板无异常活动',
+          threatLevel: '中等 - 常态化巡航'
+        },
+        output: '### 研判报告\n\n**1. 身份确认**\n* 目标 I: USS John Finn (DDG-113)\n* 目标 II: USNS Bowditch (TAGS-62)\n* 依据: 关联冲绳基地 HUMINT 情报 (Report_088)，编队构成与离港时间完全匹配。\n\n**2. 威胁评估: [中等 - 常态化巡航]**\n* 视觉征候: 经传感器图像分析，目标主炮处于归零位置 (Stowed)，垂发盖板关闭，甲板无舰载机起降作业。\n* 结论: 判定为过航执行测量任务，未发现即时攻击意图。'
+      }
+    ],
+    // 3. 最终对话展示 (SFT Format)
+    messages: [
+      {
+        role: 'system',
+        content: '你是一个海战态势感知智能体，负责实时分析海面目标的身份与威胁等级。'
+      },
+      {
+        role: 'user',
+        content: '系统监测到台海区域出现不明舰船编队 (TransitEvent_001)，请进行身份研判与威胁评估。'
+      },
+      {
+        role: 'assistant',
+        content: '### 研判报告\n\n**1. 身份确认**\n* 目标 I: USS John Finn (DDG-113)\n* 目标 II: USNS Bowditch (TAGS-62)\n* 依据: 关联冲绳基地 HUMINT 情报 (Report_088)，编队构成与离港时间完全匹配。\n\n**2. 威胁评估: [中等 - 常态化巡航]**\n* 视觉征候: 经传感器图像分析，目标主炮处于归零位置 (Stowed)，垂发盖板关闭，甲板无舰载机起降作业。\n* 结论: 判定为过航执行测量任务，未发现即时攻击意图。\n\n'
       }
     ]
   }
@@ -313,6 +571,13 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     type: 'autonomous',
     description: '基于知识库的智能问答系统，支持多轮对话和上下文理解。',
     updatedAt: '2025-12-31 15:45:00'
+  },
+  'agent-situational': {
+    id: 'agent-situational',
+    name: '态势感知智能体',
+    type: 'autonomous',
+    description: '实时分析海面目标的身份与威胁等级，支持本体查询和视觉特征分析。',
+    updatedAt: '2026-02-01 09:15:00'
   },
 
   // ==========================================
@@ -428,6 +693,11 @@ const MOCK_LOGS_MAP: Record<string, LogEntry[]> = {
   'device-03': MOCK_LOGS_OSINT,
   'knowledge-07': MOCK_LOGS_OSINT,
   'kb-qa-09': MOCK_LOGS_OSINT,
+  
+  // ==========================================
+  // Situational Awareness Agent
+  // ==========================================
+  'agent-situational': MOCK_LOGS_SITUATIONAL,
 
   // ==========================================
   // Map Workflow Agents to Cleaner/Writer logs

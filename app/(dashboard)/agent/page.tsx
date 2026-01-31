@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Search, Plus, Bot, Workflow, RefreshCw, Copy, Edit, Trash2, Grid2x2, Network } from "lucide-react";
@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { getAllAgents } from "@/lib/agent-data";
 
 interface Agent {
   id: string;
@@ -32,113 +33,44 @@ interface Agent {
   updatedAt: string;
 }
 
-const AGENTS_MOCK_DATA: Agent[] = [
-  {
-    id: "osint-01",
-    name: "OSINT开源情报整编",
-    type: "自主规划智能体",
-    status: "未发布",
-    desc: "基于全网开源数据的深度情报挖掘与关联分析。",
-    updatedAt: "2026-01-05 09:15:00",
-  },
-  {
-    id: "code-02",
-    name: "CodeMaster 架构师",
-    type: "自主规划智能体",
-    status: "未发布",
-    desc: "专注于代码审查、重构建议和技术方案设计。",
-    updatedAt: "2026-01-07 10:30:00",
-  },
-  {
-    id: "device-03",
-    name: "设备维修判断与预测",
-    type: "自主规划智能体",
-    status: "已发布",
-    desc: "基于传感器数据和历史维修记录，预测设备故障概率。",
-    updatedAt: "2026-01-03 11:00:00",
-  },
-  {
-    id: "flow-01",
-    name: "数据清洗工作流",
-    type: "工作流智能体",
-    status: "未发布",
-    desc: "自动化数据清洗和预处理工作流，支持多数据源输入和标准化输出。",
-    updatedAt: "2026-01-08 14:20:00",
-  },
-  {
-    id: "writing-04",
-    name: "多智能体写作",
-    type: "工作流智能体",
-    status: "未发布",
-    desc: "智能体应用描述",
-    updatedAt: "2026-01-07 10:30:00",
-  },
-  {
-    id: "extract-05",
-    name: "文件内容提取",
-    type: "工作流智能体",
-    status: "未发布",
-    desc: "智能体应用描述",
-    updatedAt: "2026-01-06 14:20:00",
-  },
-  {
-    id: "hypertension-06",
-    name: "高血压病大模型",
-    type: "工作流智能体",
-    status: "未发布",
-    desc: "智能体应用描述",
-    updatedAt: "2026-01-04 16:45:00",
-  },
-  {
-    id: "anti-fl-07",
-    name: "反FL分析智能体",
-    type: "工作流智能体",
-    status: "已发布",
-    desc: "智能体应用描述",
-    updatedAt: "2026-01-02 13:30:00",
-  },
-  {
-    id: "data-analysis-08",
-    name: "数据分析工作流",
-    type: "工作流智能体",
-    status: "未发布",
-    desc: "自动化数据分析流程，支持多数据源整合",
-    updatedAt: "2026-01-01 10:20:00",
-  },
-  {
-    id: "kb-qa-09",
-    name: "知识库问答",
-    type: "自主规划智能体",
-    status: "未发布",
-    desc: "基于知识库的智能问答系统",
-    updatedAt: "2025-12-31 15:45:00",
-  },
-  {
-    id: "approval-10",
-    name: "审批流程智能体",
-    type: "工作流智能体",
-    status: "未发布",
-    desc: "企业审批流程自动化处理",
-    updatedAt: "2025-12-30 09:30:00",
-  },
-  {
-    id: "report-11",
-    name: "报表生成工作流",
-    type: "工作流智能体",
-    status: "未发布",
-    desc: "自动生成各类业务报表",
-    updatedAt: "2025-12-30 08:15:00",
-  },
-];
+// 将 AgentProfile 转换为页面需要的 Agent 格式
+function convertAgentProfileToAgent(profile: ReturnType<typeof getAllAgents>[0]): Agent {
+  return {
+    id: profile.id,
+    name: profile.name,
+    type: profile.type === 'autonomous' ? '自主规划智能体' : '工作流智能体',
+    status: '未发布', // 默认状态
+    desc: profile.description,
+    updatedAt: profile.updatedAt,
+  };
+}
+
+// 某些智能体的特殊状态配置
+const AGENTS_STATUS_MAP: Record<string, string> = {
+  'device-03': '已发布',
+  'anti-fl-07': '已发布',
+};
 
 const ITEMS_PER_PAGE = 20;
 
 export default function AgentPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const [agents] = useState<Agent[]>(AGENTS_MOCK_DATA);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
+
+  // 从 lib/agent-data.ts 获取所有智能体数据
+  const agents = useMemo(() => {
+    const allAgents = getAllAgents();
+    return allAgents.map((profile) => {
+      const agent = convertAgentProfileToAgent(profile);
+      // 如果有特殊状态配置，使用配置的状态
+      if (AGENTS_STATUS_MAP[agent.id]) {
+        agent.status = AGENTS_STATUS_MAP[agent.id];
+      }
+      return agent;
+    });
+  }, []);
 
   const filteredAgents = agents.filter((agent) =>
     agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

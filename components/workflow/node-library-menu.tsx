@@ -74,7 +74,7 @@ const nodeCategories: NodeCategory[] = [
     label: "工具",
     items: [
       { id: "code", label: "代码", icon: Code, color: "text-orange-600" },
-      { id: "mcp", label: "MCP", icon: Building2, color: "text-orange-600" },
+      { id: "mcp", label: "MCP", icon: Building2, color: "text-green-600" },
       { id: "api", label: "API", icon: Plug, color: "text-green-600" },
     ],
   },

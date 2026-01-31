@@ -513,7 +513,7 @@ export const MODEL_SCHEMAS: Record<string, ModelSchema> = {
 };
 
 export function getModelSchema(modelId: string): ModelSchema {
-  const base = MODEL_SCHEMAS[modelId] || MODEL_SCHEMAS["DeepSeek-R2"];
+  const base = MODEL_SCHEMAS[modelId] || MODEL_SCHEMAS["Qwen3-32B"];
 
   const normalizeToolDomain = (schema: ModelSchema): ModelSchema => {
     const { workflow, plugins, mcp } = schema.capabilities;

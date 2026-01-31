@@ -91,7 +91,7 @@ const getModelIcon = (modelName: string) => {
 };
 
 export function ModelSelector({
-  selectedModel = "DeepSeek-R2",
+  selectedModel = "Qwen3-32B",
   modelParams,
   onModelChange,
   onParamsChange,

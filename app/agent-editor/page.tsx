@@ -33,6 +33,8 @@ import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBad
 import { LogsTable, type LogEntry } from "@/components/agent/logs-table";
 import { useModelCompatibility } from "@/lib/useModelCompatibility";
 import { CompatibilityIndicator } from "@/components/agent-editor/CompatibilityIndicator";
+import { TraceView } from "@/components/agent/trace-view";
+import type { ExecutionStep } from "@/lib/agent-data";
 
 // Mock 预览与调试日志数据（模拟用户在创建过程中进行的对话测试）
 const MOCK_PREVIEW_LOGS: LogEntry[] = [
@@ -118,7 +120,7 @@ export default function AgentEditorPage() {
     scoreThreshold: 0.1,
     autoTagFilterEnabled: false,
   });
-  const [selectedModel, setSelectedModel] = useState("DeepSeek-R2");
+  const [selectedModel, setSelectedModel] = useState("Qwen3-32B");
   const [modelParams, setModelParams] = useState<ModelParams>({
     temperature: 0.01,
     top_p: 0.01,
@@ -139,7 +141,12 @@ export default function AgentEditorPage() {
   const [openingStatement, setOpeningStatement] = useState("");
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([""]);
   const [chatHistory, setChatHistory] = useState<
-    Array<{ role: "user" | "assistant"; content: string; timestamp: string }>
+    Array<{ 
+      role: "user" | "assistant"; 
+      content: string; 
+      timestamp: string;
+      traceSteps?: ExecutionStep[]; // 执行链路步骤
+    }>
   >([]);
   const [showSuggestedChips, setShowSuggestedChips] = useState(true);
 
@@ -231,6 +238,9 @@ export default function AgentEditorPage() {
   const handleSendMessage = (message: string) => {
     if (!message.trim()) return;
 
+    // 强制输出 - 确保函数被调用
+    console.log('🚀 [handleSendMessage] 被调用，消息:', message);
+
     const userMessage = {
       role: "user" as const,
       content: message,
@@ -256,15 +266,366 @@ export default function AgentEditorPage() {
       return;
     }
 
-    // Mock AI response
+    // 生成智能回复（基于用户消息和智能体配置）
+    const generateResponse = (userMsg: string): string => {
+      const msg = userMsg.toLowerCase();
+      
+      // ========== 优先级最高：态势感知相关 ==========
+      // 只要包含"态势"，就匹配态势感知逻辑（必须放在最前面，甚至比开场白还优先）
+      if (msg.includes("态势") || msg.includes("威胁") || msg.includes("身份") || msg.includes("评估") || msg.includes("分析") || msg.includes("海面") || msg.includes("目标")) {
+        console.log('[DEBUG] 匹配到态势感知逻辑，消息:', userMsg);
+        // 返回完整的研判报告（基于 lib/agent-data.ts 中的 log-sit-01）
+        return `### 研判报告
+
+**1. 身份确认**
+* 目标 I: USS John Finn (DDG-113)
+* 目标 II: USNS Bowditch (TAGS-62)
+* 依据: 关联冲绳基地 HUMINT 情报 (Report_088)，编队构成与离港时间完全匹配。
+
+**2. 威胁评估: [中等 - 常态化巡航]**
+* 视觉征候: 经传感器图像分析，目标主炮处于归零位置 (Stowed)，垂发盖板关闭，甲板无舰载机起降作业。
+* 结论: 判定为过航执行测量任务，未发现即时攻击意图。`;
+      }
+      
+      // 如果有开场白且是第一条消息，使用开场白
+      if (chatHistory.length === 0 && openingStatement.trim()) {
+        return openingStatement;
+      }
+
+      // 根据用户消息内容生成相关回复
+      // 注意：将问候语检查放在后面，优先匹配具体功能
+      if (msg === "你好" || msg === "hello" || msg === "hi" || msg.trim() === "") {
+        return openingStatement.trim() || "您好！我是您的智能助手，有什么可以帮您的吗？";
+      }
+
+      // 如果用户询问功能或能力
+      if (msg.includes("功能") || msg.includes("能力") || msg.includes("做什么") || msg.includes("能做什么")) {
+        const hasKnowledge = selectedKnowledgeBases.length > 0;
+        const hasTools = selectedPlugins.length > 0 || selectedWorkflows.length > 0;
+        const hasOntology = selectedOntologies.length > 0;
+        
+        let response = "我可以帮助您：\n";
+        if (hasKnowledge) response += "• 基于知识库回答问题\n";
+        if (hasOntology) response += "• 查询本体对象和关联信息\n";
+        if (hasTools) response += "• 调用工具和工作流完成任务\n";
+        if (prompt.trim()) {
+          response += `\n${prompt.slice(0, 200)}${prompt.length > 200 ? '...' : ''}`;
+        }
+        return response;
+      }
+
+      // 如果用户询问本体查询相关
+      if (msg.includes("本体") || msg.includes("ontology") || msg.includes("对象")) {
+        if (selectedOntologies.length > 0) {
+          return `我可以帮您查询本体对象。当前已配置 ${selectedOntologies.length} 个本体。您可以告诉我需要查询的对象类型和条件，我会为您检索相关信息。`;
+        } else {
+          return "本体查询功能需要先配置本体。请在左侧\"知识\"面板中添加本体配置。";
+        }
+      }
+
+      // 如果用户询问知识库相关（注意：必须在态势感知之后，避免"态势感知"被误匹配）
+      if (msg.includes("知识库") || (msg.includes("知识") && !msg.includes("态势"))) {
+        if (selectedKnowledgeBases.length > 0) {
+          return `我可以基于知识库回答您的问题。当前已关联 ${selectedKnowledgeBases.length} 个知识库。请告诉我您想了解的内容，我会从知识库中检索相关信息为您解答。`;
+        } else {
+          return "知识库功能需要先添加知识库。请在左侧\"知识\"面板中点击 + 按钮添加知识库。";
+        }
+      }
+
+      // 如果用户询问视觉分析相关
+      if (msg.includes("视觉") || msg.includes("图像") || msg.includes("图片") || msg.includes("识别")) {
+        return "我可以进行视觉特征分析。请提供图像数据，我会识别目标的主炮状态、垂发系统、甲板活动等关键特征，并评估目标的威胁等级。";
+      }
+
+      // 默认回复：基于角色指令生成
+        if (prompt.trim()) {
+          const promptPreview = prompt.slice(0, 150);
+          return `我理解您的问题。${promptPreview}${prompt.length > 150 ? '...' : ''}\n\n请告诉我更多细节，我会根据我的能力为您提供帮助。`;
+        }
+
+      // 最后的默认回复
+      return "我理解您的问题。这是一个预览模式，实际部署后我会根据配置的知识库、工具和本体为您提供更详细的回答。您可以尝试询问我的功能、知识库内容或本体查询相关的问题。";
+    };
+
+    // 生成执行链路（基于用户消息和智能体配置）
+    const generateTraceSteps = (userMsg: string): ExecutionStep[] => {
+      console.log('🔍 [generateTraceSteps] 被调用，消息:', userMsg);
+      const msg = userMsg.toLowerCase();
+      console.log('🔍 [generateTraceSteps] 转小写后:', msg);
+      const now = new Date();
+      const baseTime = now.getTime();
+      let stepIndex = 0;
+      const steps: ExecutionStep[] = [];
+
+      // 如果涉及态势感知、威胁评估相关
+      if (msg.includes("威胁") || msg.includes("态势") || msg.includes("身份") || msg.includes("评估") || msg.includes("分析") || msg.includes("海面") || msg.includes("目标")) {
+        console.log('✅ [generateTraceSteps] 匹配到态势感知关键词，开始生成执行链路');
+        console.log('✅ [generateTraceSteps] 匹配到态势感知关键词，开始生成执行链路');
+        // Step 1: 思考
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: 'Step 1: 场景理解与规划',
+          stepType: 'thought',
+          status: 'success',
+          startTime: new Date(baseTime + stepIndex * 1000).toLocaleTimeString(),
+          endTime: new Date(baseTime + (stepIndex + 1) * 1000).toLocaleTimeString(),
+          duration: 1000,
+          input: `用户请求: ${userMsg}`,
+          output: '目标在台海出现，需要检索 MDP 中符合条件的情报对象，并进行视觉特征分析以评估威胁等级。'
+        });
+
+        // Step 2: 本体查询（即使没有配置，也展示模拟数据）
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: '本体查询: 关联情报对象',
+          stepType: 'ontology_query',
+          status: 'success',
+          startTime: new Date(baseTime + stepIndex * 1000).toLocaleTimeString(),
+          endTime: new Date(baseTime + (stepIndex + 3) * 1000).toLocaleTimeString(),
+          duration: 3000,
+          input: {
+            objectType: 'IntelligenceReport',
+            filter: {
+              keywords: ['Destroyer', 'Survey Ship'],
+              timeRange: '-72h'
+            }
+          },
+          output: [
+            {
+              id: 'Report_Obj_088',
+              type: 'IntelligenceReport',
+              title: 'HUMINT: Okinawa Port Departure',
+              properties: {
+                summary: '冲绳集结: 菲恩号(DDG-113), 鲍迪奇号(TAGS-62) 于今日离港...',
+                confidence: 'High',
+                source: 'HUMINT',
+                timestamp: new Date().toISOString()
+              }
+            }
+          ]
+        });
+
+        // Step 3: 工具调用（即使没有配置，也展示模拟数据）
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: '调用: 视觉模型 (Posture Check)',
+          stepType: 'tool_call',
+          status: 'success',
+          startTime: new Date(baseTime + stepIndex * 1000).toLocaleTimeString(),
+          endTime: new Date(baseTime + (stepIndex + 3) * 1000).toLocaleTimeString(),
+          duration: 3000,
+          input: {
+            image_source: 'Linked_Sensor_Data',
+            detection_targets: ['Main_Gun', 'VLS_Hatch', 'Deck_Activity']
+          },
+          output: {
+            image_url: '/mock/ddg-sensor.jpg',
+            features: {
+              gun_posture: 'Stowed (归零)',
+              vls_state: 'Closed',
+              deck: 'Clear'
+            },
+            conclusion: 'Non-Aggressive'
+          }
+        });
+
+        // Step 4: 最终答案生成
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: 'Step 4: 生成研判报告',
+          stepType: 'final_answer',
+          status: 'success',
+          startTime: new Date(baseTime + stepIndex * 1000).toLocaleTimeString(),
+          endTime: new Date(baseTime + (stepIndex + 2) * 1000).toLocaleTimeString(),
+          duration: 2000,
+          input: {
+            intelligenceData: '已关联冲绳基地 HUMINT 情报 (Report_088)',
+            visualAnalysis: '主炮归零、垂发关闭、甲板无异常活动',
+            threatLevel: '中等 - 常态化巡航'
+          },
+          output: '### 研判报告\n\n**1. 身份确认**\n* 目标 I: USS John Finn (DDG-113)\n* 目标 II: USNS Bowditch (TAGS-62)\n* 依据: 关联冲绳基地 HUMINT 情报 (Report_088)，编队构成与离港时间完全匹配。\n\n**2. 威胁评估: [中等 - 常态化巡航]**\n* 视觉征候: 经传感器图像分析，目标主炮处于归零位置 (Stowed)，垂发盖板关闭，甲板无舰载机起降作业。\n* 结论: 判定为过航执行测量任务，未发现即时攻击意图。'
+        });
+        console.log('✅ [generateTraceSteps] 态势感知执行链路生成完成，共', steps.length, '个步骤');
+      } else if (msg.includes("本体") || msg.includes("ontology") || msg.includes("对象")) {
+        // 本体查询场景
+        if (selectedOntologies.length > 0) {
+          steps.push({
+            id: `step-${++stepIndex}`,
+            stepName: '本体查询: 查询对象实例',
+            stepType: 'ontology_query',
+            status: 'success',
+            startTime: new Date(baseTime + stepIndex * 1000).toLocaleTimeString(),
+            endTime: new Date(baseTime + (stepIndex + 2) * 1000).toLocaleTimeString(),
+            duration: 2000,
+            input: {
+              objectType: 'Vehicle',
+              filter: { license_plate: '京A88888' }
+            },
+            output: [
+              {
+                id: 'obj_123',
+                type: 'Vehicle',
+                title: '车辆对象',
+                properties: {
+                  color: 'Black',
+                  owner: 'Zhang San',
+                  license_plate: '京A88888'
+                }
+              }
+            ]
+          });
+        }
+      } else if (msg.includes("知识库") || msg.includes("知识") || selectedKnowledgeBases.length > 0) {
+        // RAG 检索场景
+        if (selectedKnowledgeBases.length > 0) {
+          steps.push({
+            id: `step-${++stepIndex}`,
+            stepName: '知识检索: 从知识库获取相关信息',
+            stepType: 'rag_retrieval',
+            status: 'success',
+            startTime: new Date(baseTime + stepIndex * 1000).toLocaleTimeString(),
+            endTime: new Date(baseTime + (stepIndex + 2) * 1000).toLocaleTimeString(),
+            duration: 2000,
+            input: {
+              query: userMsg,
+              knowledgeBases: selectedKnowledgeBases.map(kb => kb.id),
+              topK: 5
+            },
+            output: {
+              chunks: [
+                {
+                  id: 'chunk_001',
+                  content: '相关文档片段内容...',
+                  score: 0.85,
+                  source: '知识库文档1'
+                }
+              ]
+            },
+            citations: [
+              {
+                sourceName: '知识库文档1',
+                content: '相关文档片段内容...',
+                url: '#'
+              }
+            ]
+          });
+        }
+      } else {
+        // 通用思考步骤
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: 'Step 1: 理解用户意图',
+          stepType: 'thought',
+          status: 'success',
+          startTime: new Date(baseTime + stepIndex * 1000).toLocaleTimeString(),
+          endTime: new Date(baseTime + (stepIndex + 1) * 1000).toLocaleTimeString(),
+          duration: 1000,
+          input: `用户消息: ${userMsg}`,
+          output: '正在分析用户需求，准备生成回复...'
+        });
+      }
+
+      console.log('📊 [generateTraceSteps] 最终返回步骤数量:', steps.length);
+      return steps;
+    };
+
+    // Mock AI response with delay
     setTimeout(() => {
+      console.log('🚀🚀🚀 [CRITICAL] setTimeout 回调执行，消息:', message);
+      const response = generateResponse(message);
+      console.log('🚀🚀🚀 [CRITICAL] generateResponse 返回:', response.substring(0, 100));
+      const traceSteps = generateTraceSteps(message);
+      console.log('🚀🚀🚀 [CRITICAL] generateTraceSteps 返回步骤数:', traceSteps.length);
+      
+      // 调试日志 - 强制输出
+      console.log('========== [Agent Editor Debug] ==========');
+      console.log('[Agent Editor] User message:', message);
+      console.log('[Agent Editor] Generated response:', response);
+      console.log('[Agent Editor] Trace steps count:', traceSteps.length);
+      console.log('[Agent Editor] Trace steps:', JSON.stringify(traceSteps, null, 2));
+      
+      // 确保 traceSteps 总是存在（即使是空数组也要显示）
+      // 强制验证：确保态势感知消息总是有执行链路
+      if ((message.toLowerCase().includes("态势") || message.toLowerCase().includes("威胁") || message.toLowerCase().includes("身份") || message.toLowerCase().includes("评估") || message.toLowerCase().includes("分析") || message.toLowerCase().includes("海面") || message.toLowerCase().includes("目标")) && traceSteps.length === 0) {
+        console.error('❌❌❌ [CRITICAL] 态势感知消息但没有生成执行链路！强制生成...');
+        // 如果执行链路为空，强制生成完整的4个步骤
+        const baseTime = Date.now();
+        traceSteps.push({
+          id: 'step-1',
+          stepName: 'Step 1: 场景理解与规划',
+          stepType: 'thought',
+          status: 'success',
+          startTime: new Date(baseTime).toLocaleTimeString(),
+          endTime: new Date(baseTime + 1000).toLocaleTimeString(),
+          duration: 1000,
+          input: `用户请求: ${message}`,
+          output: '目标在台海出现，需要检索 MDP 中符合条件的情报对象，并进行视觉特征分析以评估威胁等级。'
+        });
+        traceSteps.push({
+          id: 'step-2',
+          stepName: '本体查询: 关联情报对象',
+          stepType: 'ontology_query',
+          status: 'success',
+          startTime: new Date(baseTime + 1000).toLocaleTimeString(),
+          endTime: new Date(baseTime + 4000).toLocaleTimeString(),
+          duration: 3000,
+          input: { objectType: 'IntelligenceReport', filter: { keywords: ['Destroyer', 'Survey Ship'], timeRange: '-72h' } },
+          output: [{ id: 'Report_Obj_088', type: 'IntelligenceReport', title: 'HUMINT: Okinawa Port Departure', properties: { summary: '冲绳集结: 菲恩号(DDG-113), 鲍迪奇号(TAGS-62) 于今日离港...', confidence: 'High' } }]
+        });
+        traceSteps.push({
+          id: 'step-3',
+          stepName: '调用: 视觉模型 (Posture Check)',
+          stepType: 'tool_call',
+          status: 'success',
+          startTime: new Date(baseTime + 4000).toLocaleTimeString(),
+          endTime: new Date(baseTime + 7000).toLocaleTimeString(),
+          duration: 3000,
+          input: { image_source: 'Linked_Sensor_Data', detection_targets: ['Main_Gun', 'VLS_Hatch', 'Deck_Activity'] },
+          output: { image_url: '/mock/ddg-sensor.jpg', features: { gun_posture: 'Stowed (归零)', vls_state: 'Closed', deck: 'Clear' }, conclusion: 'Non-Aggressive' }
+        });
+        traceSteps.push({
+          id: 'step-4',
+          stepName: 'Step 4: 生成研判报告',
+          stepType: 'final_answer',
+          status: 'success',
+          startTime: new Date(baseTime + 7000).toLocaleTimeString(),
+          endTime: new Date(baseTime + 9000).toLocaleTimeString(),
+          duration: 2000,
+          input: { intelligenceData: '已关联冲绳基地 HUMINT 情报 (Report_088)', visualAnalysis: '主炮归零、垂发关闭、甲板无异常活动', threatLevel: '中等 - 常态化巡航' },
+          output: '### 研判报告\n\n**1. 身份确认**\n* 目标 I: USS John Finn (DDG-113)\n* 目标 II: USNS Bowditch (TAGS-62)\n* 依据: 关联冲绳基地 HUMINT 情报 (Report_088)，编队构成与离港时间完全匹配。\n\n**2. 威胁评估: [中等 - 常态化巡航]**\n* 视觉征候: 经传感器图像分析，目标主炮处于归零位置 (Stowed)，垂发盖板关闭，甲板无舰载机起降作业。\n* 结论: 判定为过航执行测量任务，未发现即时攻击意图。'
+        });
+      }
+      
       const aiMessage = {
         role: "assistant" as const,
-        content: "您好，有什么可以帮您？",
+        content: response,
         timestamp: new Date().toLocaleTimeString(),
+        traceSteps: traceSteps.length > 0 ? traceSteps : undefined, // 只有非空时才设置
       };
-      setChatHistory((prev) => [...prev, aiMessage]);
-    }, 500);
+      
+      // 强制验证：如果消息包含"态势"但 traceSteps 为空，输出警告
+      if (message.toLowerCase().includes("态势") && traceSteps.length === 0) {
+        console.error('❌ [ERROR] 态势感知消息但没有生成执行链路！消息:', message);
+        console.error('❌ [ERROR] traceSteps:', traceSteps);
+      }
+      
+      console.log('[Agent Editor] AI Message with traceSteps:', JSON.stringify(aiMessage, null, 2));
+      console.log('[Agent Editor] traceSteps exists?', !!aiMessage.traceSteps);
+      console.log('[Agent Editor] traceSteps length:', aiMessage.traceSteps?.length || 0);
+      console.log('==========================================');
+      
+      setChatHistory((prev) => {
+        const newHistory = [...prev, aiMessage];
+        console.log('[Agent Editor] Updated chat history length:', newHistory.length);
+        console.log('[Agent Editor] Last message traceSteps:', newHistory[newHistory.length - 1]?.traceSteps?.length || 0);
+        console.log('[Agent Editor] Last message traceSteps 详情:', newHistory[newHistory.length - 1]?.traceSteps);
+        // 强制验证：确保执行链路被正确添加
+        if (message.toLowerCase().includes("态势") && newHistory[newHistory.length - 1]?.traceSteps?.length === 0) {
+          console.error('❌❌❌ [CRITICAL ERROR] 态势感知消息但执行链路为空！');
+        }
+        return newHistory;
+      });
+    }, 800 + Math.random() * 400); // 模拟思考时间 800-1200ms
   };
 
   const handleSuggestedQuestionClick = (question: string) => {
@@ -490,7 +851,7 @@ export default function AgentEditorPage() {
                 className="flex-1 flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">
-                  <Network className="w-5 h-5 text-slate-600" />
+                  <Network className="w-5 h-5" style={{ color: '#ea580c' }} />
                   <span className="font-medium text-slate-900 inline-flex items-center gap-2">
                     本体
                     <CompatibilityIndicator
@@ -535,8 +896,8 @@ export default function AgentEditorPage() {
                       key={index}
                       className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center gap-3"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                        <Network className="w-4 h-4 text-blue-600" />
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#ffedd5' }}>
+                        <Network className="w-4 h-4" style={{ color: '#ea580c' }} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-slate-900">
@@ -884,7 +1245,7 @@ export default function AgentEditorPage() {
                           key={mcp.id}
                           className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center gap-3"
                         >
-                          <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0 text-orange-600">
+                          <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center shrink-0 text-green-600">
                             {mcp.icon}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -1036,8 +1397,48 @@ export default function AgentEditorPage() {
                               : "bg-slate-100 text-slate-700"
                           }`}
                         >
-                          <p className="text-sm">{message.content}</p>
+                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                         </div>
+                        {/* 执行链路展示 - 强制显示 */}
+                        {message.role === "assistant" && (
+                          <>
+                            {(() => {
+                              // 调试：在渲染时输出
+                              console.log('🎨 [Render] 渲染消息，role:', message.role);
+                              console.log('🎨 [Render] Message traceSteps:', message.traceSteps);
+                              console.log('🎨 [Render] Message traceSteps length:', message.traceSteps?.length || 0);
+                              console.log('🎨 [Render] Message content:', message.content.substring(0, 50));
+                              
+                              if (message.traceSteps && message.traceSteps.length > 0) {
+                                console.log('✅ [Render] 显示执行链路，步骤数:', message.traceSteps.length);
+                                return (
+                                  <div className="mt-3 max-w-[80%]">
+                                    <div className="bg-white border-2 border-blue-200 rounded-lg p-4 shadow-sm">
+                                      <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                                        <span>执行链路</span>
+                                        <span className="text-xs font-normal text-blue-600">
+                                          ({message.traceSteps.length} 个步骤)
+                                        </span>
+                                      </h4>
+                                      <TraceView steps={message.traceSteps} />
+                                    </div>
+                                  </div>
+                                );
+                              } else {
+                                console.warn('⚠️ [Render] 无执行链路数据，traceSteps:', message.traceSteps);
+                                return (
+                                  <div className="mt-2 text-xs text-red-500 italic max-w-[80%] p-2 bg-red-50 rounded border border-red-200">
+                                    ⚠️ 调试: 无执行链路数据
+                                    <br />
+                                    traceSteps: {message.traceSteps ? '存在但为空数组' : '不存在'}
+                                    <br />
+                                    <span className="text-xs">消息内容: {message.content.substring(0, 50)}...</span>
+                                  </div>
+                                );
+                              }
+                            })()}
+                          </>
+                        )}
                         <p
                           className={`text-xs text-slate-400 mt-1 ${
                             message.role === "user" ? "mr-1 text-right" : "ml-1"
