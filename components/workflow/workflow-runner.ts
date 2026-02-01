@@ -67,12 +67,27 @@ function getMockOutput(node: Node): any {
   // 优先级2: 根据节点类型生成默认Mock输出
   const nodeType = node.type || "";
   
-  // Start节点：返回输入变量
+  // Start节点：根据 inputVariables 生成输出
   if (nodeType === "start") {
-    return {
-      query: "示例查询内容",
-      files: [],
-    };
+    const inputVariables = node.data?.inputVariables || [];
+    const output: any = {};
+    inputVariables.forEach((v: { name: string; type: string; description?: string }) => {
+      // 根据变量类型生成默认值
+      if (v.type === "string") {
+        output[v.name] = v.description || `示例${v.name}`;
+      } else if (v.type === "array[file]") {
+        output[v.name] = [];
+      } else if (v.type === "array[string]") {
+        output[v.name] = [];
+      } else if (v.type === "number") {
+        output[v.name] = 0;
+      } else if (v.type === "boolean") {
+        output[v.name] = false;
+      } else {
+        output[v.name] = null;
+      }
+    });
+    return output;
   }
 
   // Router节点（分支器）：返回路由信息
@@ -113,11 +128,43 @@ function getMockOutput(node: Node): any {
     };
   }
 
-  // LLM节点
+  // LLM节点：根据 outputVariables 生成输出
   if (nodeType === "llm") {
-    return {
-      text: "这是大模型生成的示例回复内容",
-    };
+    // 如果节点有 mockOutput，优先使用
+    if (node.data?.mockOutput !== undefined) {
+      if (typeof node.data.mockOutput === "function") {
+        return node.data.mockOutput(node);
+      }
+      return node.data.mockOutput;
+    }
+    
+    // 否则根据 outputVariables 生成默认输出
+    const outputVariables = node.data?.outputVariables || [];
+    const output: any = {};
+    outputVariables.forEach((v: { name: string; type: string }) => {
+      if (v.name === "text") {
+        output.text = "这是大模型生成的示例回复内容";
+      } else if (v.name === "queries") {
+        output.queries = { entity: "示例实体", pattern: "示例模式" };
+      } else if (v.type === "string") {
+        output[v.name] = `示例${v.name}`;
+      } else if (v.type === "array[object]") {
+        output[v.name] = [];
+      } else if (v.type === "object") {
+        output[v.name] = {};
+      } else {
+        output[v.name] = null;
+      }
+    });
+    
+    // 如果没有 outputVariables，使用默认格式
+    if (Object.keys(output).length === 0) {
+      return {
+        text: "这是大模型生成的示例回复内容",
+      };
+    }
+    
+    return output;
   }
 
   // Knowledge节点
@@ -184,9 +231,58 @@ function getMockOutput(node: Node): any {
   }
 
   if (nodeType === "object-query") {
+    // 如果节点有 mockOutput，优先使用（虽然函数开头已经检查过，但这里再检查一次确保）
+    if (node.data?.mockOutput !== undefined) {
+      if (typeof node.data.mockOutput === "function") {
+        return node.data.mockOutput(node);
+      }
+      return node.data.mockOutput;
+    }
+    
+    // 否则返回默认空数组
     return {
       objectSets: [],
     };
+  }
+
+  // MCP节点：根据 outputVariables 生成输出
+  if (nodeType === "mcp") {
+    // 如果节点有 mockOutput，优先使用
+    if (node.data?.mockOutput !== undefined) {
+      if (typeof node.data.mockOutput === "function") {
+        return node.data.mockOutput(node);
+      }
+      return node.data.mockOutput;
+    }
+    
+    // 否则根据 outputVariables 生成默认输出
+    const outputVariables = node.data?.outputVariables || [];
+    const output: any = {};
+    outputVariables.forEach((v: { name: string; type: string }) => {
+      if (v.type === "boolean") {
+        output[v.name] = true;
+      } else if (v.type === "array[string]") {
+        output[v.name] = [];
+      } else if (v.type === "array[object]") {
+        output[v.name] = [];
+      } else if (v.type === "string") {
+        output[v.name] = "";
+      } else if (v.type === "number") {
+        output[v.name] = 0;
+      } else {
+        output[v.name] = null;
+      }
+    });
+    
+    // 如果没有 outputVariables，使用默认格式
+    if (Object.keys(output).length === 0) {
+      return {
+        success: true,
+        result: {},
+      };
+    }
+    
+    return output;
   }
 
   // End节点

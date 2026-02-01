@@ -15,6 +15,7 @@ import {
   X,
   FileText,
   Sparkles,
+  Edit2,
 } from "lucide-react";
 import { KnowledgeBaseSelector, type KnowledgeBase } from "@/components/agent-editor/KnowledgeBaseSelector";
 import { RetrievalSettings, type RetrievalConfig } from "@/components/agent-editor/RetrievalSettings";
@@ -31,6 +32,8 @@ import { useModelCompatibility } from "@/lib/useModelCompatibility";
 import { CompatibilityIndicator } from "@/components/agent-editor/CompatibilityIndicator";
 import { TraceView } from "@/components/agent/trace-view";
 import type { ExecutionStep } from "@/lib/agent-data";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 // 定义详细数据源
 interface AgentDetailData {
@@ -340,6 +343,7 @@ export function AutonomousEditor({
     () => normalizeOntologies((initialAgentData as any)?.ontologies)
   );
   const [ontologyConfigOpen, setOntologyConfigOpen] = useState(false);
+  const [editingOntologyIndex, setEditingOntologyIndex] = useState<number | null>(null);
   const [selectedTerminologies, setSelectedTerminologies] = useState<Terminology[]>(
     () => normalizeTerminologies((initialAgentData as any)?.terminologies)
   );
@@ -459,11 +463,25 @@ export function AutonomousEditor({
   };
 
   const handleAddOntology = (config: OntologyConfig) => {
-    setSelectedOntologies([...selectedOntologies, config]);
+    if (editingOntologyIndex !== null) {
+      // 更新现有本体配置
+      const updated = [...selectedOntologies];
+      updated[editingOntologyIndex] = config;
+      setSelectedOntologies(updated);
+      setEditingOntologyIndex(null);
+    } else {
+      // 添加新本体配置
+      setSelectedOntologies([...selectedOntologies, config]);
+    }
   };
 
   const handleRemoveOntology = (index: number) => {
     setSelectedOntologies(selectedOntologies.filter((_, i) => i !== index));
+  };
+
+  const handleEditOntology = (index: number) => {
+    setEditingOntologyIndex(index);
+    setOntologyConfigOpen(true);
   };
 
   const handleAddTerminology = (terminology: Terminology) => {
@@ -931,6 +949,7 @@ export function AutonomousEditor({
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                setEditingOntologyIndex(null);
                 setOntologyConfigOpen(true);
               }}
               className="p-1.5 hover:bg-slate-200 rounded-lg transition-colors ml-2"
@@ -946,34 +965,115 @@ export function AutonomousEditor({
                   暂无本体，点击上方 + 按钮添加
                 </div>
               ) : (
-                selectedOntologies.map((ontology, index) => (
-                  <div
-                    key={index}
-                    className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center gap-3"
-                  >
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: '#ffedd5' }}>
-                      <Network className="w-4 h-4" style={{ color: '#ea580c' }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-900">
-                        {ontology.ontology} - {ontology.objectType}
-                        {ontology.property && ` - ${ontology.property}`}
-                      </div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {ontology.retrievalMethod === "semantic"
-                          ? `语义检索 (${ontology.retrievalVector})`
-                          : "全量检索"}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveOntology(index)}
-                      className="p-1 hover:bg-slate-200 rounded transition-colors shrink-0"
-                      title="移除"
+                selectedOntologies.map((ontology, index) => {
+                  // 获取对象类型图标
+                  const getObjectTypeIcon = (objectType: string) => {
+                    if (objectType.includes("历史") || objectType.includes("战例")) {
+                      return BookOpen;
+                    }
+                    return Network;
+                  };
+                  
+                  // 获取检索方式标签
+                  const getRetrievalMethodLabel = (method: "structured" | "semantic" | undefined) => {
+                    if (method === "structured") {
+                      return "结构化检索";
+                    } else if (method === "semantic") {
+                      return "语义检索";
+                    }
+                    return "未设置";
+                  };
+                  
+                  const Icon = getObjectTypeIcon(ontology.objectType);
+                  
+                  return (
+                    <div
+                      key={index}
+                      className="border border-slate-200 rounded-lg bg-white"
                     >
-                      <X className="w-4 h-4 text-slate-500" />
-                    </button>
-                  </div>
-                ))
+                      {/* Card Header */}
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                            <Icon className="w-4 h-4 text-orange-600" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-slate-900">
+                              {ontology.objectType}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {ontology.ontology}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditOntology(index)}
+                          className="h-8 gap-1.5"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          <span className="text-xs">编辑配置</span>
+                        </Button>
+                      </div>
+
+                      {/* Card Body */}
+                      <div className="px-4 py-3 space-y-2">
+                        {/* 检索方式 */}
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={ontology.retrievalMethod === "semantic" ? "default" : "secondary"}
+                            className="text-xs"
+                          >
+                            {getRetrievalMethodLabel(ontology.retrievalMethod)}
+                          </Badge>
+                        </div>
+
+                        {/* 关键参数 */}
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <span className="text-slate-500">TopK:</span>
+                            <span className="ml-1 text-slate-900 font-medium">
+                              {ontology.topK ?? 20}
+                            </span>
+                          </div>
+                          {ontology.retrievalMethod === "semantic" && (
+                            <div>
+                              <span className="text-slate-500">语义权重:</span>
+                              <span className="ml-1 text-slate-900 font-medium">
+                                {((ontology.semanticWeight ?? 0.6) * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-slate-500">阈值:</span>
+                            <span className="ml-1 text-slate-900 font-medium">
+                              {((ontology.threshold ?? 0.6) * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          {ontology.property && (
+                            <div>
+                              <span className="text-slate-500">检索字段:</span>
+                              <span className="ml-1 text-slate-900 font-medium">
+                                {ontology.property}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {/* Remove Button - Outside card body */}
+                      <div className="px-4 pb-3 flex justify-end">
+                        <button
+                          onClick={() => handleRemoveOntology(index)}
+                          className="text-xs text-slate-500 hover:text-red-600 transition-colors"
+                          title="移除"
+                        >
+                          移除
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
           )}
@@ -1587,7 +1687,17 @@ export function AutonomousEditor({
       {/* Ontology Config Dialog */}
       <OntologyConfigDialog
         open={ontologyConfigOpen}
-        onOpenChange={setOntologyConfigOpen}
+        onOpenChange={(open) => {
+          setOntologyConfigOpen(open);
+          if (!open) {
+            setEditingOntologyIndex(null);
+          }
+        }}
+        initialConfig={
+          editingOntologyIndex !== null
+            ? selectedOntologies[editingOntologyIndex]
+            : undefined
+        }
         onSave={handleAddOntology}
       />
 

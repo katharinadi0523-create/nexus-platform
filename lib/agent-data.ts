@@ -523,20 +523,298 @@ const MOCK_LOGS_SITUATIONAL: LogEntry[] = [
 ];
 
 // ==========================================
+// 场景 5: 意图分析智能体 (Intent Analysis Agent)
+// 特征: 工作流型 Agent，包含三路并行情报检索与融合推理
+// ==========================================
+
+const MOCK_LOGS_INTENT_ANALYSIS: LogEntry[] = [
+  {
+    id: 'log-intent-01',
+    createdAt: '2026-02-02 10:00:00',
+    tokens: 6800,
+    latency: 8500,
+    // 1. 运行时快照
+    runConfig: {
+      model: 'GPT-4-Turbo-Military',
+      temperature: 0.1,
+      knowledgeBases: [],
+      tools: [
+        { name: 'Intent_Manager.batch_create', description: '批量创建意图假设对象（MCP工具）' },
+      ]
+    },
+    // 2. 完整执行链路（工作流步骤）
+    traceSteps: [
+      // --- Step 1: Start ---
+      {
+        id: 'step-start',
+        stepName: 'Step 1: 接收输入报告',
+        stepType: 'thought',
+        status: 'success',
+        startTime: '10:00:00',
+        endTime: '10:00:00',
+        duration: 100,
+        input: '',
+        output: 'Identity Report: DDG-113 (John Finn) & TAGS-62 (Bowditch); Behavior: Loitering in Taiwan Strait...'
+      },
+      // --- Step 2: LLM Parse ---
+      {
+        id: 'step-llm-parse',
+        stepName: 'Step 2: 解析意图查询',
+        stepType: 'thought',
+        status: 'success',
+        startTime: '10:00:01',
+        endTime: '10:00:03',
+        duration: 2000,
+        input: {
+          report: 'Identity Report: DDG-113 (John Finn) & TAGS-62 (Bowditch); Behavior: Loitering in Taiwan Strait...'
+        },
+        output: '解析意图：需查询实体详情、编队战术含义及类似历史战例。'
+      },
+      // --- Step 3: Entity Query (并行执行块 A) ---
+      {
+        id: 'step-query-entity',
+        stepName: '精确查询: 舰船与编队',
+        stepType: 'ontology_query',
+        status: 'success',
+        startTime: '10:00:03',
+        endTime: '10:00:05',
+        duration: 2000,
+        input: {
+          objectType: 'Ship',
+          method: 'Exact',
+          expand: 'Formation',
+          query: 'DDG-113, TAGS-62'
+        },
+        output: {
+          ships: [
+            { name: 'DDG-113', radar: 'SPY-1D', type: 'Destroyer' },
+            { name: 'TAGS-62', type: 'Survey', capabilities: ['Hydrographic', 'Bathymetric'] }
+          ],
+          formation: 'US 7th Fleet',
+          formationType: 'Escort'
+        }
+      },
+      // --- Step 4: Pattern Query (并行执行块 B) ---
+      {
+        id: 'step-query-pattern',
+        stepName: '语义检索: 编队战术模式',
+        stepType: 'ontology_query',
+        status: 'success',
+        startTime: '10:00:03',
+        endTime: '10:00:05',
+        duration: 2000,
+        input: {
+          objectType: 'FormationPattern',
+          method: 'Semantic',
+          query_emb: 'Destroyer + Survey Ship',
+          topK: 1
+        },
+        output: {
+          pattern: 'HVU-PROT',
+          desc: '高价值单元护航 (High Value Unit Protection)',
+          characteristics: ['Escort formation', 'Defensive posture', 'Survey support']
+        }
+      },
+      // --- Step 5: History Query (并行执行块 C) ---
+      {
+        id: 'step-query-history',
+        stepName: '语义检索: 历史战例',
+        stepType: 'ontology_query',
+        status: 'success',
+        startTime: '10:00:03',
+        endTime: '10:00:05',
+        duration: 2000,
+        input: {
+          objectType: 'HistoricalCase',
+          method: 'Semantic',
+          query_emb: 'Loitering in sensitive strait',
+          topK: 2
+        },
+        output: {
+          cases: [
+            {
+              id: 'Case_2023_SCS_Mapping',
+              title: '2023年南海水文测绘行动',
+              description: '类似编队在敏感海域进行长时间测绘作业',
+              outcome: 'Seabed Mapping'
+            },
+            {
+              id: 'Case_2024_FONOP',
+              title: '2024年自由航行行动',
+              description: '驱逐舰护航测量船通过国际水道',
+              outcome: 'Freedom of Navigation'
+            }
+          ]
+        }
+      },
+      // --- Step 6: LLM Reason (融合推理) ---
+      {
+        id: 'step-llm-reason',
+        stepName: '多维意图融合推理',
+        stepType: 'thought',
+        status: 'success',
+        startTime: '10:00:06',
+        endTime: '10:00:09',
+        duration: 3000,
+        input: {
+          original_report: 'DDG-113, Loitering...',
+          entity_data: {
+            ships: [
+              { name: 'DDG-113', radar: 'SPY-1D', type: 'Destroyer' },
+              { name: 'TAGS-62', type: 'Survey', capabilities: ['Hydrographic', 'Bathymetric'] }
+            ],
+            formation: 'US 7th Fleet',
+            formationType: 'Escort'
+          },
+          pattern_match: {
+            pattern: 'HVU-PROT',
+            desc: '高价值单元护航 (High Value Unit Protection)',
+            characteristics: ['Escort formation', 'Defensive posture', 'Survey support']
+          },
+          history_match: {
+            cases: [
+              {
+                id: 'Case_2023_SCS_Mapping',
+                title: '2023年南海水文测绘行动',
+                description: '类似编队在敏感海域进行长时间测绘作业',
+                outcome: 'Seabed Mapping'
+              },
+              {
+                id: 'Case_2024_FONOP',
+                title: '2024年自由航行行动',
+                description: '驱逐舰护航测量船通过国际水道',
+                outcome: 'Freedom of Navigation'
+              }
+            ]
+          }
+        },
+        output: '综合分析：实体特征显示具备强区域防空与水文测绘能力；模式匹配确认这是典型的高价值单元护航；历史战例表明此类编队常用于战前水文数据积累。\n>> 结论：主要意图为战场环境预置（水文调查）。'
+      },
+      // --- Step 7: Rule Match ---
+      {
+        id: 'step-rule-match',
+        stepName: '匹配作战规定',
+        stepType: 'ontology_query',
+        status: 'success',
+        startTime: '10:00:09',
+        endTime: '10:00:11',
+        duration: 2000,
+        input: {
+          objectType: 'CombatRegulation',
+          intent_hypothesis: '战场环境预置（水文调查）'
+        },
+        output: {
+          matched: [
+            {
+              id: 'Reg_001',
+              title: '《海空情况处置规定》',
+              clause: '查证与驱离条款',
+              applicable: true
+            }
+          ]
+        }
+      },
+      // --- Step 8: MCP Action (创建意图对象) ---
+      {
+        id: 'step-action-create',
+        stepName: '实例化意图对象 (Batch Create)',
+        stepType: 'tool_call',
+        status: 'success',
+        startTime: '10:00:11',
+        endTime: '10:00:13',
+        duration: 2000,
+        input: {
+          action: 'create_intents',
+          objects: [
+            {
+              id: 'intent-uuid-101',
+              type: 'Assessment',
+              intent: 'Hydrographic Survey',
+              prob: 'High',
+              description: '水文调查 - 主要意图'
+            },
+            {
+              id: 'intent-uuid-102',
+              type: 'Assessment',
+              intent: 'Electronic Surveillance',
+              prob: 'Medium',
+              description: '电子侦察 - 次要意图'
+            },
+            {
+              id: 'intent-uuid-103',
+              type: 'Assessment',
+              intent: 'Battlefield Prep',
+              prob: 'Low',
+              description: '战场预置 - 潜在意图'
+            }
+          ]
+        },
+        output: {
+          success: true,
+          created_ids: ['intent-uuid-101', 'intent-uuid-102', 'intent-uuid-103'],
+          timestamp: '2026-02-02T10:00:13Z'
+        }
+      },
+      // --- Step 9: End ---
+      {
+        id: 'step-end',
+        stepName: 'Step 9: 生成最终报告',
+        stepType: 'final_answer',
+        status: 'success',
+        startTime: '10:00:13',
+        endTime: '10:00:15',
+        duration: 2000,
+        input: {
+          intent_objects: [
+            { id: 'intent-uuid-101', intent: 'Hydrographic Survey', prob: 'High' },
+            { id: 'intent-uuid-102', intent: 'Electronic Surveillance', prob: 'Medium' },
+            { id: 'intent-uuid-103', intent: 'Battlefield Prep', prob: 'Low' }
+          ],
+          matched_regulation: '《海空情况处置规定》- 查证与驱离条款'
+        },
+        output: '### 意图分析报告\n\n**意图假设已生成并实例化：**\n\n1. **主要意图 (High)**: 水文调查 (Hydrographic Survey)\n   - ID: intent-uuid-101\n   - 依据: 编队构成（DDG-113 + TAGS-62）与历史战例匹配\n\n2. **次要意图 (Medium)**: 电子侦察 (Electronic Surveillance)\n   - ID: intent-uuid-102\n   - 依据: DDG-113 具备 SPY-1D 雷达系统\n\n3. **潜在意图 (Low)**: 战场预置 (Battlefield Prep)\n   - ID: intent-uuid-103\n   - 依据: 模式匹配显示 HVU-PROT 护航编队特征\n\n**匹配预案**: 《海空情况处置规定》- 查证与驱离条款\n\n**建议行动**: 启动查证程序，持续监控编队动态。'
+      }
+    ],
+    // 3. 最终对话展示 (SFT Format)
+    messages: [
+      {
+        role: 'user',
+        content: 'Identity Report: DDG-113 (John Finn) & TAGS-62 (Bowditch); Behavior: Loitering in Taiwan Strait...'
+      },
+      {
+        role: 'assistant',
+        content: '### 意图分析报告\n\n**意图假设已生成并实例化：**\n\n1. **主要意图 (High)**: 水文调查 (Hydrographic Survey)\n   - ID: intent-uuid-101\n   - 依据: 编队构成（DDG-113 + TAGS-62）与历史战例匹配\n\n2. **次要意图 (Medium)**: 电子侦察 (Electronic Surveillance)\n   - ID: intent-uuid-102\n   - 依据: DDG-113 具备 SPY-1D 雷达系统\n\n3. **潜在意图 (Low)**: 战场预置 (Battlefield Prep)\n   - ID: intent-uuid-103\n   - 依据: 模式匹配显示 HVU-PROT 护航编队特征\n\n**匹配预案**: 《海空情况处置规定》- 查证与驱离条款\n\n**建议行动**: 启动查证程序，持续监控编队动态。'
+      }
+    ]
+  }
+];
+
+// ==========================================
 // 数据仓库与查询方法
 // ==========================================
 
 const MOCK_AGENTS: Record<string, AgentProfile> = {
   // ==========================================
+  // 优先显示：新创建的智能体（放在最前面）
+  // ==========================================
+  'agent-situational': {
+    id: 'agent-situational',
+    name: '态势感知智能体',
+    type: 'autonomous',
+    description: '实时分析海面目标的身份与威胁等级，支持本体查询和视觉特征分析。',
+    updatedAt: '2026-02-01 09:15:00'
+  },
+  'agent-intent-analysis': {
+    id: 'agent-intent-analysis',
+    name: '意图分析智能体',
+    type: 'workflow',
+    description: '接收 Identity/Behavior 报告，通过实体关联、模式匹配、战例类比三路情报融合，生成意图假设并匹配预案。',
+    updatedAt: '2026-02-02 10:00:00'
+  },
+
+  // ==========================================
   // Group A: Autonomous Agents (Type: 'autonomous')
   // ==========================================
-  'agent-osint': {
-    id: 'agent-osint',
-    name: 'OSINT开源情报整编',
-    type: 'autonomous',
-    description: '基于全网开源数据的深度情报挖掘与关联分析。',
-    updatedAt: '2026-01-05 09:15:00'
-  },
   'osint-01': {
     id: 'osint-01',
     name: 'OSINT开源情报整编',
@@ -565,44 +843,16 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     description: '基于知识库的智能问答系统，支持多轮对话和上下文理解。',
     updatedAt: '2025-12-31 15:45:00'
   },
-  'kb-qa-09': {
-    id: 'kb-qa-09',
-    name: '知识库问答',
-    type: 'autonomous',
-    description: '基于知识库的智能问答系统，支持多轮对话和上下文理解。',
-    updatedAt: '2025-12-31 15:45:00'
-  },
-  'agent-situational': {
-    id: 'agent-situational',
-    name: '态势感知智能体',
-    type: 'autonomous',
-    description: '实时分析海面目标的身份与威胁等级，支持本体查询和视觉特征分析。',
-    updatedAt: '2026-02-01 09:15:00'
-  },
 
   // ==========================================
   // Group B: Workflow Agents (Type: 'workflow')
   // ==========================================
-  'agent-cleaner': {
-    id: 'agent-cleaner',
-    name: '数据清洗工作流',
-    type: 'workflow',
-    description: '自动化数据清洗和预处理工作流，支持多数据源输入和标准化输出。',
-    updatedAt: '2026-01-08 14:20:00'
-  },
   'flow-01': {
     id: 'flow-01',
     name: '数据清洗工作流',
     type: 'workflow',
     description: '自动化数据清洗和预处理工作流，支持多数据源输入和标准化输出。',
     updatedAt: '2026-01-08 14:20:00'
-  },
-  'agent-writer': {
-    id: 'agent-writer',
-    name: '多智能体写作',
-    type: 'workflow',
-    description: '智能协同写作助手，支持大纲生成、扩写和润色。',
-    updatedAt: '2026-01-07 10:30:00'
   },
   'writing-04': {
     id: 'writing-04',
@@ -625,13 +875,6 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     description: '基于医疗知识库的高血压疾病诊断与治疗方案生成系统。',
     updatedAt: '2026-01-04 16:45:00'
   },
-  'hypertension-06': {
-    id: 'hypertension-06',
-    name: '高血压病大模型',
-    type: 'workflow',
-    description: '基于医疗知识库的高血压疾病诊断与治疗方案生成系统。',
-    updatedAt: '2026-01-04 16:45:00'
-  },
   'anti-fl-07': {
     id: 'anti-fl-07',
     name: '反FL分析智能体',
@@ -646,25 +889,11 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     description: '自动化数据分析流程，支持数据清洗、统计分析和可视化报告生成。',
     updatedAt: '2026-01-01 10:20:00'
   },
-  'data-analysis-08': {
-    id: 'data-analysis-08',
-    name: '数据分析工作流',
-    type: 'workflow',
-    description: '自动化数据分析流程，支持多数据源整合',
-    updatedAt: '2026-01-01 10:20:00'
-  },
   'process-09': {
     id: 'process-09',
     name: '审批流程智能体',
     type: 'workflow',
     description: '企业审批流程自动化处理，支持多级审批和智能路由。',
-    updatedAt: '2025-12-30 09:30:00'
-  },
-  'approval-10': {
-    id: 'approval-10',
-    name: '审批流程智能体',
-    type: 'workflow',
-    description: '企业审批流程自动化处理',
     updatedAt: '2025-12-30 09:30:00'
   },
   'report-08': {
@@ -673,13 +902,6 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     type: 'workflow',
     description: '自动生成各类业务报表，支持自定义模板和数据源配置。',
     updatedAt: '2025-12-30 08:15:00'
-  },
-  'report-11': {
-    id: 'report-11',
-    name: '报表生成工作流',
-    type: 'workflow',
-    description: '自动生成各类业务报表',
-    updatedAt: '2025-12-30 08:15:00'
   }
 };
 
@@ -687,12 +909,10 @@ const MOCK_LOGS_MAP: Record<string, LogEntry[]> = {
   // ==========================================
   // Map all Autonomous Agents to OSINT logs
   // ==========================================
-  'agent-osint': MOCK_LOGS_OSINT,
   'osint-01': MOCK_LOGS_OSINT,
   'code-02': MOCK_LOGS_OSINT,
   'device-03': MOCK_LOGS_OSINT,
   'knowledge-07': MOCK_LOGS_OSINT,
-  'kb-qa-09': MOCK_LOGS_OSINT,
   
   // ==========================================
   // Situational Awareness Agent
@@ -703,24 +923,23 @@ const MOCK_LOGS_MAP: Record<string, LogEntry[]> = {
   // Map Workflow Agents to Cleaner/Writer logs
   // Data/Analysis Workflows -> Cleaner Logs
   // ==========================================
-  'agent-cleaner': MOCK_LOGS_CLEANER,
   'flow-01': MOCK_LOGS_CLEANER,
   'extract-05': MOCK_LOGS_CLEANER,
   'analysis-01': MOCK_LOGS_CLEANER,
-  'data-analysis-08': MOCK_LOGS_CLEANER,
   'process-09': MOCK_LOGS_CLEANER,
-  'approval-10': MOCK_LOGS_CLEANER,
   'anti-fl-07': MOCK_LOGS_CLEANER,
 
   // ==========================================
   // Creative/Generation Workflows -> Writer Logs
   // ==========================================
-  'agent-writer': MOCK_LOGS_WRITER,
   'writing-04': MOCK_LOGS_WRITER,
   'hyper-06': MOCK_LOGS_WRITER,
-  'hypertension-06': MOCK_LOGS_WRITER,
   'report-08': MOCK_LOGS_WRITER,
-  'report-11': MOCK_LOGS_WRITER
+
+  // ==========================================
+  // Intent Analysis Agent
+  // ==========================================
+  'agent-intent-analysis': MOCK_LOGS_INTENT_ANALYSIS
 };
 
 // 获取智能体详情
@@ -734,8 +953,31 @@ export function getLogsByAgentId(id: string): LogEntry[] {
 }
 
 // 获取所有智能体列表
+// 确保态势感知智能体和意图分析智能体在前两位
 export function getAllAgents(): AgentProfile[] {
-  return Object.values(MOCK_AGENTS);
+  const allAgents = Object.values(MOCK_AGENTS);
+  
+  // 分离出需要优先显示的智能体
+  const priorityAgents = allAgents.filter(
+    agent => agent.id === 'agent-situational' || agent.id === 'agent-intent-analysis'
+  );
+  
+  // 其他智能体
+  const otherAgents = allAgents.filter(
+    agent => agent.id !== 'agent-situational' && agent.id !== 'agent-intent-analysis'
+  );
+  
+  // 确保态势感知在前，意图分析在第二
+  const sortedPriorityAgents = priorityAgents.sort((a, b) => {
+    if (a.id === 'agent-situational') return -1;
+    if (b.id === 'agent-situational') return 1;
+    if (a.id === 'agent-intent-analysis') return -1;
+    if (b.id === 'agent-intent-analysis') return 1;
+    return 0;
+  });
+  
+  // 合并：优先智能体在前，其他智能体在后
+  return [...sortedPriorityAgents, ...otherAgents];
 }
 
 // ==========================================

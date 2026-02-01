@@ -46,7 +46,8 @@ const getNodeLabel = (nodeType: string): string => {
     "data-clarify": "数据澄清",
     "data-query": "数据查询",
     "data-visualize": "数据可视化",
-    "object-query": "对象查询",
+    "object-query": "本体对象",
+    "mcp": "MCP",
   };
   return labelMap[nodeType] || "节点";
 };
@@ -97,6 +98,10 @@ const getDefaultOutputVariables = (nodeType: string): Array<{ name: string; type
     ],
     "object-query": [
       { name: "objectSets", type: "Array[Object]" },
+    ],
+    "mcp": [
+      { name: "result", type: "Any" },
+      { name: "success", type: "Boolean" },
     ],
   };
   return defaultOutputsMap[nodeType] || [];

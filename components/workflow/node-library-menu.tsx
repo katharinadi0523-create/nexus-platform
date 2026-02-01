@@ -16,6 +16,7 @@ import {
   Plug,
   MessageSquare,
   Network,
+  Package,
   LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -48,7 +49,7 @@ const nodeCategories: NodeCategory[] = [
     id: "ontology",
     label: "本体",
     items: [
-      { id: "object-query", label: "对象查询", icon: Network, color: "text-slate-600" },
+      { id: "object-query", label: "本体对象", icon: Network, color: "text-orange-600" },
     ],
   },
   {
@@ -74,7 +75,7 @@ const nodeCategories: NodeCategory[] = [
     label: "工具",
     items: [
       { id: "code", label: "代码", icon: Code, color: "text-orange-600" },
-      { id: "mcp", label: "MCP", icon: Building2, color: "text-green-600" },
+      { id: "mcp", label: "MCP", icon: Package, color: "text-green-600" },
       { id: "api", label: "API", icon: Plug, color: "text-green-600" },
     ],
   },

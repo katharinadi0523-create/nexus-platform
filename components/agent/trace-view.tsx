@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import {
-  Brain,
+  Sparkles,
   Wrench,
   Database,
   CheckCircle2,
@@ -13,6 +13,7 @@ import {
   ExternalLink,
   FileText,
   Share2,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -23,12 +24,49 @@ interface TraceViewProps {
 }
 
 /**
+ * 判断是否为 MCP 工具调用
+ */
+function isMCPToolCall(step: ExecutionStep): boolean {
+  if (step.stepType !== "tool_call") return false;
+  
+  // 检查步骤名称是否包含 MCP 相关关键词（如"动作:"、"更新"等）
+  const stepName = step.stepName || "";
+  if (stepName.includes("动作:") || stepName.includes("更新")) {
+    return true;
+  }
+  
+  // 检查 input.action 是否匹配 MCP 行动名称
+  const action = step.input?.action;
+  if (typeof action === "string") {
+    const mcpActions = [
+      "Update_Identity",
+      "Update_Threat_Level",
+      "Update_Entity",
+      "Archive_Event",
+      "Verify_Source",
+      "Link_to_Entity",
+      "Annotate_Image",
+    ];
+    if (mcpActions.some(mcpAction => action === mcpAction || action.includes(mcpAction))) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
  * 获取步骤类型的图标
  */
-function getStepIcon(stepType: ExecutionStepType) {
+function getStepIcon(stepType: ExecutionStepType, step?: ExecutionStep) {
+  // 如果是 MCP 工具调用，使用 Package 图标
+  if (step && isMCPToolCall(step)) {
+    return Package;
+  }
+  
   switch (stepType) {
     case "thought":
-      return Brain;
+      return Sparkles;
     case "tool_call":
       return Wrench;
     case "rag_retrieval":
@@ -45,7 +83,17 @@ function getStepIcon(stepType: ExecutionStepType) {
 /**
  * 获取步骤类型的颜色主题
  */
-function getStepColorTheme(stepType: ExecutionStepType) {
+function getStepColorTheme(stepType: ExecutionStepType, step?: ExecutionStep) {
+  // 如果是 MCP 工具调用，使用绿色主题
+  if (step && isMCPToolCall(step)) {
+    return {
+      border: "border-green-500",
+      bg: "bg-green-50",
+      icon: "text-green-600",
+      badge: "bg-green-100 text-green-700",
+    };
+  }
+  
   switch (stepType) {
     case "thought":
       return {
@@ -267,8 +315,8 @@ export function TraceView({ steps }: TraceViewProps) {
       {visibleSteps.map((step, index) => {
         const isExpanded = expandedSteps.has(step.id);
         const isLast = index === visibleSteps.length - 1;
-        const Icon = getStepIcon(step.stepType);
-        const theme = getStepColorTheme(step.stepType);
+        const Icon = getStepIcon(step.stepType, step);
+        const theme = getStepColorTheme(step.stepType, step);
 
         return (
           <div key={step.id} className="relative flex gap-4">

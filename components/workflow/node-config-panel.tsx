@@ -1,7 +1,7 @@
 "use client";
 
 import { Node, Edge } from "reactflow";
-import { X, Play, StopCircle, Sparkles, BookOpen, Network, Table, Filter, Database, BarChart3, Bot, GitBranch, Eye, Code } from "lucide-react";
+import { X, Play, StopCircle, Sparkles, BookOpen, Network, Table, Filter, Database, BarChart3, Bot, GitBranch, Eye, Code, Package } from "lucide-react";
 import { StartNodeConfig } from "./configs/start-node-config";
 import { LLMNodeConfig } from "./configs/llm-node-config";
 import { KnowledgeNodeConfig } from "./configs/knowledge-node-config";
@@ -15,6 +15,7 @@ import { AgentNodeConfig } from "./configs/agent-node-config";
 import { BranchNodeConfig } from "./configs/branch-node-config";
 import { IntentRecognizeNodeConfig } from "./configs/intent-recognize-node-config";
 import { CodeNodeConfig } from "./configs/code-node-config";
+import { MCPNodeConfig } from "./configs/mcp-node-config";
 import { cn } from "@/lib/utils";
 
 interface NodeConfigPanelProps {
@@ -53,6 +54,8 @@ const getNodeIcon = (type: string | undefined) => {
       return Eye;
     case "code":
       return Code;
+    case "mcp":
+      return Package;
     default:
       return Play;
   }
@@ -69,7 +72,7 @@ const getNodeLabel = (type: string | undefined) => {
     case "knowledge":
       return "知识检索";
     case "object-query":
-      return "对象查询";
+      return "本体对象";
     case "table-select":
       return "选表";
     case "data-clarify":
@@ -86,6 +89,8 @@ const getNodeLabel = (type: string | undefined) => {
       return "意图识别";
     case "code":
       return "代码";
+    case "mcp":
+      return "MCP";
     default:
       return "节点";
   }
@@ -102,7 +107,7 @@ const getNodeColor = (type: string | undefined) => {
     case "knowledge":
       return "text-purple-600";
     case "object-query":
-      return "text-purple-600";
+      return "text-orange-600";
     case "table-select":
     case "data-clarify":
     case "data-query":
@@ -116,6 +121,8 @@ const getNodeColor = (type: string | undefined) => {
       return "text-blue-600";
     case "code":
       return "text-orange-600";
+    case "mcp":
+      return "text-green-600";
     default:
       return "text-slate-600";
   }
@@ -190,6 +197,9 @@ export function NodeConfigPanel({
           <ObjectQueryNodeConfig
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
           />
         )}
         {selectedNode.type === "table-select" && (
@@ -257,6 +267,15 @@ export function NodeConfigPanel({
         )}
         {selectedNode.type === "code" && (
           <CodeNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+            currentNodeId={selectedNode.id}
+            nodes={nodes}
+            edges={edges}
+          />
+        )}
+        {selectedNode.type === "mcp" && (
+          <MCPNodeConfig
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
             currentNodeId={selectedNode.id}

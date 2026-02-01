@@ -57,6 +57,9 @@ export function BaseNode({
 }: BaseNodeComponentProps) {
   const isSelected = selected || nodeProps.selected;
   const colors = colorMap[color];
+  
+  // 优先使用 data.description 或 data.label，如果没有则使用传入的 label
+  const displayLabel = nodeProps.data?.description || nodeProps.data?.label || label;
 
   return (
     <div
@@ -81,7 +84,7 @@ export function BaseNode({
         <div className={cn("w-6 h-6 rounded flex items-center justify-center", colors.bg)}>
           <Icon className={cn("w-4 h-4", colors.icon)} />
         </div>
-        <span className="flex-1 text-sm font-medium text-slate-900">{label}</span>
+        <span className="flex-1 text-sm font-medium text-slate-900">{displayLabel}</span>
         <MoreHorizontal className="w-4 h-4 text-slate-400" />
       </div>
 

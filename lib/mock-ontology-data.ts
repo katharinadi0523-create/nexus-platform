@@ -84,6 +84,64 @@ export const ontologyData: OntologyData = {
       "hull_number",
       "country",
     ],
+    // 意图研判相关对象类型
+    // 编队 (Formation)
+    编队: [
+      "formation_id",
+      "name",
+      "composition",
+    ],
+    // 编队战术模式 (FormationPattern)
+    编队战术模式: [
+      "pattern_id",
+      "name",
+      "description",
+      "pattern_embedding",
+    ],
+    // 历史战例 (HistoricalCase)
+    历史战例: [
+      "case_id",
+      "title",
+      "summary",
+      "date",
+      "case_embedding",
+    ],
+    // 作战条令 (CombatRegulation)
+    作战条令: [
+      "rule_id",
+      "title",
+      "content",
+      "trigger_condition",
+    ],
+    // 意图研判结果 (IntentAssessment)
+    意图研判结果: [
+      "assessment_id",
+      "intent_type",
+      "probability",
+      "evidence",
+    ],
+    // 方案生成相关对象类型
+    // 预案条款 (PreplanClause)
+    预案条款: [
+      "clause_id",
+      "title",
+      "content",
+      "risk_level",
+    ],
+    // 作战席位 (OperationalPost)
+    作战席位: [
+      "post_id",
+      "role_name",
+      "current_assignee",
+      "status",
+    ],
+    // 作战资产 (CombatAsset)
+    作战资产: [
+      "asset_id",
+      "name",
+      "type",
+      "status",
+    ],
   },
 };
 
@@ -219,6 +277,70 @@ export const ontologyDataWithMetadata: OntologyDataWithMetadata = {
       { name: "name", type: "string" },
       { name: "hull_number", type: "string" },
       { name: "country", type: "string" },
+    ],
+    // ==========================================
+    // 意图研判相关对象类型 (Intent Analysis)
+    // ==========================================
+    // 编队 (Formation)
+    编队: [
+      { name: "formation_id", type: "string" },
+      { name: "name", type: "string" },
+      { name: "composition", type: "string" },
+    ],
+    // 编队战术模式 (FormationPattern)
+    编队战术模式: [
+      { name: "pattern_id", type: "string" },
+      { name: "name", type: "string" },
+      { name: "description", type: "string" },
+      // 向量字段（用于语义检索）
+      { name: "pattern_embedding", type: "array", isVector: true },
+    ],
+    // 历史战例 (HistoricalCase)
+    历史战例: [
+      { name: "case_id", type: "string" },
+      { name: "title", type: "string" },
+      { name: "summary", type: "string" },
+      { name: "date", type: "string" },
+      // 向量字段（用于语义检索）
+      { name: "case_embedding", type: "array", isVector: true },
+    ],
+    // 作战条令 (CombatRegulation)
+    作战条令: [
+      { name: "rule_id", type: "string" },
+      { name: "title", type: "string" },
+      { name: "content", type: "string" },
+      { name: "trigger_condition", type: "string" },
+    ],
+    // 意图研判结果 (IntentAssessment)
+    意图研判结果: [
+      { name: "assessment_id", type: "string" },
+      { name: "intent_type", type: "string" },
+      { name: "probability", type: "number" },
+      { name: "evidence", type: "string" },
+    ],
+    // ==========================================
+    // 方案生成相关对象类型 (Plan Generation)
+    // ==========================================
+    // 预案条款 (PreplanClause)
+    预案条款: [
+      { name: "clause_id", type: "string" },
+      { name: "title", type: "string" },
+      { name: "content", type: "string" },
+      { name: "risk_level", type: "string" },
+    ],
+    // 作战席位 (OperationalPost)
+    作战席位: [
+      { name: "post_id", type: "string" },
+      { name: "role_name", type: "string" },
+      { name: "current_assignee", type: "string" },
+      { name: "status", type: "string" },
+    ],
+    // 作战资产 (CombatAsset)
+    作战资产: [
+      { name: "asset_id", type: "string" },
+      { name: "name", type: "string" },
+      { name: "type", type: "string" },
+      { name: "status", type: "string" },
     ],
   },
 };

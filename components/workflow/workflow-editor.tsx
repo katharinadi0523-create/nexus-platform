@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useMemo, useRef } from "react";
+import { useCallback, useState, useMemo, useRef, useEffect } from "react";
 import { Plus, Play, Bug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -31,11 +31,13 @@ import { BranchNode } from "./nodes/branch-node";
 import { IntentRecognizeNode } from "./nodes/intent-recognize-node";
 import { CodeNode } from "./nodes/code-node";
 import { GenericNode } from "./nodes/generic-node";
+import { MCPNode } from "./nodes/mcp-node";
 import { NodeConfigPanel } from "./node-config-panel";
 import { NodeLibraryMenu } from "./node-library-menu";
 import { BasicConfigSheet } from "./basic-config-sheet";
 import { executeWorkflow, FlowRuntimeResult } from "./workflow-runner";
 import { WorkflowResultPanel } from "./workflow-result-panel";
+import { getWorkflowByAgentId } from "@/lib/mock/workflow-data";
 
 interface WorkflowEditorProps {
   agentId: string;
@@ -57,7 +59,7 @@ const nodeTypes = {
   branch: BranchNode,
   "intent-recognize": IntentRecognizeNode,
   code: CodeNode,
-  mcp: GenericNode,
+  mcp: MCPNode,
   api: GenericNode,
   message: GenericNode,
   "object-query": ObjectQueryNode,
@@ -127,8 +129,13 @@ const initialEdges: Edge[] = [
 ];
 
 export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  // 根据 agentId 加载工作流数据，如果没有则使用默认值
+  const workflowData = agentId ? getWorkflowByAgentId(agentId) : null;
+  const defaultNodes = workflowData?.nodes || initialNodes;
+  const defaultEdges = workflowData?.edges || initialEdges;
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(defaultEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodeLibraryOpen, setNodeLibraryOpen] = useState(false);
   const [basicConfigOpen, setBasicConfigOpen] = useState(false);
@@ -136,6 +143,15 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
   const [isExecuting, setIsExecuting] = useState(false);
   const [runResultOpen, setRunResultOpen] = useState(false);
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
+
+  // 当 agentId 变化时，重新加载工作流数据
+  useEffect(() => {
+    const newWorkflowData = agentId ? getWorkflowByAgentId(agentId) : null;
+    if (newWorkflowData) {
+      setNodes(newWorkflowData.nodes);
+      setEdges(newWorkflowData.edges);
+    }
+  }, [agentId, setNodes, setEdges]);
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId) || null,
@@ -359,6 +375,7 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
             onClose={() => setRunResult(null)}
             onNodeClick={handleNodeClickFromResult}
             isExecuting={isExecuting}
+            nodes={nodes}
           />
         )}
       </div>

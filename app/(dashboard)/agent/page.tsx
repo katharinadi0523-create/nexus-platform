@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Plus, Bot, Workflow, RefreshCw, Copy, Edit, Trash2, Grid2x2, Network } from "lucide-react";
+import { Search, Plus, Bot, Workflow, RefreshCw, Copy, Edit, Trash2, Sparkles, GitBranch } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -47,6 +47,8 @@ function convertAgentProfileToAgent(profile: ReturnType<typeof getAllAgents>[0])
 
 // 某些智能体的特殊状态配置
 const AGENTS_STATUS_MAP: Record<string, string> = {
+  'agent-situational': '已发布',
+  'agent-intent-analysis': '已发布',
   'device-03': '已发布',
   'anti-fl-07': '已发布',
 };
@@ -202,9 +204,9 @@ export default function AgentPage() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {isAutonomous ? (
-                          <Network className="h-4 w-4 text-blue-600" />
+                          <Sparkles className="h-4 w-4 text-blue-600" />
                         ) : (
-                          <Grid2x2 className="h-4 w-4 text-blue-600" />
+                          <GitBranch className="h-4 w-4 text-blue-600" />
                         )}
                         <Link
                           href={`/agent/${agent.id}`}
@@ -225,12 +227,12 @@ export default function AgentPage() {
                       >
                         {isAutonomous ? (
                           <>
-                            <Network className="mr-1 h-3 w-3" />
+                            <Sparkles className="mr-1 h-3 w-3" />
                             {agent.type}
                           </>
                         ) : (
                           <>
-                            <Workflow className="mr-1 h-3 w-3" />
+                            <GitBranch className="mr-1 h-3 w-3" />
                             {agent.type}
                           </>
                         )}

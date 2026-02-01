@@ -44,6 +44,7 @@ interface MCPSelectorProps {
   onOpenChange: (open: boolean) => void;
   onSelect: (mcps: MCP[]) => void;
   selectedMCPs?: MCP[];
+  singleSelect?: boolean; // 新增：是否单选模式
 }
 
 // 本体行动选择状态
@@ -104,6 +105,7 @@ export function MCPSelector({
   onOpenChange,
   onSelect,
   selectedMCPs = [],
+  singleSelect = false,
 }: MCPSelectorProps) {
   const [activeTab, setActiveTab] = useState<"preset" | "my" | "ontology">("ontology");
   const [searchQuery, setSearchQuery] = useState("");
@@ -141,19 +143,31 @@ export function MCPSelector({
   }, [searchQuery]);
 
   const toggleSelection = (mcpId: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(mcpId)
-        ? prev.filter((id) => id !== mcpId)
-        : [...prev, mcpId]
-    );
+    if (singleSelect) {
+      // 单选模式：直接替换
+      setSelectedIds([mcpId]);
+    } else {
+      // 多选模式：切换选择
+      setSelectedIds((prev) =>
+        prev.includes(mcpId)
+          ? prev.filter((id) => id !== mcpId)
+          : [...prev, mcpId]
+      );
+    }
   };
 
   // 切换本体行动选择
   const toggleActionSelection = (actionId: string) => {
-    setSelectedActions((prev) => ({
-      ...prev,
-      [actionId]: !prev[actionId],
-    }));
+    if (singleSelect) {
+      // 单选模式：只保留当前选择的
+      setSelectedActions({ [actionId]: !selectedActions[actionId] });
+    } else {
+      // 多选模式：切换选择
+      setSelectedActions((prev) => ({
+        ...prev,
+        [actionId]: !prev[actionId],
+      }));
+    }
   };
 
   // 切换对象类型展开/折叠
@@ -171,6 +185,10 @@ export function MCPSelector({
 
   // 批量选择/取消选择对象类型下的所有行动
   const toggleObjectTypeActions = (objectType: string, actions: OntologyAction[]) => {
+    if (singleSelect) {
+      // 单选模式：不支持批量选择
+      return;
+    }
     const allSelected = actions.every((action) => selectedActions[action.id]);
     setSelectedActions((prev) => {
       const next = { ...prev };
@@ -425,7 +443,7 @@ export function MCPSelector({
               onClick={handleConfirm}
               className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
             >
-              添加 ({totalSelectedCount})
+              {singleSelect ? "确认" : `添加 (${totalSelectedCount})`}
             </button>
           </div>
         </div>

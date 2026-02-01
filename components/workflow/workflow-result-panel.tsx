@@ -1,28 +1,143 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ChevronDown, ChevronRight, CheckCircle2, XCircle, MinusCircle, AlertCircle } from "lucide-react";
+import { ChevronDown, ChevronRight, CheckCircle2, XCircle, MinusCircle, AlertCircle, Play, StopCircle, Sparkles, BookOpen, Network, Table, Filter, Database, BarChart3, Bot, GitBranch, Eye, Code, Package, LucideIcon } from "lucide-react";
 import { FlowRuntimeResult, NodeRuntime } from "./workflow-runner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { Node } from "reactflow";
 
 interface WorkflowResultPanelProps {
   result: FlowRuntimeResult | null;
   onClose: () => void;
   onNodeClick?: (nodeId: string) => void;
   isExecuting?: boolean;
+  nodes?: Node[];
 }
+
+// 获取节点图标
+const getNodeIcon = (type: string | undefined): LucideIcon => {
+  switch (type) {
+    case "start":
+      return Play;
+    case "end":
+      return StopCircle;
+    case "llm":
+      return Sparkles;
+    case "knowledge":
+      return BookOpen;
+    case "object-query":
+      return Network;
+    case "table-select":
+      return Table;
+    case "data-clarify":
+      return Filter;
+    case "data-query":
+      return Database;
+    case "data-visualize":
+      return BarChart3;
+    case "agent":
+      return Bot;
+    case "branch":
+      return GitBranch;
+    case "intent-recognize":
+      return Eye;
+    case "code":
+      return Code;
+    case "mcp":
+      return Package;
+    default:
+      return Play;
+  }
+};
+
+// 获取节点默认标签
+const getNodeLabel = (type: string | undefined): string => {
+  switch (type) {
+    case "start":
+      return "开始";
+    case "end":
+      return "结束";
+    case "llm":
+      return "大模型";
+    case "knowledge":
+      return "知识检索";
+    case "object-query":
+      return "本体对象";
+    case "table-select":
+      return "选表";
+    case "data-clarify":
+      return "数据澄清";
+    case "data-query":
+      return "数据查询";
+    case "data-visualize":
+      return "数据可视化";
+    case "agent":
+      return "智能体";
+    case "branch":
+      return "分支器";
+    case "intent-recognize":
+      return "意图识别";
+    case "code":
+      return "代码";
+    case "mcp":
+      return "MCP";
+    default:
+      return "节点";
+  }
+};
+
+// 获取节点颜色
+const getNodeColor = (type: string | undefined): string => {
+  switch (type) {
+    case "start":
+      return "text-green-600";
+    case "end":
+      return "text-red-600";
+    case "llm":
+      return "text-blue-600";
+    case "knowledge":
+      return "text-purple-600";
+    case "object-query":
+      return "text-orange-600";
+    case "table-select":
+    case "data-clarify":
+    case "data-query":
+    case "data-visualize":
+      return "text-purple-600";
+    case "agent":
+      return "text-blue-600";
+    case "branch":
+      return "text-orange-600";
+    case "intent-recognize":
+      return "text-blue-600";
+    case "code":
+      return "text-orange-600";
+    case "mcp":
+      return "text-green-600";
+    default:
+      return "text-slate-600";
+  }
+};
 
 function NodeResultItem({
   nodeId,
   nodeRuntime,
   onNodeClick,
+  node,
 }: {
   nodeId: string;
   nodeRuntime: NodeRuntime;
   onNodeClick?: (nodeId: string) => void;
+  node?: Node;
 }) {
   const [expanded, setExpanded] = useState(false);
+  
+  // 获取节点图标、名称和颜色
+  const nodeType = node?.type || nodeRuntime.nodeType;
+  const Icon = getNodeIcon(nodeType);
+  const nodeName = node?.data?.description || node?.data?.label || getNodeLabel(nodeType);
+  const iconColor = getNodeColor(nodeType);
 
   const getStatusIcon = () => {
     switch (nodeRuntime.status) {
@@ -36,21 +151,6 @@ function NodeResultItem({
         return <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />;
       default:
         return null;
-    }
-  };
-
-  const getStatusColor = () => {
-    switch (nodeRuntime.status) {
-      case "success":
-        return "text-green-600";
-      case "failed":
-        return "text-red-600";
-      case "skipped":
-        return "text-slate-400";
-      case "running":
-        return "text-blue-600";
-      default:
-        return "text-slate-600";
     }
   };
 
@@ -70,19 +170,13 @@ function NodeResultItem({
         ) : (
           <ChevronRight className="w-4 h-4 text-slate-500" />
         )}
-        {getStatusIcon()}
+        <div className="w-5 h-5 rounded flex items-center justify-center bg-slate-100">
+          <Icon className={cn("w-3.5 h-3.5", iconColor)} />
+        </div>
         <span className="flex-1 text-sm font-medium text-slate-900">
-          {nodeId}
+          {nodeName}
         </span>
-        <span className={cn("text-xs", getStatusColor())}>
-          {nodeRuntime.status === "success"
-            ? "成功"
-            : nodeRuntime.status === "failed"
-            ? "失败"
-            : nodeRuntime.status === "running"
-            ? "执行中..."
-            : "跳过"}
-        </span>
+        {getStatusIcon()}
       </button>
 
       {expanded && (
@@ -135,8 +229,12 @@ export function WorkflowResultPanel({
   onClose,
   onNodeClick,
   isExecuting = false,
+  nodes = [],
 }: WorkflowResultPanelProps) {
   if (!result) return null;
+  
+  // 创建节点映射，方便快速查找
+  const nodeMap = new Map(nodes.map(node => [node.id, node]));
 
   // 根据执行状态动态设置默认tab：运行中显示"节点执行"，运行结束显示"最终输出"
   const [activeTab, setActiveTab] = useState<string>(isExecuting ? "nodes" : "output");
@@ -244,12 +342,14 @@ export function WorkflowResultPanel({
               {result.nodeOrder.map((nodeId) => {
                 const nodeRuntime = result.nodeResults[nodeId];
                 if (!nodeRuntime) return null;
+                const node = nodeMap.get(nodeId);
                 return (
                   <NodeResultItem
                     key={nodeId}
                     nodeId={nodeId}
                     nodeRuntime={nodeRuntime}
                     onNodeClick={onNodeClick}
+                    node={node}
                   />
                 );
               })}

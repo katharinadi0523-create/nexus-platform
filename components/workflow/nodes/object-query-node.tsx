@@ -20,8 +20,8 @@ export function ObjectQueryNode(props: NodeProps<ObjectQueryNodeData>) {
   return (
     <BaseNode
       icon={Network}
-      label="对象查询"
-      color="purple"
+      label="本体对象"
+      color="orange"
       showTargetHandle={true}
       showSourceHandle={true}
       selected={props.selected}

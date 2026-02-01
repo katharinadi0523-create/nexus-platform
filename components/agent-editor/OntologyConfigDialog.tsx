@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -56,7 +56,23 @@ export function OntologyConfigDialog({
   initialConfig = defaultConfig,
   onSave,
 }: OntologyConfigDialogProps) {
-  const [config, setConfig] = useState<OntologyConfig>(initialConfig);
+  // 合并 initialConfig 和 defaultConfig，确保所有属性都有默认值
+  const mergedConfig: OntologyConfig = useMemo(() => ({
+    ...defaultConfig,
+    ...initialConfig,
+    // 确保数值属性有默认值
+    threshold: initialConfig?.threshold ?? defaultConfig.threshold,
+    topK: initialConfig?.topK ?? defaultConfig.topK,
+    semanticWeight: initialConfig?.semanticWeight ?? defaultConfig.semanticWeight,
+    injectionFields: initialConfig?.injectionFields ?? defaultConfig.injectionFields,
+  }), [initialConfig]);
+  
+  const [config, setConfig] = useState<OntologyConfig>(mergedConfig);
+
+  // 当 initialConfig 变化时，更新 config
+  useEffect(() => {
+    setConfig(mergedConfig);
+  }, [mergedConfig]);
 
   const handleSave = () => {
     onSave?.(config);
@@ -64,7 +80,7 @@ export function OntologyConfigDialog({
   };
 
   const handleCancel = () => {
-    setConfig(initialConfig);
+    setConfig(mergedConfig);
     onOpenChange(false);
   };
 
@@ -408,7 +424,7 @@ export function OntologyConfigDialog({
               <Label className="text-base font-medium">阈值分</Label>
               <div className="flex items-center gap-4">
                 <Slider
-                  value={[config.threshold]}
+                  value={[config.threshold ?? defaultConfig.threshold]}
                   onValueChange={([value]) =>
                     setConfig({ ...config, threshold: value })
                   }
@@ -419,7 +435,7 @@ export function OntologyConfigDialog({
                 />
                 <Input
                   type="number"
-                  value={config.threshold.toFixed(2)}
+                  value={(config.threshold ?? defaultConfig.threshold).toFixed(2)}
                   onChange={(e) => {
                     const val = parseFloat(e.target.value);
                     if (!isNaN(val) && val >= 0 && val <= 1) {

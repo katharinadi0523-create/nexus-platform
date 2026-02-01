@@ -64,7 +64,7 @@
   - `data-clarify`: 数据澄清节点
   - `data-query`: 数据查询节点
   - `data-visualize`: 数据可视化节点
-  - `object-query`: 对象查询节点
+  - `object-query`: 本体对象节点
 
 ### 5. Mock配置
 - **当前状态**: 节点数据中没有预设的 `mockOutput` 字段
