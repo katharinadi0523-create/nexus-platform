@@ -269,9 +269,12 @@ export function ModelSelector({
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-80 p-0"
+        className="w-80 p-0 max-h-[60vh] overflow-y-auto"
         align="start"
+        side="top"
         sideOffset={8}
+        collisionPadding={32}
+        avoidCollisions={true}
       >
         <div className="p-4">
           {/* Section 1: 模型服务选择 */}

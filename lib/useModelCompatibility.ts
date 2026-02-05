@@ -10,9 +10,10 @@ export interface CompatibilityItem {
     | "terminology"
     | "workflow"
     | "plugins"
-    | "mcp";
+    | "mcp"
+    | "memory";
   status: CompatibilityStatus;
-  shortLabel: "" | "部分支持" | "模型不支持" | "未知";
+  shortLabel: "" | "部分支持" | "模型不支持" | "支持效果未知";
   tooltip: string;
 }
 
@@ -26,7 +27,7 @@ function scoreToStatus(score: ModelCapabilityScore | undefined): CompatibilitySt
 function statusToShortLabel(status: CompatibilityStatus): CompatibilityItem["shortLabel"] {
   if (status === "limited") return "部分支持";
   if (status === "unsupported") return "模型不支持";
-  if (status === "unknown") return "未知";
+  if (status === "unknown") return "支持效果未知";
   return "";
 }
 
@@ -46,7 +47,8 @@ function buildTooltip(
   if (status === "supported") {
     return `${modelName}支持此功能`;
   }
-  return `${modelName}的兼容性未知`;
+  // Unknown status: for exclusive models
+  return `无法识别该模型对该能力的支持情况，建议先测试或选择平台预置模型`;
 }
 
 export function useModelCompatibility(modelId: string) {
@@ -61,6 +63,7 @@ export function useModelCompatibility(modelId: string) {
     const workflowStatus = scoreToStatus(capabilities?.workflow);
     const pluginsStatus = scoreToStatus(capabilities?.plugins);
     const mcpStatus = scoreToStatus(capabilities?.mcp);
+    const memoryStatus = scoreToStatus(capabilities?.memory);
 
     const items: Record<CompatibilityItem["key"], CompatibilityItem> = {
       knowledge_base: {
@@ -98,6 +101,12 @@ export function useModelCompatibility(modelId: string) {
         status: mcpStatus,
         shortLabel: statusToShortLabel(mcpStatus),
         tooltip: buildTooltip("mcp", mcpStatus, modelName),
+      },
+      memory: {
+        key: "memory",
+        status: memoryStatus,
+        shortLabel: statusToShortLabel(memoryStatus),
+        tooltip: buildTooltip("memory", memoryStatus, modelName),
       },
     };
 

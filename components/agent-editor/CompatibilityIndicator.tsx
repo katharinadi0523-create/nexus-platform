@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, CircleX } from "lucide-react";
+import { AlertTriangle, CircleX, HelpCircle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -35,7 +35,7 @@ export function CompatibilityIndicator({
           }
         : {
             wrap: "bg-slate-50 text-slate-600 border-slate-200",
-            icon: <span className="text-[12px] leading-none">?</span>,
+            icon: <HelpCircle className="h-3.5 w-3.5" />,
           };
 
   return (

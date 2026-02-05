@@ -27,6 +27,7 @@ import { Package } from "lucide-react";
 import { getAllActions } from "@/lib/mock/mock-mcp-actions";
 import { OntologyConfigDialog, type OntologyConfig } from "@/components/agent-editor/OntologyConfigDialog";
 import { TerminologySelector, type Terminology } from "@/components/agent-editor/TerminologySelector";
+import { MemoryConfigPanel } from "@/components/agent-editor/MemoryConfigPanel";
 import { checkSensitiveContent } from "@/lib/content-filter";
 import { useModelCompatibility } from "@/lib/useModelCompatibility";
 import { CompatibilityIndicator } from "@/components/agent-editor/CompatibilityIndicator";
@@ -34,6 +35,7 @@ import { TraceView } from "@/components/agent/trace-view";
 import type { ExecutionStep } from "@/lib/agent-data";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import type { MemoryVariable } from "@/lib/types/agent";
 
 // 定义详细数据源
 interface AgentDetailData {
@@ -348,6 +350,7 @@ export function AutonomousEditor({
     () => normalizeTerminologies((initialAgentData as any)?.terminologies)
   );
   const [terminologySelectorOpen, setTerminologySelectorOpen] = useState(false);
+  const [memoryVariables, setMemoryVariables] = useState<MemoryVariable[]>([]);
   const [prompt, setPrompt] = useState("");
   const [openingStatement, setOpeningStatement] = useState("");
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([""]);
@@ -570,7 +573,10 @@ export function AutonomousEditor({
       if (msg.includes("威胁") || msg.includes("态势") || msg.includes("身份") || msg.includes("评估") || msg.includes("分析") || msg.includes("海面") || msg.includes("目标")) {
         let currentTime = baseTime;
         
-        // Step 1: 初始思考
+        // ==========================================
+        // 阶段一：身份推理 (Identity Reasoning)
+        // ==========================================
+        // Step 1: 思考 (Reasoning)
         steps.push({
           id: `step-${++stepIndex}`,
           stepName: 'Step 1: 场景分析与规划',
@@ -580,148 +586,182 @@ export function AutonomousEditor({
           endTime: new Date(currentTime + 1500).toLocaleTimeString(),
           duration: 1500,
           input: '',
-          output: '监测到台海区域出现不明目标组合 (1驱+1测)。\n基于常识判断，目标来源极可能是冲绳或佐世保基地。\n>> 规划：检索 MDP 情报库中符合 [地点+舰型] 的近期情报。'
+          output: '监测到台海区域出现不明目标组合 (1驱+1测，ID未知)。\n[常识] 目标在台海，则来源可能是冲绳或佐世保\n[规划] 在 MDP 中检索符合地点和舰型组合的情报对象。'
         });
         currentTime += 1500;
 
-        // Step 2: 本体查询
+        // Step 2: 本体查询 IntelligenceReport
         steps.push({
           id: `step-${++stepIndex}`,
-          stepName: '本体查询: 关联情报对象',
+          stepName: '本体查询: IntelligenceReport',
           stepType: 'ontology_query',
           status: 'success',
           startTime: new Date(currentTime).toLocaleTimeString(),
           endTime: new Date(currentTime + 2500).toLocaleTimeString(),
           duration: 2500,
-          input: { 
-            objectType: 'IntelligenceReport', 
-            filter: { 
-              loc: ['Okinawa', 'Sasebo'], 
-              keywords: ['Destroyer', 'Survey'], 
-              time: '-72h' 
-            } 
+          input: {
+            objectType: 'IntelligenceReport',
+            filter: {
+              location: ['Okinawa'],
+              keywords: ['Destroyer'],
+              time: '-72h'
+            }
           },
-          output: { 
-            matched: [{ 
-              id: 'Report_088', 
-              content: '冲绳集结: 菲恩号(DDG-113), 鲍迪奇号(TAGS-62)...' 
-            }] 
+          output: {
+            matched: [{
+              id: 'Report_Obj_088',
+              content: '冲绳集结: 菲恩号(DDG-113), 鲍迪奇号(TAGS-62)'
+            }]
           }
         });
         currentTime += 2500;
 
-        // Step 3: 融合思考 (Fusion)
+        // Step 3: 融合与计算 (Spatiotemporal Check)
         steps.push({
           id: `step-${++stepIndex}`,
-          stepName: 'Step 2: 情报融合与锁定',
+          stepName: 'Step 2: 时空融合与计算',
           stepType: 'thought',
           status: 'success',
           startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 1000).toLocaleTimeString(),
-          duration: 1000,
+          endTime: new Date(currentTime + 1500).toLocaleTimeString(),
+          duration: 1500,
           input: '',
-          output: '查询结果 Report_088 中的编队构成与现场观测完美匹配。\n>> 结论：锁定身份为美海军"菲恩"号编队。\n>> 行动：更新事件实体的身份属性。'
+          output: '融合与计算：\n1. 距离：冲绳至台海约 600km，耗时 24h\n2. 航速：600 除以 24 等于 25km/h (13.5节)，符合驱逐舰经济航速\n3. 结论：观测对象即为 Report_Obj_088 中的编队'
         });
-        currentTime += 1000;
+        currentTime += 1500;
 
-        // Step 4: 写动作
+        // Step 4: 更新事件身份 (Link Identity)
         steps.push({
           id: `step-${++stepIndex}`,
-          stepName: '动作: 更新事件身份',
+          stepName: '动作: 更新事件身份 (Link Identity)',
           stepType: 'tool_call',
           status: 'success',
           startTime: new Date(currentTime).toLocaleTimeString(),
           endTime: new Date(currentTime + 800).toLocaleTimeString(),
           duration: 800,
-          input: { 
-            action: 'Update_Entity', 
-            target: 'TransitEvent_001', 
-            updates: { 
-              identity: ['US-DDG-113', 'US-TAGS-62'] 
-            } 
+          input: {
+            action: 'Update_Entity',
+            target: 'TransitEvent_001',
+            updates: {
+              ship_ids: ['US-DDG-113', 'US-TAGS-62'],
+              Status: 'Identified'
+            }
           },
-          output: { 
-            success: true, 
-            snapshot_id: 'evt_v2' 
+          output: {
+            success: true,
+            snapshot_id: 'evt_v2',
+            updated_fields: ['ship_ids', 'Status']
           }
         });
         currentTime += 800;
 
-        // Step 5: 态势评估思考 (Reasoning)
+        // ==========================================
+        // 阶段二：视觉态势评估 (Visual Threat Assessment)
+        // ==========================================
+        // Step 5: 思考 (Reasoning)
         steps.push({
           id: `step-${++stepIndex}`,
-          stepName: 'Step 3: 态势评估策略 (Reasoning)',
+          stepName: 'Step 3: 态势评估策略',
           stepType: 'thought',
           status: 'success',
           startTime: new Date(currentTime).toLocaleTimeString(),
           endTime: new Date(currentTime + 1500).toLocaleTimeString(),
           duration: 1500,
           input: '',
-          output: '身份已确认。下一步需评估其威胁等级。\n>> 规划：读取关联的传感器图像 (SensorData)，调用视觉模型分析 主炮状态 与 垂发盖板 开启情况。'
+          output: '身份已更新。需读取关联的图像对象，分析物理征候以评估威胁。'
         });
         currentTime += 1500;
 
-        // Step 6: 视觉动作
+        // Step 6: 读取对象 SensorData (Image)
         steps.push({
           id: `step-${++stepIndex}`,
-          stepName: '调用: 视觉态势分析',
+          stepName: '读取对象: SensorData (Image)',
+          stepType: 'ontology_query',
+          status: 'success',
+          startTime: new Date(currentTime).toLocaleTimeString(),
+          endTime: new Date(currentTime + 1000).toLocaleTimeString(),
+          duration: 1000,
+          input: {
+            objectType: 'SensorData',
+            filter: {
+              linked_to: 'TransitEvent_001',
+              type: 'Image'
+            }
+          },
+          output: {
+            matched: [{
+              id: 'Sensor_Img_001',
+              type: 'Image',
+              linked_to: 'TransitEvent_001',
+              binary_data: 'Image_Binary_Data'
+            }]
+          }
+        });
+        currentTime += 1000;
+
+        // Step 7: 视觉模型处理 (Internal Model)
+        steps.push({
+          id: `step-${++stepIndex}`,
+          stepName: '视觉模型处理 (Internal Model)',
           stepType: 'tool_call',
           status: 'success',
           startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 3000).toLocaleTimeString(),
-          duration: 3000,
-          input: { 
-            image_id: 'Sensor_Img_001', 
-            targets: ['Main_Gun', 'VLS_Hatch'] 
+          endTime: new Date(currentTime + 2000).toLocaleTimeString(),
+          duration: 2000,
+          input: {
+            image_data: 'Image_Binary_Data',
+            targets: ['Main_Gun', 'VLS_Hatch', 'Deck']
           },
-          output: { 
-            gun: 'Stowed (归零)', 
-            vls: 'Closed', 
-            deck: 'Clear', 
-            conclusion: 'Non-Aggressive' 
+          output: {
+            Gun: 'Stowed',
+            VLS: 'Closed',
+            Deck: 'Clear',
+            Posture: 'Non-Aggressive Posture'
           }
         });
-        currentTime += 3000;
+        currentTime += 2000;
 
-        // Step 7: 最终决策思考 (Decision)
+        // Step 8: 综合定级 (Decision)
         steps.push({
           id: `step-${++stepIndex}`,
-          stepName: 'Step 4: 综合决策 (Decision)',
+          stepName: 'Step 4: 综合定级',
           stepType: 'thought',
           status: 'success',
           startTime: new Date(currentTime).toLocaleTimeString(),
           endTime: new Date(currentTime + 1500).toLocaleTimeString(),
           duration: 1500,
           input: '',
-          output: '综合研判：\n1. 高能力 (DDG-113 具备区域防空能力)\n2. 低姿态 (主炮归零，无攻击征候)\n>> 结论：判定威胁等级为 Medium (常态化巡航)。\n>> 行动：更新事件威胁等级，并生成报告。'
+          output: '综合定级：\n1. 高能力：DDG 具备区域防空能力\n2. 抵近：目标已进入台海区域\n>> 初步结论：高能力(DDG) + 抵近 = High Threat\n>> 虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性\n>> 最终结论：综合判定为 High Threat (常态化巡航)'
         });
         currentTime += 1500;
 
-        // Step 8: 更新威胁等级动作
+        // Step 9: 更新最终威胁评估 (Final Decision)
         steps.push({
           id: `step-${++stepIndex}`,
-          stepName: '动作: 更新威胁等级 (Update Threat Level)',
+          stepName: '动作: 更新最终威胁评估 (Final Decision)',
           stepType: 'tool_call',
           status: 'success',
           startTime: new Date(currentTime).toLocaleTimeString(),
           endTime: new Date(currentTime + 1000).toLocaleTimeString(),
           duration: 1000,
-          input: { 
-            action: 'Update_Entity', 
-            target: 'TransitEvent_001', 
-            updates: { 
-              threat_level: 'Medium', 
-              risk_factor: 'Non-Aggressive' 
-            } 
+          input: {
+            action: 'Update_Entity',
+            target: 'TransitEvent_001',
+            updates: {
+              Final_Threat_Assessment: 'High',
+              Reasoning: '经时空计算确认身份为菲恩号，高能力(DDG) + 抵近 = High Threat，虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性，判定为常态化巡航'
+            }
           },
-          output: { 
-            success: true, 
-            timestamp: new Date(currentTime + 1000).toLocaleTimeString()
+          output: {
+            success: true,
+            timestamp: new Date(currentTime + 1000).toLocaleTimeString(),
+            final_assessment: 'High',
+            reasoning: '经时空计算确认身份为菲恩号，高能力(DDG) + 抵近 = High Threat，虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性，判定为常态化巡航'
           }
         });
         currentTime += 1000;
 
-        // Step 9: 最终答案生成
+        // Step 10: 最终答案生成
         steps.push({
           id: `step-${++stepIndex}`,
           stepName: 'Step 5: 生成研判报告',
@@ -731,11 +771,12 @@ export function AutonomousEditor({
           endTime: new Date(currentTime + 2000).toLocaleTimeString(),
           duration: 2000,
           input: {
-            intelligenceData: '已关联冲绳基地 HUMINT 情报 (Report_088)',
-            visualAnalysis: '主炮归零、垂发关闭、甲板无异常活动',
-            threatLevel: '中等 - 常态化巡航'
+            intelligenceData: '已关联冲绳基地 HUMINT 情报 (Report_Obj_088)',
+            spatiotemporalCheck: '距离 600km，航速 13.5节，符合经济航速，确认身份匹配',
+            visualAnalysis: '主炮归零(Stowed)、垂发关闭(Closed)、甲板无异常(Clear)，姿态为非攻击性',
+            threatLevel: '高 - 常态化巡航'
           },
-          output: '### 研判报告\n\n**1. 身份确认**\n* 目标 I: USS John Finn (DDG-113)\n* 目标 II: USNS Bowditch (TAGS-62)\n* 依据: 关联冲绳基地 HUMINT 情报 (Report_088)，编队构成与离港时间完全匹配。\n\n**2. 威胁评估: [中等 - 常态化巡航]**\n* 视觉征候: 经传感器图像分析，目标主炮处于归零位置 (Stowed)，垂发盖板关闭，甲板无舰载机起降作业。\n* 结论: 判定为过航执行测量任务，未发现即时攻击意图。'
+          output: '### 研判报告\n\n**1. 身份确认**\n* 目标 I: USS John Finn (DDG-113)\n* 目标 II: USNS Bowditch (TAGS-62)\n* 依据: 关联冲绳基地 HUMINT 情报 (Report_Obj_088)，经时空计算（距离 600km，航速 13.5节）确认编队构成与离港时间完全匹配。\n\n**2. 威胁评估: [高 - 常态化巡航]**\n* 能力评估: DDG-113 具备区域防空能力，属于高能力平台\n* 行为分析: 目标已进入台海区域（抵近），视觉分析显示主炮归零(Stowed)、垂发关闭(Closed)、甲板无异常活动(Clear)\n* 综合定级: 高能力(DDG) + 抵近 = High Threat。虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性，综合判定为 High Threat\n* 结论: 判定为过航执行测量任务，常态化巡航，但需持续关注其动态。'
         });
       }
 
@@ -1428,6 +1469,13 @@ export function AutonomousEditor({
           </div>
         </div>
 
+        {/* Memory Config Section */}
+        <MemoryConfigPanel
+          variables={memoryVariables}
+          onVariablesChange={setMemoryVariables}
+          selectedModel={selectedModel}
+        />
+
         {/* Conversation Settings Section */}
         <div className="mt-6 pt-6 border-t border-slate-200">
           <h3 className="text-base font-semibold text-slate-900 mb-4">
@@ -1562,11 +1610,8 @@ export function AutonomousEditor({
                       {message.role === "assistant" && message.traceSteps && message.traceSteps.length > 0 && (
                         <div className="mt-3 max-w-[80%]">
                           <div className="bg-white border-2 border-blue-200 rounded-lg p-4 shadow-sm">
-                            <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                              <span>执行链路</span>
-                              <span className="text-xs font-normal text-blue-600">
-                                ({message.traceSteps.length} 个步骤)
-                              </span>
+                            <h4 className="text-sm font-semibold text-slate-900 mb-3">
+                              执行链路
                             </h4>
                             <TraceView steps={message.traceSteps} />
                           </div>

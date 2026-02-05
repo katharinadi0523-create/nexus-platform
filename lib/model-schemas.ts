@@ -45,6 +45,7 @@ export interface ModelCapabilitiesSchema {
   workflow: ModelCapabilityScore;
   plugins: ModelCapabilityScore; // Function Calling / Plugins
   mcp: ModelCapabilityScore;
+  memory: ModelCapabilityScore; // Memory Variables - follows tool domain rules
 }
 
 export interface ModelSchema {
@@ -146,6 +147,7 @@ export const MODEL_SCHEMAS: Record<string, ModelSchema> = {
       workflow: 2,
       plugins: 2,
       mcp: 2,
+      memory: 2,
     },
   },
   "Qwen3-8B": {
@@ -230,6 +232,7 @@ export const MODEL_SCHEMAS: Record<string, ModelSchema> = {
       workflow: 2,
       plugins: 2,
       mcp: 2,
+      memory: 2,
     },
   },
   "DeepSeek V3": {
@@ -276,6 +279,7 @@ export const MODEL_SCHEMAS: Record<string, ModelSchema> = {
       workflow: 2,
       plugins: 2,
       mcp: 2,
+      memory: 2,
     },
   },
   "DeepSeek-R1": {
@@ -322,6 +326,7 @@ export const MODEL_SCHEMAS: Record<string, ModelSchema> = {
       workflow: 2,
       plugins: 2,
       mcp: 2,
+      memory: 2,
     },
   },
   "Qwen3-DPO": {
@@ -369,6 +374,7 @@ export const MODEL_SCHEMAS: Record<string, ModelSchema> = {
       workflow: 1,
       plugins: 1,
       mcp: 2,
+      memory: 1, // follows tool domain (min of workflow/plugins/mcp)
     },
   },
   "微调多模态感知大模型": {
@@ -416,6 +422,7 @@ export const MODEL_SCHEMAS: Record<string, ModelSchema> = {
       workflow: 1,
       plugins: 1,
       mcp: 2,
+      memory: 1, // follows tool domain (min of workflow/plugins/mcp)
     },
   },
   "DeepSeek-R2": {
@@ -463,6 +470,7 @@ export const MODEL_SCHEMAS: Record<string, ModelSchema> = {
       workflow: 2,
       plugins: 2,
       mcp: 2,
+      memory: 2,
     },
   },
 
@@ -508,6 +516,7 @@ export const MODEL_SCHEMAS: Record<string, ModelSchema> = {
       workflow: 0,
       plugins: 0,
       mcp: 0,
+      memory: 0, // follows tool domain (min of workflow/plugins/mcp)
     },
   },
 };
@@ -517,10 +526,10 @@ export function getModelSchema(modelId: string): ModelSchema {
 
   const normalizeToolDomain = (schema: ModelSchema): ModelSchema => {
     const { workflow, plugins, mcp } = schema.capabilities;
-    // Tool domain must be consistent: workflow/plugins/mcp share the same support level.
+    // Tool domain must be consistent: workflow/plugins/mcp/memory share the same support level.
     // Use the weakest level as the unified tool score.
     const unifiedToolScore = Math.min(workflow, plugins, mcp) as ModelCapabilityScore;
-    if (workflow === unifiedToolScore && plugins === unifiedToolScore && mcp === unifiedToolScore) {
+    if (workflow === unifiedToolScore && plugins === unifiedToolScore && mcp === unifiedToolScore && schema.capabilities.memory === unifiedToolScore) {
       return schema;
     }
     return {
@@ -530,6 +539,7 @@ export function getModelSchema(modelId: string): ModelSchema {
         workflow: unifiedToolScore,
         plugins: unifiedToolScore,
         mcp: unifiedToolScore,
+        memory: unifiedToolScore, // memory follows tool domain
       },
     };
   };
@@ -550,10 +560,11 @@ export function getModelSchema(modelId: string): ModelSchema {
           knowledge_base: pick(1),
           ontology: pick(2),
           terminology: pick(3),
-          // tool domain: one score drives all
+          // tool domain: one score drives all (workflow/plugins/mcp/memory)
           workflow: toolScore,
           plugins: toolScore,
           mcp: toolScore,
+          memory: toolScore, // memory follows tool domain
         },
       };
       return normalizeToolDomain(randomized);

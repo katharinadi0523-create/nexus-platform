@@ -349,9 +349,12 @@ const MOCK_LOGS_SITUATIONAL: LogEntry[] = [
         { name: 'Vision_Analyzer', description: '视觉特征提取（视觉态势分析）' }
       ]
     },
-    // 2. 完整执行链路（严格按照"思考 -> 行动 -> 思考 -> 行动"的顺序）
+    // 2. 完整执行链路（严格按照新的 Mermaid 时序图流程）
     traceSteps: [
-      // --- 1. 初始思考 ---
+      // ==========================================
+      // 阶段一：身份推理 (Identity Reasoning)
+      // ==========================================
+      // --- Step 1: 思考 (Reasoning) ---
       {
         id: 'step-01',
         stepName: 'Step 1: 场景分析与规划',
@@ -360,14 +363,13 @@ const MOCK_LOGS_SITUATIONAL: LogEntry[] = [
         startTime: '09:15:00',
         endTime: '09:15:01',
         duration: 1500,
-        input: '', // Thought 类型不需要结构化 input
-        // Thought 只有内容，没有结构化 IO
-        output: '监测到台海区域出现不明目标组合 (1驱+1测)。\n基于常识判断，目标来源极可能是冲绳或佐世保基地。\n>> 规划：检索 MDP 情报库中符合 [地点+舰型] 的近期情报。'
+        input: '',
+        output: '监测到台海区域出现不明目标组合 (1驱+1测，ID未知)。\n[常识] 目标在台海，则来源可能是冲绳或佐世保\n[规划] 在 MDP 中检索符合地点和舰型组合的情报对象。'
       },
-      // --- 2. 本体查询 ---
+      // --- Step 2: 本体查询 IntelligenceReport ---
       {
         id: 'step-02',
-        stepName: '本体查询: 关联情报对象',
+        stepName: '本体查询: IntelligenceReport',
         stepType: 'ontology_query',
         status: 'success',
         startTime: '09:15:02',
@@ -376,34 +378,34 @@ const MOCK_LOGS_SITUATIONAL: LogEntry[] = [
         input: { 
           objectType: 'IntelligenceReport', 
           filter: { 
-            loc: ['Okinawa', 'Sasebo'], 
-            keywords: ['Destroyer', 'Survey'], 
+            location: ['Okinawa'], 
+            keywords: ['Destroyer'], 
             time: '-72h' 
           } 
         },
         output: { 
           matched: [{ 
-            id: 'Report_088', 
-            content: '冲绳集结: 菲恩号(DDG-113), 鲍迪奇号(TAGS-62)...' 
+            id: 'Report_Obj_088', 
+            content: '冲绳集结: 菲恩号(DDG-113), 鲍迪奇号(TAGS-62)' 
           }] 
         }
       },
-      // --- 3. 融合思考 ---
+      // --- Step 3: 融合与计算 (Spatiotemporal Check) ---
       {
         id: 'step-03',
-        stepName: 'Step 2: 情报融合与锁定',
+        stepName: 'Step 2: 时空融合与计算',
         stepType: 'thought',
         status: 'success',
         startTime: '09:15:05',
         endTime: '09:15:06',
-        duration: 1000,
-        input: '', // Thought 类型不需要结构化 input
-        output: '查询结果 Report_088 中的编队构成与现场观测完美匹配。\n>> 结论：锁定身份为美海军"菲恩"号编队。\n>> 行动：更新事件实体的身份属性。'
+        duration: 1500,
+        input: '',
+        output: '融合与计算：\n1. 距离：冲绳至台海约 600km，耗时 24h\n2. 航速：600 除以 24 等于 25km/h (13.5节)，符合驱逐舰经济航速\n3. 结论：观测对象即为 Report_Obj_088 中的编队'
       },
-      // --- 4. 写动作 ---
+      // --- Step 4: 更新事件身份 (Link Identity) ---
       {
         id: 'step-04',
-        stepName: '动作: 更新事件身份',
+        stepName: '动作: 更新事件身份 (Link Identity)',
         stepType: 'tool_call',
         status: 'success',
         startTime: '09:15:06',
@@ -413,62 +415,92 @@ const MOCK_LOGS_SITUATIONAL: LogEntry[] = [
           action: 'Update_Entity', 
           target: 'TransitEvent_001', 
           updates: { 
-            identity: ['US-DDG-113', 'US-TAGS-62'] 
+            ship_ids: ['US-DDG-113', 'US-TAGS-62'],
+            Status: 'Identified'
           } 
         },
         output: { 
           success: true, 
-          snapshot_id: 'evt_v2' 
+          snapshot_id: 'evt_v2',
+          updated_fields: ['ship_ids', 'Status']
         }
       },
-      // --- 5. 态势评估思考 (Reasoning) ---
+      // ==========================================
+      // 阶段二：视觉态势评估 (Visual Threat Assessment)
+      // ==========================================
+      // --- Step 5: 思考 (Reasoning) ---
       {
         id: 'step-05',
-        stepName: 'Step 3: 态势评估策略 (Reasoning)',
+        stepName: 'Step 3: 态势评估策略',
         stepType: 'thought',
         status: 'success',
         startTime: '09:15:07',
         endTime: '09:15:08',
         duration: 1500,
-        input: '', // Thought 类型不需要结构化 input
-        output: '身份已确认。下一步需评估其威胁等级。\n>> 规划：读取关联的传感器图像 (SensorData)，调用视觉模型分析 主炮状态 与 垂发盖板 开启情况。'
+        input: '',
+        output: '身份已更新。需读取关联的图像对象，分析物理征候以评估威胁。'
       },
-      // --- 6. 视觉动作 ---
+      // --- Step 6: 读取对象 SensorData (Image) ---
       {
         id: 'step-06',
-        stepName: '调用: 视觉态势分析',
-        stepType: 'tool_call',
+        stepName: '读取对象: SensorData (Image)',
+        stepType: 'ontology_query',
         status: 'success',
         startTime: '09:15:09',
-        endTime: '09:15:12',
-        duration: 3000,
+        endTime: '09:15:10',
+        duration: 1000,
         input: { 
-          image_id: 'Sensor_Img_001', 
-          targets: ['Main_Gun', 'VLS_Hatch'] 
+          objectType: 'SensorData', 
+          filter: { 
+            linked_to: 'TransitEvent_001',
+            type: 'Image'
+          } 
         },
         output: { 
-          gun: 'Stowed (归零)', 
-          vls: 'Closed', 
-          deck: 'Clear', 
-          conclusion: 'Non-Aggressive' 
+          matched: [{ 
+            id: 'Sensor_Img_001', 
+            type: 'Image',
+            linked_to: 'TransitEvent_001',
+            binary_data: 'Image_Binary_Data'
+          }] 
         }
       },
-      // --- 7. 最终决策思考 (Decision) ---
+      // --- Step 7: 视觉模型处理 (Internal Model) ---
       {
         id: 'step-07',
-        stepName: 'Step 4: 综合决策 (Decision)',
+        stepName: '视觉模型处理 (Internal Model)',
+        stepType: 'tool_call',
+        status: 'success',
+        startTime: '09:15:10',
+        endTime: '09:15:12',
+        duration: 2000,
+        input: { 
+          image_data: 'Image_Binary_Data',
+          targets: ['Main_Gun', 'VLS_Hatch', 'Deck'] 
+        },
+        output: { 
+          Gun: 'Stowed', 
+          VLS: 'Closed', 
+          Deck: 'Clear',
+          Posture: 'Non-Aggressive Posture'
+        }
+      },
+      // --- Step 8: 综合定级 (Decision) ---
+      {
+        id: 'step-08',
+        stepName: 'Step 4: 综合定级',
         stepType: 'thought',
         status: 'success',
         startTime: '09:15:12',
         endTime: '09:15:13',
         duration: 1500,
-        input: '', // Thought 类型不需要结构化 input
-        output: '综合研判：\n1. 高能力 (DDG-113 具备区域防空能力)\n2. 低姿态 (主炮归零，无攻击征候)\n>> 结论：判定威胁等级为 Medium (常态化巡航)。\n>> 行动：更新事件威胁等级，并生成报告。'
+        input: '',
+        output: '综合定级：\n1. 高能力：DDG 具备区域防空能力\n2. 抵近：目标已进入台海区域\n>> 初步结论：高能力(DDG) + 抵近 = High Threat\n>> 虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性\n>> 最终结论：综合判定为 High Threat (常态化巡航)'
       },
-      // --- 8. 更新威胁等级动作 ---
+      // --- Step 9: 更新最终威胁评估 (Final Decision) ---
       {
-        id: 'step-08',
-        stepName: '动作: 更新威胁等级 (Update Threat Level)',
+        id: 'step-09',
+        stepName: '动作: 更新最终威胁评估 (Final Decision)',
         stepType: 'tool_call',
         status: 'success',
         startTime: '09:15:13',
@@ -478,18 +510,20 @@ const MOCK_LOGS_SITUATIONAL: LogEntry[] = [
           action: 'Update_Entity', 
           target: 'TransitEvent_001', 
           updates: { 
-            threat_level: 'Medium', 
-            risk_factor: 'Non-Aggressive' 
+            Final_Threat_Assessment: 'High',
+            Reasoning: '经时空计算确认身份为菲恩号，高能力(DDG) + 抵近 = High Threat，虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性，判定为常态化巡航'
           } 
         },
         output: { 
           success: true, 
-          timestamp: '09:15:14' 
+          timestamp: '09:15:14',
+          final_assessment: 'High',
+          reasoning: '经时空计算确认身份为菲恩号，高能力(DDG) + 抵近 = High Threat，虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性，判定为常态化巡航'
         }
       },
-      // --- 9. 最终答案生成 ---
+      // --- Step 10: 最终答案生成 ---
       {
-        id: 'step-09',
+        id: 'step-10',
         stepName: 'Step 5: 生成研判报告',
         stepType: 'final_answer',
         status: 'success',
@@ -497,11 +531,12 @@ const MOCK_LOGS_SITUATIONAL: LogEntry[] = [
         endTime: '09:15:16',
         duration: 2000,
         input: {
-          intelligenceData: '已关联冲绳基地 HUMINT 情报 (Report_088)',
-          visualAnalysis: '主炮归零、垂发关闭、甲板无异常活动',
-          threatLevel: '中等 - 常态化巡航'
+          intelligenceData: '已关联冲绳基地 HUMINT 情报 (Report_Obj_088)',
+          spatiotemporalCheck: '距离 600km，航速 13.5节，符合经济航速，确认身份匹配',
+          visualAnalysis: '主炮归零(Stowed)、垂发关闭(Closed)、甲板无异常(Clear)，姿态为非攻击性',
+          threatLevel: '高 - 常态化巡航'
         },
-        output: '### 研判报告\n\n**1. 身份确认**\n* 目标 I: USS John Finn (DDG-113)\n* 目标 II: USNS Bowditch (TAGS-62)\n* 依据: 关联冲绳基地 HUMINT 情报 (Report_088)，编队构成与离港时间完全匹配。\n\n**2. 威胁评估: [中等 - 常态化巡航]**\n* 视觉征候: 经传感器图像分析，目标主炮处于归零位置 (Stowed)，垂发盖板关闭，甲板无舰载机起降作业。\n* 结论: 判定为过航执行测量任务，未发现即时攻击意图。'
+        output: '### 研判报告\n\n**1. 身份确认**\n* 目标 I: USS John Finn (DDG-113)\n* 目标 II: USNS Bowditch (TAGS-62)\n* 依据: 关联冲绳基地 HUMINT 情报 (Report_Obj_088)，经时空计算（距离 600km，航速 13.5节）确认编队构成与离港时间完全匹配。\n\n**2. 威胁评估: [高 - 常态化巡航]**\n* 能力评估: DDG-113 具备区域防空能力，属于高能力平台\n* 行为分析: 目标已进入台海区域（抵近），视觉分析显示主炮归零(Stowed)、垂发关闭(Closed)、甲板无异常活动(Clear)\n* 综合定级: 高能力(DDG) + 抵近 = High Threat。虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性，综合判定为 High Threat\n* 结论: 判定为过航执行测量任务，常态化巡航，但需持续关注其动态。'
       }
     ],
     // 3. 最终对话展示 (SFT Format)
