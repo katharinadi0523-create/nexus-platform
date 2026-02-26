@@ -360,12 +360,12 @@ export default function AgentEditorPage() {
         return response;
       }
 
-      // 如果用户询问本体查询相关
+      // 如果用户询问本体检索相关
       if (msg.includes("本体") || msg.includes("ontology") || msg.includes("对象")) {
         if (selectedOntologies.length > 0) {
           return `我可以帮您查询本体对象。当前已配置 ${selectedOntologies.length} 个本体。您可以告诉我需要查询的对象类型和条件，我会为您检索相关信息。`;
         } else {
-          return "本体查询功能需要先配置本体。请在左侧\"知识\"面板中添加本体配置。";
+          return "本体检索功能需要先配置本体。请在左侧\"知识\"面板中添加本体配置。";
         }
       }
 
@@ -390,7 +390,7 @@ export default function AgentEditorPage() {
         }
 
       // 最后的默认回复
-      return "我理解您的问题。这是一个预览模式，实际部署后我会根据配置的知识库、工具和本体为您提供更详细的回答。您可以尝试询问我的功能、知识库内容或本体查询相关的问题。";
+      return "我理解您的问题。这是一个预览模式，实际部署后我会根据配置的知识库、工具和本体为您提供更详细的回答。您可以尝试询问我的功能、知识库内容或本体检索相关的问题。";
     };
 
     // 生成执行链路（基于用户消息和智能体配置）
@@ -425,10 +425,10 @@ export default function AgentEditorPage() {
         });
         currentTime += 1500;
 
-        // Step 2: 本体查询 IntelligenceReport
+        // Step 2: 本体检索 IntelligenceReport
         steps.push({
           id: `step-${++stepIndex}`,
-          stepName: '本体查询: IntelligenceReport',
+          stepName: '本体检索: IntelligenceReport',
           stepType: 'ontology_query',
           status: 'success',
           startTime: new Date(currentTime).toLocaleTimeString(),
@@ -615,11 +615,11 @@ export default function AgentEditorPage() {
         });
         console.log('✅ [generateTraceSteps] 态势感知执行链路生成完成，共', steps.length, '个步骤');
       } else if (msg.includes("本体") || msg.includes("ontology") || msg.includes("对象")) {
-        // 本体查询场景
+        // 本体检索场景
         if (selectedOntologies.length > 0) {
           steps.push({
             id: `step-${++stepIndex}`,
-            stepName: '本体查询: 查询对象实例',
+            stepName: '本体检索: 查询对象实例',
             stepType: 'ontology_query',
             status: 'success',
             startTime: new Date(baseTime + stepIndex * 1000).toLocaleTimeString(),
@@ -731,7 +731,7 @@ export default function AgentEditorPage() {
         });
         traceSteps.push({
           id: 'step-2',
-          stepName: '本体查询: 关联情报对象',
+          stepName: '本体检索: 关联情报对象',
           stepType: 'ontology_query',
           status: 'success',
           startTime: new Date(baseTime + 1000).toLocaleTimeString(),

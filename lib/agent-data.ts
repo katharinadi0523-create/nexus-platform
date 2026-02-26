@@ -88,7 +88,7 @@ export type ExecutionStepStatus = 'running' | 'success' | 'failed';
 export interface ExecutionStep {
   id: string;
   stepType: ExecutionStepType;
-  stepName: string; // e.g., "Step 1: 规划", "调用: Google Search", "本体查询: 车辆对象"
+  stepName: string; // e.g., "Step 1: 规划", "调用: Google Search", "本体检索: 车辆对象"
   status: ExecutionStepStatus;
   input: any; // 可展开查看的入参，如 JSON
   // 当 stepType === 'ontology_query' 时：
@@ -329,7 +329,7 @@ const MOCK_LOGS_WRITER: LogEntry[] = [
 
 // ==========================================
 // 场景 4: 态势感知智能体 (Situational Awareness)
-// 特征: 包含完整的执行链路和配置快照，展示本体查询和视觉分析流程
+// 特征: 包含完整的执行链路和配置快照，展示本体检索和视觉分析流程
 // ==========================================
 
 const MOCK_LOGS_SITUATIONAL: LogEntry[] = [
@@ -344,7 +344,7 @@ const MOCK_LOGS_SITUATIONAL: LogEntry[] = [
       temperature: 0.1,
       knowledgeBases: [{ id: 'kb-naval-01', version: '2026.01' }],
       tools: [
-        { name: 'MDP_Graph_Read', description: '读取本体对象（本体查询）' },
+        { name: 'MDP_Graph_Read', description: '读取本体对象（本体检索）' },
         { name: 'Entity_Update', description: '更新实体属性（身份、威胁等级）' },
         { name: 'Vision_Analyzer', description: '视觉特征提取（视觉态势分析）' }
       ]
@@ -366,10 +366,10 @@ const MOCK_LOGS_SITUATIONAL: LogEntry[] = [
         input: '',
         output: '监测到台海区域出现不明目标组合 (1驱+1测，ID未知)。\n[常识] 目标在台海，则来源可能是冲绳或佐世保\n[规划] 在 MDP 中检索符合地点和舰型组合的情报对象。'
       },
-      // --- Step 2: 本体查询 IntelligenceReport ---
+      // --- Step 2: 本体检索 IntelligenceReport ---
       {
         id: 'step-02',
-        stepName: '本体查询: IntelligenceReport',
+        stepName: '本体检索: IntelligenceReport',
         stepType: 'ontology_query',
         status: 'success',
         startTime: '09:15:02',
@@ -836,7 +836,7 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     id: 'agent-situational',
     name: '态势感知智能体',
     type: 'autonomous',
-    description: '实时分析海面目标的身份与威胁等级，支持本体查询和视觉特征分析。',
+    description: '实时分析海面目标的身份与威胁等级，支持本体检索和视觉特征分析。',
     updatedAt: '2026-02-01 09:15:00'
   },
   'agent-intent-analysis': {

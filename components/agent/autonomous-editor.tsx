@@ -109,7 +109,7 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
   "agent-situational": {
     type: "autonomous",
     name: "态势感知智能体",
-    description: "实时分析海面目标的身份与威胁等级，支持本体查询和视觉特征分析。",
+    description: "实时分析海面目标的身份与威胁等级，支持本体检索和视觉特征分析。",
     prompt: "你是一个海战态势感知智能体，负责实时分析海面目标的身份与威胁等级。",
     openingStatement: "你好，我是态势感知智能体。我可以进行实时态势分析和威胁评估，请提供目标信息。",
     suggestedQuestions: [
@@ -145,7 +145,7 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
         actionId: "action-transit-update-threat",
       },
     ],
-    mockReply: "我可以进行实时态势分析和威胁评估。请提供目标信息（如位置、特征等），我会：\n1. 通过本体查询关联情报对象\n2. 进行身份识别和融合\n3. 调用视觉模型分析目标状态\n4. 综合评估威胁等级并生成研判报告。",
+    mockReply: "我可以进行实时态势分析和威胁评估。请提供目标信息（如位置、特征等），我会：\n1. 通过本体检索关联情报对象\n2. 进行身份识别和融合\n3. 调用视觉模型分析目标状态\n4. 综合评估威胁等级并生成研判报告。",
   },
 };
 
@@ -590,10 +590,10 @@ export function AutonomousEditor({
         });
         currentTime += 1500;
 
-        // Step 2: 本体查询 IntelligenceReport
+        // Step 2: 本体检索 IntelligenceReport
         steps.push({
           id: `step-${++stepIndex}`,
-          stepName: '本体查询: IntelligenceReport',
+          stepName: '本体检索: IntelligenceReport',
           stepType: 'ontology_query',
           status: 'success',
           startTime: new Date(currentTime).toLocaleTimeString(),

@@ -18,6 +18,8 @@ import {
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import type { ExecutionStep, ExecutionStepType, ExecutionStepStatus } from "@/lib/agent-data";
+import { OntologyQueryNode } from "@/components/agent/ontology-query-node";
+import { buildOntologyExecutionDataFromStep } from "@/lib/mock/mock-ontology-execution";
 
 interface TraceViewProps {
   steps: ExecutionStep[];
@@ -179,69 +181,6 @@ function formatDuration(ms: number): string {
 }
 
 /**
- * 渲染本体查询的对象实例卡片
- */
-function renderOntologyObjectCard(obj: any, index: number) {
-  // 尝试提取对象的关键信息
-  const objId = obj.id || obj.objectId || `对象 ${index + 1}`;
-  const objType = obj.type || obj.objectType || "未知类型";
-  const properties = obj.properties || obj.attrs || {};
-  const title = obj.title || obj.name || objId;
-
-  // 提取关键属性（优先显示常见的属性）
-  const keyProperties = Object.entries(properties)
-    .slice(0, 5) // 最多显示 5 个属性
-    .map(([key, value]) => ({ key, value }));
-
-  return (
-    <div
-      key={index}
-      className="bg-orange-50 border border-orange-200 rounded-lg p-4 hover:bg-orange-100 transition-colors"
-    >
-      <div className="flex items-start gap-3">
-        <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
-          <Share2 className="w-4 h-4 text-orange-600" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm font-semibold text-slate-900">{title}</span>
-            <Badge variant="outline" className="text-xs border-orange-300 text-orange-700">
-              {objType}
-            </Badge>
-            {objId && (
-              <span className="text-xs text-slate-500 font-mono">{objId}</span>
-            )}
-          </div>
-          {keyProperties.length > 0 && (
-            <div className="space-y-1.5 mt-2">
-              {keyProperties.map(({ key, value }) => (
-                <div key={key} className="flex items-start gap-2 text-xs">
-                  <span className="font-medium text-slate-700 min-w-[80px]">
-                    {key}:
-                  </span>
-                  <span className="text-slate-600 break-words">
-                    {typeof value === "object"
-                      ? JSON.stringify(value)
-                      : String(value)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-          {obj.links && Array.isArray(obj.links) && obj.links.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-orange-200">
-              <span className="text-xs text-slate-500">
-                关联对象: {obj.links.length} 个
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
  * TraceView 组件
  * 用于展示执行链路的时间轴视图，支持流式播放效果
  */
@@ -386,7 +325,7 @@ export function TraceView({ steps }: TraceViewProps) {
                         : step.stepType === "rag_retrieval"
                         ? "知识检索"
                         : step.stepType === "ontology_query"
-                        ? "本体查询"
+                        ? "本体检索"
                         : "最终答案"}
                     </Badge>
                   </div>
@@ -420,6 +359,16 @@ export function TraceView({ steps }: TraceViewProps) {
                       </div>
                     </div>
                   </div>
+                ) : step.stepType === "ontology_query" ? (
+                  /* 本体检索：使用双模式节点组件 */
+                  isExpanded && (
+                    <div className="border-t border-slate-200">
+                      <OntologyQueryNode
+                        data={buildOntologyExecutionDataFromStep(step)}
+                        defaultResultView="business"
+                      />
+                    </div>
+                  )
                 ) : (
                   /* 其他类型：可折叠的 Input/Output */
                   isExpanded && (
@@ -439,9 +388,7 @@ export function TraceView({ steps }: TraceViewProps) {
                       {/* Input */}
                       <div>
                         <div className="text-xs font-medium text-slate-700 mb-2">
-                          {step.stepType === "ontology_query"
-                            ? "查询条件 (Query Filters)"
-                            : "输入 (Input)"}
+                          输入 (Input)
                         </div>
                         <div className="bg-slate-50 rounded border border-slate-200 p-3 overflow-x-auto">
                           <pre className="text-xs text-slate-700 whitespace-pre-wrap break-words font-mono">
@@ -450,54 +397,17 @@ export function TraceView({ steps }: TraceViewProps) {
                         </div>
                       </div>
 
-                      {/* Output - 本体查询特殊渲染 */}
-                      {step.stepType === "ontology_query" ? (
-                        <div>
-                          <div className="text-xs font-medium text-slate-700 mb-2">
-                            查询结果 (Query Results)
-                          </div>
-                          {step.output && typeof step.output === "object" ? (
-                            Array.isArray(step.output) ? (
-                              // 多个对象实例
-                              <div className="space-y-3">
-                                {step.output.length > 0 ? (
-                                  step.output.map((obj: any, idx: number) =>
-                                    renderOntologyObjectCard(obj, idx)
-                                  )
-                                ) : (
-                                  <div className="bg-slate-50 rounded border border-slate-200 p-4 text-center text-sm text-slate-500">
-                                    未找到匹配的对象实例
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              // 单个对象实例
-                              <div className="space-y-3">
-                                {renderOntologyObjectCard(step.output, 0)}
-                              </div>
-                            )
-                          ) : (
-                            // 非对象格式，回退到 JSON 显示
-                            <div className="bg-slate-50 rounded border border-slate-200 p-3 overflow-x-auto">
-                              <pre className="text-xs text-slate-700 whitespace-pre-wrap break-words font-mono">
-                                {formatJSON(step.output)}
-                              </pre>
-                            </div>
-                          )}
+                      {/* Output */}
+                      <div>
+                        <div className="text-xs font-medium text-slate-700 mb-2">
+                          输出 (Output)
                         </div>
-                      ) : (
-                        // 其他类型的 Output 保持原样
-                        <div>
-                          <div className="text-xs font-medium text-slate-700 mb-2">
-                            输出 (Output)
-                          </div>
-                          <div className="bg-slate-50 rounded border border-slate-200 p-3 overflow-x-auto">
-                            <pre className="text-xs text-slate-700 whitespace-pre-wrap break-words font-mono">
-                              {formatJSON(step.output)}
-                            </pre>
-                          </div>
+                        <div className="bg-slate-50 rounded border border-slate-200 p-3 overflow-x-auto">
+                          <pre className="text-xs text-slate-700 whitespace-pre-wrap break-words font-mono">
+                            {formatJSON(step.output)}
+                          </pre>
                         </div>
-                      )}
+                      </div>
 
                       {/* Citations (仅 RAG 步骤) */}
                       {step.stepType === "rag_retrieval" &&
