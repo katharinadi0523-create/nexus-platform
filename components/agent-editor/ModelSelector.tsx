@@ -16,6 +16,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
@@ -61,6 +67,8 @@ const TOOLTIP_CONTENT: Partial<Record<ModelParamKey, string>> = {
   deep_thinking: "开启后模型展示深思考过程，提升逻辑准确性。",
   context_turns:
     "传入大模型上下文的前序对话轮数（一问一答计为一轮）。数值越大，模型对历史记忆越完整，但模型上下文压力相应增大。",
+  current_time: "开启后大模型能自动获取当前时间。",
+  sp_anti_leak: "开启后将会加固提示词，显著降低提示词泄露情况的出现概率。",
 };
 
 // 获取模型图标
@@ -110,21 +118,39 @@ export function ModelSelector({
     [currentModel]
   );
 
-  const [params, setParams] = useState<ModelParams>(modelParams || defaultParams);
+  const [params, setParams] = useState<ModelParams>(() => ({
+    ...defaultParams,
+    ...modelParams,
+    current_time: modelParams?.current_time ?? false,
+    sp_anti_leak: modelParams?.sp_anti_leak ?? false,
+  }));
 
-  // Keep controlled prop in sync
+  // Keep controlled prop in sync (preserve global toggles if not in modelParams)
   useEffect(() => {
     if (!modelParams) return;
-    setParams(modelParams);
+    setParams((prev) => ({
+      ...prev,
+      ...modelParams,
+      current_time: modelParams.current_time ?? prev.current_time ?? false,
+      sp_anti_leak: modelParams.sp_anti_leak ?? prev.sp_anti_leak ?? false,
+    }));
   }, [modelParams]);
 
   // 当模型改变时，重置参数为默认值
   const handleModelSelect = (model: string) => {
     setCurrentModel(model);
     const newDefaultParams = getDefaultModelParams(model);
-    setParams(newDefaultParams);
+    setParams({
+      ...newDefaultParams,
+      current_time: params.current_time ?? false,
+      sp_anti_leak: params.sp_anti_leak ?? false,
+    });
     onModelChange?.(model);
-    onParamsChange?.(newDefaultParams);
+    onParamsChange?.({
+      ...newDefaultParams,
+      current_time: params.current_time ?? false,
+      sp_anti_leak: params.sp_anti_leak ?? false,
+    });
 
     // 根据选择的模型切换 tab
     if (exclusiveModels.includes(model)) {
@@ -164,20 +190,16 @@ export function ModelSelector({
       <div className="space-y-2">
         <div className="flex items-center gap-1.5">
           <Label className="text-xs text-slate-700">{param.label}</Label>
-          <Popover>
-            <PopoverTrigger asChild>
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
               <button type="button" className="cursor-help">
                 <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
               </button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-64 p-3 text-xs text-slate-700"
-              side="right"
-              sideOffset={8}
-            >
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
               {param.description || TOOLTIP_CONTENT[param.key]}
-            </PopoverContent>
-          </Popover>
+            </TooltipContent>
+          </Tooltip>
         </div>
         <div className="flex items-center gap-3">
           <Slider
@@ -234,20 +256,16 @@ export function ModelSelector({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-1.5">
             <Label className="text-xs text-slate-700">{param.label}</Label>
-            <Popover>
-              <PopoverTrigger asChild>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
                 <button type="button" className="cursor-help">
                   <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
                 </button>
-              </PopoverTrigger>
-              <PopoverContent
-                className="w-64 p-3 text-xs text-slate-700"
-                side="right"
-                sideOffset={8}
-              >
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
                 {param.description || TOOLTIP_CONTENT[param.key]}
-              </PopoverContent>
-            </Popover>
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           <Switch
@@ -260,6 +278,7 @@ export function ModelSelector({
   };
 
   return (
+    <TooltipProvider delayDuration={0}>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
@@ -292,29 +311,22 @@ export function ModelSelector({
                 <TabsTrigger value="exclusive">
                   <span className="inline-flex items-center gap-1">
                     我的模型服务
-                    <Popover>
-                      <PopoverTrigger asChild>
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
                         <span
-                          role="button"
-                          tabIndex={0}
+                          role="img"
+                          aria-label="我的模型服务说明"
                           className="cursor-help inline-flex"
                           onClick={(e) => e.stopPropagation()}
                           onPointerDown={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          aria-label="我的模型服务说明"
                         >
                           <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
                         </span>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="w-72 p-3 text-xs text-slate-700"
-                        side="bottom"
-                        align="center"
-                        sideOffset={8}
-                      >
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={8} className="max-w-72 p-3 text-xs text-slate-700">
                         本项目在模型开发平台「在线服务」中部署的大语言模型。若该模型不支持深度思考或工具调用，Agent 的规划与执行能力可能受限，输出效果可能不稳定
-                      </PopoverContent>
-                    </Popover>
+                      </TooltipContent>
+                    </Tooltip>
                   </span>
                 </TabsTrigger>
               </TabsList>
@@ -384,10 +396,55 @@ export function ModelSelector({
               {currentSchema.supportedParams.map((p) => (
                 <div key={p.key}>{renderParam(p)}</div>
               ))}
+
+              {/* 全局开关：当前时间、SP防泄漏指令（所有模型均展示，默认关闭） */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <Label className="text-xs text-slate-700">当前时间</Label>
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="cursor-help">
+                          <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
+                        {TOOLTIP_CONTENT.current_time}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Switch
+                    checked={params.current_time ?? false}
+                    onCheckedChange={(checked) => handleParamChange("current_time", checked)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <Label className="text-xs text-slate-700">SP防泄漏指令</Label>
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="cursor-help">
+                          <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
+                        {TOOLTIP_CONTENT.sp_anti_leak}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Switch
+                    checked={params.sp_anti_leak ?? false}
+                    onCheckedChange={(checked) => handleParamChange("sp_anti_leak", checked)}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </PopoverContent>
     </Popover>
+    </TooltipProvider>
   );
 }

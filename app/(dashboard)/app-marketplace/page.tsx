@@ -27,6 +27,7 @@ import {
   Share2,
   ChevronLeft,
   ChevronRight,
+  Crosshair,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -174,11 +175,11 @@ const appList: App[] = [
   },
   {
     id: "5",
-    title: "客服助手",
+    title: "态势感知智能体",
     author: "@AppForge",
-    description: "底层适配多行业在线客服场景，帮助企业快速构建产品智能客服体系。",
-    tags: ["企业服务"],
-    icon: Headphones,
+    description: "接入MDP平台多维数据，结合本体图谱与推理规则，实现对特定区域或目标的实时态势感知与意图快判。",
+    tags: ["数据分析", "国防军工"],
+    icon: Crosshair,
     stats: {
       downloads: "6.3k",
       favorites: "445",

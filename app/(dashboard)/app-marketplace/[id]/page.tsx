@@ -26,6 +26,12 @@ import {
   Code,
   Users,
   Sparkles,
+  Crosshair,
+  ChevronLeft,
+  ChevronRight,
+  Brain,
+  ImageIcon,
+  Puzzle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +41,11 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { checkSensitiveContent } from "@/lib/content-filter";
+import { TraceView } from "@/components/agent/trace-view";
+import {
+  generateSituationalTraceSteps,
+  isSituationalQuery,
+} from "@/lib/mock/situational-trace";
 
 interface AppDetail {
   id: string;
@@ -56,6 +67,11 @@ interface AppDetail {
   workflows: string[];
   usageCount: string;
   favoriteCount: number;
+  viewCount?: string;
+  shareCount?: string;
+  updatedAt?: string;
+  publicConfig?: { key: string; value: string; icon: "model" | "mcp" | "plugin" }[];
+  privateConfig?: { name: string; count: number }[];
   openingStatement?: string;
   suggestedPrompts?: string[];
 }
@@ -72,6 +88,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  traceSteps?: import("@/lib/agent-data").ExecutionStep[];
 }
 
 // Mock data mapping based on marketplace apps
@@ -101,25 +118,38 @@ const getAppDetail = (id: string): AppDetail | null => {
     },
     "5": {
       id: "5",
-      title: "客服助手",
+      title: "态势感知智能体",
       author: "@AppForge",
       description:
-        "底层适配多行业在线客服场景，帮助企业快速构建产品智能客服体系。支持多渠道接入，提供7×24小时智能问答服务，大幅提升客户满意度。",
-      tags: ["企业服务"],
-      icon: Headphones,
+        "接入MDP平台多维数据，结合本体图谱与推理规则，实现对特定区域或目标的实时态势感知与意图快判。",
+      tags: ["数据分析", "国防军工"],
+      icon: Crosshair,
       stats: { downloads: "6.3k", favorites: "445" },
-      developer: { name: "AppForge", handle: "@AppForge" },
-      models: ["DeepSeek", "Qwen", "Llama"],
-      workflows: ["客服流程", "问题分类"],
-      usageCount: "6.3k",
-      favoriteCount: 445,
-      openingStatement:
-        "你好，我是客服助手。我能帮助你解答产品相关问题，处理售后请求，并提供专业的企业服务支持。无论你是客户还是企业管理员，我都能为你提供高效、友好的服务体验。请告诉我你需要什么帮助。",
-      suggestedPrompts: [
-        "如何重置我的账户密码？",
-        "产品退换货流程是什么？",
-        "如何联系人工客服？",
+      developer: { name: "中国电子云", handle: "@monkeyking" },
+      models: ["DeepSeek-R1 6B", "Qwen", "Llama"],
+      workflows: ["情报分析", "意图研判"],
+      usageCount: "24k",
+      favoriteCount: 51,
+      viewCount: "90k",
+      shareCount: "99",
+      updatedAt: "2025/05/05 15:15:15",
+      publicConfig: [
+        { key: "模型", value: "DeepSeek-R1 6B", icon: "model" },
+        { key: "MCP", value: "图片理解", icon: "mcp" },
+        { key: "插件", value: "文档解析", icon: "plugin" },
       ],
+      privateConfig: [
+        { name: "模型", count: 2 },
+        { name: "知识库", count: 2 },
+        { name: "本体对象", count: 2 },
+        { name: "术语库", count: 2 },
+        { name: "工作流", count: 2 },
+        { name: "插件", count: 2 },
+        { name: "MCP", count: 2 },
+      ],
+      openingStatement:
+        "你好，我是态势感知智能体。我可以进行实时态势分析和威胁评估，请提供目标信息。",
+      suggestedPrompts: ["实时分析海面目标的身份与威胁等级"],
     },
     "6": {
       id: "6",
@@ -300,6 +330,7 @@ export default function AppDetailPage() {
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null
   >(null);
+  const [detailsPanelOpen, setDetailsPanelOpen] = useState(true);
 
   useEffect(() => {
     if (!id) return;
@@ -345,18 +376,12 @@ export default function AppDetailPage() {
       return "感谢您的咨询。作为智能问诊助手，我可以帮助您：\n\n- 初步症状评估\n- 推荐合适的科室\n- 生成结构化病历\n- 提供健康建议\n\n请详细描述您的症状，我会尽力为您提供帮助。如需紧急医疗帮助，请立即拨打120或前往最近的急诊科。";
     }
 
-    // 客服助手 (id: 5)
+    // 态势感知智能体 (id: 5) - 内容在执行链路 final_answer 中，此处返回空，由 traceSteps 承载
+    if (appId === "5" && isSituationalQuery(query)) {
+      return "";
+    }
     if (appId === "5") {
-      if (query.includes("密码") || query.includes("重置") || query.includes("忘记")) {
-        return `关于密码重置，您可以通过以下方式操作：\n\n**方式一：通过邮箱重置**\n1. 在登录页面点击"忘记密码"\n2. 输入注册邮箱\n3. 查收邮件中的重置链接\n4. 点击链接设置新密码\n\n**方式二：通过手机号重置**\n1. 在登录页面点击"忘记密码"\n2. 选择手机号重置\n3. 输入手机号并获取验证码\n4. 验证后设置新密码\n\n**安全提示**：\n- 密码应包含大小写字母、数字和特殊字符\n- 不要使用过于简单的密码\n- 定期更换密码\n\n如果遇到问题，请联系我们的技术支持。`;
-      }
-      if (query.includes("退货") || query.includes("换货") || query.includes("退款")) {
-        return `关于退换货流程，具体如下：\n\n**退货条件**：\n- 商品未使用，保持原包装\n- 在收到商品后7天内申请\n- 非定制类商品\n\n**退货流程**：\n1. 登录账户 → 我的订单\n2. 选择需要退货的订单\n3. 点击"申请退货"并填写原因\n4. 等待审核（通常1-2个工作日）\n5. 审核通过后按指引寄回商品\n6. 收到商品后3-7个工作日退款\n\n**退款方式**：原路退回\n\n**注意事项**：\n- 请妥善保管商品和包装\n- 运费由退换货原因决定\n\n需要我帮您查看具体订单状态吗？`;
-      }
-      if (query.includes("人工") || query.includes("联系") || query.includes("客服")) {
-        return `您可以通过以下方式联系我们的客服：\n\n**在线客服**：\n- 工作日：9:00-18:00\n- 点击页面右下角"在线客服"图标\n\n**电话客服**：\n- 服务热线：400-XXX-XXXX\n- 工作日：9:00-18:00\n\n**邮件支持**：\n- 邮箱：support@example.com\n- 我们会在24小时内回复\n\n**其他渠道**：\n- 微信公众号：关注后直接留言\n- 官方微博：@AppForge官方\n\n**建议**：\n- 简单问题可先咨询在线智能客服\n- 复杂问题可转接人工客服\n\n请问您需要咨询什么具体问题？`;
-      }
-      return "您好！我是客服助手，很高兴为您服务。\n\n我可以帮您处理：\n- 账户相关问题（登录、密码、绑定等）\n- 订单相关（查询、退换货、退款等）\n- 产品使用问题\n- 其他业务咨询\n\n请告诉我您需要什么帮助，我会尽力为您解决。";
+      return "您好！我是态势感知智能体。\n\n我可以进行实时态势分析和威胁评估，请提供目标信息（如位置、特征等）。";
     }
 
     // 企业信息查询 (id: 6)
@@ -391,19 +416,20 @@ export default function AppDetailPage() {
     return "感谢您的提问。这是一个模拟回复，实际应用中会连接AI模型生成回答。";
   };
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim() || !app) return;
+  const handleSendMessage = (overrideContent?: string) => {
+    const content = (overrideContent ?? inputValue).trim();
+    if (!content || !app) return;
 
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
       role: "user",
-      content: inputValue.trim(),
+      content,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    const userQuery = inputValue.trim();
-    setInputValue("");
+    const userQuery = content;
+    if (!overrideContent) setInputValue("");
 
     // 检测敏感词
     const blockedResponse = checkSensitiveContent(userQuery);
@@ -422,11 +448,15 @@ export default function AppDetailPage() {
       return;
     }
 
-    // Generate intelligent mock response for first few apps
-    const isIntelligentApp = ["4", "5", "6", "7"].includes(app.id);
-    const responseContent = isIntelligentApp
-      ? generateMockResponse(app.id, userQuery)
-      : "感谢您的提问。这是一个模拟回复，实际应用中会连接AI模型生成回答。";
+    // 态势感知智能体 (id: 5)：与 agent-situational 预览一致，使用执行链路
+    const isSituational =
+      app.id === "5" && isSituationalQuery(userQuery);
+    const traceSteps = isSituational ? generateSituationalTraceSteps(userQuery) : undefined;
+    const responseContent = isSituational
+      ? ""
+      : ["4", "5", "6", "7"].includes(app.id)
+        ? generateMockResponse(app.id, userQuery)
+        : "感谢您的提问。这是一个模拟回复，实际应用中会连接AI模型生成回答。";
 
     setTimeout(() => {
       const aiMessage: Message = {
@@ -434,15 +464,15 @@ export default function AppDetailPage() {
         role: "assistant",
         content: responseContent,
         timestamp: new Date(),
+        traceSteps,
       };
       setMessages((prev) => [...prev, aiMessage]);
     }, 800 + Math.random() * 400); // 模拟AI思考时间 800-1200ms
   };
 
   const handleSuggestedPromptClick = (prompt: string) => {
-    setInputValue(prompt);
-    // Optionally auto-send
-    // handleSendMessage();
+    handleSendMessage(prompt);
+    setInputValue("");
   };
 
   const handleNewConversation = () => {
@@ -617,22 +647,36 @@ export default function AppDetailPage() {
                   <div
                     key={message.id}
                     className={cn(
-                      "flex",
-                      message.role === "user" ? "justify-end" : "justify-start"
+                      "flex flex-col gap-1",
+                      message.role === "user" ? "items-end" : "items-start"
                     )}
                   >
-                    <div
-                      className={cn(
-                        "max-w-[80%] rounded-lg px-4 py-2",
-                        message.role === "user"
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-100 text-gray-900"
+                    {message.content.trim() !== "" && (
+                      <div
+                        className={cn(
+                          "max-w-[80%] rounded-lg px-4 py-2",
+                          message.role === "user"
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 text-gray-900"
+                        )}
+                      >
+                        <p className="text-sm whitespace-pre-wrap">
+                          {message.content}
+                        </p>
+                      </div>
+                    )}
+                    {message.role === "assistant" &&
+                      message.traceSteps &&
+                      message.traceSteps.length > 0 && (
+                        <div className="w-full max-w-[90%] mt-2">
+                          <div className="bg-white border-2 border-blue-200 rounded-lg p-4 shadow-sm">
+                            <h4 className="text-sm font-semibold text-slate-900 mb-3">
+                              执行链路
+                            </h4>
+                            <TraceView steps={message.traceSteps} />
+                          </div>
+                        </div>
                       )}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">
-                        {message.content}
-                      </p>
-                    </div>
                   </div>
                 ))}
               </div>
@@ -697,150 +741,230 @@ export default function AppDetailPage() {
         </div>
       </div>
 
-      {/* Right Sidebar - App Details */}
-      <div className="w-80 border-l border-gray-200 bg-slate-50 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-900">应用详情</h3>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.back()}
-            className="h-6 w-6"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <ScrollArea className="flex-1">
-          <div className="p-4 space-y-6">
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-xs text-gray-500 mb-1">使用量</div>
-                <div className="text-lg font-semibold text-gray-900">
-                  {app.usageCount}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500 mb-1">收藏</div>
-                <div className="text-lg font-semibold text-gray-900">
-                  {app.favoriteCount}
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Actions */}
-            <div className="space-y-2">
-              <Button className="w-full" variant="outline">
-                <Heart className="h-4 w-4 mr-2" />
-                收藏
-              </Button>
-              <Button className="w-full" variant="outline">
-                <Share2 className="h-4 w-4 mr-2" />
-                分享
-              </Button>
-            </div>
-
-            <Separator />
-
-            {/* Description */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                应用描述
-              </h4>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                {app.description}
-              </p>
-            </div>
-
-            <Separator />
-
-            {/* Tags */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                应用标签
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {app.tags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    variant="secondary"
-                    className="bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  >
-                    {tag}
-                  </Badge>
-                ))}
+      {/* Right Sidebar - App Details (Collapsible) */}
+      <div
+        className={`border-l border-gray-200 bg-white flex flex-col transition-all duration-200 ${
+          detailsPanelOpen ? "w-80" : "w-12"
+        }`}
+      >
+        {detailsPanelOpen ? (
+          <>
+            {/* Header */}
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <h3 className="text-base font-semibold text-gray-900">
+                应用详情
+              </h3>
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setDetailsPanelOpen(false)}
+                  className="h-7 w-7 text-gray-500 hover:text-gray-700"
+                  title="收起"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => router.back()}
+                  className="h-7 w-7 text-gray-500 hover:text-gray-700"
+                  title="关闭"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
             </div>
 
-            <Separator />
-
-            {/* Developer */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                开发者
-              </h4>
-              <div className="flex items-center gap-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-blue-100 text-blue-600 text-xs">
-                    {app.developer.name.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <div className="text-sm font-medium text-gray-900">
-                    {app.developer.name}
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="p-4 space-y-5">
+                {/* Stats - 4 columns */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-gray-900">
+                      {app.viewCount ?? app.stats.downloads}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">浏览量</div>
                   </div>
-                  <div className="text-xs text-gray-500">{app.developer.handle}</div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-gray-900">
+                      {app.usageCount}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">使用量</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-gray-900">
+                      {app.favoriteCount}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">收藏量</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-gray-900">
+                      {app.shareCount ??
+                        String(Math.min(99, Math.floor(app.favoriteCount * 0.25)))}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">分享量</div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            <Separator />
-
-            {/* Models */}
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900 mb-2">模型</h4>
-              <div className="flex flex-wrap gap-2">
-                {app.models.map((model) => (
-                  <Badge
-                    key={model}
-                    variant="secondary"
-                    className="bg-gray-200 text-gray-700 hover:bg-gray-300"
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 border-gray-200 bg-white hover:bg-gray-50"
                   >
-                    {model}
-                  </Badge>
-                ))}
-              </div>
-            </div>
+                    <Heart className="h-4 w-4 mr-1.5" />
+                    收藏
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 border-gray-200 bg-white hover:bg-gray-50"
+                  >
+                    <Share2 className="h-4 w-4 mr-1.5" />
+                    分享
+                  </Button>
+                </div>
 
-            <Separator />
+                {/* Description */}
+                <div>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    {app.description}
+                  </p>
+                </div>
 
-            {/* Workflow */}
-            {app.workflows && app.workflows.length > 0 && (
-              <>
+                {/* Tags */}
                 <div>
                   <h4 className="text-sm font-semibold text-gray-900 mb-2">
-                    工作流
+                    应用标签
                   </h4>
                   <div className="flex flex-wrap gap-2">
-                    {app.workflows.map((workflow) => (
+                    {app.tags.map((tag) => (
                       <Badge
-                        key={workflow}
+                        key={tag}
                         variant="secondary"
-                        className="bg-gray-200 text-gray-700 hover:bg-gray-300"
+                        className="bg-gray-100 text-gray-600 hover:bg-gray-200 font-normal"
                       >
-                        {workflow}
+                        {tag}
                       </Badge>
                     ))}
                   </div>
                 </div>
-              </>
-            )}
+
+                {/* 发布信息 */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">
+                    发布信息
+                  </h4>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <div>
+                      发布人: {app.developer.name} {app.developer.handle}
+                    </div>
+                    <div>
+                      更新时间: {app.updatedAt ?? "2025/05/05 15:15:15"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 公开配置 */}
+                {(() => {
+                  const publicCfg =
+                    app.publicConfig ?? [
+                      { key: "模型", value: app.models[0] ?? "-", icon: "model" as const },
+                      { key: "MCP", value: "图片理解", icon: "mcp" as const },
+                      { key: "插件", value: "文档解析", icon: "plugin" as const },
+                    ];
+                  return publicCfg.length > 0 ? (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">
+                      公开配置
+                    </h4>
+                    <div className="space-y-2">
+                      {publicCfg.map((item) => (
+                        <div
+                          key={item.key}
+                          className="flex items-center gap-2 text-sm"
+                        >
+                          <span className="text-gray-500 w-14 shrink-0">
+                            {item.key}
+                          </span>
+                          {item.icon === "model" && (
+                            <Brain className="h-4 w-4 text-gray-400 shrink-0" />
+                          )}
+                          {item.icon === "mcp" && (
+                            <ImageIcon className="h-4 w-4 text-gray-400 shrink-0" />
+                          )}
+                          {item.icon === "plugin" && (
+                            <Puzzle className="h-4 w-4 text-gray-400 shrink-0" />
+                          )}
+                          <span className="text-gray-900 truncate">
+                            {item.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  ) : null;
+                })()}
+
+                {/* 私有配置 */}
+                {(() => {
+                  const privateCfg =
+                    app.privateConfig ?? [
+                      { name: "模型", count: app.models.length },
+                      { name: "知识库", count: 2 },
+                      { name: "本体对象", count: 2 },
+                      { name: "术语库", count: 2 },
+                      { name: "工作流", count: app.workflows?.length ?? 2 },
+                      { name: "插件", count: 2 },
+                      { name: "MCP", count: 2 },
+                    ];
+                  return privateCfg.length > 0 ? (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900 mb-2">
+                      私有配置
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {privateCfg.map((item) => (
+                        <Badge
+                          key={item.name}
+                          variant="secondary"
+                          className="bg-gray-100 text-gray-600 hover:bg-gray-200 font-normal"
+                        >
+                          {item.name}*{item.count}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  ) : null;
+                })()}
+              </div>
+            </ScrollArea>
+          </>
+        ) : (
+          /* Collapsed state - narrow bar */
+          <div className="flex flex-col items-center py-4 gap-2 h-full">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setDetailsPanelOpen(true)}
+              className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+              title="展开应用详情"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.back()}
+              className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+              title="关闭"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
-        </ScrollArea>
+        )}
       </div>
     </div>
   );

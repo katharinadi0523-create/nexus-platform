@@ -29,6 +29,7 @@ import { OntologyConfigDialog, type OntologyConfig } from "@/components/agent-ed
 import { TerminologySelector, type Terminology } from "@/components/agent-editor/TerminologySelector";
 import { MemoryConfigPanel } from "@/components/agent-editor/MemoryConfigPanel";
 import { checkSensitiveContent } from "@/lib/content-filter";
+import { generateSituationalTraceSteps } from "@/lib/mock/situational-trace";
 import { useModelCompatibility } from "@/lib/useModelCompatibility";
 import { CompatibilityIndicator } from "@/components/agent-editor/CompatibilityIndicator";
 import { TraceView } from "@/components/agent/trace-view";
@@ -305,7 +306,7 @@ export function AutonomousEditor({
 
   const [expandedSections, setExpandedSections] = useState({
     knowledge: true,
-    ontology: false,
+    ontology: true,
     terminology: false,
     workflow: false,
     plugins: false,
@@ -346,6 +347,8 @@ export function AutonomousEditor({
   );
   const [ontologyConfigOpen, setOntologyConfigOpen] = useState(false);
   const [editingOntologyIndex, setEditingOntologyIndex] = useState<number | null>(null);
+  /** 每个本体卡片配置区是否收起，key 为卡片 index，默认全展开 */
+  const [ontologyCardCollapsed, setOntologyCardCollapsed] = useState<Record<number, boolean>>({});
   const [selectedTerminologies, setSelectedTerminologies] = useState<Terminology[]>(
     () => normalizeTerminologies((initialAgentData as any)?.terminologies)
   );
@@ -550,237 +553,27 @@ export function AutonomousEditor({
     // 生成智能回复和执行链路（基于用户消息和智能体配置）
     const generateResponse = (userMsg: string): string => {
       const msg = userMsg.toLowerCase();
-      
+
       // ========== 优先级最高：态势感知相关 ==========
-      if (msg.includes("态势") || msg.includes("威胁") || msg.includes("身份") || msg.includes("评估") || msg.includes("分析") || msg.includes("海面") || msg.includes("目标")) {
-        // 返回空字符串，研判报告只在执行链路的最后一步（final_answer）中显示
+      if (
+        msg.includes("态势") ||
+        msg.includes("威胁") ||
+        msg.includes("身份") ||
+        msg.includes("评估") ||
+        msg.includes("分析") ||
+        msg.includes("海面") ||
+        msg.includes("目标")
+      ) {
         return "";
       }
-      
-      // 根据当前的 id，从 AGENTS_DETAIL_DATA[id].mockReply 获取模拟回复内容
+
       return agentData?.mockReply || "您好，有什么可以帮您？";
     };
 
-    // 生成执行链路（基于用户消息和智能体配置）
     const generateTraceSteps = (userMsg: string): ExecutionStep[] => {
-      const msg = userMsg.toLowerCase();
-      const now = new Date();
-      const baseTime = now.getTime();
-      let stepIndex = 0;
-      const steps: ExecutionStep[] = [];
-
-      // 如果涉及态势感知、威胁评估相关
-      if (msg.includes("威胁") || msg.includes("态势") || msg.includes("身份") || msg.includes("评估") || msg.includes("分析") || msg.includes("海面") || msg.includes("目标")) {
-        let currentTime = baseTime;
-        
-        // ==========================================
-        // 阶段一：身份推理 (Identity Reasoning)
-        // ==========================================
-        // Step 1: 思考 (Reasoning)
-        steps.push({
-          id: `step-${++stepIndex}`,
-          stepName: 'Step 1: 场景分析与规划',
-          stepType: 'thought',
-          status: 'success',
-          startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 1500).toLocaleTimeString(),
-          duration: 1500,
-          input: '',
-          output: '监测到台海区域出现不明目标组合 (1驱+1测，ID未知)。\n[常识] 目标在台海，则来源可能是冲绳或佐世保\n[规划] 在 MDP 中检索符合地点和舰型组合的情报对象。'
-        });
-        currentTime += 1500;
-
-        // Step 2: 本体检索 IntelligenceReport
-        steps.push({
-          id: `step-${++stepIndex}`,
-          stepName: '本体检索: IntelligenceReport',
-          stepType: 'ontology_query',
-          status: 'success',
-          startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 2500).toLocaleTimeString(),
-          duration: 2500,
-          input: {
-            objectType: 'IntelligenceReport',
-            filter: {
-              location: ['Okinawa'],
-              keywords: ['Destroyer'],
-              time: '-72h'
-            }
-          },
-          output: {
-            matched: [{
-              id: 'Report_Obj_088',
-              content: '冲绳集结: 菲恩号(DDG-113), 鲍迪奇号(TAGS-62)'
-            }]
-          }
-        });
-        currentTime += 2500;
-
-        // Step 3: 融合与计算 (Spatiotemporal Check)
-        steps.push({
-          id: `step-${++stepIndex}`,
-          stepName: 'Step 2: 时空融合与计算',
-          stepType: 'thought',
-          status: 'success',
-          startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 1500).toLocaleTimeString(),
-          duration: 1500,
-          input: '',
-          output: '融合与计算：\n1. 距离：冲绳至台海约 600km，耗时 24h\n2. 航速：600 除以 24 等于 25km/h (13.5节)，符合驱逐舰经济航速\n3. 结论：观测对象即为 Report_Obj_088 中的编队'
-        });
-        currentTime += 1500;
-
-        // Step 4: 更新事件身份 (Link Identity)
-        steps.push({
-          id: `step-${++stepIndex}`,
-          stepName: '动作: 更新事件身份 (Link Identity)',
-          stepType: 'tool_call',
-          status: 'success',
-          startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 800).toLocaleTimeString(),
-          duration: 800,
-          input: {
-            action: 'Update_Entity',
-            target: 'TransitEvent_001',
-            updates: {
-              ship_ids: ['US-DDG-113', 'US-TAGS-62'],
-              Status: 'Identified'
-            }
-          },
-          output: {
-            success: true,
-            snapshot_id: 'evt_v2',
-            updated_fields: ['ship_ids', 'Status']
-          }
-        });
-        currentTime += 800;
-
-        // ==========================================
-        // 阶段二：视觉态势评估 (Visual Threat Assessment)
-        // ==========================================
-        // Step 5: 思考 (Reasoning)
-        steps.push({
-          id: `step-${++stepIndex}`,
-          stepName: 'Step 3: 态势评估策略',
-          stepType: 'thought',
-          status: 'success',
-          startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 1500).toLocaleTimeString(),
-          duration: 1500,
-          input: '',
-          output: '身份已更新。需读取关联的图像对象，分析物理征候以评估威胁。'
-        });
-        currentTime += 1500;
-
-        // Step 6: 读取对象 SensorData (Image)
-        steps.push({
-          id: `step-${++stepIndex}`,
-          stepName: '读取对象: SensorData (Image)',
-          stepType: 'ontology_query',
-          status: 'success',
-          startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 1000).toLocaleTimeString(),
-          duration: 1000,
-          input: {
-            objectType: 'SensorData',
-            filter: {
-              linked_to: 'TransitEvent_001',
-              type: 'Image'
-            }
-          },
-          output: {
-            matched: [{
-              id: 'Sensor_Img_001',
-              type: 'Image',
-              linked_to: 'TransitEvent_001',
-              binary_data: 'Image_Binary_Data'
-            }]
-          }
-        });
-        currentTime += 1000;
-
-        // Step 7: 视觉模型处理 (Internal Model)
-        steps.push({
-          id: `step-${++stepIndex}`,
-          stepName: '视觉模型处理 (Internal Model)',
-          stepType: 'tool_call',
-          status: 'success',
-          startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 2000).toLocaleTimeString(),
-          duration: 2000,
-          input: {
-            image_data: 'Image_Binary_Data',
-            targets: ['Main_Gun', 'VLS_Hatch', 'Deck']
-          },
-          output: {
-            Gun: 'Stowed',
-            VLS: 'Closed',
-            Deck: 'Clear',
-            Posture: 'Non-Aggressive Posture'
-          }
-        });
-        currentTime += 2000;
-
-        // Step 8: 综合定级 (Decision)
-        steps.push({
-          id: `step-${++stepIndex}`,
-          stepName: 'Step 4: 综合定级',
-          stepType: 'thought',
-          status: 'success',
-          startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 1500).toLocaleTimeString(),
-          duration: 1500,
-          input: '',
-          output: '综合定级：\n1. 高能力：DDG 具备区域防空能力\n2. 抵近：目标已进入台海区域\n>> 初步结论：高能力(DDG) + 抵近 = High Threat\n>> 虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性\n>> 最终结论：综合判定为 High Threat (常态化巡航)'
-        });
-        currentTime += 1500;
-
-        // Step 9: 更新最终威胁评估 (Final Decision)
-        steps.push({
-          id: `step-${++stepIndex}`,
-          stepName: '动作: 更新最终威胁评估 (Final Decision)',
-          stepType: 'tool_call',
-          status: 'success',
-          startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 1000).toLocaleTimeString(),
-          duration: 1000,
-          input: {
-            action: 'Update_Entity',
-            target: 'TransitEvent_001',
-            updates: {
-              Final_Threat_Assessment: 'High',
-              Reasoning: '经时空计算确认身份为菲恩号，高能力(DDG) + 抵近 = High Threat，虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性，判定为常态化巡航'
-            }
-          },
-          output: {
-            success: true,
-            timestamp: new Date(currentTime + 1000).toLocaleTimeString(),
-            final_assessment: 'High',
-            reasoning: '经时空计算确认身份为菲恩号，高能力(DDG) + 抵近 = High Threat，虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性，判定为常态化巡航'
-          }
-        });
-        currentTime += 1000;
-
-        // Step 10: 最终答案生成
-        steps.push({
-          id: `step-${++stepIndex}`,
-          stepName: 'Step 5: 生成研判报告',
-          stepType: 'final_answer',
-          status: 'success',
-          startTime: new Date(currentTime).toLocaleTimeString(),
-          endTime: new Date(currentTime + 2000).toLocaleTimeString(),
-          duration: 2000,
-          input: {
-            intelligenceData: '已关联冲绳基地 HUMINT 情报 (Report_Obj_088)',
-            spatiotemporalCheck: '距离 600km，航速 13.5节，符合经济航速，确认身份匹配',
-            visualAnalysis: '主炮归零(Stowed)、垂发关闭(Closed)、甲板无异常(Clear)，姿态为非攻击性',
-            threatLevel: '高 - 常态化巡航'
-          },
-          output: '### 研判报告\n\n**1. 身份确认**\n* 目标 I: USS John Finn (DDG-113)\n* 目标 II: USNS Bowditch (TAGS-62)\n* 依据: 关联冲绳基地 HUMINT 情报 (Report_Obj_088)，经时空计算（距离 600km，航速 13.5节）确认编队构成与离港时间完全匹配。\n\n**2. 威胁评估: [高 - 常态化巡航]**\n* 能力评估: DDG-113 具备区域防空能力，属于高能力平台\n* 行为分析: 目标已进入台海区域（抵近），视觉分析显示主炮归零(Stowed)、垂发关闭(Closed)、甲板无异常活动(Clear)\n* 综合定级: 高能力(DDG) + 抵近 = High Threat。虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性，综合判定为 High Threat\n* 结论: 判定为过航执行测量任务，常态化巡航，但需持续关注其动态。'
-        });
-      }
-
-      return steps;
+      const situational = generateSituationalTraceSteps(userMsg);
+      if (situational.length > 0) return situational;
+      return [];
     };
 
     // 设置 1.5秒 的 setTimeout 来模拟网络请求延迟
@@ -1018,7 +811,7 @@ export function AutonomousEditor({
                   // 获取检索方式标签
                   const getRetrievalMethodLabel = (method: "structured" | "semantic" | undefined) => {
                     if (method === "structured") {
-                      return "结构化检索";
+                      return "精准检索";
                     } else if (method === "semantic") {
                       return "语义检索";
                     }
@@ -1026,7 +819,8 @@ export function AutonomousEditor({
                   };
                   
                   const Icon = getObjectTypeIcon(ontology.objectType);
-                  
+                  const isCardExpanded = !ontologyCardCollapsed[index];
+
                   return (
                     <div
                       key={index}
@@ -1034,11 +828,28 @@ export function AutonomousEditor({
                     >
                       {/* Card Header */}
                       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOntologyCardCollapsed((prev) => ({
+                                ...prev,
+                                [index]: !prev[index],
+                              }))
+                            }
+                            className="p-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 shrink-0"
+                            aria-label={isCardExpanded ? "收起配置" : "展开配置"}
+                          >
+                            {isCardExpanded ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronUp className="w-4 h-4" />
+                            )}
+                          </button>
+                          <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
                             <Icon className="w-4 h-4 text-orange-600" />
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <div className="text-sm font-medium text-slate-900">
                               {ontology.objectType}
                             </div>
@@ -1051,14 +862,17 @@ export function AutonomousEditor({
                           variant="ghost"
                           size="sm"
                           onClick={() => handleEditOntology(index)}
-                          className="h-8 gap-1.5"
+                          className="h-8 w-8 shrink-0 p-0"
+                          title="编辑配置"
+                          aria-label="编辑配置"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
-                          <span className="text-xs">编辑配置</span>
                         </Button>
                       </div>
 
-                      {/* Card Body */}
+                      {/* Card Body - 默认展开，可收起 */}
+                      {isCardExpanded && (
+                      <>
                       <div className="px-4 py-3 space-y-2">
                         {/* 检索方式 */}
                         <div className="flex items-center gap-2">
@@ -1112,6 +926,8 @@ export function AutonomousEditor({
                           移除
                         </button>
                       </div>
+                      </>
+                      )}
                     </div>
                   );
                 })

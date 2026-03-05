@@ -102,7 +102,7 @@ export default function AgentEditorPage() {
   const [prompt, setPrompt] = useState("");
   const [expandedSections, setExpandedSections] = useState({
     knowledge: true,
-    ontology: false,
+    ontology: true,
     terminology: false,
     workflow: false,
     plugins: false,
@@ -168,6 +168,8 @@ export default function AgentEditorPage() {
   const [selectedOntologies, setSelectedOntologies] = useState<OntologyConfig[]>(getInitialOntologies());
   const [ontologyConfigOpen, setOntologyConfigOpen] = useState(false);
   const [editingOntologyIndex, setEditingOntologyIndex] = useState<number | null>(null);
+  /** 每个本体卡片配置区是否收起，key 为卡片 index，默认全展开 */
+  const [ontologyCardCollapsed, setOntologyCardCollapsed] = useState<Record<number, boolean>>({});
   const [selectedTerminologies, setSelectedTerminologies] = useState<Terminology[]>([]);
   const [terminologySelectorOpen, setTerminologySelectorOpen] = useState(false);
   const [openingStatement, setOpeningStatement] = useState("");
@@ -611,7 +613,17 @@ export default function AgentEditorPage() {
             visualAnalysis: '主炮归零(Stowed)、垂发关闭(Closed)、甲板无异常(Clear)，姿态为非攻击性',
             threatLevel: '高 - 常态化巡航'
           },
-          output: '### 研判报告\n\n**1. 身份确认**\n* 目标 I: USS John Finn (DDG-113)\n* 目标 II: USNS Bowditch (TAGS-62)\n* 依据: 关联冲绳基地 HUMINT 情报 (Report_Obj_088)，经时空计算（距离 600km，航速 13.5节）确认编队构成与离港时间完全匹配。\n\n**2. 威胁评估: [高 - 常态化巡航]**\n* 能力评估: DDG-113 具备区域防空能力，属于高能力平台\n* 行为分析: 目标已进入台海区域（抵近），视觉分析显示主炮归零(Stowed)、垂发关闭(Closed)、甲板无异常活动(Clear)\n* 综合定级: 高能力(DDG) + 抵近 = High Threat。虽然视觉分析显示主炮归零，但驱逐舰始终有攻击属性，综合判定为 High Threat\n* 结论: 判定为过航执行测量任务，常态化巡航，但需持续关注其动态。'
+          // 带本体引用标签的 Markdown，用于本体溯源交互
+          output:
+            '### 研判报告\n' +
+            '\n' +
+            '**1. 身份确认**\n' +
+            '* 目标 I: USS John Finn (DDG-113) <onto_ref id="DDG-113"></onto_ref>\n' +
+            '* 目标 II: USNS Bowditch (TAGS-62) <onto_ref id="TAGS-62"></onto_ref>\n' +
+            '* 依据: 关联冲绳基地 HUMINT 情报 <onto_ref id="Report_Obj_088"></onto_ref>，经时空计算确认编队构成与离港时间完全匹配。\n' +
+            '\n' +
+            '**2. 威胁评估: [高 - 常态化巡航]**\n' +
+            '* 能力评估: DDG-113 具备区域防空能力，属于高能力平台。 <onto_ref id="DDG-113"></onto_ref>'
         });
         console.log('✅ [generateTraceSteps] 态势感知执行链路生成完成，共', steps.length, '个步骤');
       } else if (msg.includes("本体") || msg.includes("ontology") || msg.includes("对象")) {
@@ -1072,7 +1084,7 @@ export default function AgentEditorPage() {
                     // 获取检索方式标签
                     const getRetrievalMethodLabel = (method: "structured" | "semantic" | undefined) => {
                       if (method === "structured") {
-                        return "结构化检索";
+                        return "精准检索";
                       } else if (method === "semantic") {
                         return "语义检索";
                       }
@@ -1081,6 +1093,7 @@ export default function AgentEditorPage() {
                     
                     const Icon = getObjectTypeIcon(ontology.objectType);
                     
+                    const isCardExpanded = !ontologyCardCollapsed[index];
                     return (
                     <div
                       key={index}
@@ -1088,31 +1101,51 @@ export default function AgentEditorPage() {
                       >
                         {/* Card Header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOntologyCardCollapsed((prev) => ({
+                                  ...prev,
+                                  [index]: !prev[index],
+                                }))
+                              }
+                              className="p-0.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 shrink-0"
+                              aria-label={isCardExpanded ? "收起配置" : "展开配置"}
+                            >
+                              {isCardExpanded ? (
+                                <ChevronDown className="w-4 h-4" />
+                              ) : (
+                                <ChevronUp className="w-4 h-4" />
+                              )}
+                            </button>
+                            <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
                               <Icon className="w-4 h-4 text-orange-600" />
-                      </div>
-                            <div>
-                        <div className="text-sm font-medium text-slate-900">
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-slate-900">
                                 {ontology.objectType}
-                        </div>
+                              </div>
                               <div className="text-xs text-slate-500">
                                 {ontology.ontology}
-                        </div>
-                      </div>
+                              </div>
+                            </div>
                           </div>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleEditOntology(index)}
-                            className="h-8 gap-1.5"
+                            className="h-8 w-8 shrink-0 p-0"
+                            title="编辑配置"
+                            aria-label="编辑配置"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
-                            <span className="text-xs">编辑配置</span>
                           </Button>
                         </div>
 
-                        {/* Card Body */}
+                        {/* Card Body - 默认展开，可收起 */}
+                        {isCardExpanded && (
+                        <>
                         <div className="px-4 py-3 space-y-2">
                           {/* 检索方式 */}
                           <div className="flex items-center gap-2">
@@ -1158,14 +1191,16 @@ export default function AgentEditorPage() {
                         </div>
                         {/* Remove Button - Outside card body */}
                         <div className="px-4 pb-3 flex justify-end">
-                      <button
-                        onClick={() => handleRemoveOntology(index)}
+                          <button
+                            onClick={() => handleRemoveOntology(index)}
                             className="text-xs text-slate-500 hover:text-red-600 transition-colors"
-                        title="移除"
-                      >
+                            title="移除"
+                          >
                             移除
-                      </button>
-                    </div>
+                          </button>
+                        </div>
+                        </>
+                        )}
                       </div>
                     );
                   })

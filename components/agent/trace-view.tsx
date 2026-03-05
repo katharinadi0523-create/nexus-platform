@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import type { ExecutionStep, ExecutionStepType, ExecutionStepStatus } from "@/lib/agent-data";
 import { OntologyQueryNode } from "@/components/agent/ontology-query-node";
 import { buildOntologyExecutionDataFromStep } from "@/lib/mock/mock-ontology-execution";
+import { FinalAnswerWithOntologyTrace } from "@/components/agent/final-answer-with-ontology-trace";
 
 interface TraceViewProps {
   steps: ExecutionStep[];
@@ -349,13 +350,17 @@ export function TraceView({ steps }: TraceViewProps) {
                     </div>
                   </div>
                 ) : step.stepType === "final_answer" ? (
-                  /* Final Answer 类型：显示在灰色回答框中 */
+                  /* Final Answer 类型：支持 Markdown + 本体溯源 */
                   <div className="px-4 pb-4 border-t border-slate-200">
                     <div className="pt-3">
                       <div className="bg-slate-100 border border-slate-300 rounded-lg p-4">
-                        <p className="text-sm text-slate-900 whitespace-pre-wrap leading-relaxed font-medium">
-                          {typeof step.output === "string" ? step.output : formatJSON(step.output)}
-                        </p>
+                        <FinalAnswerWithOntologyTrace
+                          markdown={
+                            typeof step.output === "string"
+                              ? step.output
+                              : undefined
+                          }
+                        />
                       </div>
                     </div>
                   </div>

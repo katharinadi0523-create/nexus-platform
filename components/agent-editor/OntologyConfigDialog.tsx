@@ -9,7 +9,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -113,6 +112,24 @@ export function OntologyConfigDialog({
     return allProperties.filter((prop) => !prop.isVector);
   }, [allProperties]);
 
+  const availableInjectionFieldNames = useMemo(
+    () => availableInjectionFields.map((f) => f.name),
+    [availableInjectionFields]
+  );
+
+  // 注入字段默认全选：当对象类型下有可选字段且当前未选任何字段时，默认选中全部
+  useEffect(() => {
+    if (
+      availableInjectionFieldNames.length > 0 &&
+      config.injectionFields.length === 0
+    ) {
+      setConfig((prev) => ({
+        ...prev,
+        injectionFields: [...availableInjectionFieldNames],
+      }));
+    }
+  }, [config.objectType, availableInjectionFieldNames]);
+
   const handleOntologyChange = (value: string) => {
     setConfig({
       ...config,
@@ -124,12 +141,13 @@ export function OntologyConfigDialog({
   };
 
   const handleObjectTypeChange = (value: string) => {
-    setConfig({
+    const nextConfig = {
       ...config,
       objectType: value,
-      property: "", // 重置属性
-      injectionFields: [], // 重置注入字段
-    });
+      property: "",
+      injectionFields: [],
+    };
+    setConfig(nextConfig);
   };
 
   const handlePropertyChange = (value: string) => {
@@ -164,27 +182,11 @@ export function OntologyConfigDialog({
         </DialogHeader>
 
         <div className="space-y-8 !pt-0">
-          {/* Block 1: Query Rewrite */}
-          <div className="flex items-center justify-between py-2">
-            <Label className="text-base font-medium">Query 改写</Label>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={config.queryRewrite}
-                onCheckedChange={(checked) =>
-                  setConfig({ ...config, queryRewrite: checked })
-                }
-              />
-              <span className="text-sm text-slate-600 min-w-[24px]">
-                {config.queryRewrite ? "开" : "关"}
-              </span>
-            </div>
-          </div>
-
-          {/* Block 2: Retrieval Method */}
+          {/* Block 1: 检索召回模式 */}
           <div className="space-y-4">
-            <Label className="text-base font-medium">检索方式</Label>
+            <Label className="text-base font-medium">检索召回模式</Label>
             <div className="grid grid-cols-2 gap-4">
-              {/* Option A: 结构化检索 */}
+              {/* Option A: 精准检索 */}
               <button
                 type="button"
                 onClick={() => handleRetrievalMethodChange("structured")}
@@ -214,10 +216,10 @@ export function OntologyConfigDialog({
                   </div>
                 )}
                 <div className="font-semibold text-base text-slate-900 mb-2">
-                  结构化检索
+                  精准检索
                 </div>
                 <div className="text-sm text-slate-500 leading-relaxed">
-                  基于精确匹配和结构化查询，适用于已知字段值的场景
+                  通过属性值检索对应的对象实例的信息
                 </div>
               </button>
 
@@ -307,9 +309,25 @@ export function OntologyConfigDialog({
             )}
           </div>
 
-          {/* Block 3: Target Selection (3-Level Cascade) */}
+          {/* Block 2: 检索属性 (3-Level Cascade) */}
           <div className="space-y-4">
-            <Label className="text-base font-medium">检索目标</Label>
+            <div className="flex items-center gap-1.5">
+              <Label className="text-base font-medium">检索属性</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className="cursor-help">
+                    <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-56 p-3 text-xs text-slate-700"
+                  side="right"
+                  sideOffset={8}
+                >
+                  选择用于检索的对象属性
+                </PopoverContent>
+              </Popover>
+            </div>
             <div className="grid grid-cols-3 gap-4">
               {/* Level 1: Ontology */}
               <div>
@@ -387,7 +405,7 @@ export function OntologyConfigDialog({
                     side="right"
                     sideOffset={8}
                   >
-                    召回的相关对象个数
+                    检索召回的对象实例个数上限
                   </PopoverContent>
                 </Popover>
               </div>
@@ -419,9 +437,25 @@ export function OntologyConfigDialog({
               </div>
             </div>
 
-            {/* Threshold */}
+            {/* Score */}
             <div className="space-y-3">
-              <Label className="text-base font-medium">阈值分</Label>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-base font-medium">Score</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button type="button" className="cursor-help">
+                      <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-64 p-3 text-xs text-slate-700"
+                    side="right"
+                    sideOffset={8}
+                  >
+                    召回匹配分过滤，当大于或等于这个匹配分时才返回
+                  </PopoverContent>
+                </Popover>
+              </div>
               <div className="flex items-center gap-4">
                 <Slider
                   value={[config.threshold ?? defaultConfig.threshold]}
@@ -451,45 +485,91 @@ export function OntologyConfigDialog({
             </div>
           </div>
 
-          {/* Block 5: Context Injection (Strict Filter) */}
+          {/* Block 5: 注入字段配置（列表形式，默认全选） */}
           {config.objectType && (
             <div className="space-y-3">
-              <div className="flex items-center gap-1.5">
-                <Label className="text-base font-medium">
-                  注入字段配置
-                </Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button type="button" className="cursor-help">
-                      <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    className="w-64 p-3 text-xs text-slate-700"
-                    side="right"
-                    sideOffset={8}
-                  >
-                    选择检索命中后，注入到 Agent 上下文的属性（自动过滤向量字段）
-                  </PopoverContent>
-                </Popover>
-              </div>
+              <Label className="text-base font-medium">注入字段配置</Label>
               {availableInjectionFields.length > 0 ? (
-                <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                  {availableInjectionFields.map((field) => (
-                    <div key={field.name} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`injection-${field.name}`}
-                        checked={config.injectionFields.includes(field.name)}
-                        onCheckedChange={() => handleInjectionFieldToggle(field.name)}
-                      />
-                      <Label
-                        htmlFor={`injection-${field.name}`}
-                        className="text-sm text-slate-700 cursor-pointer"
-                      >
-                        {field.name}
-                      </Label>
-                    </div>
-                  ))}
+                <div className="overflow-hidden rounded-lg border border-slate-200">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 text-left text-xs font-medium text-slate-600">
+                        <th className="w-10 px-3 py-2.5 border-b border-slate-200">
+                          <Checkbox
+                            checked={
+                              config.injectionFields.length ===
+                              availableInjectionFields.length
+                            }
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setConfig({
+                                  ...config,
+                                  injectionFields: availableInjectionFields.map(
+                                    (f) => f.name
+                                  ),
+                                });
+                              } else {
+                                setConfig({
+                                  ...config,
+                                  injectionFields: [],
+                                });
+                              }
+                            }}
+                            aria-label="全选"
+                          />
+                        </th>
+                        <th className="px-3 py-2.5 border-b border-slate-200">
+                          显示名称
+                        </th>
+                        <th className="px-3 py-2.5 border-b border-slate-200">
+                          属性类型
+                        </th>
+                        <th className="px-3 py-2.5 border-b border-slate-200">
+                          表字段
+                        </th>
+                        <th className="px-3 py-2.5 border-b border-slate-200">
+                          属性说明
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 bg-white">
+                      {availableInjectionFields.map((field) => (
+                        <tr
+                          key={field.name}
+                          className="hover:bg-slate-50/50"
+                        >
+                          <td className="w-10 px-3 py-2">
+                            <Checkbox
+                              id={`injection-${field.name}`}
+                              checked={config.injectionFields.includes(
+                                field.name
+                              )}
+                              onCheckedChange={() =>
+                                handleInjectionFieldToggle(field.name)
+                              }
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-slate-800">
+                            <Label
+                              htmlFor={`injection-${field.name}`}
+                              className="cursor-pointer"
+                            >
+                              {field.displayName ?? field.name}
+                            </Label>
+                          </td>
+                          <td className="px-3 py-2 text-slate-600 font-mono text-xs">
+                            {field.type}
+                          </td>
+                          <td className="px-3 py-2 text-slate-600 font-mono text-xs">
+                            {field.name}
+                          </td>
+                          <td className="px-3 py-2 text-slate-500 text-xs">
+                            {field.description ?? "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-500 text-center">

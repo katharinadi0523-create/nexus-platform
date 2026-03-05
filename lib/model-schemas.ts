@@ -9,7 +9,9 @@ export type ModelParamKey =
   | "top_k"
   | "frequency_penalty"
   | "deep_thinking"
-  | "context_turns";
+  | "context_turns"
+  | "current_time"
+  | "sp_anti_leak";
 
 export interface NumberParamSchema {
   key: ModelParamKey;

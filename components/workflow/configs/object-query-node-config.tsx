@@ -35,7 +35,7 @@ const getObjectTypeIcon = (objectType: string) => {
 // 获取检索方式标签
 const getRetrievalMethodLabel = (method: "structured" | "semantic" | undefined) => {
   if (method === "structured") {
-    return "结构化检索";
+    return "精准检索";
   } else if (method === "semantic") {
     return "语义检索";
   }
@@ -176,10 +176,11 @@ export function ObjectQueryNodeConfig({
                 setIsEditing(true);
                 setOntologyDialogOpen(true);
               }}
-              className="h-8 gap-1.5"
+              className="h-8 w-8 p-0"
+              title="编辑配置"
+              aria-label="编辑配置"
             >
               <Edit2 className="w-3.5 h-3.5" />
-              <span className="text-xs">编辑配置</span>
             </Button>
           </div>
 
