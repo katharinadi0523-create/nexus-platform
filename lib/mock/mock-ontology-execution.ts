@@ -86,21 +86,82 @@ export const mockExecutionData: OntologyExecutionData = {
       {
         entry_object: {
           object_type: "IntelligenceReport",
-          object_id: "Report_Obj_088",
+          object_id: "HUMINT2026030584",
           score: 0.96,
           properties: {
             location: "Okinawa",
-            report_summary: "Visual confirmation of DDG departure.",
+            report_summary: "HUMINT visual confirmation of naval movements.",
+            confidence_level: "High",
           },
         },
         traversed_paths: {
           has_event_subject: [
             {
               object_type: "Ship",
-              object_id: "DDG-113",
+              object_id: "TAGS_62",
+              properties: {
+                hull_number: "TAGS-62",
+                ship_class: "Training Ship",
+                combat_capability: "Support",
+              },
+            },
+          ],
+        },
+      },
+      {
+        entry_object: {
+          object_type: "IntelligenceReport",
+          object_id: "OSINT2026030588",
+          score: 0.92,
+          properties: {
+            location: "Sasebo",
+            report_summary: "Visual confirmation of DDG departure, heading 240.",
+            confidence_level: "High",
+          },
+        },
+        traversed_paths: {
+          has_event_subject: [
+            {
+              object_type: "Ship",
+              object_id: "DDG_13",
               properties: {
                 hull_number: "DDG-113",
                 ship_class: "Arleigh Burke",
+                combat_capability: "Area Air Defense",
+              },
+            },
+          ],
+        },
+      },
+      {
+        entry_object: {
+          object_type: "IntelligenceReport",
+          object_id: "HUMINT20260305105",
+          score: 0.88,
+          properties: {
+            location: "Okinawa",
+            report_summary: "Supplemental HUMINT on same formation.",
+            confidence_level: "Medium",
+          },
+        },
+        traversed_paths: {
+          has_event_subject: [
+            {
+              object_type: "Ship",
+              object_id: "TAGS_62",
+              properties: {
+                hull_number: "TAGS-62",
+                ship_class: "Training Ship",
+                combat_capability: "Support",
+              },
+            },
+            {
+              object_type: "Ship",
+              object_id: "DDG_13",
+              properties: {
+                hull_number: "DDG-113",
+                ship_class: "Arleigh Burke",
+                combat_capability: "Area Air Defense",
               },
             },
           ],

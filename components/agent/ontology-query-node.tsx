@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import {
   Layers,
   FileText,
-  Link2,
   Copy,
   ChevronDown,
   ChevronRight,
@@ -13,7 +12,6 @@ import { cn } from "@/lib/utils";
 import type {
   OntologyExecutionData,
   ResponseDataItem,
-  TraversedNode,
 } from "@/lib/mock/mock-ontology-execution";
 
 function formatJSON(value: unknown): string {
@@ -58,57 +56,51 @@ function OntologyNodeQueryFilters({ data }: { data: OntologyExecutionData }) {
 }
 
 // ---------------------------------------------------------------------------
-// Area C: 业务视图 - 聚类与层级
+// Area C: 业务视图 - 按对象类型聚类，扁平列出实例
 // ---------------------------------------------------------------------------
-function clusterByEntryType(
-  data: ResponseDataItem[]
-): Map<string, ResponseDataItem[]> {
-  const map = new Map<string, ResponseDataItem[]>();
-  for (const item of data) {
-    const type = item.entry_object?.object_type ?? "未知类型";
-    if (!map.has(type)) map.set(type, []);
-    map.get(type)!.push(item);
-  }
-  return map;
-}
 
-/** 逐层递进：link 一行，每个目标对象一行，用 ↳ 与缩进表达层级 */
-function RelationshipRow({
-  edgeName,
-  nodes,
-}: {
-  edgeName: string;
-  label: string;
-  nodes: TraversedNode[];
-}) {
-  return (
-    <>
-      <div className="flex items-center gap-2 pl-8 py-1.5 pr-3 rounded hover:bg-slate-50/50 transition-colors">
-        <span className="text-slate-400 text-xs">↳</span>
-        <Link2 className="w-4 h-4 text-orange-500 shrink-0" />
-        <span className="text-xs text-slate-700">{edgeName}</span>
-        <span className="text-xs text-slate-500">(link)</span>
-      </div>
-      {nodes.map((node, idx) => (
-        <div
-          key={idx}
-          className="flex items-center gap-2 pl-10 py-1.5 pr-3 rounded hover:bg-slate-50/50 transition-colors"
-        >
-          <span className="text-slate-400 text-xs">↳</span>
-          <FileText className="w-4 h-4 text-slate-500 shrink-0" />
-          <span className="text-xs font-mono text-slate-800">{node.object_id}</span>
-          {node.object_type && (
-            <span className="text-xs text-slate-500">({node.object_type})</span>
-          )}
-        </div>
-      ))}
-    </>
-  );
+/**
+ * 从 response_data 中按「对象类型」聚类，收集每个类型下的所有对象实例 ID。
+ * 结构：Map<object_type, object_id[]>
+ */
+function collectObjectsByType(
+  data: ResponseDataItem[]
+): Map<string, string[]> {
+  const map = new Map<string, Set<string>>();
+  const typeOrder: string[] = [];
+
+  const add = (objectType: string, objectId: string) => {
+    const type = objectType || "未知类型";
+    if (!map.has(type)) {
+      map.set(type, new Set());
+      typeOrder.push(type);
+    }
+    map.get(type)!.add(objectId);
+  };
+
+  for (const item of data) {
+    const entry = item.entry_object;
+    if (entry) {
+      add(entry.object_type, entry.object_id);
+    }
+    const paths = item.traversed_paths ?? {};
+    for (const nodes of Object.values(paths)) {
+      for (const node of nodes) {
+        add(node.object_type, node.object_id);
+      }
+    }
+  }
+
+  const result = new Map<string, string[]>();
+  for (const type of typeOrder) {
+    result.set(type, Array.from(map.get(type)!));
+  }
+  return result;
 }
 
 function BusinessViewContent({ data }: { data: OntologyExecutionData }) {
   const items = data.response_data?.data ?? [];
-  const clustered = useMemo(() => clusterByEntryType(items), [items]);
+  const clustered = useMemo(() => collectObjectsByType(items), [items]);
 
   if (items.length === 0) {
     return (
@@ -120,24 +112,24 @@ function BusinessViewContent({ data }: { data: OntologyExecutionData }) {
 
   return (
     <div className="px-2 pb-4">
-      {Array.from(clustered.entries()).map(([objectType, entries]) => (
+      {Array.from(clustered.entries()).map(([objectType, instanceIds]) => (
         <ClusterBlock
           key={objectType}
           objectType={objectType}
-          entries={entries}
+          instanceIds={instanceIds}
         />
       ))}
     </div>
   );
 }
 
-/** 按对象类型分组：类型行不做特殊背景、展开按钮在右侧；下方为逐层递进结构 */
+/** 按对象类型分组：类型标题 + 扁平实例列表（|_ 前缀） */
 function ClusterBlock({
   objectType,
-  entries,
+  instanceIds,
 }: {
   objectType: string;
-  entries: ResponseDataItem[];
+  instanceIds: string[];
 }) {
   const [expanded, setExpanded] = useState(true);
 
@@ -163,34 +155,14 @@ function ClusterBlock({
       </div>
       {expanded && (
         <div className="pt-0.5 pb-2">
-          {entries.map((item, idx) => (
-            <div key={idx} className="space-y-0">
-              <div className="flex items-center gap-2 pl-6 py-1.5 pr-3 rounded hover:bg-slate-50/50 transition-colors">
-                <span className="text-slate-400 text-xs">↳</span>
-                <FileText className="w-4 h-4 text-slate-500 shrink-0" />
-                <span className="text-sm font-mono text-slate-800">
-                  {item.entry_object?.object_id ?? `条目 ${idx + 1}`}
-                </span>
-                {item.entry_object?.score != null && (
-                  <span className="text-xs text-slate-500">
-                    得分 {item.entry_object.score}
-                  </span>
-                )}
-                <span className="text-xs text-slate-500">(对象实例)</span>
-              </div>
-              {item.traversed_paths &&
-                Object.entries(item.traversed_paths).map(([edge, nodes]) => (
-                  <RelationshipRow
-                    key={edge}
-                    edgeName={edge}
-                    label={
-                      edge === "has_event_subject"
-                        ? "关联主体"
-                        : edge.replace(/_/g, " ")
-                    }
-                    nodes={nodes}
-                  />
-                ))}
+          {instanceIds.map((id) => (
+            <div
+              key={id}
+              className="flex items-center gap-2 pl-6 py-1.5 pr-3 rounded hover:bg-slate-50/50 transition-colors"
+            >
+              <span className="text-slate-400 text-xs">|_</span>
+              <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+              <span className="text-sm font-mono text-slate-800">{id}</span>
             </div>
           ))}
         </div>
@@ -282,7 +254,7 @@ function OntologyNodeResults({
                 : "text-slate-600 hover:text-slate-900"
             )}
           >
-            开发者视图
+            开发者模式
           </button>
         </div>
       </div>

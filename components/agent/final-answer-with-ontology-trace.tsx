@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import { Anchor, Box, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -8,7 +8,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -17,6 +16,18 @@ import {
   TooltipContent,
   TooltipProvider,
 } from "@/components/ui/tooltip";
+import ReactFlow, {
+  ReactFlowProvider,
+  Controls,
+  useNodesState,
+  useEdgesState,
+  Handle,
+  Position,
+  type Node,
+  type Edge,
+  type NodeProps,
+} from "reactflow";
+import "reactflow/dist/style.css";
 
 type OntologyPropertyDef = {
   fieldName: string;
@@ -29,10 +40,18 @@ type OntologyMetadata = {
   propertiesDef: OntologyPropertyDef[];
 };
 
+/** 溯源图谱：节点与边，支持多条 relationship 指向同一目标 */
+export type TraceGraphData = {
+  nodes: { id: string; label: string; nodeType: string }[];
+  edges: { source: string; target: string; label: string }[];
+};
+
 type OntologyInstance = {
   type: string;
   title: string;
+  /** @deprecated 使用 traceGraph 代替 */
   path: string | null;
+  traceGraph?: TraceGraphData;
   properties: Record<string, string>;
   metadata: OntologyMetadata;
 };
@@ -57,7 +76,18 @@ const mockOntologyData: OntologyMap = {
   "DDG-113": {
     type: "Ship",
     title: "USS John Finn (DDG-113)",
-    path: "[情报 Report_088] ━━(包含主体)━━▶ [DDG-113]",
+    path: null,
+    traceGraph: {
+      nodes: [
+        { id: "Report_Obj_088", label: "Report_Obj_088 冲绳离港视觉确认", nodeType: "IntelligenceReport" },
+        { id: "TransitEvent_001", label: "TransitEvent_001 台海过航事件", nodeType: "TransitEvent" },
+        { id: "DDG-113", label: "DDG-113 USS John Finn", nodeType: "Ship" },
+      ],
+      edges: [
+        { source: "Report_Obj_088", target: "DDG-113", label: "包含主体" },
+        { source: "TransitEvent_001", target: "DDG-113", label: "观测对象" },
+      ],
+    },
     properties: {
       航速: "13.5节",
       战术能力: "区域防空",
@@ -88,7 +118,22 @@ const mockOntologyData: OntologyMap = {
   "TAGS-62": {
     type: "Ship",
     title: "USNS Bowditch (TAGS-62)",
-    path: "[情报 Report_088] ━━(伴随目标)━━▶ [TAGS-62]",
+    path: null,
+    traceGraph: {
+      nodes: [
+        { id: "HUMINT2026030584", label: "HUMINT2026030584 冲绳人力情报", nodeType: "IntelligenceReport" },
+        { id: "OSINT2026030588", label: "OSINT2026030588 佐世保开源情报", nodeType: "IntelligenceReport" },
+        { id: "TransitEvent_001", label: "TransitEvent_001 台海过航事件", nodeType: "TransitEvent" },
+        { id: "Sensor_Img_001", label: "Sensor_Img_001 冲绳光学图像", nodeType: "SensorData" },
+        { id: "TAGS-62", label: "TAGS-62 USNS Bowditch", nodeType: "Ship" },
+      ],
+      edges: [
+        { source: "HUMINT2026030584", target: "TAGS-62", label: "伴随目标" },
+        { source: "OSINT2026030588", target: "TAGS-62", label: "伴随目标" },
+        { source: "TransitEvent_001", target: "TAGS-62", label: "观测对象" },
+        { source: "Sensor_Img_001", target: "TAGS-62", label: "关联目标" },
+      ],
+    },
     properties: {
       航速: "12.0节",
       战术能力: "测量与情报支援",
@@ -201,6 +246,123 @@ const ONTOLOGY_VIEW_URL =
   "https://mdp.mydemo.top/mdp/%E6%9C%AC%E4%BD%93%E5%9C%BA%E6%99%AF%E5%BA%93/%E6%BC%94%E7%A4%BA1-%E5%8F%B0%E6%B5%B7%E6%83%85%E5%8A%BF%E6%A8%A1%E6%8B%9F?tab=%E6%9C%AC%E4%BD%93%E5%9B%BE%E8%B0%B1";
 
 // ---------------------------------------------------------------------------
+// 溯源实例图谱 - 传统图谱形态（多 relationship 指向同一目标）
+// ---------------------------------------------------------------------------
+function TraceGraphCircleNode({ data }: NodeProps) {
+  return (
+    <div className="flex flex-col items-center justify-center">
+      <Handle type="target" position={Position.Left} className="!w-2 !h-2 !bg-sky-400 !border-sky-600" />
+      <Handle type="source" position={Position.Right} className="!w-2 !h-2 !bg-sky-400 !border-sky-600" />
+      <div className="flex min-h-[2.5rem] min-w-[2.5rem] max-w-[160px] shrink-0 items-center justify-center rounded-full border-2 border-sky-300 bg-sky-50 px-3 py-2 shadow-sm">
+        <span className="text-[10px] font-medium text-sky-800 text-center leading-tight break-words whitespace-normal">
+          {data?.label ?? ""}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+const traceNodeTypes = { circle: TraceGraphCircleNode };
+
+function TraceInstanceGraphInner({ graph }: { graph: TraceGraphData }) {
+  const { nodes: rawNodes, edges: rawEdges } = graph;
+  const sourceIds = useMemo(
+    () => [...new Set(rawEdges.map((e) => e.source))],
+    [rawEdges]
+  );
+  const targetId = rawEdges[0]?.target ?? "";
+  const sources = useMemo(
+    () => sourceIds.map((id) => rawNodes.find((n) => n.id === id)).filter(Boolean) as { id: string; label: string; nodeType: string }[],
+    [sourceIds, rawNodes]
+  );
+  const targetNode = useMemo(
+    () => rawNodes.find((n) => n.id === targetId),
+    [rawNodes, targetId]
+  );
+
+  const layoutNodes: Node[] = useMemo(() => {
+    const ns: Node[] = [];
+    if (targetNode) {
+      ns.push({
+        id: targetNode.id,
+        type: "circle",
+        position: { x: 320, y: 80 },
+        data: { label: targetNode.label },
+      });
+    }
+    sources.forEach((s, i) => {
+      if (!s) return;
+      const y = 20 + i * 60;
+      ns.push({
+        id: s.id,
+        type: "circle",
+        position: { x: 20, y },
+        data: { label: s.label },
+      });
+    });
+    return ns;
+  }, [rawNodes, targetNode, sources]);
+
+  const layoutEdges: Edge[] = useMemo(() => {
+    return rawEdges.map((e, i) => ({
+      id: `e-${i}`,
+      source: e.source,
+      target: e.target,
+      label: e.label,
+      labelStyle: { fontSize: 10 },
+      labelBgStyle: { fill: "white", fillOpacity: 0.9 },
+      labelBgBorderRadius: 4,
+      labelBgPadding: [4, 2] as [number, number],
+      style: { strokeDasharray: "5,5", stroke: "#38bdf8" },
+      markerEnd: { type: "arrowclosed" as const, color: "#38bdf8" },
+      type: "straight",
+    }));
+  }, [rawEdges]);
+
+  const [nodes, , onNodesChange] = useNodesState(layoutNodes);
+  const [edges, , onEdgesChange] = useEdgesState(layoutEdges);
+
+  if (!rawEdges.length || !targetNode) {
+    return (
+      <div className="flex h-[280px] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-500">
+        暂无溯源关系
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-[280px] w-full rounded-lg border border-slate-200 bg-[#fafafa] bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:12px_12px]">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodeTypes={traceNodeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.2 }}
+        minZoom={0.5}
+        maxZoom={1.5}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
+        proOptions={{ hideAttribution: true }}
+        className="rounded-lg"
+      >
+        <Controls showZoom showFitView showInteractive={false} />
+      </ReactFlow>
+    </div>
+  );
+}
+
+function TraceInstanceGraph({ graph }: { graph: TraceGraphData }) {
+  return (
+    <ReactFlowProvider>
+      <TraceInstanceGraphInner graph={graph} />
+    </ReactFlowProvider>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // 本体溯源弹窗
 // ---------------------------------------------------------------------------
 interface OntologyTraceModalProps {
@@ -221,7 +383,7 @@ function OntologyTraceModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Box className="w-5 h-5 text-slate-600" />
@@ -260,11 +422,13 @@ function OntologyTraceModal({
               </TabsList>
 
               <TabsContent value="instance" className="mt-3 space-y-3">
-                {instance.path && (
+                {instance.traceGraph ? (
+                  <TraceInstanceGraph graph={instance.traceGraph} />
+                ) : instance.path ? (
                   <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 font-mono">
                     {instance.path}
                   </div>
-                )}
+                ) : null}
                 <KeyValueGrid
                   title="属性 (Properties)"
                   data={instance.properties}

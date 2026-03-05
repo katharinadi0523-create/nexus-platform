@@ -46,18 +46,109 @@ export function generateSituationalTraceSteps(userMsg: string): ExecutionStep[] 
     endTime: new Date(currentTime + 2500).toLocaleTimeString(),
     duration: 2500,
     input: {
-      objectType: "IntelligenceReport",
-      filter: {
-        location: ["Okinawa"],
-        keywords: ["Destroyer"],
-        time: "-72h",
+      entry_point: {
+        object_type: "IntelligenceReport",
+        search_pattern: "hybrid_search",
+        search_query: "Destroyer departure",
+        filters: {
+          location: { $in: ["Okinawa", "Sasebo"] },
+          time_window: { $gte: "now-72h" },
+        },
       },
+      traversals: [
+        {
+          edge: "has_event_subject",
+          target_object: "Ship",
+          return_properties: ["hull_number", "ship_class", "combat_capability"],
+        },
+      ],
     },
     output: {
-      matched: [
+      status: "success",
+      data: [
         {
-          id: "Report_Obj_088",
-          content: "冲绳集结: 菲恩号(DDG-113), 鲍迪奇号(TAGS-62)",
+          entry_object: {
+            object_type: "IntelligenceReport",
+            object_id: "HUMINT2026030584",
+            score: 0.96,
+            properties: {
+              location: "Okinawa",
+              report_summary: "HUMINT visual confirmation of naval movements.",
+              confidence_level: "High",
+            },
+          },
+          traversed_paths: {
+            has_event_subject: [
+              {
+                object_type: "Ship",
+                object_id: "TAGS_62",
+                properties: {
+                  hull_number: "TAGS-62",
+                  ship_class: "Training Ship",
+                  combat_capability: "Support",
+                },
+              },
+            ],
+          },
+        },
+        {
+          entry_object: {
+            object_type: "IntelligenceReport",
+            object_id: "OSINT2026030588",
+            score: 0.92,
+            properties: {
+              location: "Sasebo",
+              report_summary: "Visual confirmation of DDG departure, heading 240.",
+              confidence_level: "High",
+            },
+          },
+          traversed_paths: {
+            has_event_subject: [
+              {
+                object_type: "Ship",
+                object_id: "DDG_13",
+                properties: {
+                  hull_number: "DDG-113",
+                  ship_class: "Arleigh Burke",
+                  combat_capability: "Area Air Defense",
+                },
+              },
+            ],
+          },
+        },
+        {
+          entry_object: {
+            object_type: "IntelligenceReport",
+            object_id: "HUMINT20260305105",
+            score: 0.88,
+            properties: {
+              location: "Okinawa",
+              report_summary: "Supplemental HUMINT on same formation.",
+              confidence_level: "Medium",
+            },
+          },
+          traversed_paths: {
+            has_event_subject: [
+              {
+                object_type: "Ship",
+                object_id: "TAGS_62",
+                properties: {
+                  hull_number: "TAGS-62",
+                  ship_class: "Training Ship",
+                  combat_capability: "Support",
+                },
+              },
+              {
+                object_type: "Ship",
+                object_id: "DDG_13",
+                properties: {
+                  hull_number: "DDG-113",
+                  ship_class: "Arleigh Burke",
+                  combat_capability: "Area Air Defense",
+                },
+              },
+            ],
+          },
         },
       ],
     },
@@ -128,19 +219,42 @@ export function generateSituationalTraceSteps(userMsg: string): ExecutionStep[] 
     endTime: new Date(currentTime + 1000).toLocaleTimeString(),
     duration: 1000,
     input: {
-      objectType: "SensorData",
-      filter: {
-        linked_to: "TransitEvent_001",
-        type: "Image",
+      entry_point: {
+        object_type: "SensorData",
+        search_pattern: "filter",
+        search_query: "",
+        filters: {
+          linked_to: "TransitEvent_001",
+          type: "Image",
+        },
       },
     },
     output: {
-      matched: [
+      status: "success",
+      data: [
         {
-          id: "Sensor_Img_001",
-          type: "Image",
-          linked_to: "TransitEvent_001",
-          binary_data: "Image_Binary_Data",
+          entry_object: {
+            object_type: "SensorData",
+            object_id: "Sensor_Img_001",
+            score: 1.0,
+            properties: {
+              type: "Image",
+              linked_to: "TransitEvent_001",
+              format: "JPEG",
+            },
+          },
+        },
+        {
+          entry_object: {
+            object_type: "SensorData",
+            object_id: "Sensor_Img_002",
+            score: 0.95,
+            properties: {
+              type: "Image",
+              linked_to: "TransitEvent_001",
+              format: "JPEG",
+            },
+          },
         },
       ],
     },
