@@ -8,6 +8,7 @@ import {
   Bot,
   Database,
   Key,
+  Layers3,
   Library,
   Network,
   Puzzle,
@@ -18,6 +19,7 @@ import {
   ExternalLink,
   Shield,
   FileText,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalHeader } from "@/components/layout/global-header";
@@ -40,6 +42,12 @@ const menuGroups: MenuGroup[] = [
     title: "项目开发",
     items: [
       {
+        key: "ClawHub",
+        label: "ClawHub",
+        icon: Layers3,
+        href: "/claw-hub",
+      },
+      {
         key: "AppMarketplace",
         label: "应用广场",
         icon: AppWindow,
@@ -56,6 +64,12 @@ const menuGroups: MenuGroup[] = [
   {
     title: "资源管理",
     items: [
+      {
+        key: "Skills",
+        label: "Skills",
+        icon: Sparkles,
+        href: "/skills",
+      },
       {
         key: "MCPManagement",
         label: "MCP管理",
@@ -151,7 +165,11 @@ function Sidebar() {
             <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+                const isActive =
+                  pathname === item.href ||
+                  (item.href === "/claw-hub" && pathname.startsWith("/claw-hub")) ||
+                  (item.href === "/claw-hub" &&
+                    (pathname.startsWith("/cloud-claw") || pathname.startsWith("/cec-claw")));
                 const linkClassName = cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   isActive

@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import {
-  Sparkles,
   ChevronDown,
   Check,
   HelpCircle,
@@ -26,7 +25,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
@@ -47,6 +45,8 @@ export interface ModelSelectorProps {
   modelParams?: ModelParams;
   onModelChange?: (model: string) => void;
   onParamsChange?: (params: ModelParams) => void;
+  showParams?: boolean;
+  triggerClassName?: string;
 }
 
 const presetModels = PRESET_MODEL_IDS;
@@ -99,16 +99,22 @@ const getModelIcon = (modelName: string) => {
 };
 
 export function ModelSelector({
-  selectedModel = "Qwen3-32B",
+  selectedModel,
   modelParams,
   onModelChange,
   onParamsChange,
+  showParams = true,
+  triggerClassName,
 }: ModelSelectorProps) {
+  const initialModel = selectedModel ?? "Qwen3-32B";
+  const isModelControlled = selectedModel !== undefined;
+  const isParamsControlled = modelParams !== undefined;
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"preset" | "exclusive">(
-    exclusiveModels.includes(selectedModel) ? "exclusive" : "preset"
+    exclusiveModels.includes(initialModel) ? "exclusive" : "preset"
   );
-  const [currentModel, setCurrentModel] = useState(selectedModel);
+  const [uncontrolledModel, setUncontrolledModel] = useState(initialModel);
+  const currentModel = isModelControlled ? selectedModel : uncontrolledModel;
 
   const currentSchema = useMemo(() => getModelSchema(currentModel), [currentModel]);
 
@@ -118,39 +124,41 @@ export function ModelSelector({
     [currentModel]
   );
 
-  const [params, setParams] = useState<ModelParams>(() => ({
-    ...defaultParams,
+  const [uncontrolledParams, setUncontrolledParams] = useState<ModelParams>(() => ({
+    ...getDefaultModelParams(initialModel),
     ...modelParams,
     current_time: modelParams?.current_time ?? false,
     sp_anti_leak: modelParams?.sp_anti_leak ?? false,
   }));
-
-  // Keep controlled prop in sync (preserve global toggles if not in modelParams)
-  useEffect(() => {
-    if (!modelParams) return;
-    setParams((prev) => ({
-      ...prev,
-      ...modelParams,
-      current_time: modelParams.current_time ?? prev.current_time ?? false,
-      sp_anti_leak: modelParams.sp_anti_leak ?? prev.sp_anti_leak ?? false,
-    }));
-  }, [modelParams]);
+  const params = useMemo(
+    () =>
+      isParamsControlled
+        ? {
+            ...defaultParams,
+            ...modelParams,
+            current_time: modelParams.current_time ?? false,
+            sp_anti_leak: modelParams.sp_anti_leak ?? false,
+          }
+        : uncontrolledParams,
+    [defaultParams, isParamsControlled, modelParams, uncontrolledParams]
+  );
 
   // 当模型改变时，重置参数为默认值
   const handleModelSelect = (model: string) => {
-    setCurrentModel(model);
     const newDefaultParams = getDefaultModelParams(model);
-    setParams({
+    const nextParams = {
       ...newDefaultParams,
       current_time: params.current_time ?? false,
       sp_anti_leak: params.sp_anti_leak ?? false,
-    });
+    };
+    if (!isModelControlled) {
+      setUncontrolledModel(model);
+    }
+    if (!isParamsControlled) {
+      setUncontrolledParams(nextParams);
+    }
     onModelChange?.(model);
-    onParamsChange?.({
-      ...newDefaultParams,
-      current_time: params.current_time ?? false,
-      sp_anti_leak: params.sp_anti_leak ?? false,
-    });
+    onParamsChange?.(nextParams);
 
     // 根据选择的模型切换 tab
     if (exclusiveModels.includes(model)) {
@@ -179,7 +187,9 @@ export function ModelSelector({
       };
     }
 
-    setParams(newParams);
+    if (!isParamsControlled) {
+      setUncontrolledParams(newParams);
+    }
     onParamsChange?.(newParams);
   };
 
@@ -281,9 +291,16 @@ export function ModelSelector({
     <TooltipProvider delayDuration={0}>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-          {getModelIcon(currentModel)}
-          <span className="font-medium">{currentModel}</span>
+        <button
+          className={cn(
+            "flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition-colors",
+            triggerClassName
+          )}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            {getModelIcon(currentModel)}
+            <span className="truncate font-medium">{currentModel}</span>
+          </span>
           <ChevronDown className="w-4 h-4 text-slate-500" />
         </button>
       </PopoverTrigger>
@@ -387,61 +404,62 @@ export function ModelSelector({
             </Tabs>
           </div>
 
-          {/* Section 2: 参数配置 */}
-          <div className="mt-4">
-            <h3 className="text-sm font-medium text-slate-900 mb-2">
-              参数配置
-            </h3>
-            <div className="space-y-4">
-              {currentSchema.supportedParams.map((p) => (
-                <div key={p.key}>{renderParam(p)}</div>
-              ))}
+          {showParams && (
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-slate-900 mb-2">
+                参数配置
+              </h3>
+              <div className="space-y-4">
+                {currentSchema.supportedParams.map((p) => (
+                  <div key={p.key}>{renderParam(p)}</div>
+                ))}
 
-              {/* 全局开关：当前时间、SP防泄漏指令（所有模型均展示，默认关闭） */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <Label className="text-xs text-slate-700">当前时间</Label>
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <button type="button" className="cursor-help">
-                          <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
-                        {TOOLTIP_CONTENT.current_time}
-                      </TooltipContent>
-                    </Tooltip>
+                {/* 全局开关：当前时间、SP防泄漏指令（所有模型均展示，默认关闭） */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-xs text-slate-700">当前时间</Label>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="cursor-help">
+                            <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
+                          {TOOLTIP_CONTENT.current_time}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Switch
+                      checked={params.current_time ?? false}
+                      onCheckedChange={(checked) => handleParamChange("current_time", checked)}
+                    />
                   </div>
-                  <Switch
-                    checked={params.current_time ?? false}
-                    onCheckedChange={(checked) => handleParamChange("current_time", checked)}
-                  />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <Label className="text-xs text-slate-700">SP防泄漏指令</Label>
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <button type="button" className="cursor-help">
-                          <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
-                        {TOOLTIP_CONTENT.sp_anti_leak}
-                      </TooltipContent>
-                    </Tooltip>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-xs text-slate-700">SP防泄漏指令</Label>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="cursor-help">
+                            <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
+                          {TOOLTIP_CONTENT.sp_anti_leak}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Switch
+                      checked={params.sp_anti_leak ?? false}
+                      onCheckedChange={(checked) => handleParamChange("sp_anti_leak", checked)}
+                    />
                   </div>
-                  <Switch
-                    checked={params.sp_anti_leak ?? false}
-                    onCheckedChange={(checked) => handleParamChange("sp_anti_leak", checked)}
-                  />
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </PopoverContent>
     </Popover>

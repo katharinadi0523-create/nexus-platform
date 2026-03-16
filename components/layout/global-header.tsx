@@ -1,64 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Sparkles, ChevronRight, Search, HelpCircle, AlertCircle, User } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { HelpCircle, AlertCircle, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-
-// Mock data for context switcher
-interface Project {
-  id: string;
-  name: string;
-}
-
-interface Organization {
-  id: string;
-  name: string;
-  projects: Project[];
-}
-
-const organizations: Organization[] = [
-  {
-    id: "app-dev",
-    name: "应用开发平台",
-    projects: [{ id: "app-dev-pm", name: "应用开发PM" }],
-  },
-  {
-    id: "future",
-    name: "未来事业部",
-    projects: [
-      { id: "research", name: "科研智能体研发" },
-      { id: "gf", name: "GF项目" },
-    ],
-  },
-  {
-    id: "data-gov",
-    name: "多模态数据治理平台",
-    projects: [{ id: "military", name: "军工项目" }],
-  },
-  {
-    id: "model",
-    name: "模型平台",
-    projects: [{ id: "model-train", name: "模型训练项目A" }],
-  },
-  {
-    id: "base",
-    name: "BASE",
-    projects: [],
-  },
-];
-
-// Current context (default to first project)
-const defaultContext = {
-  organization: organizations[0],
-  project: organizations[0].projects[0],
-};
 
 // Platform navigation items
 interface PlatformNavItem {
@@ -80,14 +30,6 @@ const platformNavItems: PlatformNavItem[] = [
 
 export function GlobalHeader() {
   const pathname = usePathname();
-  const router = useRouter();
-  const [selectedOrg, setSelectedOrg] = useState<Organization | null>(
-    defaultContext.organization
-  );
-  const [selectedProject, setSelectedProject] = useState<Project | null>(
-    defaultContext.project
-  );
-  const [isContextSwitcherOpen, setIsContextSwitcherOpen] = useState(false);
 
   // Determine active platform based on pathname
   const getActivePlatform = () => {
@@ -95,7 +37,11 @@ export function GlobalHeader() {
       pathname === "/" ||
       pathname.startsWith("/agent") ||
       pathname.startsWith("/agent-editor") ||
+      pathname.startsWith("/claw-hub") ||
+      pathname.startsWith("/cloud-claw") ||
+      pathname.startsWith("/cec-claw") ||
       pathname.startsWith("/app-marketplace") ||
+      pathname.startsWith("/skills") ||
       pathname.startsWith("/mcp-management") ||
       pathname.startsWith("/tool-marketplace") ||
       pathname.startsWith("/workflow") ||
@@ -117,13 +63,6 @@ export function GlobalHeader() {
   };
 
   const activePlatform = getActivePlatform();
-
-  const handleProjectSelect = (org: Organization, project: Project) => {
-    setSelectedOrg(org);
-    setSelectedProject(project);
-    setIsContextSwitcherOpen(false);
-    // Here you could navigate or update context based on selection
-  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-[60px] bg-white border-b border-gray-200">
