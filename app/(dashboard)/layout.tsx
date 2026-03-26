@@ -66,7 +66,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       {
         key: "Skills",
-        label: "Skills",
+        label: "SkillHub",
         icon: Sparkles,
         href: "/skills",
       },
