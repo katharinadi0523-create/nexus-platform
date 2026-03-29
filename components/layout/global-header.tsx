@@ -38,6 +38,7 @@ export function GlobalHeader() {
       pathname.startsWith("/agent") ||
       pathname.startsWith("/agent-editor") ||
       pathname.startsWith("/claw-hub") ||
+      pathname.startsWith("/claw-hub-next") ||
       pathname.startsWith("/cloud-claw") ||
       pathname.startsWith("/cec-claw") ||
       pathname.startsWith("/app-marketplace") ||
