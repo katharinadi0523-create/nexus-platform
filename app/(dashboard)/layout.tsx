@@ -48,6 +48,12 @@ const menuGroups: MenuGroup[] = [
         href: "/claw-hub",
       },
       {
+        key: "ClawHubNext",
+        label: "ClawHub 新版",
+        icon: Sparkles,
+        href: "/claw-hub-next",
+      },
+      {
         key: "AppMarketplace",
         label: "应用广场",
         icon: AppWindow,
@@ -167,7 +173,7 @@ function Sidebar() {
                 const Icon = item.icon;
                 const isActive =
                   pathname === item.href ||
-                  (item.href === "/claw-hub" && pathname.startsWith("/claw-hub")) ||
+                  pathname.startsWith(`${item.href}/`) ||
                   (item.href === "/claw-hub" &&
                     (pathname.startsWith("/cloud-claw") || pathname.startsWith("/cec-claw")));
                 const linkClassName = cn(

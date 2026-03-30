@@ -259,7 +259,7 @@ export function TraceView({ steps }: TraceViewProps) {
         const theme = getStepColorTheme(step.stepType, step);
 
         return (
-          <div key={step.id} className="relative flex gap-4">
+          <div key={step.id} className="relative flex gap-3 sm:gap-4">
             {/* 左侧时间轴 */}
             <div className="flex flex-col items-center">
               {/* 图标 */}
@@ -298,43 +298,47 @@ export function TraceView({ steps }: TraceViewProps) {
                   onClick={() => step.stepType !== "thought" && step.stepType !== "final_answer" && toggleStep(step.id)}
                   disabled={step.stepType === "thought" || step.stepType === "final_answer"}
                   className={cn(
-                    "w-full px-4 py-3 flex items-center justify-between gap-3 text-left transition-colors rounded-t-lg",
+                    "w-full rounded-t-lg px-4 py-3 text-left transition-colors",
                     step.stepType === "thought" || step.stepType === "final_answer"
                       ? "cursor-default" 
                       : "hover:bg-slate-50/50 cursor-pointer"
                   )}
                 >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    {step.stepType !== "thought" && step.stepType !== "final_answer" && (
-                      isExpanded ? (
-                        <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                      )
-                    )}
-                    <span className="text-sm font-medium text-slate-900 truncate">
-                      {step.stepName}
-                    </span>
-                    <Badge
-                      variant="secondary"
-                      className={cn("text-xs flex-shrink-0", theme.badge)}
-                    >
-                      {step.stepType === "thought"
-                        ? "思考"
-                        : step.stepType === "tool_call"
-                        ? "工具调用"
-                        : step.stepType === "rag_retrieval"
-                        ? "知识检索"
-                        : step.stepType === "ontology_query"
-                        ? "本体检索"
-                        : "最终答案"}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    {getStatusIcon(step.status)}
-                    <span className="text-xs text-slate-500">
-                      {formatDuration(step.duration)}
-                    </span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      {step.stepType !== "thought" && step.stepType !== "final_answer" && (
+                        isExpanded ? (
+                          <ChevronDown className="w-4 h-4 flex-shrink-0 text-slate-400" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 flex-shrink-0 text-slate-400" />
+                        )
+                      )}
+                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                        <span className="min-w-0 whitespace-normal break-words text-sm font-medium leading-6 text-slate-900">
+                          {step.stepName}
+                        </span>
+                        <Badge
+                          variant="secondary"
+                          className={cn("text-xs flex-shrink-0", theme.badge)}
+                        >
+                          {step.stepType === "thought"
+                            ? "思考"
+                            : step.stepType === "tool_call"
+                            ? "工具调用"
+                            : step.stepType === "rag_retrieval"
+                            ? "知识检索"
+                            : step.stepType === "ontology_query"
+                            ? "本体检索"
+                            : "最终答案"}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-3">
+                      {getStatusIcon(step.status)}
+                      <span className="text-xs text-slate-500">
+                        {formatDuration(step.duration)}
+                      </span>
+                    </div>
                   </div>
                 </button>
 
@@ -379,7 +383,7 @@ export function TraceView({ steps }: TraceViewProps) {
                   isExpanded && (
                     <div className="px-4 pb-4 space-y-4 border-t border-slate-200">
                       {/* 时间信息 */}
-                      <div className="grid grid-cols-2 gap-4 pt-3 text-xs text-slate-600">
+                      <div className="grid grid-cols-1 gap-3 pt-3 text-xs text-slate-600 sm:grid-cols-2">
                         <div>
                           <span className="font-medium">开始时间:</span>{" "}
                           <span className="text-slate-500">{step.startTime}</span>

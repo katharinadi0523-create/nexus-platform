@@ -8,7 +8,6 @@ import {
   HelpCircle,
   AlertTriangle,
   Box,
-  ExternalLink,
 } from "lucide-react";
 import {
   Popover,
@@ -341,7 +340,16 @@ export function ModelSelector({
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={8} className="max-w-72 p-3 text-xs text-slate-700">
-                        本项目在模型开发平台「在线服务」中部署的大语言模型。若该模型不支持深度思考或工具调用，Agent 的规划与执行能力可能受限，输出效果可能不稳定
+                        <span>
+                          本项目在模型开发平台「
+                          <a
+                            href="/model-dev/online-services"
+                            className="text-blue-600 hover:text-blue-700 underline"
+                          >
+                            在线服务
+                          </a>
+                          」中部署的大语言模型。若该模型不支持深度思考或工具调用，Agent 的规划与执行能力可能受限，输出效果可能不稳定
+                        </span>
                       </TooltipContent>
                     </Tooltip>
                   </span>
@@ -387,19 +395,6 @@ export function ModelSelector({
                     )}
                   </button>
                 ))}
-                
-                {/* 在线模型服务链接 */}
-                <div className="mt-4 pt-4 border-t border-slate-200">
-                  <a
-                    href="/model-dev/online-services"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-md transition-colors"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    <span>在线模型服务</span>
-                  </a>
-                </div>
               </TabsContent>
             </Tabs>
           </div>

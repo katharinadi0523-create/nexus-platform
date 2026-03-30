@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -149,43 +149,51 @@ export default function AgentDetailPage() {
   // Get agent type from agent-data.ts (source of truth)
   const agentProfile = agentId ? getAgentById(agentId) : null;
   const isWorkflow = agentProfile?.type === "workflow";
+  const initialDisplayName = agentData?.name || agentProfile?.name || "加载中...";
+  const [displayName, setDisplayName] = useState(initialDisplayName);
+
+  useEffect(() => {
+    setDisplayName(initialDisplayName);
+  }, [initialDisplayName]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="flex h-screen flex-col overflow-hidden bg-[linear-gradient(180deg,#fbfcfe_0%,#f5f7fb_45%,#eef4ff_100%)]">
       {/* Header - Fixed */}
-      <header className="relative flex h-16 flex-none items-center justify-between border-b border-slate-200 bg-white px-6">
+      <header className="relative flex h-20 flex-none items-center justify-between border-b border-slate-200/80 bg-white/80 px-6 backdrop-blur">
         {/* Left: Back Button & Title */}
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
-            className="gap-2 pl-0 hover:bg-transparent hover:text-primary"
+            className="gap-2 rounded-2xl border border-slate-200 bg-white px-3 shadow-sm hover:bg-slate-50 hover:text-slate-900"
             onClick={() => router.push("/agent")}
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="text-sm font-medium">返回</span>
           </Button>
           <div className="h-6 w-px bg-border" />
-          <span className="font-semibold text-base">{agentData?.name || agentProfile?.name || "加载中..."}</span>
+          <div>
+            <span className="text-base font-semibold text-slate-950">{displayName}</span>
+          </div>
         </div>
 
         {/* Center: Tab Switcher (Absolutely Centered) */}
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+        <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-slate-200/80 bg-white/90 p-1.5 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.35)]">
           <button
             onClick={() => setActiveTab("config")}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === "config"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-slate-900 text-white shadow-sm"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             }`}
           >
             应用配置
           </button>
           <button
             onClick={() => setActiveTab("logs")}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === "logs"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-slate-900 text-white shadow-sm"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             }`}
           >
             日志与调优
@@ -193,13 +201,13 @@ export default function AgentDetailPage() {
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <ProtectionStatusBadge
             protectionTaskName="GF专属防护"
             protectionTaskId="1"
             protectionTypes={["policy", "lexicon"]}
           />
-          <Button className="bg-slate-900 text-white hover:bg-slate-800">
+          <Button className="rounded-2xl bg-slate-900 px-4 text-white shadow-[0_18px_40px_-24px_rgba(15,23,42,0.8)] hover:bg-slate-800">
             <Rocket className="w-4 h-4" />
             发布
           </Button>
@@ -207,12 +215,16 @@ export default function AgentDetailPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex flex-1 overflow-hidden">
+      <main className="flex min-h-0 flex-1 overflow-hidden">
         {activeTab === "config" ? (
           isWorkflow ? (
             <WorkflowEditor agentId={agentId} />
           ) : (
-            <AutonomousEditor agentId={agentId} initialAgentData={agentData || undefined} />
+            <AutonomousEditor
+              agentId={agentId}
+              initialAgentData={agentData || undefined}
+              onNameChange={setDisplayName}
+            />
           )
         ) : (
           <AgentLogsView />

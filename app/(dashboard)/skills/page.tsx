@@ -1,8 +1,16 @@
 "use client";
 
-import { ChangeEvent, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowUp,
+  ChangeEvent,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  AlertTriangle,
   BadgeCheck,
   BellRing,
   Bot,
@@ -15,17 +23,14 @@ import {
   Download,
   FileCode2,
   FilePenLine,
-  FilePlus2,
   FileText,
   Folder,
   FolderOpen,
   FolderPlus,
   LayoutGrid,
   Mail,
-  Mic,
   MessagesSquare,
   PanelLeft,
-  Paperclip,
   Plus,
   Rocket,
   Save,
@@ -53,6 +58,7 @@ import {
 } from "@/components/ui/card";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -61,10 +67,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  SkillsFoundryTab,
+  type SkillsFoundryTemplateSeed,
+} from "@/components/skills/skills-foundry-tab";
 import {
   Tooltip,
   TooltipContent,
@@ -74,12 +83,16 @@ import {
 import { cn } from "@/lib/utils";
 
 type SkillSource = "template" | "blank" | "imported";
-type SkillStatus = "draft" | "reviewing" | "published";
+type SkillStatus = "draft" | "reviewing" | "published" | "reviewFailed";
 type MarketplaceSourceType = "platform" | "org";
 type MarketplaceSourceFilter = "all" | MarketplaceSourceType | "favorite";
 type SkillsExperienceMode = "mvp" | "v2";
 type SkillsTab = "marketplace" | "mine" | "foundry";
 type MarketplaceSortMode = "downloads" | "references" | "updatedAt";
+type MySkillStatusFilter = "all" | "reviewing" | "published" | "reviewFailed";
+type SkillImportMode = "local" | "url";
+type SkillImportUrlSource = "github" | "skills.sh" | "clawhub";
+type SkillReleaseMode = "publish" | "update";
 type AudienceCategory =
   | "ai"
   | "dev"
@@ -132,6 +145,7 @@ interface MySkill {
   updatedBy: string;
   version?: string;
   publishedTemplateId?: string;
+  hasPublishedHistory: boolean;
 }
 
 interface SkillBundle {
@@ -158,14 +172,6 @@ interface TreeFileEntry {
   skillId: string;
 }
 
-interface FoundryDirectory {
-  id: string;
-  name: string;
-  templateId?: string;
-  source: "preset" | "marketplace";
-  files: SkillFile[];
-}
-
 const CATEGORY_OPTIONS = [
   { value: "通用", label: "通用" },
   { value: "开发工具", label: "开发工具" },
@@ -176,9 +182,45 @@ const CATEGORY_OPTIONS = [
   { value: "安全合规", label: "安全合规" },
 ];
 
+const MY_SKILL_STATUS_FILTERS: Array<{ value: MySkillStatusFilter; label: string }> = [
+  { value: "all", label: "全部" },
+  { value: "reviewing", label: "审核中" },
+  { value: "published", label: "已上架" },
+  { value: "reviewFailed", label: "审核失败" },
+];
+
 const CEC_CLAW_INSTANCE = "华东专属 CEC-Claw";
 const ALL_SKILLS_VALUE = "__all__";
 const CURRENT_SKILL_EDITOR = "楠不难";
+const IMPORT_URL_SOURCE_OPTIONS: Array<{
+  value: SkillImportUrlSource;
+  label: string;
+  hint: string;
+  icon: LucideIcon;
+  accentClass: string;
+}> = [
+  {
+    value: "github",
+    label: "GitHub导入",
+    hint: "支持 github.com/<组织>/<仓库> 形式",
+    icon: FileCode2,
+    accentClass: "border-indigo-200/80 bg-indigo-50/90 text-indigo-700",
+  },
+  {
+    value: "skills.sh",
+    label: "skills.sh导入",
+    hint: "支持 skills.sh/<组织>/<仓库>/<skill> 形式",
+    icon: Sparkles,
+    accentClass: "border-amber-200/80 bg-amber-50/90 text-amber-700",
+  },
+  {
+    value: "clawhub",
+    label: "Clawhub导入",
+    hint: "支持 clawhub.ai/<作者>/<skill> 形式",
+    icon: Bot,
+    accentClass: "border-emerald-200/80 bg-emerald-50/90 text-emerald-700",
+  },
+];
 const AGENT_REFERENCE_POOL = [
   "经营分析Agent",
   "项目周报Agent",
@@ -200,74 +242,6 @@ const AGENT_REFERENCE_POOL = [
   "项目协调Agent",
   "蓝信通知Agent",
   "值班信息Agent",
-];
-
-const INITIAL_FOUNDRY_DIRECTORIES: FoundryDirectory[] = [
-  createFoundryDirectory({
-    id: "skill-creator",
-    name: "skill-creator",
-    source: "preset",
-    files: [
-      {
-        path: "SKILL.md",
-        content: `---
-name: skill-creator
-description: "Create new skills, modify and improve existing skills."
----
-
-# Skill Creator
-
-Use this workspace to create or optimize a skill.
-`,
-      },
-      { path: "agents/README.md", content: "# agents\n\nStore agent prompts and usage notes here.\n" },
-      { path: "assets/README.md", content: "# assets\n\nStore examples, screenshots and snippets here.\n" },
-      { path: "eval-viewer/README.md", content: "# eval-viewer\n\nStore evaluation views and review notes here.\n" },
-      { path: "references/README.md", content: "# references\n\nStore reference materials here.\n" },
-      { path: "scripts/bootstrap.ts", content: "export function bootstrapSkill() {\n  return 'skill-creator';\n}\n" },
-    ],
-  }),
-  createFoundryDirectory({
-    id: "xlsx",
-    name: "xlsx",
-    source: "preset",
-    files: [
-      {
-        path: "SKILL.md",
-        content: `---
-name: xlsx
-description: "Process spreadsheet-heavy tasks."
----
-
-# xlsx
-
-Use this skill when the task is centered on spreadsheet output.
-`,
-      },
-      { path: "scripts/normalize-sheet.ts", content: "export function normalizeSheet() {\n  return 'normalized';\n}\n" },
-    ],
-  }),
-  createFoundryDirectory({
-    id: "theme-factory",
-    name: "theme-factory",
-    source: "preset",
-    files: [
-      {
-        path: "SKILL.md",
-        content: `---
-name: theme-factory
-description: "Apply a consistent theme across outputs."
----
-
-# theme-factory
-
-Use this skill to apply reusable presentation themes.
-`,
-      },
-      { path: "assets/palette.md", content: "# palette\n\n- Primary\n- Secondary\n- Accent\n" },
-      { path: "scripts/apply-theme.ts", content: "export function applyTheme() {\n  return 'theme-applied';\n}\n" },
-    ],
-  }),
 ];
 
 const SOURCE_FILTERS = [
@@ -328,6 +302,7 @@ function createMySkill(input: {
   updatedBy?: string;
   version?: string;
   publishedTemplateId?: string;
+  hasPublishedHistory?: boolean;
 }) {
   const files = cloneFiles(input.files, input.id);
   const firstFileId = files[0]?.id ?? "";
@@ -349,23 +324,8 @@ function createMySkill(input: {
     updatedBy: input.updatedBy ?? CURRENT_SKILL_EDITOR,
     version: input.version,
     publishedTemplateId: input.publishedTemplateId,
+    hasPublishedHistory: input.hasPublishedHistory ?? input.status === "published",
   } satisfies MySkill;
-}
-
-function createFoundryDirectory(input: {
-  id: string;
-  name: string;
-  source: "preset" | "marketplace";
-  templateId?: string;
-  files: Array<{ path: string; content: string }>;
-}) {
-  return {
-    id: input.id,
-    name: input.name,
-    source: input.source,
-    templateId: input.templateId,
-    files: input.files.map((file) => createFile(file.path, file.content, `foundry-${input.id}`)),
-  } satisfies FoundryDirectory;
 }
 
 function buildReferencedAgents(seedIndex: number, count: number) {
@@ -1046,6 +1006,8 @@ const initialMySkills: MySkill[] = [
     category: "通讯协作",
     tags: ["周报", "运营"],
     source: "blank",
+    status: "reviewing",
+    version: "1.0",
     files: [
       createFile(
         "START.md",
@@ -1164,6 +1126,8 @@ description: "为 AI 产线项目生成规范、正式、可审批的公文与�
     category: "开发工具",
     tags: ["MCP", "联调", "接口", "排障"],
     source: "imported",
+    status: "reviewFailed",
+    version: "1.1",
     files: [
       createFile(
         "START.md",
@@ -1216,6 +1180,8 @@ description: "沉淀 MCP 联调流程、检查单和问题记录。"
     category: "安全合规",
     tags: ["质检", "审校", "合规"],
     source: "template",
+    status: "draft",
+    version: "1.0",
     files: [
       createFile(
         "START.md",
@@ -1364,6 +1330,69 @@ function normalizeImportedPath(path: string) {
   }
 
   return segments[0] ?? "SKILL.md";
+}
+
+function getImportUrlSourceLabel(source: SkillImportUrlSource) {
+  switch (source) {
+    case "github":
+      return "GitHub";
+    case "skills.sh":
+      return "skills.sh";
+    default:
+      return "Clawhub";
+  }
+}
+
+function inferSkillImportUrlSource(value: string): SkillImportUrlSource | null {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (hostname === "github.com") {
+      return "github";
+    }
+
+    if (hostname === "skills.sh") {
+      return "skills.sh";
+    }
+
+    if (hostname === "clawhub.ai") {
+      return "clawhub";
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function formatImportedSkillName(rawSegment: string) {
+  const decoded = decodeURIComponent(rawSegment).replace(/[-_]+/g, " ").trim();
+  return decoded || "imported skill";
+}
+
+function extractSkillNameFromUrl(url: URL, source: SkillImportUrlSource) {
+  const segments = url.pathname.split("/").filter(Boolean);
+
+  if (source === "github") {
+    return formatImportedSkillName(segments[1] ?? segments.at(-1) ?? "github-skill");
+  }
+
+  return formatImportedSkillName(segments.at(-1) ?? "imported-skill");
+}
+
+function isValidSkillImportUrlPath(url: URL, source: SkillImportUrlSource) {
+  const segments = url.pathname.split("/").filter(Boolean);
+
+  if (source === "github") {
+    return segments.length >= 2;
+  }
+
+  if (source === "skills.sh") {
+    return segments.length >= 3;
+  }
+
+  return segments.length >= 2;
 }
 
 type AudienceVisualMeta = {
@@ -1533,11 +1562,46 @@ function suggestNextVersion(version?: string) {
   return segments.join(".");
 }
 
+function hasPublishedHistory(
+  skill: Pick<MySkill, "status" | "publishedTemplateId" | "hasPublishedHistory">
+) {
+  return skill.status === "published" || skill.hasPublishedHistory || Boolean(skill.publishedTemplateId);
+}
+
+function getSkillReleaseActionMeta(
+  skill: Pick<MySkill, "status" | "publishedTemplateId" | "hasPublishedHistory">
+) {
+  if (skill.status === "reviewing") {
+    return {
+      mode: (hasPublishedHistory(skill) ? "update" : "publish") as const,
+      label: "审核中",
+      icon: Clock3,
+      disabled: true,
+    };
+  }
+
+  if (!hasPublishedHistory(skill)) {
+    return {
+      mode: "publish" as const,
+      label: "发布",
+      icon: Rocket,
+      disabled: false,
+    };
+  }
+
+  return {
+    mode: "update" as const,
+    label: skill.status === "published" ? "更新" : "更新发布",
+    icon: Upload,
+    disabled: false,
+  };
+}
+
 function getSkillStatusMeta(status: SkillStatus) {
   switch (status) {
     case "published":
       return {
-        label: "已发布",
+        label: "已上架",
         icon: BadgeCheck,
         className: "text-emerald-700",
       };
@@ -1547,12 +1611,35 @@ function getSkillStatusMeta(status: SkillStatus) {
         icon: Clock3,
         className: "text-sky-700",
       };
+    case "reviewFailed":
+      return {
+        label: "审核失败",
+        icon: X,
+        className: "text-rose-700",
+      };
     default:
       return {
         label: "未发布",
         icon: FilePenLine,
         className: "text-amber-700",
       };
+  }
+}
+
+function getMySkillStatusFilterClass(filterValue: MySkillStatusFilter, active: boolean) {
+  if (!active) {
+    return "border-transparent bg-transparent text-slate-500 hover:border-slate-200/80 hover:bg-white hover:text-slate-900";
+  }
+
+  switch (filterValue) {
+    case "reviewing":
+      return "border-sky-200/80 bg-sky-50 text-sky-700 shadow-[0_14px_26px_-24px_rgba(14,165,233,0.46)]";
+    case "published":
+      return "border-emerald-200/80 bg-emerald-50 text-emerald-700 shadow-[0_14px_26px_-24px_rgba(16,185,129,0.42)]";
+    case "reviewFailed":
+      return "border-rose-200/80 bg-rose-50 text-rose-700 shadow-[0_14px_26px_-24px_rgba(244,63,94,0.38)]";
+    default:
+      return "border-slate-200/90 bg-white text-slate-900 shadow-[0_14px_26px_-24px_rgba(15,23,42,0.18)]";
   }
 }
 
@@ -1645,6 +1732,7 @@ export default function SkillsPage() {
   const [focusedSkillId, setFocusedSkillId] = useState(initialMySkills[0]?.id ?? "");
   const [marketSearch, setMarketSearch] = useState("");
   const [mySkillSearch, setMySkillSearch] = useState("");
+  const [mySkillStatusFilter, setMySkillStatusFilter] = useState<MySkillStatusFilter>("all");
   const [marketSourceFilter, setMarketSourceFilter] = useState<MarketplaceSourceFilter>("all");
   const [marketSortMode, setMarketSortMode] = useState<MarketplaceSortMode>("downloads");
   const [audienceCategoryFilter, setAudienceCategoryFilter] =
@@ -1653,32 +1741,25 @@ export default function SkillsPage() {
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [updateTargetSkillId, setUpdateTargetSkillId] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTargetSkillId, setDeleteTargetSkillId] = useState("");
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importMode, setImportMode] = useState<SkillImportMode>("local");
+  const [importUrlSource, setImportUrlSource] = useState<SkillImportUrlSource>("github");
+  const [importUrlValue, setImportUrlValue] = useState("");
   const [updateVersionInput, setUpdateVersionInput] = useState("");
   const [updateZipFile, setUpdateZipFile] = useState<File | null>(null);
-  const [foundryDirectories, setFoundryDirectories] = useState<FoundryDirectory[]>(
-    INITIAL_FOUNDRY_DIRECTORIES
-  );
-  const [foundrySearch, setFoundrySearch] = useState("");
-  const [selectedFoundryDirectoryId, setSelectedFoundryDirectoryId] = useState(
-    INITIAL_FOUNDRY_DIRECTORIES[0]?.id ?? ""
-  );
-  const [foundryPrompt, setFoundryPrompt] = useState("");
-  const [foundryAttachmentNames, setFoundryAttachmentNames] = useState<string[]>([]);
-  const [foundryActiveFileId, setFoundryActiveFileId] = useState("");
-  const [foundryExpandedFolders, setFoundryExpandedFolders] = useState<Record<string, boolean>>({});
-  const [isFoundryTreeVisible, setIsFoundryTreeVisible] = useState(true);
-  const [isFoundryEditorVisible, setIsFoundryEditorVisible] = useState(false);
-  const [foundryCreateMenuOpen, setFoundryCreateMenuOpen] = useState(false);
+  const [releaseMode, setReleaseMode] = useState<SkillReleaseMode>("publish");
+  const [pendingFoundryTemplate, setPendingFoundryTemplate] =
+    useState<SkillsFoundryTemplateSeed | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
-  const foundryAttachmentInputRef = useRef<HTMLInputElement>(null);
-  const foundryUploadFilesInputRef = useRef<HTMLInputElement>(null);
-  const foundryUploadFolderInputRef = useRef<HTMLInputElement>(null);
+  const updateZipInputRef = useRef<HTMLInputElement>(null);
+  const reviewApprovalTimersRef = useRef<Record<string, number>>({});
   const useUnifiedSkillsManagementView = true;
 
   const deferredMarketSearch = useDeferredValue(marketSearch);
   const deferredMySkillSearch = useDeferredValue(mySkillSearch);
   const deferredFileSearch = useDeferredValue(fileSearch);
-  const deferredFoundrySearch = useDeferredValue(foundrySearch);
   const isAllSkillsSelected = selectedSkillId === ALL_SKILLS_VALUE;
   const isMvpMode = experienceMode === "mvp";
 
@@ -1694,15 +1775,15 @@ export default function SkillsPage() {
     }
   }, [activeTab, isMvpMode]);
 
-  useEffect(() => {
-    const folderInput = foundryUploadFolderInputRef.current;
-    if (!folderInput) {
-      return;
-    }
-
-    folderInput.setAttribute("webkitdirectory", "");
-    folderInput.setAttribute("directory", "");
-  }, []);
+  useEffect(
+    () => () => {
+      Object.values(reviewApprovalTimersRef.current).forEach((timerId) => {
+        window.clearTimeout(timerId);
+      });
+      reviewApprovalTimersRef.current = {};
+    },
+    []
+  );
 
   const activeSkill = useMemo(
     () =>
@@ -1712,10 +1793,117 @@ export default function SkillsPage() {
     [focusedSkillId, isAllSkillsSelected, mySkills, selectedSkillId]
   );
 
+  const updateTargetSkill = useMemo(
+    () => mySkills.find((skill) => skill.id === updateTargetSkillId) ?? null,
+    [mySkills, updateTargetSkillId]
+  );
+  const deleteTargetSkill = useMemo(
+    () => mySkills.find((skill) => skill.id === deleteTargetSkillId) ?? null,
+    [deleteTargetSkillId, mySkills]
+  );
+
+  const updateCurrentVersion = updateTargetSkill?.version ?? "1.0";
+  const isPublishRelease = releaseMode === "publish";
+  const updateZipError =
+    updateZipFile && !updateZipFile.name.toLowerCase().endsWith(".zip")
+      ? "仅支持上传 zip 包"
+      : "";
+  const updateVersionError = useMemo(() => {
+    if (!updateTargetSkill) {
+      return "";
+    }
+
+    const nextVersion = updateVersionInput.trim();
+    if (!nextVersion) {
+      return "";
+    }
+
+    if (!isValidVersion(nextVersion)) {
+      return "版本号格式需为 1.1 或 1.1.2";
+    }
+
+    if (isPublishRelease) {
+      if (compareVersions(nextVersion, "1.0") < 0) {
+        return `首次发布请填写不低于${formatSkillVersion("1.0")}的版本号`;
+      }
+      return "";
+    }
+
+    if (compareVersions(nextVersion, updateCurrentVersion) <= 0) {
+      return `请填写高于${formatSkillVersion(updateCurrentVersion)}的版本号`;
+    }
+
+    return "";
+  }, [isPublishRelease, updateCurrentVersion, updateTargetSkill, updateVersionInput]);
+  const canSubmitRelease = Boolean(
+    updateTargetSkill &&
+      updateVersionInput.trim() &&
+      (isPublishRelease || updateZipFile) &&
+      !updateZipError &&
+      !updateVersionError
+  );
+  const normalizedImportUrl = importUrlValue.trim();
+  const inferredImportUrlSource = useMemo(
+    () => (normalizedImportUrl ? inferSkillImportUrlSource(normalizedImportUrl) : null),
+    [normalizedImportUrl]
+  );
+  const importUrlError = useMemo(() => {
+    if (!normalizedImportUrl) {
+      return "";
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(normalizedImportUrl);
+    } catch {
+      return "请输入有效的 URL 地址";
+    }
+
+    if (!inferredImportUrlSource) {
+      return "仅支持 GitHub、skills.sh 或 Clawhub 链接";
+    }
+
+    if (inferredImportUrlSource !== importUrlSource) {
+      return `当前选择的是 ${getImportUrlSourceLabel(importUrlSource)} 导入，请填写对应来源链接`;
+    }
+
+    if (!isValidSkillImportUrlPath(parsedUrl, importUrlSource)) {
+      if (importUrlSource === "github") {
+        return "GitHub 导入请填写完整仓库链接，例如 github.com/org/repo";
+      }
+
+      if (importUrlSource === "skills.sh") {
+        return "skills.sh 导入请填写完整 skill 链接，例如 skills.sh/org/repo/skill";
+      }
+
+      return "Clawhub 导入请填写完整 skill 链接，例如 clawhub.ai/author/skill";
+    }
+
+    return "";
+  }, [importUrlSource, inferredImportUrlSource, normalizedImportUrl]);
+  const canImportFromUrl = Boolean(normalizedImportUrl && !importUrlError);
+
   const activeFile = useMemo(
     () => activeSkill?.files.find((file) => file.id === activeSkill.activeFileId) ?? null,
     [activeSkill]
   );
+  const deleteTargetAudienceCategory = deleteTargetSkill
+    ? mapEditorCategoryToAudienceCategory(deleteTargetSkill.category)
+    : null;
+  const deleteTargetAudienceMeta = deleteTargetAudienceCategory
+    ? AUDIENCE_VISUAL_META[deleteTargetAudienceCategory]
+    : null;
+  const DeleteTargetIcon =
+    deleteTargetSkill && deleteTargetAudienceCategory
+      ? getMarketplaceSkillIcon({
+          name: deleteTargetSkill.name,
+          audienceCategory: deleteTargetAudienceCategory,
+        })
+      : FilePenLine;
+  const deleteTargetStatusMeta = deleteTargetSkill
+    ? getSkillStatusMeta(deleteTargetSkill.status)
+    : null;
+  const DeleteTargetStatusIcon = deleteTargetStatusMeta?.icon ?? FilePenLine;
 
   const filteredMarketplaceSkills = useMemo(() => {
     const query = deferredMarketSearch.trim().toLowerCase();
@@ -1770,76 +1958,21 @@ export default function SkillsPage() {
   }, [audienceCategoryFilter, deferredMarketSearch, marketSortMode, marketplaceSkills, marketSourceFilter]);
   const filteredMySkills = useMemo(() => {
     const query = deferredMySkillSearch.trim().toLowerCase();
+    const scopedSkills = mySkills.filter((skill) =>
+      mySkillStatusFilter === "all" ? true : skill.status === mySkillStatusFilter
+    );
 
     if (!query) {
-      return mySkills;
+      return scopedSkills;
     }
 
-    return mySkills.filter((skill) =>
-      [
-        skill.name,
-        skill.description,
-        skill.category,
-        skill.tags.join(" "),
-      ]
+    return scopedSkills.filter((skill) =>
+      [skill.name, skill.description, skill.category, skill.tags.join(" ")]
         .join(" ")
         .toLowerCase()
         .includes(query)
     );
-  }, [deferredMySkillSearch, mySkills]);
-
-  const selectedFoundryDirectory = useMemo(
-    () =>
-      foundryDirectories.find((directory) => directory.id === selectedFoundryDirectoryId) ??
-      foundryDirectories[0] ??
-      null,
-    [foundryDirectories, selectedFoundryDirectoryId]
-  );
-
-  useEffect(() => {
-    if (!selectedFoundryDirectory && foundryDirectories.length > 0) {
-      setSelectedFoundryDirectoryId(foundryDirectories[0].id);
-    }
-  }, [foundryDirectories, selectedFoundryDirectory]);
-
-  useEffect(() => {
-    if (!selectedFoundryDirectory) {
-      return;
-    }
-
-    const fileStillExists = selectedFoundryDirectory.files.some(
-      (file) => file.id === foundryActiveFileId
-    );
-
-    if (!fileStillExists && isFoundryEditorVisible) {
-      setFoundryActiveFileId(selectedFoundryDirectory.files[0]?.id ?? "");
-    }
-  }, [foundryActiveFileId, isFoundryEditorVisible, selectedFoundryDirectory]);
-
-  const selectedFoundryFile = useMemo(
-    () =>
-      selectedFoundryDirectory?.files.find((file) => file.id === foundryActiveFileId) ?? null,
-    [foundryActiveFileId, selectedFoundryDirectory]
-  );
-
-  const foundryVisibleFiles = useMemo<TreeFileEntry[]>(() => {
-    const query = deferredFoundrySearch.trim().toLowerCase();
-    const files = foundryDirectories.flatMap((directory) =>
-      directory.files.map((file) => ({
-        fileId: file.id,
-        skillId: directory.id,
-        path: `${directory.name}/${file.path}`,
-      }))
-    );
-
-    if (!query) {
-      return files;
-    }
-
-    return files.filter((file) => file.path.toLowerCase().includes(query));
-  }, [deferredFoundrySearch, foundryDirectories]);
-
-  const foundryFileTree = useMemo(() => buildFileTree(foundryVisibleFiles), [foundryVisibleFiles]);
+  }, [deferredMySkillSearch, mySkillStatusFilter, mySkills]);
 
   const visibleFiles = useMemo<TreeFileEntry[]>(() => {
     const scopedSkills = isAllSkillsSelected ? mySkills : activeSkill ? [activeSkill] : [];
@@ -1954,47 +2087,81 @@ export default function SkillsPage() {
     toast.success(`已保存 Skill：${activeSkill.name}`);
   };
 
-  const publishSkillById = (skillId: string) => {
-    const skillToPublish = mySkills.find((skill) => skill.id === skillId);
-    if (!skillToPublish) {
+  const handlePublish = () => {
+    if (!activeSkill) {
       return;
     }
 
-    const nextVersion =
-      skillToPublish.status === "published"
-        ? suggestNextVersion(skillToPublish.version)
-        : "1.0";
-    const publishedId =
-      skillToPublish.publishedTemplateId ?? `${slugify(skillToPublish.name)}-published`;
-    const publishedTemplate: SkillTemplate = {
-      id: publishedId,
-      name: skillToPublish.name,
-      author: "我的Skills",
-      publishedAt: formatNow(),
-      publishedBy: CURRENT_SKILL_EDITOR,
-      description: skillToPublish.description,
-      category: skillToPublish.category,
-      sourceType:
-        marketplaceSkills.find((item) => item.id === publishedId)?.sourceType ?? "org",
-      audienceCategory: mapEditorCategoryToAudienceCategory(skillToPublish.category),
-      isFavorite:
-        marketplaceSkills.find((item) => item.id === publishedId)?.isFavorite ?? false,
-      tags: skillToPublish.tags,
-      downloads:
-        marketplaceSkills.find((item) => item.id === publishedId)?.downloads ?? 0,
-      references:
-        marketplaceSkills.find((item) => item.id === publishedId)?.references ?? 0,
-      referencedAgents:
-        marketplaceSkills.find((item) => item.id === publishedId)?.referencedAgents ?? [],
-      boundToCEC:
-        !isMvpMode &&
-        (skillToPublish.linkedCECClaws.length > 0 ||
-          marketplaceSkills.find((item) => item.id === publishedId)?.boundToCEC === true),
-      files: cloneFiles(skillToPublish.files, `published-${publishedId}`),
-    };
+    openReleaseDialog(activeSkill.id);
+  };
+
+  const buildMarketplaceSkillTemplate = useCallback(
+    (skillToPublish: MySkill, currentMarketplace: SkillTemplate[]) => {
+      const publishedId = skillToPublish.publishedTemplateId ?? `${skillToPublish.id}-published`;
+      const existingTemplate = currentMarketplace.find((item) => item.id === publishedId);
+
+      const publishedTemplate: SkillTemplate = {
+        id: publishedId,
+        name: skillToPublish.name,
+        author: existingTemplate?.author ?? "我的Skills",
+        publishedAt: formatNow(),
+        publishedBy: CURRENT_SKILL_EDITOR,
+        description: skillToPublish.description,
+        category: skillToPublish.category,
+        sourceType: existingTemplate?.sourceType ?? "org",
+        audienceCategory: mapEditorCategoryToAudienceCategory(skillToPublish.category),
+        isFavorite: existingTemplate?.isFavorite ?? false,
+        tags: skillToPublish.tags,
+        downloads: existingTemplate?.downloads ?? 0,
+        references: existingTemplate?.references ?? 0,
+        referencedAgents: existingTemplate?.referencedAgents ?? [],
+        boundToCEC:
+          !isMvpMode &&
+          (skillToPublish.linkedCECClaws.length > 0 || existingTemplate?.boundToCEC === true),
+        files: cloneFiles(skillToPublish.files, `published-${publishedId}`),
+      };
+
+      return {
+        publishedId,
+        publishedTemplate,
+      };
+    },
+    [isMvpMode]
+  );
+
+  const approveReviewingSkill = useCallback((skillId: string, expectedVersion: string) => {
+    let approvedSkill: MySkill | null = null;
+
+    setMySkills((current) => {
+      const target = current.find((item) => item.id === skillId);
+      if (!target || target.status !== "reviewing" || target.version !== expectedVersion) {
+        return current;
+      }
+
+      approvedSkill = {
+        ...target,
+        status: "published",
+        updatedAt: formatNow(),
+        updatedBy: CURRENT_SKILL_EDITOR,
+        dirty: false,
+        hasPublishedHistory: true,
+        publishedTemplateId: target.publishedTemplateId ?? `${target.id}-published`,
+      };
+
+      return [approvedSkill, ...current.filter((item) => item.id !== skillId)];
+    });
+
+    if (!approvedSkill) {
+      return;
+    }
 
     setMarketplaceSkills((current) => {
+      const { publishedId, publishedTemplate } = buildMarketplaceSkillTemplate(
+        approvedSkill,
+        current
+      );
       const exists = current.some((item) => item.id === publishedId);
+
       if (exists) {
         return current.map((item) => (item.id === publishedId ? publishedTemplate : item));
       }
@@ -2002,101 +2169,74 @@ export default function SkillsPage() {
       return [publishedTemplate, ...current];
     });
 
-    updateSkill(skillToPublish.id, (skill) => ({
-      ...skill,
-      dirty: false,
-      status: "published",
-      updatedAt: formatNow(),
-      updatedBy: CURRENT_SKILL_EDITOR,
-      version: nextVersion,
-      publishedTemplateId: publishedId,
-    }));
-
     toast.success(
-      skillToPublish.status === "published"
-        ? `已更新发布：${skillToPublish.name}`
-        : `已发布到 Skills 广场：${skillToPublish.name}`
+      `审核通过，已上架：${approvedSkill.name} ${formatSkillVersion(approvedSkill.version)}`
     );
-  };
+  }, [buildMarketplaceSkillTemplate]);
 
-  const handlePublish = () => {
-    if (!activeSkill) {
-      return;
-    }
+  useEffect(() => {
+    const activeReviewKeys = new Set<string>();
 
-    publishSkillById(activeSkill.id);
-  };
-
-  const handleRequestReview = (skillId: string) => {
-    const skill = mySkills.find((item) => item.id === skillId);
-    if (!skill) {
-      return;
-    }
-
-    const nextVersion = "1.0";
-
-    setMySkills((current) => {
-      const target = current.find((item) => item.id === skillId);
-      if (!target) {
-        return current;
+    mySkills.forEach((skill) => {
+      if (skill.status !== "reviewing") {
+        return;
       }
 
-      const reviewingSkill = {
-        ...target,
-        status: "reviewing" as const,
-        version: nextVersion,
-        updatedAt: formatNow(),
-        updatedBy: CURRENT_SKILL_EDITOR,
-        dirty: false,
-      };
+      const reviewKey = `${skill.id}:${skill.version ?? "1.0"}`;
+      activeReviewKeys.add(reviewKey);
 
-      return [reviewingSkill, ...current.filter((item) => item.id !== skillId)];
+      if (reviewApprovalTimersRef.current[reviewKey]) {
+        return;
+      }
+
+      reviewApprovalTimersRef.current[reviewKey] = window.setTimeout(() => {
+        approveReviewingSkill(skill.id, skill.version ?? "1.0");
+        delete reviewApprovalTimersRef.current[reviewKey];
+      }, 5000);
     });
 
-    toast.success(`已提交审核：${skill.name} ${formatSkillVersion(nextVersion)}`);
-  };
+    Object.entries(reviewApprovalTimersRef.current).forEach(([reviewKey, timerId]) => {
+      if (activeReviewKeys.has(reviewKey)) {
+        return;
+      }
 
-  const openUpdateDialog = (skillId: string) => {
+      window.clearTimeout(timerId);
+      delete reviewApprovalTimersRef.current[reviewKey];
+    });
+  }, [approveReviewingSkill, mySkills]);
+
+  const openReleaseDialog = (skillId: string) => {
     const skill = mySkills.find((item) => item.id === skillId);
     if (!skill) {
       return;
     }
 
+    const nextMode = getSkillReleaseActionMeta(skill).mode;
     setUpdateTargetSkillId(skillId);
-    setUpdateVersionInput(suggestNextVersion(skill.version));
+    setReleaseMode(nextMode);
+    setUpdateVersionInput(
+      nextMode === "publish"
+        ? isValidVersion(skill.version ?? "") && compareVersions(skill.version ?? "1.0", "1.0") >= 0
+          ? (skill.version ?? "1.0")
+          : "1.0"
+        : suggestNextVersion(skill.version)
+    );
     setUpdateZipFile(null);
     setUpdateDialogOpen(true);
   };
 
-  const handleSubmitUpdate = () => {
-    const skill = mySkills.find((item) => item.id === updateTargetSkillId);
+  const handleSubmitRelease = () => {
+    const skill = updateTargetSkill;
     if (!skill) {
       toast.error("未找到需要更新的 Skill");
       return;
     }
 
+    if (!canSubmitRelease) {
+      return;
+    }
+
     const nextVersion = updateVersionInput.trim();
-    const currentVersion = skill.version ?? "1.0";
-
-    if (!updateZipFile) {
-      toast.error("请先上传新的 zip 包");
-      return;
-    }
-
-    if (!updateZipFile.name.toLowerCase().endsWith(".zip")) {
-      toast.error("仅支持上传 zip 包");
-      return;
-    }
-
-    if (!isValidVersion(nextVersion)) {
-      toast.error("版本号格式不正确，请使用 1.1 或 1.1.2");
-      return;
-    }
-
-    if (compareVersions(nextVersion, currentVersion) <= 0) {
-      toast.error(`新版本号必须高于当前版本 ${formatSkillVersion(currentVersion)}`);
-      return;
-    }
 
     setMySkills((current) => {
       const target = current.find((item) => item.id === skill.id);
@@ -2111,6 +2251,7 @@ export default function SkillsPage() {
         updatedAt: formatNow(),
         updatedBy: CURRENT_SKILL_EDITOR,
         dirty: false,
+        hasPublishedHistory: hasPublishedHistory(target),
       };
 
       return [reviewingSkill, ...current.filter((item) => item.id !== skill.id)];
@@ -2120,8 +2261,18 @@ export default function SkillsPage() {
     setUpdateTargetSkillId("");
     setUpdateVersionInput("");
     setUpdateZipFile(null);
+    setReleaseMode("publish");
 
-    toast.success(`已提交更新审核：${skill.name} ${formatSkillVersion(nextVersion)}`);
+    if (releaseMode === "publish") {
+      toast.success(`已提交发布审核：${skill.name} ${formatSkillVersion(nextVersion)}`);
+      return;
+    }
+
+    toast.success(
+      hasPublishedHistory(skill) && skill.status !== "published"
+        ? `已提交更新发布审核：${skill.name} ${formatSkillVersion(nextVersion)}`
+        : `已提交更新审核：${skill.name} ${formatSkillVersion(nextVersion)}`
+    );
   };
 
   const handleAddFile = () => {
@@ -2151,7 +2302,7 @@ export default function SkillsPage() {
   };
 
   const handleDownloadTemplate = (template: SkillTemplate) => {
-    downloadTextFile(`${template.name}.skill.json`, serializeSkillBundle({
+    downloadTextFile(`${template.name}.zip`, serializeSkillBundle({
       name: template.name,
       description: template.description,
       category: template.category,
@@ -2184,252 +2335,16 @@ export default function SkillsPage() {
   };
 
   const handleAddToSkillsFoundry = (template: SkillTemplate) => {
-    const targetDirectoryId = `foundry-${template.id}`;
-    const alreadyAdded = foundryDirectories.some((directory) => directory.id === targetDirectoryId);
-    if (alreadyAdded) {
-      setSelectedFoundryDirectoryId(targetDirectoryId);
-      setActiveTab("foundry");
-      toast.info(`已在 Skills Foundry 中：${template.name}`);
-      return;
-    }
-
-    const foundryDirectory = createFoundryDirectory({
-      id: targetDirectoryId,
+    setPendingFoundryTemplate({
+      requestId: `${template.id}-${Date.now()}`,
+      id: template.id,
       name: template.name,
-      templateId: template.id,
-      source: "marketplace",
       files: template.files.map((file) => ({
         path: file.path,
         content: file.content,
       })),
     });
-
-    setFoundryDirectories((current) => [foundryDirectory, ...current]);
-    setSelectedFoundryDirectoryId(targetDirectoryId);
-    setFoundryActiveFileId(foundryDirectory.files[0]?.id ?? "");
-    setIsFoundryEditorVisible(false);
     setActiveTab("foundry");
-    toast.success(`已添加到 Skills Foundry：${template.name}`);
-  };
-
-  const handleCreateFoundryDirectory = () => {
-    const nextId = `draft-space-${Date.now()}`;
-    const nextName = `new-skill-space-${foundryDirectories.length + 1}`;
-    const nextDirectory = createFoundryDirectory({
-      id: nextId,
-      name: nextName,
-      source: "preset",
-      files: [
-        {
-          path: "SKILL.md",
-          content: `---\nname: ${nextName}\ndescription: ""\n---\n\n# ${nextName}\n`,
-        },
-      ],
-    });
-
-    setFoundryDirectories((current) => [nextDirectory, ...current]);
-    setSelectedFoundryDirectoryId(nextId);
-    setFoundryActiveFileId(nextDirectory.files[0]?.id ?? "");
-    setIsFoundryEditorVisible(true);
-    setFoundryPrompt("使用/create skills创建一个技能，要求如下：");
-    toast.success(`已创建目录：${nextName}`);
-  };
-
-  const handleFoundryAttachments = (event: ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.target.files ?? []);
-    if (selectedFiles.length === 0) {
-      return;
-    }
-
-    setFoundryAttachmentNames(selectedFiles.map((file) => file.name));
-    toast.success(`已添加 ${selectedFiles.length} 个附件`);
-    event.target.value = "";
-  };
-
-  const handleApplyFoundryTemplate = (mode: "create" | "optimize") => {
-    if (mode === "create") {
-      setFoundryPrompt("使用/create skills创建一个技能，要求如下：");
-      return;
-    }
-
-    const targetName = selectedFoundryDirectory?.name ?? "当前";
-    setFoundryPrompt(`使用/create skills优化${targetName}技能，要求如下：`);
-  };
-
-  const handleFoundryVoiceInput = () => {
-    toast.info("语音输入能力建设中，后续会接入实时语音转写。");
-  };
-
-  const handleSelectFoundryFile = (directoryId: string, fileId: string) => {
-    setSelectedFoundryDirectoryId(directoryId);
-    setFoundryActiveFileId(fileId);
-    setIsFoundryEditorVisible(true);
-  };
-
-  const updateFoundryFileContent = (content: string) => {
-    if (!selectedFoundryDirectory || !selectedFoundryFile) {
-      return;
-    }
-
-    setFoundryDirectories((current) =>
-      current.map((directory) =>
-        directory.id !== selectedFoundryDirectory.id
-          ? directory
-          : {
-              ...directory,
-              files: directory.files.map((file) =>
-                file.id === selectedFoundryFile.id ? { ...file, content } : file
-              ),
-            }
-      )
-    );
-  };
-
-  const toggleFoundryFolder = (path: string) => {
-    setFoundryExpandedFolders((current) => ({
-      ...current,
-      [path]: !(current[path] ?? true),
-    }));
-  };
-
-  const handleCreateFoundryFile = () => {
-    if (!selectedFoundryDirectory) {
-      toast.error("请先选择一个目录");
-      return;
-    }
-
-    const nextPath = window.prompt("请输入新文件名", "new-file.md")?.trim();
-    if (!nextPath) {
-      return;
-    }
-
-    const nextFile = createFile(nextPath, `# ${nextPath}\n`, `foundry-${selectedFoundryDirectory.id}`);
-
-    setFoundryDirectories((current) =>
-      current.map((directory) =>
-        directory.id !== selectedFoundryDirectory.id
-          ? directory
-          : {
-              ...directory,
-              files: [...directory.files, nextFile],
-            }
-      )
-    );
-    setFoundryActiveFileId(nextFile.id);
-    setIsFoundryEditorVisible(true);
-    toast.success(`已新建文件：${nextPath}`);
-  };
-
-  const handleCreateFoundryFolder = () => {
-    if (!selectedFoundryDirectory) {
-      toast.error("请先选择一个目录");
-      return;
-    }
-
-    const folderName = window.prompt("请输入新文件夹名", "new-folder")?.trim();
-    if (!folderName) {
-      return;
-    }
-
-    const nextFile = createFile(
-      `${folderName}/README.md`,
-      `# ${folderName}\n\n在这里补充目录说明。\n`,
-      `foundry-${selectedFoundryDirectory.id}`
-    );
-
-    setFoundryDirectories((current) =>
-      current.map((directory) =>
-        directory.id !== selectedFoundryDirectory.id
-          ? directory
-          : {
-              ...directory,
-              files: [...directory.files, nextFile],
-            }
-      )
-    );
-    setFoundryExpandedFolders((current) => ({
-      ...current,
-      [selectedFoundryDirectory.name]: true,
-      [`${selectedFoundryDirectory.name}/${folderName}`]: true,
-    }));
-    setFoundryActiveFileId(nextFile.id);
-    setIsFoundryEditorVisible(true);
-    toast.success(`已新建文件夹：${folderName}`);
-  };
-
-  const handleUploadFoundryFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.target.files ?? []);
-    if (!selectedFoundryDirectory || selectedFiles.length === 0) {
-      event.target.value = "";
-      return;
-    }
-
-    const nextFiles = await Promise.all(
-      selectedFiles.map(async (file, index) =>
-        createFile(
-          file.name || `file-${index + 1}.md`,
-          await file.text(),
-          `foundry-${selectedFoundryDirectory.id}`
-        )
-      )
-    );
-
-    setFoundryDirectories((current) =>
-      current.map((directory) =>
-        directory.id !== selectedFoundryDirectory.id
-          ? directory
-          : {
-              ...directory,
-              files: [...directory.files, ...nextFiles],
-            }
-      )
-    );
-
-    toast.success(`已上传 ${nextFiles.length} 个文件`);
-    event.target.value = "";
-  };
-
-  const handleUploadFoundryFolder = async (event: ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.target.files ?? []);
-    if (!selectedFoundryDirectory || selectedFiles.length === 0) {
-      event.target.value = "";
-      return;
-    }
-
-    const nextFiles = await Promise.all(
-      selectedFiles.map(async (file, index) =>
-        createFile(
-          normalizeImportedPath(file.webkitRelativePath || file.name || `file-${index + 1}.md`),
-          await file.text(),
-          `foundry-${selectedFoundryDirectory.id}`
-        )
-      )
-    );
-
-    setFoundryDirectories((current) =>
-      current.map((directory) =>
-        directory.id !== selectedFoundryDirectory.id
-          ? directory
-          : {
-              ...directory,
-              files: [...directory.files, ...nextFiles],
-            }
-      )
-    );
-
-    toast.success(`已上传文件夹，共 ${nextFiles.length} 个文件`);
-    event.target.value = "";
-  };
-
-  const handleSendFoundryPrompt = () => {
-    if (!foundryPrompt.trim() && foundryAttachmentNames.length === 0) {
-      toast.error("请先输入需求或上传附件");
-      return;
-    }
-
-    toast.success("已提交到 Skills Foundry，会基于你的要求开始创建或优化 Skill。");
-    setFoundryPrompt("");
-    setFoundryAttachmentNames([]);
   };
 
   const handleExportMySkill = (skillId: string) => {
@@ -2438,7 +2353,7 @@ export default function SkillsPage() {
       return;
     }
 
-    downloadTextFile(`${skill.name}.skill.json`, serializeSkillBundle({
+    downloadTextFile(`${skill.name}.zip`, serializeSkillBundle({
       name: skill.name,
       description: skill.description,
       category: skill.category,
@@ -2455,13 +2370,18 @@ export default function SkillsPage() {
       return;
     }
 
-    const confirmed = window.confirm(`确认删除 Skill「${skill.name}」吗？此操作不可撤销。`);
-    if (!confirmed) {
+    setDeleteTargetSkillId(skillId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDeleteMySkill = () => {
+    const skill = deleteTargetSkill;
+    if (!skill) {
       return;
     }
 
     setMySkills((current) => {
-      const nextSkills = current.filter((item) => item.id !== skillId);
+      const nextSkills = current.filter((item) => item.id !== skill.id);
       const fallbackSkillId = nextSkills[0]?.id ?? "";
 
       setSelectedSkillId((currentSelected) => {
@@ -2469,17 +2389,128 @@ export default function SkillsPage() {
           return nextSkills.length > 0 ? ALL_SKILLS_VALUE : "";
         }
 
-        return currentSelected === skillId ? fallbackSkillId : currentSelected;
+        return currentSelected === skill.id ? fallbackSkillId : currentSelected;
       });
 
       setFocusedSkillId((currentFocused) =>
-        currentFocused === skillId ? fallbackSkillId : currentFocused
+        currentFocused === skill.id ? fallbackSkillId : currentFocused
       );
 
       return nextSkills;
     });
 
+    setDeleteDialogOpen(false);
+    setDeleteTargetSkillId("");
     toast.success(`已删除 Skill：${skill.name}`);
+  };
+
+  const handleOfflineMySkill = (skillId: string) => {
+    const skill = mySkills.find((item) => item.id === skillId);
+    if (!skill) {
+      return;
+    }
+
+    if (skill.status !== "published") {
+      toast.info("仅已上架的 Skill 支持下架");
+      return;
+    }
+
+    const confirmed = window.confirm(`确认下架 Skill「${skill.name}」吗？下架后将不再对外展示。`);
+    if (!confirmed) {
+      return;
+    }
+
+    setMySkills((current) =>
+      current.map((item) =>
+        item.id === skillId
+          ? {
+              ...item,
+              status: "draft",
+              updatedAt: formatNow(),
+              updatedBy: CURRENT_SKILL_EDITOR,
+            }
+          : item
+      )
+    );
+
+    if (skill.publishedTemplateId) {
+      setMarketplaceSkills((current) =>
+        current.filter(
+          (item) => !(item.id === skill.publishedTemplateId && item.sourceType === "org")
+        )
+      );
+    }
+
+    toast.success(`已下架 Skill：${skill.name}，当前已转为未发布`);
+  };
+
+  const finalizeImportedSkill = (importedSkill: MySkill, successMessage: string) => {
+    setMySkills((current) => [importedSkill, ...current]);
+    setMySkillStatusFilter("all");
+    setMySkillSearch("");
+    setSelectedSkillId(importedSkill.id);
+    setFocusedSkillId(importedSkill.id);
+    setActiveTab("mine");
+    setImportDialogOpen(false);
+    setImportUrlValue("");
+    toast.success(successMessage);
+  };
+
+  const buildImportedSkillFromUrl = (
+    urlValue: string,
+    source: SkillImportUrlSource
+  ) => {
+    const parsedUrl = new URL(urlValue);
+    const sourceLabel = getImportUrlSourceLabel(source);
+    const displayName = uniqueName(
+      extractSkillNameFromUrl(parsedUrl, source),
+      mySkills.map((skill) => skill.name)
+    );
+    const filePrefix = `import-url-${slugify(displayName)}`;
+
+    return createMySkill({
+      id: `${slugify(displayName)}-${Date.now()}`,
+      name: displayName,
+      description: `从${sourceLabel}链接导入的 Skill 草稿，可继续补充说明、模板和脚本内容。`,
+      category: "通用",
+      tags: [sourceLabel, "URL导入"],
+      source: "imported",
+      files: [
+        createFile(
+          "SKILL.md",
+          `---
+name: ${slugify(displayName)}
+description: "Imported from ${sourceLabel}"
+source_url: "${parsedUrl.toString()}"
+---
+
+# ${displayName}
+
+## 来源
+- 类型：${sourceLabel}
+- 链接：${parsedUrl.toString()}
+
+## 后续补充
+- 在这里完善技能描述
+- 补充触发条件与输入输出要求
+- 增加模板、脚本或参考资料
+`,
+          filePrefix
+        ),
+        createFile(
+          "SOURCE.md",
+          `# 来源信息
+
+- 来源类型：${sourceLabel}
+- 导入链接：${parsedUrl.toString()}
+- 导入时间：${formatNow()}
+
+请在导入后校验目录结构、说明文档和脚本内容是否完整。
+`,
+          filePrefix
+        ),
+      ],
+    });
   };
 
   const handleImportSkills = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -2489,67 +2520,89 @@ export default function SkillsPage() {
     }
 
     try {
-      if (
-        selectedFiles.length === 1 &&
-        selectedFiles[0].name.toLowerCase().endsWith(".skill.json")
-      ) {
-        const bundle = JSON.parse(await selectedFiles[0].text()) as Partial<SkillBundle>;
-        const bundleFiles =
-          bundle.files?.map((file, index) =>
-            createFile(file.path ?? `file-${index + 1}.md`, file.content ?? "", "import-bundle")
-          ) ?? [];
+      const importFile = selectedFiles[0];
+      const fileName = importFile.name.toLowerCase();
+      let importedSkill: MySkill | null = null;
 
-        const importedSkill = createMySkill({
-          id: `${slugify(bundle.name ?? "imported-skill")}-${Date.now()}`,
-          name: uniqueName(bundle.name ?? "imported-skill", mySkills.map((skill) => skill.name)),
-          description: bundle.description ?? "从导出文件导入的 Skill。",
-          category: bundle.category ?? "通用",
-          tags: bundle.tags ?? ["导入"],
-          source: "imported",
-          files:
-            bundleFiles.length > 0
-              ? bundleFiles
-              : [createFile("SKILL.md", "# Imported Skill", "import-fallback")],
-        });
+      if (fileName.endsWith(".skill.json") || fileName.endsWith(".zip")) {
+        const rawText = await importFile.text();
 
-        setMySkills((current) => [importedSkill, ...current]);
-        setSelectedSkillId(importedSkill.id);
-        setActiveTab("mine");
-        toast.success(`已导入 Skill：${importedSkill.name}`);
-      } else {
-        const contents = await Promise.all(
-          selectedFiles.map(async (file) => ({
-            path: normalizeImportedPath(file.webkitRelativePath || file.name),
-            content: await file.text(),
-          }))
-        );
+        try {
+          const bundle = JSON.parse(rawText) as Partial<SkillBundle>;
+          const bundleFiles =
+            bundle.files?.map((file, index) =>
+              createFile(file.path ?? `file-${index + 1}.md`, file.content ?? "", "import-bundle")
+            ) ?? [];
 
-        const rawName = selectedFiles[0].webkitRelativePath
-          ? selectedFiles[0].webkitRelativePath.split("/")[0]
-          : selectedFiles[0].name.replace(/\.[^.]+$/, "");
+          importedSkill = createMySkill({
+            id: `${slugify(bundle.name ?? "imported-skill")}-${Date.now()}`,
+            name: uniqueName(bundle.name ?? "imported-skill", mySkills.map((skill) => skill.name)),
+            description: bundle.description ?? "从导出文件导入的 Skill。",
+            category: bundle.category ?? "通用",
+            tags: bundle.tags ?? ["导入"],
+            source: "imported",
+            files:
+              bundleFiles.length > 0
+                ? bundleFiles
+                : [createFile("SKILL.md", "# Imported Skill", "import-fallback")],
+          });
+        } catch {
+          const JSZip = (await import("jszip")).default;
+          const zip = await JSZip.loadAsync(importFile);
+          const zipEntries = Object.values(zip.files).filter(
+            (entry) =>
+              !entry.dir &&
+              !entry.name.startsWith("__MACOSX/") &&
+              !entry.name.endsWith(".DS_Store")
+          );
 
-        const importedSkill = createMySkill({
-          id: `${slugify(rawName)}-${Date.now()}`,
-          name: uniqueName(rawName, mySkills.map((skill) => skill.name)),
-          description: "从本地文件导入的 Skill 草稿。",
-          category: "通用",
-          tags: ["导入"],
-          source: "imported",
-          files: contents.map((file, index) =>
-            createFile(file.path || `file-${index + 1}.md`, file.content, "import-multi")
-          ),
-        });
+          const contents = await Promise.all(
+            zipEntries.map(async (entry, index) => ({
+              path: normalizeImportedPath(entry.name || `file-${index + 1}.md`),
+              content: await entry.async("string"),
+            }))
+          );
 
-        setMySkills((current) => [importedSkill, ...current]);
-        setSelectedSkillId(importedSkill.id);
-        setActiveTab("mine");
-        toast.success(`已导入 Skill：${importedSkill.name}`);
+          const rawName = importFile.name.replace(/\.zip$/i, "");
+          importedSkill = createMySkill({
+            id: `${slugify(rawName)}-${Date.now()}`,
+            name: uniqueName(rawName, mySkills.map((skill) => skill.name)),
+            description: "从本地压缩包导入的 Skill 草稿。",
+            category: "通用",
+            tags: ["压缩包导入"],
+            source: "imported",
+            files:
+              contents.length > 0
+                ? contents.map((file, index) =>
+                    createFile(file.path || `file-${index + 1}.md`, file.content, "import-zip")
+                  )
+                : [createFile("SKILL.md", "# Imported Skill", "import-zip-fallback")],
+          });
+        }
       }
+
+      if (!importedSkill) {
+        throw new Error("unsupported-import");
+      }
+
+      finalizeImportedSkill(importedSkill, `已导入 Skill：${importedSkill.name}`);
     } catch {
       toast.error("导入失败，请检查文件格式");
     } finally {
       event.target.value = "";
     }
+  };
+
+  const handleImportFromUrl = () => {
+    if (!canImportFromUrl) {
+      return;
+    }
+
+    const importedSkill = buildImportedSkillFromUrl(normalizedImportUrl, importUrlSource);
+    finalizeImportedSkill(
+      importedSkill,
+      `已从 ${getImportUrlSourceLabel(importUrlSource)} 导入 Skill：${importedSkill.name}`
+    );
   };
 
   const toggleFolder = (path: string) => {
@@ -2606,76 +2659,6 @@ export default function SkillsPage() {
           style={{ paddingLeft: `${depth * 16 + 24}px` }}
         >
           <Icon className="h-4 w-4 text-slate-500" />
-          <span className="truncate">{node.name}</span>
-        </button>
-      );
-    });
-
-  const renderFoundryTree = (nodes: FileTreeNode[], depth = 0) =>
-    nodes.map((node) => {
-      if (node.type === "folder") {
-        const isRootDirectory = depth === 0;
-        const isExpanded = foundryExpandedFolders[node.path] ?? !isRootDirectory;
-        const rootDirectory = isRootDirectory
-          ? foundryDirectories.find((directory) => directory.name === node.name) ?? null
-          : null;
-        const isSelectedRoot = rootDirectory?.id === selectedFoundryDirectory?.id;
-
-        return (
-          <div key={node.path}>
-            <button
-              type="button"
-              onClick={() => {
-                if (rootDirectory) {
-                  setSelectedFoundryDirectoryId(rootDirectory.id);
-                }
-                toggleFoundryFolder(node.path);
-              }}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors",
-                isRootDirectory
-                  ? cn(
-                      "text-[15px] font-medium text-slate-900 hover:bg-slate-100",
-                      isSelectedRoot ? "bg-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]" : ""
-                    )
-                  : "text-sm text-slate-700 hover:bg-slate-100"
-              )}
-              style={{ paddingLeft: `${depth * 18 + 8}px` }}
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4 text-slate-400" />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-slate-400" />
-              )}
-              {isExpanded ? (
-                <FolderOpen className={cn("h-4 w-4", isRootDirectory ? "text-blue-600" : "text-slate-500")} />
-              ) : (
-                <Folder className={cn("h-4 w-4", isRootDirectory ? "text-blue-600" : "text-slate-500")} />
-              )}
-              <span className="truncate">{node.name}</span>
-            </button>
-            {isExpanded ? <div>{renderFoundryTree(node.children, depth + 1)}</div> : null}
-          </div>
-        );
-      }
-
-      const Icon = fileIcon(node.name);
-      const isActive = node.fileId === foundryActiveFileId;
-
-      return (
-        <button
-          key={node.path}
-          type="button"
-          onClick={() => node.fileId && node.skillId && handleSelectFoundryFile(node.skillId, node.fileId)}
-          className={cn(
-            "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors",
-            isActive
-              ? "bg-slate-100 text-slate-950"
-              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-          )}
-          style={{ paddingLeft: `${depth * 18 + 18}px` }}
-        >
-          <Icon className="h-4 w-4 text-sky-500" />
           <span className="truncate">{node.name}</span>
         </button>
       );
@@ -2886,7 +2869,7 @@ export default function SkillsPage() {
           </section>
 
           {filteredMarketplaceSkills.length > 0 ? (
-            <div className="grid gap-3 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid items-start gap-3 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredMarketplaceSkills.map((skill, index) => {
                 const audienceMeta = AUDIENCE_VISUAL_META[skill.audienceCategory];
                 const showcasePalette =
@@ -2912,7 +2895,7 @@ export default function SkillsPage() {
                     />
                     <div className="absolute inset-x-6 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(15,23,42,0.15),transparent)]" />
 
-                    <div className="relative flex h-full flex-col">
+                    <div className="relative flex flex-col">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 gap-3.5">
                           <div
@@ -2980,68 +2963,66 @@ export default function SkillsPage() {
                         {skill.description}
                       </p>
 
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between border-t border-slate-200/60 pt-3 text-[11px] text-slate-500">
-                          <div className="flex flex-wrap items-center gap-4">
-                            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 bg-white/65 px-2.5 py-1">
-                              <span className="font-semibold text-slate-950">
-                                {skill.downloads.toLocaleString()}
-                              </span>
-                              <span>下载</span>
-                            </div>
-                            {!isMvpMode ? (
-                              <TooltipProvider delayDuration={120}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      className="inline-flex items-center gap-2 rounded-full border border-slate-200/70 bg-white/65 px-2.5 py-1 text-[11px] text-slate-500 transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-700"
-                                    >
-                                      <span className="font-semibold text-slate-950">
-                                        {(skill.references ?? 0).toLocaleString()}
-                                      </span>
-                                      <span>引用</span>
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent
-                                    align="start"
-                                    className="max-w-[260px] rounded-2xl border-white/90 bg-white/96 px-3 py-3 text-slate-600 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]"
-                                  >
-                                    <div className="space-y-2">
-                                      <div className="text-[11px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
-                                        引用智能体
-                                      </div>
-                                      <div className="grid gap-1">
-                                        {(skill.referencedAgents ?? []).length > 0 ? (
-                                          (skill.referencedAgents ?? []).map((agent) => (
-                                            <div
-                                              key={`${skill.id}-${agent}`}
-                                              className="rounded-xl bg-slate-50/90 px-2.5 py-1.5 text-[12px] text-slate-700"
-                                            >
-                                              {agent}
-                                            </div>
-                                          ))
-                                        ) : (
-                                          <div className="rounded-xl bg-slate-50/90 px-2.5 py-1.5 text-[12px] text-slate-500">
-                                            暂无引用中的智能体
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            ) : null}
+                      <div className="mt-4 border-t border-slate-200/60 pt-3">
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                          <div className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200/70 bg-white/65 px-2.5 py-1">
+                            <span className="font-semibold text-slate-950">
+                              {skill.downloads.toLocaleString()}
+                            </span>
+                            <span>下载</span>
                           </div>
-                          <div className="flex items-center gap-1.5">
+                          {!isMvpMode ? (
+                            <TooltipProvider delayDuration={120}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200/70 bg-white/65 px-2.5 py-1 text-[11px] text-slate-500 transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-700"
+                                  >
+                                    <span className="font-semibold text-slate-950">
+                                      {(skill.references ?? 0).toLocaleString()}
+                                    </span>
+                                    <span>引用</span>
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent
+                                  align="start"
+                                  className="max-w-[260px] rounded-2xl border-white/90 bg-white/96 px-3 py-3 text-slate-600 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]"
+                                >
+                                  <div className="space-y-2">
+                                    <div className="text-[11px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
+                                      引用智能体
+                                    </div>
+                                    <div className="grid gap-1">
+                                      {(skill.referencedAgents ?? []).length > 0 ? (
+                                        (skill.referencedAgents ?? []).map((agent) => (
+                                          <div
+                                            key={`${skill.id}-${agent}`}
+                                            className="rounded-xl bg-slate-50/90 px-2.5 py-1.5 text-[12px] text-slate-700"
+                                          >
+                                            {agent}
+                                          </div>
+                                        ))
+                                      ) : (
+                                        <div className="rounded-xl bg-slate-50/90 px-2.5 py-1.5 text-[12px] text-slate-500">
+                                          暂无引用中的智能体
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : null}
+                          <div className="ml-auto flex items-center gap-1.5">
                             {!isMvpMode ? (
                               <Button
                                 variant="outline"
                                 className="h-9 rounded-2xl border-white/90 bg-white/82 px-3 text-[13px] text-slate-700 hover:bg-white"
                                 onClick={() => handleAddToSkillsFoundry(skill)}
                               >
-                                <Sparkles className="h-4 w-4" />
-                                添加至Skills Foundry
+                                <FolderPlus className="h-4 w-4" />
+                                加入Foundry
                               </Button>
                             ) : null}
                             <Button
@@ -3069,358 +3050,204 @@ export default function SkillsPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="foundry" className="space-y-4">
-          <input
-            ref={foundryAttachmentInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleFoundryAttachments}
+        <TabsContent
+          value="foundry"
+          forceMount
+          className={cn("space-y-4", activeTab !== "foundry" && "hidden", isMvpMode && "hidden")}
+        >
+          <SkillsFoundryTab
+            pendingTemplate={pendingFoundryTemplate}
+            onPendingTemplateHandled={() => setPendingFoundryTemplate(null)}
           />
-          <input
-            ref={foundryUploadFilesInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleUploadFoundryFiles}
-          />
-          <input
-            ref={foundryUploadFolderInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleUploadFoundryFolder}
-          />
-
-          <section className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(248,250,252,0.92))] shadow-[0_28px_60px_-46px_rgba(15,23,42,0.3)] backdrop-blur-sm">
-            <div aria-hidden className="absolute inset-0">
-              <div className="skills-ambient-orb absolute left-[-4rem] top-10 h-28 w-28 rounded-full bg-cyan-200/22 blur-3xl" />
-              <div className="skills-ambient-orb skills-ambient-orb-delay absolute right-[8%] top-12 h-40 w-40 rounded-full bg-amber-200/18 blur-3xl" />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.08),transparent_24%),linear-gradient(135deg,rgba(15,23,42,0.02),transparent_36%,rgba(250,204,21,0.05)_100%)]" />
-            </div>
-
-            <div className="relative flex flex-col gap-4 p-4 xl:flex-row xl:items-stretch xl:p-5">
-              {isFoundryTreeVisible ? (
-                <aside className="overflow-hidden rounded-[28px] border border-white/85 bg-white/88 shadow-[0_22px_46px_-36px_rgba(15,23,42,0.2)] backdrop-blur-sm xl:w-[292px] xl:shrink-0">
-                  <div className="border-b border-slate-200/70 px-4 py-4">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <div className="text-[11px] font-semibold tracking-[0.18em] text-slate-400 uppercase">
-                        Skills目录
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                        onClick={() => setIsFoundryTreeVisible(false)}
-                        aria-label="收起目录"
-                        title="收起目录"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="relative min-w-0 flex-1">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                        <Input
-                          value={foundrySearch}
-                          onChange={(event) => setFoundrySearch(event.target.value)}
-                          placeholder="Search files..."
-                          className="h-11 rounded-2xl border-white bg-slate-50/95 pl-10 pr-3 text-sm shadow-inner shadow-slate-200/55"
-                        />
-                      </div>
-                      <Popover open={foundryCreateMenuOpen} onOpenChange={setFoundryCreateMenuOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            size="icon"
-                            className="h-11 w-11 rounded-2xl bg-blue-600 text-white shadow-[0_16px_28px_-20px_rgba(37,99,235,0.72)] hover:bg-blue-500"
-                            aria-label="新建或上传"
-                            title="新建或上传"
-                          >
-                            <Plus className="h-5 w-5" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          align="end"
-                          className="w-[268px] rounded-[26px] border border-white/90 bg-white/96 p-2 shadow-[0_24px_48px_-30px_rgba(15,23,42,0.28)]"
-                        >
-                          <div className="space-y-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFoundryCreateMenuOpen(false);
-                                handleCreateFoundryFile();
-                              }}
-                              className="flex w-full items-center gap-3 rounded-[18px] px-4 py-3 text-left text-[15px] font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950"
-                            >
-                              <FilePlus2 className="h-5 w-5 text-slate-500" />
-                              <span>New file</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFoundryCreateMenuOpen(false);
-                                handleCreateFoundryFolder();
-                              }}
-                              className="flex w-full items-center gap-3 rounded-[18px] px-4 py-3 text-left text-[15px] font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950"
-                            >
-                              <FolderPlus className="h-5 w-5 text-slate-500" />
-                              <span>New folder...</span>
-                            </button>
-                            <div className="mx-2 border-t border-slate-100" />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFoundryCreateMenuOpen(false);
-                                foundryUploadFilesInputRef.current?.click();
-                              }}
-                              className="flex w-full items-center gap-3 rounded-[18px] px-4 py-3 text-left text-[15px] font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950"
-                            >
-                              <Upload className="h-5 w-5 text-slate-500" />
-                              <span>Upload files...</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFoundryCreateMenuOpen(false);
-                                foundryUploadFolderInputRef.current?.click();
-                              }}
-                              className="flex w-full items-center gap-3 rounded-[18px] px-4 py-3 text-left text-[15px] font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950"
-                            >
-                              <FolderOpen className="h-5 w-5 text-slate-500" />
-                              <span>Upload Folder</span>
-                            </button>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-
-                  <div className="max-h-[760px] overflow-y-auto px-3 py-3">
-                    <div className="space-y-1.5">
-                      {foundryFileTree.length > 0 ? (
-                        renderFoundryTree(foundryFileTree)
-                      ) : (
-                        <div className="space-y-3 rounded-[20px] border border-dashed border-slate-200/80 px-4 py-8 text-center text-sm text-slate-500">
-                          <div>没有匹配的文件或目录</div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="rounded-2xl border-slate-200/80 bg-white/88"
-                            onClick={handleCreateFoundryDirectory}
-                          >
-                            <FolderPlus className="h-4 w-4" />
-                            新建 Skill 目录
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </aside>
-              ) : null}
-
-              {isFoundryEditorVisible ? (
-                <section className="overflow-hidden rounded-[28px] border border-white/85 bg-white/88 shadow-[0_22px_46px_-36px_rgba(15,23,42,0.18)] backdrop-blur-sm xl:w-[430px] xl:shrink-0">
-                  <div className="flex items-center justify-between gap-3 border-b border-slate-200/70 px-4 py-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                        {selectedFoundryFile ? (
-                          <>
-                            {(() => {
-                              const Icon = fileIcon(selectedFoundryFile.path);
-                              return <Icon className="h-4 w-4 text-slate-500" />;
-                            })()}
-                            <span className="truncate">{selectedFoundryFile.path}</span>
-                          </>
-                        ) : (
-                          <>
-                            <FilePenLine className="h-4 w-4 text-slate-500" />
-                            <span>编辑器</span>
-                          </>
-                        )}
-                      </div>
-                      <div className="mt-1 truncate text-[12px] text-slate-500">
-                        {selectedFoundryDirectory?.name ?? "未选择目录"}
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                      onClick={() => setIsFoundryEditorVisible(false)}
-                      aria-label="关闭编辑器"
-                      title="关闭编辑器"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="px-4 py-4">
-                    {selectedFoundryFile ? (
-                      <Textarea
-                        value={selectedFoundryFile.content}
-                        onChange={(event) => updateFoundryFileContent(event.target.value)}
-                        placeholder="选择文件后可在这里编辑内容。"
-                        className="min-h-[680px] resize-none rounded-[24px] border-slate-200/80 bg-slate-50/80 p-4 font-mono text-[13px] leading-6 text-slate-700 shadow-inner shadow-slate-200/55 focus-visible:ring-sky-100"
-                      />
-                    ) : (
-                      <div className="flex min-h-[680px] items-center justify-center rounded-[24px] border border-dashed border-slate-200/80 bg-slate-50/70 px-6 text-sm text-slate-500">
-                        从左侧目录树选择一个文件后，即可在这里修改内容。
-                      </div>
-                    )}
-                  </div>
-                </section>
-              ) : null}
-
-              <div className="flex min-h-[680px] min-w-0 flex-1 flex-col justify-between rounded-[28px] border border-white/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.72))] px-6 py-6 shadow-[0_24px_50px_-40px_rgba(15,23,42,0.2)] backdrop-blur-sm lg:px-8 lg:py-8">
-                <div className="max-w-3xl space-y-3">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/70 bg-amber-50/80 px-3 py-1 text-[12px] font-semibold text-amber-700">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Skills Foundry
-                  </div>
-                  <h2 className="skills-display text-[clamp(2.2rem,3.6vw,3.35rem)] leading-[1.05] text-slate-950">
-                    创建、试用、优化Skills，构建AI提效飞轮。
-                  </h2>
-                </div>
-
-                <div className="flex flex-1 items-center justify-center py-8">
-                  <div className="w-full max-w-5xl">
-                    <div className="relative overflow-hidden rounded-[34px] border border-slate-200/80 bg-white/96 p-5 shadow-[0_34px_70px_-48px_rgba(15,23,42,0.38)]">
-                      <div aria-hidden className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(15,23,42,0.15),transparent)]" />
-
-                      <div className="relative space-y-4">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="space-y-1">
-                            <div className="text-sm font-medium text-slate-700">
-                              {selectedFoundryDirectory?.name ?? "未选择目录"}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              {!isFoundryTreeVisible ? (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="rounded-full border-slate-200/80 bg-slate-50/80 text-slate-700 hover:bg-slate-100"
-                                  onClick={() => setIsFoundryTreeVisible(true)}
-                                >
-                                  <PanelLeft className="h-4 w-4" />
-                                  显示目录
-                                </Button>
-                              ) : null}
-                              {!isFoundryEditorVisible ? (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="rounded-full border-slate-200/80 bg-slate-50/80 text-slate-700 hover:bg-slate-100"
-                                  onClick={() => setIsFoundryEditorVisible(true)}
-                                  disabled={!selectedFoundryFile}
-                                >
-                                  <FilePenLine className="h-4 w-4" />
-                                  显示编辑器
-                                </Button>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="rounded-full border-slate-200/80 bg-slate-50/80 text-slate-700 hover:bg-slate-100"
-                              onClick={() => handleApplyFoundryTemplate("create")}
-                            >
-                              <Sparkles className="h-4 w-4" />
-                              创建skill
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="rounded-full border-slate-200/80 bg-slate-50/80 text-slate-700 hover:bg-slate-100"
-                              onClick={() => handleApplyFoundryTemplate("optimize")}
-                            >
-                              <Wrench className="h-4 w-4" />
-                              优化skills
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="min-h-[248px] rounded-[28px] border border-slate-200/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.98))] px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
-                          <Textarea
-                            value={foundryPrompt}
-                            onChange={(event) => setFoundryPrompt(event.target.value)}
-                            placeholder="欢迎使用 Skills Foundry，可以在此输入你的要求。"
-                            className="min-h-[190px] resize-none border-0 bg-transparent px-0 py-0 text-base leading-8 text-slate-700 shadow-none focus-visible:ring-0"
-                          />
-
-                          {foundryAttachmentNames.length > 0 ? (
-                            <div className="mt-4 flex flex-wrap gap-2">
-                              {foundryAttachmentNames.map((name) => (
-                                <div
-                                  key={name}
-                                  className="inline-flex items-center gap-2 rounded-full border border-sky-200/70 bg-sky-50/85 px-3 py-1.5 text-xs text-sky-700"
-                                >
-                                  <Paperclip className="h-3.5 w-3.5" />
-                                  <span className="max-w-[220px] truncate">{name}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-14 w-14 rounded-[20px] border-slate-200/80 bg-white text-slate-700 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.48)] hover:bg-slate-50"
-                              onClick={() => foundryAttachmentInputRef.current?.click()}
-                              aria-label="上传附件"
-                              title="上传附件"
-                            >
-                              <Paperclip className="h-5 w-5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-14 w-14 rounded-[20px] border-slate-200/80 bg-white text-slate-700 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.48)] hover:bg-slate-50"
-                              onClick={handleFoundryVoiceInput}
-                              aria-label="语音输入"
-                              title="语音输入"
-                            >
-                              <Mic className="h-5 w-5" />
-                            </Button>
-                          </div>
-
-                          <Button
-                            type="button"
-                            size="icon"
-                            className="h-14 w-14 rounded-[20px] bg-slate-500 text-white shadow-[0_16px_30px_-22px_rgba(15,23,42,0.7)] hover:bg-slate-700"
-                            onClick={handleSendFoundryPrompt}
-                            aria-label="发送"
-                            title="发送"
-                          >
-                            <ArrowUp className="h-5 w-5" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
         </TabsContent>
 
         <TabsContent value="mine" className="space-y-4">
           <input
             ref={importInputRef}
             type="file"
-            accept=".json,.md,.txt,.ts,.tsx,.js,.jsx,.css,.yml,.yaml"
-            multiple
+            accept=".zip,application/zip"
             className="hidden"
             onChange={handleImportSkills}
           />
+
+          <Dialog
+            open={importDialogOpen}
+            onOpenChange={(open) => {
+              setImportDialogOpen(open);
+              if (!open) {
+                setImportMode("local");
+                setImportUrlSource("github");
+                setImportUrlValue("");
+              }
+            }}
+          >
+            <DialogContent className="max-w-[900px] rounded-[30px] border-white/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.95))] p-0 shadow-[0_34px_72px_-36px_rgba(15,23,42,0.36)]">
+              <div className="overflow-hidden rounded-[30px]">
+                <div className="border-b border-slate-200/70 bg-[linear-gradient(135deg,rgba(240,249,255,0.94),rgba(255,255,255,0.98)_52%,rgba(236,253,245,0.9))] px-6 py-5">
+                  <DialogHeader className="gap-2 text-left">
+                    <DialogTitle className="skills-display text-[1.6rem] text-slate-950">
+                      导入Skills
+                    </DialogTitle>
+                    <DialogDescription className="max-w-2xl text-sm leading-6 text-slate-500">
+                      支持从本地压缩包导入，也支持通过 URL 引入 GitHub、skills.sh 或 Clawhub 上的 Skill 资产。
+                    </DialogDescription>
+                  </DialogHeader>
+                </div>
+
+                <div className="space-y-5 px-6 py-5">
+                  <div className="inline-flex rounded-full border border-slate-200/80 bg-slate-100/90 p-1 shadow-[0_14px_26px_-24px_rgba(15,23,42,0.18)]">
+                    <button
+                      type="button"
+                      onClick={() => setImportMode("local")}
+                      className={cn(
+                        "rounded-full px-4 py-2 text-sm font-medium transition-all",
+                        importMode === "local"
+                          ? "bg-white text-slate-950 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.28)]"
+                          : "text-slate-500 hover:text-slate-900"
+                      )}
+                    >
+                      本地压缩包
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImportMode("url")}
+                      className={cn(
+                        "rounded-full px-4 py-2 text-sm font-medium transition-all",
+                        importMode === "url"
+                          ? "bg-white text-slate-950 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.28)]"
+                          : "text-slate-500 hover:text-slate-900"
+                      )}
+                    >
+                      URL导入
+                    </button>
+                  </div>
+
+                  {importMode === "local" ? (
+                    <div className="space-y-4">
+                      <div className="rounded-[28px] border border-slate-200/80 bg-slate-50/88 p-5">
+                        <div className="text-sm font-semibold text-slate-900">导入说明</div>
+                        <div className="mt-3 space-y-3 text-sm leading-6 text-slate-500">
+                          <p>1. 推荐上传包含 `SKILL.md`、模板目录和脚本目录的标准 Skill 压缩包。</p>
+                          <p>2. 系统会自动解析压缩包目录，并生成可维护的 Skill 草稿。</p>
+                          <p>3. 导入成功后可继续发布、更新版本或补充说明文档。</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[28px] border border-slate-200/80 bg-white/90 p-6 shadow-[0_22px_42px_-34px_rgba(15,23,42,0.18)]">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-sky-100/80 bg-sky-50/90 text-sky-700">
+                            <Upload className="h-5 w-5" />
+                          </div>
+                          <div className="space-y-2">
+                            <div className="text-base font-semibold text-slate-950">从本地上传 Skill 压缩包</div>
+                            <div className="text-sm leading-6 text-slate-500">
+                              支持导入 `.zip` 压缩包
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 rounded-[24px] border border-dashed border-slate-200/90 bg-[linear-gradient(135deg,rgba(248,250,252,0.95),rgba(255,255,255,0.92))] p-6">
+                          <div className="max-w-2xl text-sm leading-6 text-slate-500">
+                            导入后会生成一条新的 Skill 草稿，你可以继续在管理区中查看、更新、发布或下架。
+                          </div>
+                          <Button
+                            className="mt-5 h-11 rounded-2xl bg-slate-950 px-5 text-white hover:bg-slate-800"
+                            onClick={() => {
+                              setImportDialogOpen(false);
+                              window.setTimeout(() => importInputRef.current?.click(), 0);
+                            }}
+                          >
+                            <Upload className="h-4 w-4" />
+                            选择本地压缩包
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid gap-3 md:grid-cols-3">
+                        {IMPORT_URL_SOURCE_OPTIONS.map((option) => {
+                          const Icon = option.icon;
+
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => setImportUrlSource(option.value)}
+                              className={cn(
+                                "rounded-[24px] border p-4 text-left transition-all duration-200",
+                                importUrlSource === option.value
+                                  ? `${option.accentClass} shadow-[0_18px_34px_-26px_rgba(15,23,42,0.24)]`
+                                  : "border-slate-200/80 bg-white/86 text-slate-600 hover:border-slate-300 hover:bg-white"
+                              )}
+                            >
+                              <div className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-white/80 bg-white/80 shadow-sm">
+                                <Icon className="h-4 w-4" />
+                              </div>
+                              <div className="mt-4 text-sm font-semibold">{option.label}</div>
+                              <div className="mt-1 text-xs leading-5 opacity-80">{option.hint}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="rounded-[28px] border border-slate-200/80 bg-white/90 p-5 shadow-[0_22px_42px_-34px_rgba(15,23,42,0.18)]">
+                        <div className="space-y-2">
+                          <Label htmlFor="skill-import-url">导入链接</Label>
+                          <Input
+                            id="skill-import-url"
+                            value={importUrlValue}
+                            onChange={(event) => setImportUrlValue(event.target.value)}
+                            placeholder={
+                              importUrlSource === "github"
+                                ? "https://github.com/org/repo"
+                                : importUrlSource === "skills.sh"
+                                  ? "https://skills.sh/microsoft/github-copilot-for-azure/azure-ai"
+                                  : "https://clawhub.ai/rhyssullivan/answeroverflow"
+                            }
+                            aria-invalid={Boolean(importUrlError)}
+                            className={cn(
+                              "h-11 rounded-2xl bg-white/95",
+                              importUrlError
+                                ? "border-rose-200/90 text-rose-700 focus-visible:border-rose-300 focus-visible:ring-rose-100"
+                                : "border-slate-200/80"
+                            )}
+                          />
+                          <p
+                            className={cn(
+                              "text-xs",
+                              importUrlError ? "font-medium text-rose-600" : "text-slate-500"
+                            )}
+                          >
+                            {importUrlError ||
+                              `当前支持 ${getImportUrlSourceLabel(importUrlSource)} 链接导入，系统会为你生成一条可继续维护的 Skill 草稿。`}
+                          </p>
+                        </div>
+
+                        <div className="mt-5 flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            className="rounded-2xl border-slate-200/80 bg-white hover:bg-slate-50"
+                            onClick={() => setImportDialogOpen(false)}
+                          >
+                            取消
+                          </Button>
+                          <Button
+                            className="rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                            disabled={!canImportFromUrl}
+                            onClick={handleImportFromUrl}
+                          >
+                            <Upload className="h-4 w-4" />
+                            导入到skills管理
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {useUnifiedSkillsManagementView ? (
             <section className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(248,250,252,0.92))] shadow-[0_28px_60px_-46px_rgba(15,23,42,0.3)] backdrop-blur-sm">
@@ -3431,9 +3258,9 @@ export default function SkillsPage() {
 
               <div className="relative px-5 py-5">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <div className="flex items-center gap-3">
-                      <h2 className="skills-display text-[1.75rem] text-slate-950">我的Skills</h2>
+                      <h2 className="skills-display text-[1.75rem] text-slate-950">skills管理</h2>
                       <Badge
                         variant="outline"
                         className="border-slate-200/80 bg-slate-50/90 text-slate-600"
@@ -3441,9 +3268,29 @@ export default function SkillsPage() {
                         {filteredMySkills.length} 项
                       </Badge>
                     </div>
-                    <p className="max-w-2xl text-sm leading-6 text-slate-500">
-                      以列表方式统一管理自定义 Skill，支持导入、导出、发布、更新与删除。
-                    </p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <div className="min-w-[52px] text-[10px] font-semibold tracking-[0.18em] text-slate-400 uppercase">
+                        状态
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {MY_SKILL_STATUS_FILTERS.map((filter) => (
+                          <button
+                            key={filter.value}
+                            type="button"
+                            onClick={() => setMySkillStatusFilter(filter.value)}
+                            className={cn(
+                              "rounded-full border px-3 py-1.5 text-[13px] font-medium transition-all duration-200",
+                              getMySkillStatusFilterClass(
+                                filter.value,
+                                mySkillStatusFilter === filter.value
+                              )
+                            )}
+                          >
+                            {filter.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex w-full flex-col gap-2 xl:w-auto xl:min-w-[420px]">
@@ -3451,19 +3298,19 @@ export default function SkillsPage() {
                       <Button
                         variant="outline"
                         className="rounded-2xl border-white bg-white/88 shadow-sm hover:bg-white"
-                        onClick={() => importInputRef.current?.click()}
+                        onClick={() => setImportDialogOpen(true)}
                       >
                         <Upload className="h-4 w-4" />
                         导入Skills
                       </Button>
                     </div>
                     <div className="relative">
-                      <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                       <Input
                         value={mySkillSearch}
                         onChange={(event) => setMySkillSearch(event.target.value)}
-                        placeholder="搜索我的Skills"
-                        className="h-10 rounded-2xl border-white bg-white/90 pl-11 pr-4 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_-24px_rgba(15,23,42,0.18)] focus-visible:border-sky-200 focus-visible:ring-sky-100"
+                        placeholder="搜索 skills管理"
+                        className="h-10 rounded-2xl border-slate-200/90 bg-slate-50/96 pl-11 pr-4 text-sm text-slate-700 placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_14px_28px_-24px_rgba(15,23,42,0.16)] focus-visible:border-sky-200 focus-visible:ring-sky-100"
                       />
                     </div>
                   </div>
@@ -3482,6 +3329,8 @@ export default function SkillsPage() {
                       });
                       const statusMeta = getSkillStatusMeta(skill.status);
                       const StatusIcon = statusMeta.icon;
+                      const releaseAction = getSkillReleaseActionMeta(skill);
+                      const ReleaseActionIcon = releaseAction.icon;
 
                       return (
                         <article
@@ -3537,7 +3386,9 @@ export default function SkillsPage() {
                                   <span className={cn("inline-flex items-center gap-1.5 font-medium", statusMeta.className)}>
                                     <StatusIcon className="h-3.5 w-3.5" />
                                     {skill.status === "draft"
-                                      ? statusMeta.label
+                                      ? hasPublishedHistory(skill) && skill.version
+                                        ? `${statusMeta.label} ${formatSkillVersion(skill.version)}`
+                                        : statusMeta.label
                                       : `${statusMeta.label} ${formatSkillVersion(skill.version)}`}
                                   </span>
                                 </div>
@@ -3549,13 +3400,7 @@ export default function SkillsPage() {
                             </p>
 
                             <div className="mt-4">
-                              <div className="flex items-center justify-between border-t border-slate-200/60 pt-3 text-[11px] text-slate-500">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span>{skill.files.length} 个文件</span>
-                                </div>
-                              </div>
-
-                              <div className="mt-3 grid grid-cols-3 gap-1.5">
+                              <div className="grid grid-cols-2 gap-1.5 border-t border-slate-200/60 pt-3 sm:grid-cols-4">
                                 <Button
                                   variant="outline"
                                   className="h-9 rounded-2xl border-white/90 bg-white/82 px-3 text-[13px] text-slate-700 hover:bg-white"
@@ -3566,18 +3411,11 @@ export default function SkillsPage() {
                                 </Button>
                                 <Button
                                   className="h-9 flex-1 rounded-2xl bg-slate-950 px-3.5 text-[13px] text-white shadow-[0_18px_28px_-24px_rgba(15,23,42,0.76)] hover:bg-slate-800"
-                                  onClick={() =>
-                                    skill.status === "draft"
-                                      ? handleRequestReview(skill.id)
-                                      : openUpdateDialog(skill.id)
-                                  }
+                                  onClick={() => openReleaseDialog(skill.id)}
+                                  disabled={releaseAction.disabled}
                                 >
-                                  {skill.status === "draft" ? (
-                                    <Rocket className="h-4 w-4" />
-                                  ) : (
-                                    <Upload className="h-4 w-4" />
-                                  )}
-                                  {skill.status === "draft" ? "发布" : "更新"}
+                                  <ReleaseActionIcon className="h-4 w-4" />
+                                  {releaseAction.label}
                                 </Button>
                                 <Button
                                   variant="outline"
@@ -3586,6 +3424,15 @@ export default function SkillsPage() {
                                 >
                                   <Trash2 className="h-4 w-4" />
                                   删除
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  className="h-9 rounded-2xl border-white/90 bg-white/82 px-3 text-[13px] text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+                                  onClick={() => handleOfflineMySkill(skill.id)}
+                                  disabled={skill.status !== "published"}
+                                >
+                                  <X className="h-4 w-4" />
+                                  下架
                                 </Button>
                               </div>
                             </div>
@@ -3602,6 +3449,138 @@ export default function SkillsPage() {
               </div>
 
               <Dialog
+                open={deleteDialogOpen}
+                onOpenChange={(open) => {
+                  setDeleteDialogOpen(open);
+                  if (!open) {
+                    setDeleteTargetSkillId("");
+                  }
+                }}
+              >
+                <DialogContent
+                  showCloseButton={false}
+                  className="max-w-[560px] border-white/90 bg-transparent p-0 shadow-none"
+                >
+                  <div className="relative overflow-hidden rounded-[30px] border border-white/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.95))] shadow-[0_34px_70px_-38px_rgba(15,23,42,0.34)]">
+                    <div aria-hidden className="absolute inset-0">
+                      <div className="skills-ambient-orb absolute left-[-2rem] top-[-2rem] h-24 w-24 rounded-full bg-rose-200/30 blur-3xl" />
+                      <div className="skills-ambient-orb skills-ambient-orb-delay absolute right-[-1rem] top-10 h-28 w-28 rounded-full bg-amber-200/20 blur-3xl" />
+                    </div>
+
+                    <div className="relative border-b border-slate-200/70 bg-[linear-gradient(135deg,rgba(255,241,242,0.92),rgba(255,255,255,0.96)_58%,rgba(255,247,237,0.88))] px-6 py-5">
+                      <DialogClose asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-4 top-4 h-9 w-9 rounded-2xl text-slate-500 hover:bg-white/70 hover:text-slate-900"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </DialogClose>
+
+                      <DialogHeader className="max-w-[440px] gap-2 text-left">
+                        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-rose-200/80 bg-white/78 px-3 py-1 text-[12px] font-semibold text-rose-700 shadow-[0_14px_26px_-22px_rgba(244,63,94,0.35)]">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          高风险操作
+                        </div>
+                        <DialogTitle className="skills-display text-[1.6rem] leading-tight text-slate-950">
+                          删除Skill
+                        </DialogTitle>
+                        <DialogDescription className="text-sm leading-6 text-slate-500">
+                          删除后，该Skill不可找回，不可恢复，是否确认？（建议您删除前自行导出.zip保留备份）
+                        </DialogDescription>
+                      </DialogHeader>
+                    </div>
+
+                    <div className="relative space-y-4 px-6 py-5">
+                      {deleteTargetSkill ? (
+                        <>
+                          <div className="overflow-hidden rounded-[26px] border border-white/90 bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.88))] shadow-[0_18px_36px_-28px_rgba(15,23,42,0.22)]">
+                            <div className="flex items-start gap-4 px-4 py-4">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-rose-100/80 bg-white/88 text-slate-700 shadow-[0_14px_30px_-26px_rgba(15,23,42,0.3)]">
+                                <DeleteTargetIcon className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="skills-display min-w-0 flex-1 text-[1.18rem] leading-7 text-slate-950">
+                                    <span className="block truncate">{deleteTargetSkill.name}</span>
+                                  </div>
+                                  {deleteTargetAudienceMeta ? (
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        "inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-semibold",
+                                        deleteTargetAudienceMeta.badgeClass
+                                      )}
+                                    >
+                                      {deleteTargetAudienceMeta.label}
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 text-[13px] text-slate-500">
+                                  {deleteTargetStatusMeta ? (
+                                    <span
+                                      className={cn(
+                                        "inline-flex items-center gap-1.5 font-medium",
+                                        deleteTargetStatusMeta.className
+                                      )}
+                                    >
+                                      <DeleteTargetStatusIcon className="h-3.5 w-3.5" />
+                                      {deleteTargetStatusMeta.label}
+                                    </span>
+                                  ) : null}
+                                  <span className="text-slate-300">·</span>
+                                  <span>
+                                    最近更新于 {deleteTargetSkill.updatedAt}（{deleteTargetSkill.updatedBy}）
+                                  </span>
+                                </div>
+                                <p className="line-clamp-2 text-[13px] leading-6 text-slate-600">
+                                  {deleteTargetSkill.description}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="rounded-[24px] border border-rose-200/80 bg-[linear-gradient(135deg,rgba(255,241,242,0.82),rgba(255,255,255,0.95))] px-4 py-4">
+                            <div className="text-sm font-semibold text-slate-900">删除后将同步移除</div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <div className="rounded-full border border-white/90 bg-white/90 px-3 py-1.5 text-xs text-slate-600">
+                                当前 Skill 文件
+                              </div>
+                              <div className="rounded-full border border-white/90 bg-white/90 px-3 py-1.5 text-xs text-slate-600">
+                                本地版本记录
+                              </div>
+                              <div className="rounded-full border border-white/90 bg-white/90 px-3 py-1.5 text-xs text-slate-600">
+                                管理页展示记录
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+
+                    <DialogFooter className="border-t border-slate-200/70 px-6 py-4">
+                      <DialogClose asChild>
+                        <Button
+                          variant="outline"
+                          className="rounded-2xl border-slate-200/80 bg-white hover:bg-slate-50"
+                        >
+                          取消
+                        </Button>
+                      </DialogClose>
+                      <Button
+                        className="rounded-2xl bg-rose-600 text-white shadow-[0_20px_34px_-22px_rgba(225,29,72,0.65)] hover:bg-rose-500"
+                        onClick={handleConfirmDeleteMySkill}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        确认
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog
                 open={updateDialogOpen}
                 onOpenChange={(open) => {
                   setUpdateDialogOpen(open);
@@ -3609,6 +3588,7 @@ export default function SkillsPage() {
                     setUpdateTargetSkillId("");
                     setUpdateVersionInput("");
                     setUpdateZipFile(null);
+                    setReleaseMode("publish");
                   }
                 }}
               >
@@ -3617,28 +3597,58 @@ export default function SkillsPage() {
                     <div className="border-b border-slate-200/70 bg-[linear-gradient(135deg,rgba(240,249,255,0.95),rgba(255,255,255,0.96)_55%,rgba(236,253,245,0.9))] px-6 py-5">
                       <DialogHeader className="gap-1 text-left">
                         <DialogTitle className="skills-display text-[1.5rem] text-slate-950">
-                          提交 Skill 更新
+                          {releaseMode === "publish"
+                            ? "提交 Skill 发布"
+                            : hasPublishedHistory(
+                                updateTargetSkill ?? {
+                                  status: "draft",
+                                  publishedTemplateId: undefined,
+                                  hasPublishedHistory: false,
+                                }
+                              )
+                              && updateTargetSkill?.status !== "published"
+                              ? "提交 Skill 更新发布"
+                              : "提交 Skill 更新"}
                         </DialogTitle>
                         <DialogDescription className="text-sm leading-6 text-slate-500">
-                          上传新的 zip 包，并填写高于当前版本的新版本号。提交后会进入审核中状态。
+                          {releaseMode === "publish"
+                            ? "填写首次发布版本号。提交后会进入审核中状态。"
+                            : "上传新的 zip 包，并填写高于当前版本的新版本号。提交后会进入审核中状态。"}
                         </DialogDescription>
                       </DialogHeader>
                     </div>
 
                     <div className="space-y-5 px-6 py-5">
-                      <div className="space-y-2">
-                        <Label htmlFor="skill-update-zip">更新包</Label>
-                        <input
-                          id="skill-update-zip"
-                          type="file"
-                          accept=".zip,application/zip"
-                          onChange={(event) => setUpdateZipFile(event.target.files?.[0] ?? null)}
-                          className="block h-11 w-full rounded-2xl border border-slate-200/80 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-950 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
-                        />
-                        <p className="text-xs text-slate-500">
-                          {updateZipFile ? `已选择：${updateZipFile.name}` : "请上传新的 Skill zip 包"}
-                        </p>
-                      </div>
+                      {releaseMode === "update" ? (
+                        <div className="space-y-2">
+                          <Label htmlFor="skill-update-zip">更新包</Label>
+                          <input
+                            ref={updateZipInputRef}
+                            id="skill-update-zip"
+                            type="file"
+                            accept=".zip,application/zip"
+                            onChange={(event) => setUpdateZipFile(event.target.files?.[0] ?? null)}
+                            className="hidden"
+                          />
+                          <div className="flex min-h-[56px] items-center gap-3 rounded-[22px] border border-slate-200/80 bg-white/96 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.95)]">
+                            <Button
+                              type="button"
+                              className="h-9 shrink-0 rounded-xl bg-slate-950 px-4 text-sm text-white hover:bg-slate-800"
+                              onClick={() => updateZipInputRef.current?.click()}
+                            >
+                              选择文件
+                            </Button>
+                            <div className="min-w-0 flex-1 text-sm">
+                              <span className={cn("block truncate", updateZipFile ? "text-slate-700" : "text-slate-400")}>
+                                {updateZipFile ? updateZipFile.name : "未选择 zip 包"}
+                              </span>
+                            </div>
+                          </div>
+                          <p className={cn("text-xs", updateZipError ? "text-rose-600" : "text-slate-500")}>
+                            {updateZipError || "请上传新的 Skill zip 包"}
+                          </p>
+                        </div>
+                      ) : null}
 
                       <div className="space-y-2">
                         <Label htmlFor="skill-update-version">新版本号</Label>
@@ -3647,10 +3657,19 @@ export default function SkillsPage() {
                           value={updateVersionInput}
                           onChange={(event) => setUpdateVersionInput(event.target.value)}
                           placeholder="例如 1.1 或 1.1.2"
-                          className="h-11 rounded-2xl border-slate-200/80 bg-white/95"
+                          aria-invalid={Boolean(updateVersionError)}
+                          className={cn(
+                            "h-11 rounded-2xl bg-white/95",
+                            updateVersionError
+                              ? "border-rose-200/90 text-rose-700 focus-visible:border-rose-300 focus-visible:ring-rose-100"
+                              : "border-slate-200/80"
+                          )}
                         />
-                        <p className="text-xs text-slate-500">
-                          版本号需高于当前版本，支持 `1.1` 或 `1.1.2` 这类格式。
+                        <p className={cn("text-xs", updateVersionError ? "font-medium text-rose-600" : "text-slate-500")}>
+                          {updateVersionError ||
+                            (releaseMode === "publish"
+                              ? `默认从 ${formatSkillVersion("1.0")} 开始，也支持手动填写更高版本号。`
+                              : `当前版本 ${formatSkillVersion(updateCurrentVersion)}，支持 \`1.1\` 或 \`1.1.2\` 这类格式。`)}
                         </p>
                       </div>
                     </div>
@@ -3664,16 +3683,33 @@ export default function SkillsPage() {
                           setUpdateTargetSkillId("");
                           setUpdateVersionInput("");
                           setUpdateZipFile(null);
+                          setReleaseMode("publish");
                         }}
                       >
                         取消
                       </Button>
                       <Button
-                        className="rounded-2xl bg-slate-950 text-white hover:bg-slate-800"
-                        onClick={handleSubmitUpdate}
+                        className="rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                        onClick={handleSubmitRelease}
+                        disabled={!canSubmitRelease}
                       >
-                        <Upload className="h-4 w-4" />
-                        提交更新
+                        {releaseMode === "publish" ? (
+                          <Rocket className="h-4 w-4" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                        {releaseMode === "publish"
+                          ? "提交发布"
+                          : hasPublishedHistory(
+                              updateTargetSkill ?? {
+                                status: "draft",
+                                publishedTemplateId: undefined,
+                                hasPublishedHistory: false,
+                              }
+                            )
+                            && updateTargetSkill?.status !== "published"
+                            ? "提交更新发布"
+                            : "提交更新"}
                       </Button>
                     </DialogFooter>
                   </div>
@@ -3686,10 +3722,10 @@ export default function SkillsPage() {
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                   <div className="space-y-2">
                     <CardTitle className="skills-display text-[1.85rem] text-slate-950">
-                      我的Skills
+                      skills管理
                     </CardTitle>
                     <CardDescription className="max-w-2xl leading-6 text-slate-500">
-                      支持导入本地草稿、编辑文件内容、保存修改，并发布到 Skills 广场。
+                      支持导入本地压缩包或 URL 链接，继续编辑文件内容、保存修改，并发布到 Skills 广场。
                     </CardDescription>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -3708,7 +3744,7 @@ export default function SkillsPage() {
                     <Button
                       variant="outline"
                       className="rounded-2xl border-white bg-white/85 shadow-sm hover:bg-white"
-                      onClick={() => importInputRef.current?.click()}
+                      onClick={() => setImportDialogOpen(true)}
                     >
                       <Upload className="h-4 w-4" />
                       导入Skills
@@ -3936,7 +3972,7 @@ export default function SkillsPage() {
                 </div>
               ) : (
                 <div className="rounded-[28px] border border-dashed border-slate-200/90 bg-white/80 px-6 py-12 text-center text-sm text-slate-500 shadow-[0_24px_50px_-40px_rgba(15,23,42,0.2)]">
-                  还没有任何 Skill，先导入本地草稿吧。
+                  还没有任何 Skill，先导入一个本地压缩包或 URL 链接吧。
                 </div>
               )}
             </CardContent>
