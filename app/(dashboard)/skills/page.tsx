@@ -14,9 +14,11 @@ import {
   BadgeCheck,
   BellRing,
   Bot,
+  Boxes,
   Building2,
   ChartColumn,
   ChartColumnIncreasing,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock3,
@@ -27,7 +29,9 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  Github,
   LayoutGrid,
+  LoaderCircle,
   Mail,
   MessagesSquare,
   PanelLeft,
@@ -65,10 +69,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
   SkillsFoundryTab,
@@ -92,7 +112,10 @@ type MarketplaceSortMode = "downloads" | "references" | "updatedAt";
 type MySkillStatusFilter = "all" | "reviewing" | "published" | "reviewFailed";
 type SkillImportMode = "local" | "url";
 type SkillImportUrlSource = "github" | "skills.sh" | "clawhub";
+type SkillImportEntryMode = "local" | SkillImportUrlSource;
 type SkillReleaseMode = "publish" | "update";
+type DependencyToolType = "mcp" | "plugin";
+type LocalImportValidationStatus = "idle" | "validating" | "valid" | "invalid";
 type AudienceCategory =
   | "ai"
   | "dev"
@@ -121,6 +144,7 @@ interface SkillTemplate {
   audienceCategory: AudienceCategory;
   isFavorite: boolean;
   tags: string[];
+  declaredDependencies?: SkillDependency[];
   downloads: number;
   references?: number;
   referencedAgents?: string[];
@@ -134,8 +158,10 @@ interface MySkill {
   description: string;
   category: string;
   tags: string[];
+  declaredDependencies: SkillDependency[];
   source: SkillSource;
   status: SkillStatus;
+  createdBy: string;
   linkedCECClaws: string[];
   files: SkillFile[];
   activeFileId: string;
@@ -154,7 +180,28 @@ interface SkillBundle {
   description: string;
   category: string;
   tags: string[];
+  declaredDependencies?: SkillDependency[];
   files: Array<Pick<SkillFile, "path" | "content">>;
+}
+
+interface SkillDependency {
+  id: string;
+  name: string;
+  type: DependencyToolType;
+}
+
+interface LocalImportValidationResult {
+  status: LocalImportValidationStatus;
+  errors: string[];
+  fileName: string;
+  manifest?: {
+    name: string;
+    description: string;
+  };
+  category?: string;
+  tags?: string[];
+  declaredDependencies?: SkillDependency[];
+  files?: Array<Pick<SkillFile, "path" | "content">>;
 }
 
 interface FileTreeNode {
@@ -192,34 +239,47 @@ const MY_SKILL_STATUS_FILTERS: Array<{ value: MySkillStatusFilter; label: string
 const CEC_CLAW_INSTANCE = "华东专属 CEC-Claw";
 const ALL_SKILLS_VALUE = "__all__";
 const CURRENT_SKILL_EDITOR = "楠不难";
-const IMPORT_URL_SOURCE_OPTIONS: Array<{
-  value: SkillImportUrlSource;
+const IMPORT_ENTRY_OPTIONS: Array<{
+  value: SkillImportEntryMode;
   label: string;
   hint: string;
   icon: LucideIcon;
-  accentClass: string;
 }> = [
   {
+    value: "local",
+    label: "本地.zip导入",
+    hint: "上传本地 Skill 压缩包并校验结构",
+    icon: Upload,
+  },
+  {
     value: "github",
-    label: "GitHub导入",
-    hint: "支持 github.com/<组织>/<仓库> 形式",
-    icon: FileCode2,
-    accentClass: "border-indigo-200/80 bg-indigo-50/90 text-indigo-700",
+    label: "从Github导入",
+    hint: "从公开 GitHub 仓库导入 Skill",
+    icon: Github,
   },
   {
     value: "skills.sh",
-    label: "skills.sh导入",
-    hint: "支持 skills.sh/<组织>/<仓库>/<skill> 形式",
+    label: "从skill.sh导入",
+    hint: "从 skills.sh 链接导入 Skill",
     icon: Sparkles,
-    accentClass: "border-amber-200/80 bg-amber-50/90 text-amber-700",
   },
   {
     value: "clawhub",
-    label: "Clawhub导入",
-    hint: "支持 clawhub.ai/<作者>/<skill> 形式",
+    label: "从Clawhub导入",
+    hint: "从 Clawhub 链接导入 Skill",
     icon: Bot,
-    accentClass: "border-emerald-200/80 bg-emerald-50/90 text-emerald-700",
   },
+];
+const IMPORT_MAX_FILE_SIZE = 100 * 1024 * 1024;
+const DEPENDENCY_TOOL_OPTIONS: SkillDependency[] = [
+  { id: "mcp-policy-center", name: "制度中心 MCP", type: "mcp" },
+  { id: "mcp-contract-review", name: "合同审阅 MCP", type: "mcp" },
+  { id: "mcp-mail-gateway", name: "邮件网关 MCP", type: "mcp" },
+  { id: "mcp-lanxin-message", name: "蓝信消息 MCP", type: "mcp" },
+  { id: "plugin-office-suite", name: "办公套件插件", type: "plugin" },
+  { id: "plugin-travel-expense", name: "差旅报销插件", type: "plugin" },
+  { id: "plugin-procurement-center", name: "招采协同插件", type: "plugin" },
+  { id: "plugin-public-opinion", name: "舆情监测插件", type: "plugin" },
 ];
 const AGENT_REFERENCE_POOL = [
   "经营分析Agent",
@@ -295,9 +355,11 @@ function createMySkill(input: {
   description: string;
   category: string;
   tags: string[];
+  declaredDependencies?: SkillDependency[];
   source: SkillSource;
   status?: SkillStatus;
   files: SkillFile[];
+  createdBy?: string;
   linkedCECClaws?: string[];
   updatedBy?: string;
   version?: string;
@@ -313,8 +375,10 @@ function createMySkill(input: {
     description: input.description,
     category: input.category,
     tags: [...input.tags],
+    declaredDependencies: [...(input.declaredDependencies ?? [])],
     source: input.source,
     status: input.status ?? "draft",
+    createdBy: input.createdBy ?? input.updatedBy ?? CURRENT_SKILL_EDITOR,
     linkedCECClaws: input.linkedCECClaws ?? [],
     files,
     activeFileId: firstFileId,
@@ -995,6 +1059,8 @@ const initialMySkills: MySkill[] = [
     source: "template",
     status: "published",
     version: "1.0",
+    createdBy: "王晓宁",
+    updatedBy: "王晓宁",
     files: marketplaceSeeds.find((skill) => skill.id === "xlsx")?.files ?? [],
     linkedCECClaws: [CEC_CLAW_INSTANCE],
     publishedTemplateId: "xlsx",
@@ -1008,6 +1074,8 @@ const initialMySkills: MySkill[] = [
     source: "blank",
     status: "reviewing",
     version: "1.0",
+    createdBy: "周媛",
+    updatedBy: "周媛",
     files: [
       createFile(
         "START.md",
@@ -1053,6 +1121,8 @@ description: "沉淀经营周报模板与摘要规范。"
     source: "blank",
     status: "published",
     version: "1.0",
+    createdBy: "李晓晓",
+    updatedBy: "李晓晓",
     linkedCECClaws: [CEC_CLAW_INSTANCE],
     files: [
       createFile(
@@ -1128,6 +1198,8 @@ description: "为 AI 产线项目生成规范、正式、可审批的公文与�
     source: "imported",
     status: "reviewFailed",
     version: "1.1",
+    createdBy: "赵明",
+    updatedBy: "赵明",
     files: [
       createFile(
         "START.md",
@@ -1182,6 +1254,8 @@ description: "沉淀 MCP 联调流程、检查单和问题记录。"
     source: "template",
     status: "draft",
     version: "1.0",
+    createdBy: "刘婧",
+    updatedBy: "刘婧",
     files: [
       createFile(
         "START.md",
@@ -1285,13 +1359,16 @@ function fileIcon(path: string) {
   return FileText;
 }
 
-function serializeSkillBundle(skill: Pick<MySkill, "name" | "description" | "category" | "tags" | "files">): string {
+function serializeSkillBundle(
+  skill: Pick<MySkill, "name" | "description" | "category" | "tags" | "declaredDependencies" | "files">
+): string {
   const bundle: SkillBundle = {
     schemaVersion: 1,
     name: skill.name,
     description: skill.description,
     category: skill.category,
     tags: [...skill.tags],
+    declaredDependencies: [...skill.declaredDependencies],
     files: skill.files.map((file) => ({
       path: file.path,
       content: file.content,
@@ -1301,14 +1378,30 @@ function serializeSkillBundle(skill: Pick<MySkill, "name" | "description" | "cat
   return JSON.stringify(bundle, null, 2);
 }
 
-function downloadTextFile(filename: string, content: string) {
-  const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+function downloadBlobFile(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+async function exportSkillArchive(
+  filename: string,
+  skill: Pick<MySkill, "name" | "description" | "category" | "tags" | "declaredDependencies" | "files">
+) {
+  const JSZip = (await import("jszip")).default;
+  const zip = new JSZip();
+
+  skill.files.forEach((file) => {
+    zip.file(file.path, file.content);
+  });
+
+  zip.file(".skillhub.json", serializeSkillBundle(skill));
+
+  const blob = await zip.generateAsync({ type: "blob" });
+  downloadBlobFile(filename, blob);
 }
 
 function uniqueName(name: string, existingNames: string[]) {
@@ -1324,12 +1417,85 @@ function uniqueName(name: string, existingNames: string[]) {
 }
 
 function normalizeImportedPath(path: string) {
-  const segments = path.split("/").filter(Boolean);
-  if (segments.length > 1) {
-    return segments.slice(1).join("/");
+  const sanitized = path.replace(/^\.?\//, "");
+  const segments = sanitized.split("/").filter(Boolean);
+  return segments.join("/") || "SKILL.md";
+}
+
+function extractYamlValue(rawValue: string) {
+  const value = rawValue.trim();
+
+  if (!value) {
+    return "";
   }
 
-  return segments[0] ?? "SKILL.md";
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1).trim();
+  }
+
+  return value;
+}
+
+function parseSkillFrontmatter(content: string) {
+  if (!content.trim()) {
+    return { error: "导入失败：SKILL.md 内容为空或无法正常读取" };
+  }
+
+  const frontmatterMatch = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatterMatch) {
+    return { error: "导入失败：SKILL.md 格式不符合 YAML 规范" };
+  }
+
+  const yamlLines = frontmatterMatch[1].split(/\r?\n/);
+  const fields = new Map<string, string>();
+
+  for (const line of yamlLines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const separatorIndex = line.indexOf(":");
+    if (separatorIndex <= 0) {
+      return { error: "导入失败：SKILL.md 格式不符合 YAML 规范" };
+    }
+
+    const key = line.slice(0, separatorIndex).trim();
+    const value = line.slice(separatorIndex + 1);
+
+    if (!key) {
+      return { error: "导入失败：SKILL.md 格式不符合 YAML 规范" };
+    }
+
+    fields.set(key, extractYamlValue(value));
+  }
+
+  const name = fields.get("name")?.trim() ?? "";
+  const description = fields.get("description")?.trim() ?? "";
+
+  if (!name) {
+    return { error: "导入失败：SKILL.md 中缺少 Skill 名称（name）" };
+  }
+
+  if (!description) {
+    return { error: "导入失败：SKILL.md 中缺少 Skill 描述（description）" };
+  }
+
+  return {
+    name,
+    description,
+  };
+}
+
+function buildImportValidationError(error: string): LocalImportValidationResult {
+  return {
+    status: "invalid",
+    errors: [error],
+    fileName: "",
+  };
 }
 
 function getImportUrlSourceLabel(source: SkillImportUrlSource) {
@@ -1385,14 +1551,101 @@ function isValidSkillImportUrlPath(url: URL, source: SkillImportUrlSource) {
   const segments = url.pathname.split("/").filter(Boolean);
 
   if (source === "github") {
-    return segments.length >= 2;
+    return segments.length === 2;
   }
 
   if (source === "skills.sh") {
     return segments.length >= 3;
   }
 
-  return segments.length >= 2;
+  return segments.length >= 2 && segments.length <= 3;
+}
+
+async function validateLocalImportArchive(file: File): Promise<LocalImportValidationResult> {
+  const lowerName = file.name.toLowerCase();
+  const isZipLike =
+    lowerName.endsWith(".zip") || lowerName.endsWith(".skill") || lowerName.endsWith(".skill.json");
+
+  if (!isZipLike) {
+    return buildImportValidationError("仅支持导入 .zip 或 .skill 格式文件");
+  }
+
+  if (file.size > IMPORT_MAX_FILE_SIZE) {
+    return buildImportValidationError("文件大小超过 100MB，暂不支持导入");
+  }
+
+  try {
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+    const zipEntries = Object.values(zip.files).filter(
+      (entry) =>
+        !entry.dir &&
+        !entry.name.startsWith("__MACOSX/") &&
+        !entry.name.endsWith(".DS_Store")
+    );
+
+    const rootSkillEntry = zipEntries.find((entry) => /^SKILL\.md$/i.test(normalizeImportedPath(entry.name)));
+    if (!rootSkillEntry) {
+      return buildImportValidationError("导入失败：压缩包根目录下未检测到 SKILL.md 文件");
+    }
+
+    let skillMarkdown = "";
+    try {
+      skillMarkdown = await rootSkillEntry.async("string");
+    } catch {
+      return buildImportValidationError("导入失败：SKILL.md 内容为空或无法正常读取");
+    }
+
+    if (!skillMarkdown.trim()) {
+      return buildImportValidationError("导入失败：SKILL.md 内容为空或无法正常读取");
+    }
+
+    const frontmatter = parseSkillFrontmatter(skillMarkdown);
+    if ("error" in frontmatter) {
+      return buildImportValidationError(frontmatter.error);
+    }
+
+    const metadataEntry = zipEntries.find((entry) => normalizeImportedPath(entry.name) === ".skillhub.json");
+    let metadata: Partial<SkillBundle> | null = null;
+
+    if (metadataEntry) {
+      try {
+        metadata = JSON.parse(await metadataEntry.async("string")) as Partial<SkillBundle>;
+      } catch {
+        metadata = null;
+      }
+    }
+
+    const files = await Promise.all(
+      zipEntries
+        .filter((entry) => normalizeImportedPath(entry.name) !== ".skillhub.json")
+        .map(async (entry, index) => ({
+          path: normalizeImportedPath(entry.name || `file-${index + 1}.md`),
+          content: await entry.async("string"),
+        }))
+    );
+
+    return {
+      status: "valid",
+      errors: [],
+      fileName: file.name,
+      manifest: {
+        name: frontmatter.name,
+        description: frontmatter.description,
+      },
+      category: metadata?.category ?? "通用",
+      tags: Array.isArray(metadata?.tags) ? metadata.tags : ["压缩包导入"],
+      declaredDependencies: Array.isArray(metadata?.declaredDependencies)
+        ? metadata.declaredDependencies.filter(
+            (item): item is SkillDependency =>
+              Boolean(item && typeof item.id === "string" && typeof item.name === "string")
+          )
+        : [],
+      files,
+    };
+  } catch {
+    return buildImportValidationError("文件解析失败，请检查压缩包是否损坏后重试");
+  }
 }
 
 type AudienceVisualMeta = {
@@ -1747,6 +2000,17 @@ export default function SkillsPage() {
   const [importMode, setImportMode] = useState<SkillImportMode>("local");
   const [importUrlSource, setImportUrlSource] = useState<SkillImportUrlSource>("github");
   const [importUrlValue, setImportUrlValue] = useState("");
+  const [localImportFile, setLocalImportFile] = useState<File | null>(null);
+  const [localImportValidation, setLocalImportValidation] = useState<LocalImportValidationResult>({
+    status: "idle",
+    errors: [],
+    fileName: "",
+  });
+  const [importDependencyEnabled, setImportDependencyEnabled] = useState(false);
+  const [selectedDependencyIds, setSelectedDependencyIds] = useState<string[]>([]);
+  const [dependencyPopoverOpen, setDependencyPopoverOpen] = useState(false);
+  const [dependencySearch, setDependencySearch] = useState("");
+  const [remoteImportLoading, setRemoteImportLoading] = useState(false);
   const [updateVersionInput, setUpdateVersionInput] = useState("");
   const [updateZipFile, setUpdateZipFile] = useState<File | null>(null);
   const [releaseMode, setReleaseMode] = useState<SkillReleaseMode>("publish");
@@ -1881,7 +2145,21 @@ export default function SkillsPage() {
 
     return "";
   }, [importUrlSource, inferredImportUrlSource, normalizedImportUrl]);
-  const canImportFromUrl = Boolean(normalizedImportUrl && !importUrlError);
+  const selectedDeclaredDependencies = useMemo(
+    () => DEPENDENCY_TOOL_OPTIONS.filter((item) => selectedDependencyIds.includes(item.id)),
+    [selectedDependencyIds]
+  );
+  const filteredDependencyOptions = useMemo(() => {
+    const query = dependencySearch.trim().toLowerCase();
+    if (!query) {
+      return DEPENDENCY_TOOL_OPTIONS;
+    }
+
+    return DEPENDENCY_TOOL_OPTIONS.filter((item) =>
+      [item.name, item.type === "mcp" ? "mcp" : "插件"].join(" ").toLowerCase().includes(query)
+    );
+  }, [dependencySearch]);
+  const canConfirmLocalImport = localImportValidation.status === "valid";
 
   const activeFile = useMemo(
     () => activeSkill?.files.find((file) => file.id === activeSkill.activeFileId) ?? null,
@@ -2112,6 +2390,7 @@ export default function SkillsPage() {
         audienceCategory: mapEditorCategoryToAudienceCategory(skillToPublish.category),
         isFavorite: existingTemplate?.isFavorite ?? false,
         tags: skillToPublish.tags,
+        declaredDependencies: skillToPublish.declaredDependencies,
         downloads: existingTemplate?.downloads ?? 0,
         references: existingTemplate?.references ?? 0,
         referencedAgents: existingTemplate?.referencedAgents ?? [],
@@ -2301,16 +2580,21 @@ export default function SkillsPage() {
     toast.success(`已新增文件：${nextFile.path}`);
   };
 
-  const handleDownloadTemplate = (template: SkillTemplate) => {
-    downloadTextFile(`${template.name}.zip`, serializeSkillBundle({
-      name: template.name,
-      description: template.description,
-      category: template.category,
-      tags: template.tags,
-      files: template.files,
-    }));
+  const handleDownloadTemplate = async (template: SkillTemplate) => {
+    try {
+      await exportSkillArchive(`${template.name}.zip`, {
+        name: template.name,
+        description: template.description,
+        category: template.category,
+        tags: template.tags,
+        declaredDependencies: template.declaredDependencies ?? [],
+        files: template.files,
+      });
 
-    toast.success(`已下载 Skill：${template.name}`);
+      toast.success(`已下载 Skill：${template.name}`);
+    } catch {
+      toast.error("导出失败，请稍后重试");
+    }
   };
 
   const handleToggleFavorite = (templateId: string) => {
@@ -2347,21 +2631,26 @@ export default function SkillsPage() {
     setActiveTab("foundry");
   };
 
-  const handleExportMySkill = (skillId: string) => {
+  const handleExportMySkill = async (skillId: string) => {
     const skill = mySkills.find((item) => item.id === skillId);
     if (!skill) {
       return;
     }
 
-    downloadTextFile(`${skill.name}.zip`, serializeSkillBundle({
-      name: skill.name,
-      description: skill.description,
-      category: skill.category,
-      tags: skill.tags,
-      files: skill.files,
-    }));
+    try {
+      await exportSkillArchive(`${skill.name}.zip`, {
+        name: skill.name,
+        description: skill.description,
+        category: skill.category,
+        tags: skill.tags,
+        declaredDependencies: skill.declaredDependencies,
+        files: skill.files,
+      });
 
-    toast.success(`已导出 Skill：${skill.name}`);
+      toast.success(`已导出 Skill：${skill.name}`);
+    } catch {
+      toast.error("导出失败，请稍后重试");
+    }
   };
 
   const handleDeleteMySkill = (skillId: string) => {
@@ -2444,6 +2733,33 @@ export default function SkillsPage() {
     toast.success(`已下架 Skill：${skill.name}，当前已转为未发布`);
   };
 
+  const resetImportDraft = () => {
+    setImportMode("local");
+    setImportUrlSource("github");
+    setImportUrlValue("");
+    setLocalImportFile(null);
+    setLocalImportValidation({
+      status: "idle",
+      errors: [],
+      fileName: "",
+    });
+    setImportDependencyEnabled(false);
+    setSelectedDependencyIds([]);
+    setDependencySearch("");
+    setDependencyPopoverOpen(false);
+    setRemoteImportLoading(false);
+  };
+
+  const openImportDialogForMode = (mode: SkillImportEntryMode) => {
+    if (mode === "local") {
+      setImportMode("local");
+    } else {
+      setImportMode("url");
+      setImportUrlSource(mode);
+    }
+    setImportDialogOpen(true);
+  };
+
   const finalizeImportedSkill = (importedSkill: MySkill, successMessage: string) => {
     setMySkills((current) => [importedSkill, ...current]);
     setMySkillStatusFilter("all");
@@ -2452,13 +2768,14 @@ export default function SkillsPage() {
     setFocusedSkillId(importedSkill.id);
     setActiveTab("mine");
     setImportDialogOpen(false);
-    setImportUrlValue("");
+    resetImportDraft();
     toast.success(successMessage);
   };
 
   const buildImportedSkillFromUrl = (
     urlValue: string,
-    source: SkillImportUrlSource
+    source: SkillImportUrlSource,
+    declaredDependencies: SkillDependency[]
   ) => {
     const parsedUrl = new URL(urlValue);
     const sourceLabel = getImportUrlSourceLabel(source);
@@ -2474,6 +2791,7 @@ export default function SkillsPage() {
       description: `从${sourceLabel}链接导入的 Skill 草稿，可继续补充说明、模板和脚本内容。`,
       category: "通用",
       tags: [sourceLabel, "URL导入"],
+      declaredDependencies,
       source: "imported",
       files: [
         createFile(
@@ -2513,95 +2831,141 @@ source_url: "${parsedUrl.toString()}"
     });
   };
 
-  const handleImportSkills = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleLocalImportFileSelection = async (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files ?? []);
     if (selectedFiles.length === 0) {
       return;
     }
 
+    const importFile = selectedFiles[0];
+    setLocalImportFile(importFile);
+    setLocalImportValidation({
+      status: "validating",
+      errors: [],
+      fileName: importFile.name,
+    });
+
     try {
-      const importFile = selectedFiles[0];
-      const fileName = importFile.name.toLowerCase();
-      let importedSkill: MySkill | null = null;
-
-      if (fileName.endsWith(".skill.json") || fileName.endsWith(".zip")) {
-        const rawText = await importFile.text();
-
-        try {
-          const bundle = JSON.parse(rawText) as Partial<SkillBundle>;
-          const bundleFiles =
-            bundle.files?.map((file, index) =>
-              createFile(file.path ?? `file-${index + 1}.md`, file.content ?? "", "import-bundle")
-            ) ?? [];
-
-          importedSkill = createMySkill({
-            id: `${slugify(bundle.name ?? "imported-skill")}-${Date.now()}`,
-            name: uniqueName(bundle.name ?? "imported-skill", mySkills.map((skill) => skill.name)),
-            description: bundle.description ?? "从导出文件导入的 Skill。",
-            category: bundle.category ?? "通用",
-            tags: bundle.tags ?? ["导入"],
-            source: "imported",
-            files:
-              bundleFiles.length > 0
-                ? bundleFiles
-                : [createFile("SKILL.md", "# Imported Skill", "import-fallback")],
-          });
-        } catch {
-          const JSZip = (await import("jszip")).default;
-          const zip = await JSZip.loadAsync(importFile);
-          const zipEntries = Object.values(zip.files).filter(
-            (entry) =>
-              !entry.dir &&
-              !entry.name.startsWith("__MACOSX/") &&
-              !entry.name.endsWith(".DS_Store")
-          );
-
-          const contents = await Promise.all(
-            zipEntries.map(async (entry, index) => ({
-              path: normalizeImportedPath(entry.name || `file-${index + 1}.md`),
-              content: await entry.async("string"),
-            }))
-          );
-
-          const rawName = importFile.name.replace(/\.zip$/i, "");
-          importedSkill = createMySkill({
-            id: `${slugify(rawName)}-${Date.now()}`,
-            name: uniqueName(rawName, mySkills.map((skill) => skill.name)),
-            description: "从本地压缩包导入的 Skill 草稿。",
-            category: "通用",
-            tags: ["压缩包导入"],
-            source: "imported",
-            files:
-              contents.length > 0
-                ? contents.map((file, index) =>
-                    createFile(file.path || `file-${index + 1}.md`, file.content, "import-zip")
-                  )
-                : [createFile("SKILL.md", "# Imported Skill", "import-zip-fallback")],
-          });
-        }
-      }
-
-      if (!importedSkill) {
-        throw new Error("unsupported-import");
-      }
-
-      finalizeImportedSkill(importedSkill, `已导入 Skill：${importedSkill.name}`);
-    } catch {
-      toast.error("导入失败，请检查文件格式");
+      const validationResult = await validateLocalImportArchive(importFile);
+      setLocalImportValidation(validationResult);
     } finally {
       event.target.value = "";
     }
   };
 
-  const handleImportFromUrl = () => {
-    if (!canImportFromUrl) {
+  const handleConfirmLocalImport = () => {
+    if (localImportValidation.status !== "valid" || !localImportValidation.manifest || !localImportValidation.files) {
       return;
     }
 
-    const importedSkill = buildImportedSkillFromUrl(normalizedImportUrl, importUrlSource);
-    finalizeImportedSkill(
-      importedSkill,
-      `已从 ${getImportUrlSourceLabel(importUrlSource)} 导入 Skill：${importedSkill.name}`
+    const name = uniqueName(
+      localImportValidation.manifest.name,
+      mySkills.map((skill) => skill.name)
+    );
+
+    const importedSkill = createMySkill({
+      id: `${slugify(localImportValidation.manifest.name)}-${Date.now()}`,
+      name,
+      description: localImportValidation.manifest.description,
+      category: localImportValidation.category ?? "通用",
+      tags: localImportValidation.tags ?? ["压缩包导入"],
+      declaredDependencies: importDependencyEnabled
+        ? [
+            ...(localImportValidation.declaredDependencies ?? []),
+            ...selectedDeclaredDependencies.filter(
+              (dependency) =>
+                !(localImportValidation.declaredDependencies ?? []).some(
+                  (existing) => existing.id === dependency.id
+                )
+            ),
+          ]
+        : (localImportValidation.declaredDependencies ?? []),
+      source: "imported",
+      files: localImportValidation.files.map((file, index) =>
+        createFile(file.path || `file-${index + 1}.md`, file.content, "import-zip")
+      ),
+    });
+
+    finalizeImportedSkill(importedSkill, `已导入 Skill：${importedSkill.name}`);
+  };
+
+  const handleImportFromUrl = async () => {
+    const sourceLabel = getImportUrlSourceLabel(importUrlSource);
+
+    if (!normalizedImportUrl) {
+      toast.error(
+        importUrlSource === "github"
+          ? "请输入合法的 GitHub 仓库地址"
+          : `请输入合法的 ${sourceLabel} Skill 链接`
+      );
+      return;
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(normalizedImportUrl);
+    } catch {
+      toast.error(
+        importUrlSource === "github"
+          ? "请输入合法的 GitHub 仓库地址"
+          : `请输入合法的 ${sourceLabel} Skill 链接`
+      );
+      return;
+    }
+
+    if (!inferredImportUrlSource || inferredImportUrlSource !== importUrlSource) {
+      toast.error(
+        importUrlSource === "github"
+          ? "请输入合法的 GitHub 仓库地址"
+          : `请输入合法的 ${sourceLabel} Skill 链接`
+      );
+      return;
+    }
+
+    if (!isValidSkillImportUrlPath(parsedUrl, importUrlSource)) {
+      toast.error(
+        importUrlSource === "github"
+          ? "请输入合法的 GitHub 仓库地址"
+          : `请输入合法的 ${sourceLabel} Skill 链接`
+      );
+      return;
+    }
+
+    setRemoteImportLoading(true);
+
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 650));
+
+      const inaccessibleHint = /private|not[-_]?found|404/i.test(parsedUrl.toString());
+      if (inaccessibleHint) {
+        toast.error(
+          importUrlSource === "github"
+            ? "无法访问该仓库，请确保地址正确且状态为公开"
+            : `无法访问该 Skill，请确保链接正确且可公开访问`
+        );
+        return;
+      }
+
+      const importedSkill = buildImportedSkillFromUrl(
+        normalizedImportUrl,
+        importUrlSource,
+        importDependencyEnabled ? selectedDeclaredDependencies : []
+      );
+
+      finalizeImportedSkill(
+        importedSkill,
+        `已从 ${getImportUrlSourceLabel(importUrlSource)} 导入 Skill：${importedSkill.name}`
+      );
+    } finally {
+      setRemoteImportLoading(false);
+    }
+  };
+
+  const toggleDependencySelection = (dependencyId: string) => {
+    setSelectedDependencyIds((current) =>
+      current.includes(dependencyId)
+        ? current.filter((item) => item !== dependencyId)
+        : [...current, dependencyId]
     );
   };
 
@@ -2938,6 +3302,44 @@ source_url: "${parsedUrl.toString()}"
                                   ? `更新于 ${skill.publishedAt}`
                                   : `发布于 ${skill.publishedAt}（${skill.publishedBy}）`}
                               </span>
+                              {skill.declaredDependencies?.length ? (
+                                <>
+                                  <span className="text-slate-300">·</span>
+                                  <TooltipProvider delayDuration={120}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="inline-flex items-center gap-1.5 rounded-full border border-violet-200/80 bg-violet-50/85 px-2 py-0.5 text-[11px] font-medium text-violet-700 transition-colors hover:bg-violet-100"
+                                        >
+                                          <Boxes className="h-3 w-3" />
+                                          依赖声明
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        align="start"
+                                        className="max-w-[260px] rounded-2xl border-white/90 bg-white/96 px-3 py-3 text-slate-600 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]"
+                                      >
+                                        <div className="space-y-2">
+                                          <div className="text-[11px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
+                                            依赖工具
+                                          </div>
+                                          <div className="grid gap-1">
+                                            {skill.declaredDependencies.map((dependency) => (
+                                              <div
+                                                key={`${skill.id}-${dependency.id}`}
+                                                className="rounded-xl bg-slate-50/90 px-2.5 py-1.5 text-[12px] text-slate-700"
+                                              >
+                                                {dependency.name}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -3065,9 +3467,9 @@ source_url: "${parsedUrl.toString()}"
           <input
             ref={importInputRef}
             type="file"
-            accept=".zip,application/zip"
+            accept=".zip,.skill,application/zip"
             className="hidden"
-            onChange={handleImportSkills}
+            onChange={handleLocalImportFileSelection}
           />
 
           <Dialog
@@ -3075,9 +3477,7 @@ source_url: "${parsedUrl.toString()}"
             onOpenChange={(open) => {
               setImportDialogOpen(open);
               if (!open) {
-                setImportMode("local");
-                setImportUrlSource("github");
-                setImportUrlValue("");
+                resetImportDraft();
               }
             }}
           >
@@ -3095,31 +3495,28 @@ source_url: "${parsedUrl.toString()}"
                 </div>
 
                 <div className="space-y-5 px-6 py-5">
-                  <div className="inline-flex rounded-full border border-slate-200/80 bg-slate-100/90 p-1 shadow-[0_14px_26px_-24px_rgba(15,23,42,0.18)]">
-                    <button
-                      type="button"
-                      onClick={() => setImportMode("local")}
-                      className={cn(
-                        "rounded-full px-4 py-2 text-sm font-medium transition-all",
-                        importMode === "local"
-                          ? "bg-white text-slate-950 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.28)]"
-                          : "text-slate-500 hover:text-slate-900"
-                      )}
-                    >
-                      本地压缩包
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setImportMode("url")}
-                      className={cn(
-                        "rounded-full px-4 py-2 text-sm font-medium transition-all",
-                        importMode === "url"
-                          ? "bg-white text-slate-950 shadow-[0_10px_18px_-16px_rgba(15,23,42,0.28)]"
-                          : "text-slate-500 hover:text-slate-900"
-                      )}
-                    >
-                      URL导入
-                    </button>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-slate-50/92 px-3 py-2 text-xs font-medium text-slate-600 shadow-[0_14px_26px_-24px_rgba(15,23,42,0.18)]">
+                    {importMode === "local" ? (
+                      <>
+                        <Upload className="h-3.5 w-3.5" />
+                        本地.zip导入
+                      </>
+                    ) : (
+                      <>
+                        {importUrlSource === "github" ? (
+                          <Github className="h-3.5 w-3.5" />
+                        ) : importUrlSource === "skills.sh" ? (
+                          <Sparkles className="h-3.5 w-3.5" />
+                        ) : (
+                          <Bot className="h-3.5 w-3.5" />
+                        )}
+                        {importUrlSource === "github"
+                          ? "从Github导入"
+                          : importUrlSource === "skills.sh"
+                            ? "从skill.sh导入"
+                            : "从Clawhub导入"}
+                      </>
+                    )}
                   </div>
 
                   {importMode === "local" ? (
@@ -3127,9 +3524,9 @@ source_url: "${parsedUrl.toString()}"
                       <div className="rounded-[28px] border border-slate-200/80 bg-slate-50/88 p-5">
                         <div className="text-sm font-semibold text-slate-900">导入说明</div>
                         <div className="mt-3 space-y-3 text-sm leading-6 text-slate-500">
-                          <p>1. 推荐上传包含 `SKILL.md`、模板目录和脚本目录的标准 Skill 压缩包。</p>
-                          <p>2. 系统会自动解析压缩包目录，并生成可维护的 Skill 草稿。</p>
-                          <p>3. 导入成功后可继续发布、更新版本或补充说明文档。</p>
+                          <p>1. 上传文件需为 `.zip` 或 `.skill` 格式压缩包，且文件大小不超过 100MB。</p>
+                          <p>2. 压缩包根目录下必须包含 `SKILL.md` 文件，且其中需使用 YAML frontmatter 声明 `name` 和 `description`。</p>
+                          <p>3. 所有阻断项校验通过后，才可点击【确认导入】生成 Skill 草稿。</p>
                         </div>
                       </div>
 
@@ -3139,7 +3536,7 @@ source_url: "${parsedUrl.toString()}"
                             <Upload className="h-5 w-5" />
                           </div>
                           <div className="space-y-2">
-                            <div className="text-base font-semibold text-slate-950">从本地上传 Skill 压缩包</div>
+                            <div className="text-base font-semibold text-slate-950">导入文件</div>
                             <div className="text-sm leading-6 text-slate-500">
                               支持导入 `.zip` 压缩包
                             </div>
@@ -3147,48 +3544,117 @@ source_url: "${parsedUrl.toString()}"
                         </div>
 
                         <div className="mt-5 rounded-[24px] border border-dashed border-slate-200/90 bg-[linear-gradient(135deg,rgba(248,250,252,0.95),rgba(255,255,255,0.92))] p-6">
-                          <div className="max-w-2xl text-sm leading-6 text-slate-500">
-                            导入后会生成一条新的 Skill 草稿，你可以继续在管理区中查看、更新、发布或下架。
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="space-y-1">
+                              <div className="text-sm font-medium text-slate-900">
+                                {localImportFile ? localImportFile.name : "尚未选择导入文件"}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {localImportValidation.status === "validating"
+                                  ? "正在校验压缩包结构和 SKILL.md 内容..."
+                                  : localImportValidation.status === "valid"
+                                    ? "校验通过，可确认导入"
+                                    : localImportValidation.status === "invalid"
+                                      ? localImportValidation.errors[0]
+                                      : "请先选择本地 Skill 压缩包"}
+                              </div>
+                            </div>
+                            <Button
+                              className="h-11 rounded-2xl bg-slate-950 px-5 text-white hover:bg-slate-800"
+                              onClick={() => importInputRef.current?.click()}
+                            >
+                              <Upload className="h-4 w-4" />
+                              选择本地压缩包
+                            </Button>
                           </div>
-                          <Button
-                            className="mt-5 h-11 rounded-2xl bg-slate-950 px-5 text-white hover:bg-slate-800"
-                            onClick={() => {
-                              setImportDialogOpen(false);
-                              window.setTimeout(() => importInputRef.current?.click(), 0);
-                            }}
-                          >
-                            <Upload className="h-4 w-4" />
-                            选择本地压缩包
-                          </Button>
                         </div>
+
+                        <div className="mt-4 grid gap-3 md:grid-cols-3">
+                          <div
+                            className={cn(
+                              "rounded-[20px] border px-4 py-3",
+                              localImportValidation.status === "valid"
+                                ? "border-emerald-200/80 bg-emerald-50/70"
+                                : "border-slate-200/80 bg-slate-50/70"
+                            )}
+                          >
+                            <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                              {localImportValidation.status === "valid" ? (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                              ) : (
+                                <Boxes className="h-4 w-4 text-slate-500" />
+                              )}
+                              压缩包校验
+                            </div>
+                            <div className="mt-1 text-xs leading-5 text-slate-500">
+                              格式、大小、可解压性
+                            </div>
+                          </div>
+                          <div
+                            className={cn(
+                              "rounded-[20px] border px-4 py-3",
+                              localImportValidation.status === "valid"
+                                ? "border-emerald-200/80 bg-emerald-50/70"
+                                : "border-slate-200/80 bg-slate-50/70"
+                            )}
+                          >
+                            <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                              {localImportValidation.status === "valid" ? (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                              ) : (
+                                <FileText className="h-4 w-4 text-slate-500" />
+                              )}
+                              包结构校验
+                            </div>
+                            <div className="mt-1 text-xs leading-5 text-slate-500">
+                              根目录存在 SKILL.md
+                            </div>
+                          </div>
+                          <div
+                            className={cn(
+                              "rounded-[20px] border px-4 py-3",
+                              localImportValidation.status === "valid"
+                                ? "border-emerald-200/80 bg-emerald-50/70"
+                                : "border-slate-200/80 bg-slate-50/70"
+                            )}
+                          >
+                            <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                              {localImportValidation.status === "valid" ? (
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                              ) : (
+                                <ScrollText className="h-4 w-4 text-slate-500" />
+                              )}
+                              SKILL.md 校验
+                            </div>
+                            <div className="mt-1 text-xs leading-5 text-slate-500">
+                              YAML 规范、name、description
+                            </div>
+                          </div>
+                        </div>
+
+                        {localImportValidation.status === "valid" && localImportValidation.manifest ? (
+                          <div className="mt-4 rounded-[22px] border border-emerald-200/80 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-800">
+                            <div className="font-medium">{localImportValidation.manifest.name}</div>
+                            <div className="mt-1 text-xs leading-5 text-emerald-700">
+                              {localImportValidation.manifest.description}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <div className="grid gap-3 md:grid-cols-3">
-                        {IMPORT_URL_SOURCE_OPTIONS.map((option) => {
-                          const Icon = option.icon;
-
-                          return (
-                            <button
-                              key={option.value}
-                              type="button"
-                              onClick={() => setImportUrlSource(option.value)}
-                              className={cn(
-                                "rounded-[24px] border p-4 text-left transition-all duration-200",
-                                importUrlSource === option.value
-                                  ? `${option.accentClass} shadow-[0_18px_34px_-26px_rgba(15,23,42,0.24)]`
-                                  : "border-slate-200/80 bg-white/86 text-slate-600 hover:border-slate-300 hover:bg-white"
-                              )}
-                            >
-                              <div className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-white/80 bg-white/80 shadow-sm">
-                                <Icon className="h-4 w-4" />
-                              </div>
-                              <div className="mt-4 text-sm font-semibold">{option.label}</div>
-                              <div className="mt-1 text-xs leading-5 opacity-80">{option.hint}</div>
-                            </button>
-                          );
-                        })}
+                      <div className="rounded-[28px] border border-slate-200/80 bg-slate-50/88 p-5">
+                        <div className="text-sm font-semibold text-slate-900">
+                          {importUrlSource === "github"
+                            ? "支持从公开的 GitHub 仓库直接导入 Skill。"
+                            : importUrlSource === "skills.sh"
+                              ? "输入 skills.sh Skill 链接后，系统会先校验链接合法性与可访问性，再解析 Skill 内容。"
+                              : "输入 Clawhub Skill 链接后，系统会先校验链接合法性与可访问性，再解析 Skill 内容。"}
+                        </div>
+                        <div className="mt-2 text-sm leading-6 text-slate-500">
+                          解析成功后，会继续校验 `SKILL.md`、YAML frontmatter 以及 `name / description` 字段。
+                        </div>
                       </div>
 
                       <div className="rounded-[28px] border border-slate-200/80 bg-white/90 p-5 shadow-[0_22px_42px_-34px_rgba(15,23,42,0.18)]">
@@ -3200,10 +3666,10 @@ source_url: "${parsedUrl.toString()}"
                             onChange={(event) => setImportUrlValue(event.target.value)}
                             placeholder={
                               importUrlSource === "github"
-                                ? "https://github.com/org/repo"
+                                ? "http://github.com/username/this-is-a-skill"
                                 : importUrlSource === "skills.sh"
-                                  ? "https://skills.sh/microsoft/github-copilot-for-azure/azure-ai"
-                                  : "https://clawhub.ai/rhyssullivan/answeroverflow"
+                                  ? "https://skills.sh/org/repo/skill"
+                                  : "https://clawhub.ai/author/skill"
                             }
                             aria-invalid={Boolean(importUrlError)}
                             className={cn(
@@ -3220,30 +3686,158 @@ source_url: "${parsedUrl.toString()}"
                             )}
                           >
                             {importUrlError ||
-                              `当前支持 ${getImportUrlSourceLabel(importUrlSource)} 链接导入，系统会为你生成一条可继续维护的 Skill 草稿。`}
+                              (importUrlSource === "github"
+                                ? "仅接受仓库地址，不支持主页、issue、pull request 或子路径链接。"
+                                : `当前将按 ${getImportUrlSourceLabel(importUrlSource)} 来源解析 Skill，并复用本地导入的结构校验规则。`)}
                           </p>
-                        </div>
-
-                        <div className="mt-5 flex items-center justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            className="rounded-2xl border-slate-200/80 bg-white hover:bg-slate-50"
-                            onClick={() => setImportDialogOpen(false)}
-                          >
-                            取消
-                          </Button>
-                          <Button
-                            className="rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
-                            disabled={!canImportFromUrl}
-                            onClick={handleImportFromUrl}
-                          >
-                            <Upload className="h-4 w-4" />
-                            导入到skills管理
-                          </Button>
                         </div>
                       </div>
                     </div>
                   )}
+
+                  <div className="rounded-[28px] border border-slate-200/80 bg-white/90 p-5 shadow-[0_22px_42px_-34px_rgba(15,23,42,0.18)]">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        checked={importDependencyEnabled}
+                        onCheckedChange={(checked) => setImportDependencyEnabled(Boolean(checked))}
+                        className="mt-1"
+                      />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="text-sm font-semibold text-slate-900">Skill 依赖 MCP 或 插件</div>
+                        <div className="text-xs leading-5 text-slate-500">
+                          非必填。勾选后可声明 Skill 依赖的 MCP 或插件，后续会在广场卡片上展示“依赖声明”提示。
+                        </div>
+                      </div>
+                    </div>
+
+                    {importDependencyEnabled ? (
+                      <div className="mt-4 space-y-3">
+                        <Popover open={dependencyPopoverOpen} onOpenChange={setDependencyPopoverOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="h-11 w-full justify-between rounded-2xl border-slate-200/80 bg-white/95 px-4 text-slate-700 hover:bg-slate-50"
+                            >
+                              <span className="truncate">
+                                {selectedDeclaredDependencies.length > 0
+                                  ? `已选择 ${selectedDeclaredDependencies.length} 个依赖工具`
+                                  : "选择依赖工具"}
+                              </span>
+                              <ChevronDown className="h-4 w-4 text-slate-400" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            align="start"
+                            className="w-[420px] rounded-[20px] border-slate-200/80 bg-white/96 p-3"
+                          >
+                            <div className="space-y-3">
+                              <div className="relative">
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <Input
+                                  value={dependencySearch}
+                                  onChange={(event) => setDependencySearch(event.target.value)}
+                                  placeholder="搜索 MCP 或插件"
+                                  className="h-10 rounded-2xl border-slate-200/80 bg-slate-50/80 pl-10"
+                                />
+                              </div>
+                              <div className="max-h-[260px] space-y-1 overflow-y-auto">
+                                {filteredDependencyOptions.map((item) => {
+                                  const checked = selectedDependencyIds.includes(item.id);
+
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={() => toggleDependencySelection(item.id)}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                          event.preventDefault();
+                                          toggleDependencySelection(item.id);
+                                        }
+                                      }}
+                                      className={cn(
+                                        "flex w-full cursor-pointer items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors outline-none",
+                                        "focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2",
+                                        checked
+                                          ? "border-sky-200/80 bg-sky-50/85"
+                                          : "border-slate-200/70 bg-white hover:bg-slate-50"
+                                      )}
+                                    >
+                                      <Checkbox checked={checked} className="pointer-events-none" />
+                                      <div className="min-w-0 flex-1">
+                                        <div className="text-sm font-medium text-slate-900">{item.name}</div>
+                                        <div className="text-xs text-slate-500">
+                                          {item.type === "mcp" ? "MCP" : "插件"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+
+                        {selectedDeclaredDependencies.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {selectedDeclaredDependencies.map((dependency) => (
+                              <span
+                                key={dependency.id}
+                                className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-violet-50/85 px-3 py-1 text-xs font-medium text-violet-700"
+                              >
+                                <span>{dependency.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleDependencySelection(dependency.id)}
+                                  className="rounded-full text-violet-500 transition-colors hover:text-violet-700"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 border-t border-slate-200/70 pt-1">
+                    <Button
+                      variant="outline"
+                      className="rounded-2xl border-slate-200/80 bg-white hover:bg-slate-50"
+                      onClick={() => setImportDialogOpen(false)}
+                    >
+                      取消
+                    </Button>
+                    {importMode === "local" ? (
+                      <Button
+                        className="rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                        disabled={!canConfirmLocalImport}
+                        onClick={handleConfirmLocalImport}
+                      >
+                        {localImportValidation.status === "validating" ? (
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                        确认导入
+                      </Button>
+                    ) : (
+                      <Button
+                        className="rounded-2xl bg-slate-950 text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                        disabled={!normalizedImportUrl || remoteImportLoading}
+                        onClick={handleImportFromUrl}
+                      >
+                        {remoteImportLoading ? (
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                        导入
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </DialogContent>
@@ -3295,14 +3889,44 @@ source_url: "${parsedUrl.toString()}"
 
                   <div className="flex w-full flex-col gap-2 xl:w-auto xl:min-w-[420px]">
                     <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                      <Button
-                        variant="outline"
-                        className="rounded-2xl border-white bg-white/88 shadow-sm hover:bg-white"
-                        onClick={() => setImportDialogOpen(true)}
-                      >
-                        <Upload className="h-4 w-4" />
-                        导入Skills
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="rounded-2xl border-white bg-white/88 shadow-sm hover:bg-white"
+                          >
+                            <Upload className="h-4 w-4" />
+                            导入Skills
+                            <ChevronDown className="h-4 w-4 text-slate-400" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className="w-[260px] rounded-[18px] border-slate-200/80 bg-white/96 p-2 shadow-[0_20px_40px_-30px_rgba(15,23,42,0.28)]"
+                        >
+                          {IMPORT_ENTRY_OPTIONS.map((option) => {
+                            const Icon = option.icon;
+
+                            return (
+                              <DropdownMenuItem
+                                key={option.value}
+                                className="cursor-pointer rounded-[12px] px-3 py-3"
+                                onSelect={() => openImportDialogForMode(option.value)}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-slate-200/80 bg-slate-50/90 text-slate-700">
+                                    <Icon className="h-4 w-4" />
+                                  </div>
+                                  <div className="space-y-0.5">
+                                    <div className="text-sm font-medium text-slate-900">{option.label}</div>
+                                    <div className="text-xs leading-5 text-slate-500">{option.hint}</div>
+                                  </div>
+                                </div>
+                              </DropdownMenuItem>
+                            );
+                          })}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                     <div className="relative">
                       <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -3316,136 +3940,167 @@ source_url: "${parsedUrl.toString()}"
                   </div>
                 </div>
 
-                {filteredMySkills.length > 0 ? (
-                  <div className="mt-5 grid gap-3 xl:grid-cols-3 2xl:grid-cols-4">
-                    {filteredMySkills.map((skill, index) => {
-                      const audienceCategory = mapEditorCategoryToAudienceCategory(skill.category);
-                      const audienceMeta = AUDIENCE_VISUAL_META[audienceCategory];
-                      const showcasePalette =
-                        MARKETPLACE_CARD_PALETTES[index % MARKETPLACE_CARD_PALETTES.length];
-                      const SkillIcon = getMarketplaceSkillIcon({
-                        name: skill.name,
-                        audienceCategory,
-                      });
-                      const statusMeta = getSkillStatusMeta(skill.status);
-                      const StatusIcon = statusMeta.icon;
-                      const releaseAction = getSkillReleaseActionMeta(skill);
-                      const ReleaseActionIcon = releaseAction.icon;
-
-                      return (
-                        <article
-                          key={skill.id}
-                          className={cn(
-                            "skills-marketplace-card skills-stagger group relative overflow-hidden rounded-[24px] border p-4 shadow-[0_20px_40px_-36px_rgba(15,23,42,0.28)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_26px_52px_-38px_rgba(15,23,42,0.34)]",
-                            "min-h-[250px] xl:min-h-[262px]",
-                            showcasePalette.panelClass
-                          )}
-                          style={{ animationDelay: `${index * 55}ms` }}
-                        >
-                          <div
-                            aria-hidden
-                            className={cn(
-                              "skills-card-orb absolute right-[-2rem] top-[-2rem] h-32 w-32 rounded-full opacity-70 blur-3xl",
-                              showcasePalette.glowClass
-                            )}
-                          />
-                          <div className="absolute inset-x-6 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(15,23,42,0.15),transparent)]" />
-
-                          <div className="relative flex h-full flex-col">
-                            <div className="flex items-start gap-3.5">
-                              <div
-                                className={cn(
-                                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border",
-                                  showcasePalette.iconClass
-                                )}
-                              >
-                                <SkillIcon className="h-4 w-4" />
+                <div className="mt-5 overflow-hidden rounded-[22px] border border-slate-200/80 bg-white/92 shadow-[0_24px_50px_-40px_rgba(15,23,42,0.2)]">
+                  <Table className="min-w-[1120px]">
+                    <TableHeader className="bg-slate-50/92">
+                      <TableRow className="border-slate-200/80 hover:bg-slate-50/92">
+                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">名称</TableHead>
+                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">创建人</TableHead>
+                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">发布状态</TableHead>
+                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">描述</TableHead>
+                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">更新时间</TableHead>
+                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">操作</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredMySkills.length === 0 ? (
+                        <TableRow className="border-0 hover:bg-transparent">
+                          <TableCell colSpan={6} className="px-6 py-16 text-center">
+                            <div className="mx-auto max-w-md space-y-3">
+                              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[10px] border border-slate-200 bg-slate-50 text-slate-500">
+                                <Search className="h-5 w-5" />
                               </div>
-                              <div className="min-w-0 flex-1 pt-0.5">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <h3 className="skills-display min-w-0 flex-1 text-[1.18rem] leading-7 text-slate-950">
-                                    <span className="block truncate">{skill.name}</span>
-                                  </h3>
-                                  {skill.status === "published" ? (
-                                    <Badge
-                                      variant="outline"
-                                      className={cn(
-                                        "inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-[11px] font-semibold leading-none",
-                                        audienceMeta.badgeClass
-                                      )}
-                                    >
-                                      {audienceMeta.label}
-                                    </Badge>
+                              <div className="text-lg font-semibold text-slate-900">暂无匹配结果</div>
+                              <p className="text-sm leading-6 text-slate-500">
+                                没有匹配的 Skill，试试换个关键词，或者导入一个本地 Skill。
+                              </p>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredMySkills.map((skill) => {
+                          const audienceCategory = mapEditorCategoryToAudienceCategory(skill.category);
+                          const SkillIcon = getMarketplaceSkillIcon({
+                            name: skill.name,
+                            audienceCategory,
+                          });
+                          const statusMeta = getSkillStatusMeta(skill.status);
+                          const StatusIcon = statusMeta.icon;
+                          const releaseAction = getSkillReleaseActionMeta(skill);
+                          const ReleaseActionIcon = releaseAction.icon;
+                          const statusVersionLabel = skill.version
+                            ? skill.status === "draft" && hasPublishedHistory(skill)
+                              ? `历史 ${formatSkillVersion(skill.version)}`
+                              : formatSkillVersion(skill.version)
+                            : null;
+
+                          return (
+                            <TableRow
+                              key={skill.id}
+                              className="border-slate-200/80 bg-white hover:bg-slate-50/45"
+                            >
+                              <TableCell className="px-5 py-4 align-top whitespace-normal">
+                                <div className="flex items-start gap-4">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-slate-200/80 bg-slate-50/95 text-slate-700">
+                                    <SkillIcon className="h-4 w-4" />
+                                  </div>
+                                  <div className="min-w-0 space-y-1">
+                                    <div className="skills-display text-[15px] font-medium leading-6 text-slate-950">
+                                      {skill.name}
+                                    </div>
+                                    <div className="text-xs text-slate-500">
+                                      Skill ID：{skill.id}
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+
+                              <TableCell className="px-5 py-4 align-top whitespace-normal">
+                                <div className="space-y-1">
+                                  <div className="text-sm font-medium text-slate-900">{skill.createdBy}</div>
+                                  <div className="text-xs text-slate-500">
+                                    {skill.source === "template"
+                                      ? "模板导入"
+                                      : skill.source === "imported"
+                                        ? "本地导入"
+                                        : "空白创建"}
+                                  </div>
+                                </div>
+                              </TableCell>
+
+                              <TableCell className="px-5 py-4 align-top whitespace-nowrap">
+                                <div className="inline-flex items-center gap-2 text-xs">
+                                  <span
+                                    className={cn(
+                                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap",
+                                      skill.status === "published"
+                                        ? "bg-emerald-50 text-emerald-700"
+                                        : skill.status === "reviewing"
+                                          ? "bg-sky-50 text-sky-700"
+                                          : skill.status === "reviewFailed"
+                                            ? "bg-rose-50 text-rose-700"
+                                            : "bg-amber-50 text-amber-700"
+                                    )}
+                                  >
+                                    <StatusIcon className="h-3.5 w-3.5" />
+                                    {statusMeta.label}
+                                  </span>
+                                  {statusVersionLabel ? (
+                                    <span className="whitespace-nowrap text-xs font-medium text-slate-500">
+                                      {statusVersionLabel}
+                                    </span>
                                   ) : null}
                                 </div>
-                                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[13px] text-slate-500">
-                                  <span>
-                                    最近更新于 {skill.updatedAt}（{skill.updatedBy}）
-                                  </span>
-                                  <span className="text-slate-300">·</span>
-                                  <span className={cn("inline-flex items-center gap-1.5 font-medium", statusMeta.className)}>
-                                    <StatusIcon className="h-3.5 w-3.5" />
-                                    {skill.status === "draft"
-                                      ? hasPublishedHistory(skill) && skill.version
-                                        ? `${statusMeta.label} ${formatSkillVersion(skill.version)}`
-                                        : statusMeta.label
-                                      : `${statusMeta.label} ${formatSkillVersion(skill.version)}`}
-                                  </span>
+                              </TableCell>
+
+                              <TableCell className="px-5 py-4 align-top whitespace-normal">
+                                <p className="line-clamp-2 max-w-[520px] text-sm leading-6 text-slate-600">
+                                  {skill.description}
+                                </p>
+                              </TableCell>
+
+                              <TableCell className="px-5 py-4 align-top whitespace-normal">
+                                <div className="space-y-1">
+                                  <div className="text-sm font-medium text-slate-900">{skill.updatedAt}</div>
+                                  <div className="text-xs text-slate-500">更新人：{skill.updatedBy}</div>
                                 </div>
-                              </div>
-                            </div>
+                              </TableCell>
 
-                            <p className="mt-3 line-clamp-3 text-[13px] leading-5 text-slate-600">
-                              {skill.description}
-                            </p>
-
-                            <div className="mt-4">
-                              <div className="grid grid-cols-2 gap-1.5 border-t border-slate-200/60 pt-3 sm:grid-cols-4">
-                                <Button
-                                  variant="outline"
-                                  className="h-9 rounded-2xl border-white/90 bg-white/82 px-3 text-[13px] text-slate-700 hover:bg-white"
-                                  onClick={() => handleExportMySkill(skill.id)}
-                                >
-                                  <Download className="h-4 w-4" />
-                                  导出
-                                </Button>
-                                <Button
-                                  className="h-9 flex-1 rounded-2xl bg-slate-950 px-3.5 text-[13px] text-white shadow-[0_18px_28px_-24px_rgba(15,23,42,0.76)] hover:bg-slate-800"
-                                  onClick={() => openReleaseDialog(skill.id)}
-                                  disabled={releaseAction.disabled}
-                                >
-                                  <ReleaseActionIcon className="h-4 w-4" />
-                                  {releaseAction.label}
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  className="h-9 rounded-2xl border-white/90 bg-white/82 px-3 text-[13px] text-slate-700 hover:bg-white"
-                                  onClick={() => handleDeleteMySkill(skill.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  删除
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  className="h-9 rounded-2xl border-white/90 bg-white/82 px-3 text-[13px] text-slate-700 hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
-                                  onClick={() => handleOfflineMySkill(skill.id)}
-                                  disabled={skill.status !== "published"}
-                                >
-                                  <X className="h-4 w-4" />
-                                  下架
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="mt-5 rounded-[28px] border border-dashed border-slate-200/90 bg-white/78 px-6 py-14 text-center text-sm text-slate-500 shadow-[0_24px_50px_-40px_rgba(15,23,42,0.2)]">
-                    没有匹配的 Skill，试试换个关键词，或者导入一个本地 Skill。
-                  </div>
-                )}
+                              <TableCell className="px-5 py-4 align-top whitespace-normal">
+                                <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
+                                  <Button
+                                    variant="ghost"
+                                    className="h-8 rounded-lg px-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                                    onClick={() => handleExportMySkill(skill.id)}
+                                  >
+                                    <Download className="h-4 w-4" />
+                                    导出
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    className="h-8 rounded-lg px-2 text-sm text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:text-slate-300"
+                                    onClick={() => openReleaseDialog(skill.id)}
+                                    disabled={releaseAction.disabled}
+                                  >
+                                    <ReleaseActionIcon className="h-4 w-4" />
+                                    {releaseAction.label}
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    className="h-8 rounded-lg px-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                                    onClick={() => handleDeleteMySkill(skill.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    删除
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    className="h-8 rounded-lg px-2 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:text-slate-300"
+                                    onClick={() => handleOfflineMySkill(skill.id)}
+                                    disabled={skill.status !== "published"}
+                                  >
+                                    <X className="h-4 w-4" />
+                                    下架
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
 
               <Dialog
@@ -3741,14 +4396,44 @@ source_url: "${parsedUrl.toString()}"
                       ]}
                       className="w-[240px] rounded-2xl border-white bg-white/80 shadow-sm"
                     />
-                    <Button
-                      variant="outline"
-                      className="rounded-2xl border-white bg-white/85 shadow-sm hover:bg-white"
-                      onClick={() => setImportDialogOpen(true)}
-                    >
-                      <Upload className="h-4 w-4" />
-                      导入Skills
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="rounded-2xl border-white bg-white/85 shadow-sm hover:bg-white"
+                        >
+                          <Upload className="h-4 w-4" />
+                          导入Skills
+                          <ChevronDown className="h-4 w-4 text-slate-400" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-[260px] rounded-[18px] border-slate-200/80 bg-white/96 p-2"
+                      >
+                        {IMPORT_ENTRY_OPTIONS.map((option) => {
+                          const Icon = option.icon;
+
+                          return (
+                            <DropdownMenuItem
+                              key={option.value}
+                              className="cursor-pointer rounded-[12px] px-3 py-3"
+                              onSelect={() => openImportDialogForMode(option.value)}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-slate-200/80 bg-slate-50/90 text-slate-700">
+                                  <Icon className="h-4 w-4" />
+                                </div>
+                                <div className="space-y-0.5">
+                                  <div className="text-sm font-medium text-slate-900">{option.label}</div>
+                                  <div className="text-xs leading-5 text-slate-500">{option.hint}</div>
+                                </div>
+                              </div>
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <Button
                       variant="outline"
                       className="rounded-2xl border-white bg-white/85 shadow-sm hover:bg-white"
