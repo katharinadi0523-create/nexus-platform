@@ -2751,6 +2751,11 @@ export default function SkillsPage() {
   };
 
   const openImportDialogForMode = (mode: SkillImportEntryMode) => {
+    setImportDependencyEnabled(false);
+    setSelectedDependencyIds([]);
+    setDependencySearch("");
+    setDependencyPopoverOpen(false);
+
     if (mode === "local") {
       setImportMode("local");
     } else {
@@ -2772,11 +2777,7 @@ export default function SkillsPage() {
     toast.success(successMessage);
   };
 
-  const buildImportedSkillFromUrl = (
-    urlValue: string,
-    source: SkillImportUrlSource,
-    declaredDependencies: SkillDependency[]
-  ) => {
+  const buildImportedSkillFromUrl = (urlValue: string, source: SkillImportUrlSource) => {
     const parsedUrl = new URL(urlValue);
     const sourceLabel = getImportUrlSourceLabel(source);
     const displayName = uniqueName(
@@ -2791,7 +2792,7 @@ export default function SkillsPage() {
       description: `从${sourceLabel}链接导入的 Skill 草稿，可继续补充说明、模板和脚本内容。`,
       category: "通用",
       tags: [sourceLabel, "URL导入"],
-      declaredDependencies,
+      declaredDependencies: [],
       source: "imported",
       files: [
         createFile(
@@ -2946,11 +2947,7 @@ source_url: "${parsedUrl.toString()}"
         return;
       }
 
-      const importedSkill = buildImportedSkillFromUrl(
-        normalizedImportUrl,
-        importUrlSource,
-        importDependencyEnabled ? selectedDeclaredDependencies : []
-      );
+      const importedSkill = buildImportedSkillFromUrl(normalizedImportUrl, importUrlSource);
 
       finalizeImportedSkill(
         importedSkill,
@@ -3695,112 +3692,114 @@ source_url: "${parsedUrl.toString()}"
                     </div>
                   )}
 
-                  <div className="rounded-[28px] border border-slate-200/80 bg-white/90 p-5 shadow-[0_22px_42px_-34px_rgba(15,23,42,0.18)]">
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        checked={importDependencyEnabled}
-                        onCheckedChange={(checked) => setImportDependencyEnabled(Boolean(checked))}
-                        className="mt-1"
-                      />
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="text-sm font-semibold text-slate-900">Skill 依赖 MCP 或 插件</div>
-                        <div className="text-xs leading-5 text-slate-500">
-                          非必填。勾选后可声明 Skill 依赖的 MCP 或插件，后续会在广场卡片上展示“依赖声明”提示。
+                  {importMode === "local" ? (
+                    <div className="rounded-[28px] border border-slate-200/80 bg-white/90 p-5 shadow-[0_22px_42px_-34px_rgba(15,23,42,0.18)]">
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={importDependencyEnabled}
+                          onCheckedChange={(checked) => setImportDependencyEnabled(Boolean(checked))}
+                          className="mt-1"
+                        />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="text-sm font-semibold text-slate-900">Skill 依赖 MCP 或 插件</div>
+                          <div className="text-xs leading-5 text-slate-500">
+                            非必填。勾选后可声明 Skill 依赖的 MCP 或插件，后续会在广场卡片上展示“依赖声明”提示。
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {importDependencyEnabled ? (
-                      <div className="mt-4 space-y-3">
-                        <Popover open={dependencyPopoverOpen} onOpenChange={setDependencyPopoverOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="h-11 w-full justify-between rounded-2xl border-slate-200/80 bg-white/95 px-4 text-slate-700 hover:bg-slate-50"
+                      {importDependencyEnabled ? (
+                        <div className="mt-4 space-y-3">
+                          <Popover open={dependencyPopoverOpen} onOpenChange={setDependencyPopoverOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="h-11 w-full justify-between rounded-2xl border-slate-200/80 bg-white/95 px-4 text-slate-700 hover:bg-slate-50"
+                              >
+                                <span className="truncate">
+                                  {selectedDeclaredDependencies.length > 0
+                                    ? `已选择 ${selectedDeclaredDependencies.length} 个依赖工具`
+                                    : "选择依赖工具"}
+                                </span>
+                                <ChevronDown className="h-4 w-4 text-slate-400" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              align="start"
+                              className="w-[420px] rounded-[20px] border-slate-200/80 bg-white/96 p-3"
                             >
-                              <span className="truncate">
-                                {selectedDeclaredDependencies.length > 0
-                                  ? `已选择 ${selectedDeclaredDependencies.length} 个依赖工具`
-                                  : "选择依赖工具"}
-                              </span>
-                              <ChevronDown className="h-4 w-4 text-slate-400" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent
-                            align="start"
-                            className="w-[420px] rounded-[20px] border-slate-200/80 bg-white/96 p-3"
-                          >
-                            <div className="space-y-3">
-                              <div className="relative">
-                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                <Input
-                                  value={dependencySearch}
-                                  onChange={(event) => setDependencySearch(event.target.value)}
-                                  placeholder="搜索 MCP 或插件"
-                                  className="h-10 rounded-2xl border-slate-200/80 bg-slate-50/80 pl-10"
-                                />
-                              </div>
-                              <div className="max-h-[260px] space-y-1 overflow-y-auto">
-                                {filteredDependencyOptions.map((item) => {
-                                  const checked = selectedDependencyIds.includes(item.id);
+                              <div className="space-y-3">
+                                <div className="relative">
+                                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                  <Input
+                                    value={dependencySearch}
+                                    onChange={(event) => setDependencySearch(event.target.value)}
+                                    placeholder="搜索 MCP 或插件"
+                                    className="h-10 rounded-2xl border-slate-200/80 bg-slate-50/80 pl-10"
+                                  />
+                                </div>
+                                <div className="max-h-[260px] space-y-1 overflow-y-auto">
+                                  {filteredDependencyOptions.map((item) => {
+                                    const checked = selectedDependencyIds.includes(item.id);
 
-                                  return (
-                                    <div
-                                      key={item.id}
-                                      role="button"
-                                      tabIndex={0}
-                                      onClick={() => toggleDependencySelection(item.id)}
-                                      onKeyDown={(event) => {
-                                        if (event.key === "Enter" || event.key === " ") {
-                                          event.preventDefault();
-                                          toggleDependencySelection(item.id);
-                                        }
-                                      }}
-                                      className={cn(
-                                        "flex w-full cursor-pointer items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors outline-none",
-                                        "focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2",
-                                        checked
-                                          ? "border-sky-200/80 bg-sky-50/85"
-                                          : "border-slate-200/70 bg-white hover:bg-slate-50"
-                                      )}
-                                    >
-                                      <Checkbox checked={checked} className="pointer-events-none" />
-                                      <div className="min-w-0 flex-1">
-                                        <div className="text-sm font-medium text-slate-900">{item.name}</div>
-                                        <div className="text-xs text-slate-500">
-                                          {item.type === "mcp" ? "MCP" : "插件"}
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => toggleDependencySelection(item.id)}
+                                        onKeyDown={(event) => {
+                                          if (event.key === "Enter" || event.key === " ") {
+                                            event.preventDefault();
+                                            toggleDependencySelection(item.id);
+                                          }
+                                        }}
+                                        className={cn(
+                                          "flex w-full cursor-pointer items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors outline-none",
+                                          "focus-visible:ring-2 focus-visible:ring-slate-300 focus-visible:ring-offset-2",
+                                          checked
+                                            ? "border-sky-200/80 bg-sky-50/85"
+                                            : "border-slate-200/70 bg-white hover:bg-slate-50"
+                                        )}
+                                      >
+                                        <Checkbox checked={checked} className="pointer-events-none" />
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-sm font-medium text-slate-900">{item.name}</div>
+                                          <div className="text-xs text-slate-500">
+                                            {item.type === "mcp" ? "MCP" : "插件"}
+                                          </div>
                                         </div>
                                       </div>
-                                    </div>
-                                  );
-                                })}
+                                    );
+                                  })}
+                                </div>
                               </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
+                            </PopoverContent>
+                          </Popover>
 
-                        {selectedDeclaredDependencies.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {selectedDeclaredDependencies.map((dependency) => (
-                              <span
-                                key={dependency.id}
-                                className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-violet-50/85 px-3 py-1 text-xs font-medium text-violet-700"
-                              >
-                                <span>{dependency.name}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleDependencySelection(dependency.id)}
-                                  className="rounded-full text-violet-500 transition-colors hover:text-violet-700"
+                          {selectedDeclaredDependencies.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {selectedDeclaredDependencies.map((dependency) => (
+                                <span
+                                  key={dependency.id}
+                                  className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-violet-50/85 px-3 py-1 text-xs font-medium text-violet-700"
                                 >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
+                                  <span>{dependency.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleDependencySelection(dependency.id)}
+                                    className="rounded-full text-violet-500 transition-colors hover:text-violet-700"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   <div className="flex items-center justify-end gap-2 border-t border-slate-200/70 pt-1">
                     <Button
