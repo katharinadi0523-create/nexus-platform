@@ -37,12 +37,11 @@ export function GlobalHeader() {
       pathname === "/" ||
       pathname.startsWith("/agent") ||
       pathname.startsWith("/agent-editor") ||
-      pathname.startsWith("/claw-hub") ||
       pathname.startsWith("/claw-hub-next") ||
-      pathname.startsWith("/cloud-claw") ||
-      pathname.startsWith("/cec-claw") ||
       pathname.startsWith("/app-marketplace") ||
       pathname.startsWith("/skills") ||
+      pathname.startsWith("/skills-hub") ||
+      pathname.startsWith("/skills-management") ||
       pathname.startsWith("/mcp-management") ||
       pathname.startsWith("/tool-marketplace") ||
       pathname.startsWith("/workflow") ||

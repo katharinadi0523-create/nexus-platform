@@ -5,17 +5,14 @@ import { useRef, useState } from "react";
 import {
   ArrowLeft,
   Bot,
-  CircleAlert,
+  CircleHelp,
   ChevronRight,
   Clock3,
-  Cpu,
   FilePlus2,
-  FileText,
   FileStack,
   FolderOpen,
   FolderPlus,
   Gauge,
-  HardDrive,
   Mic,
   MessageSquareText,
   PanelLeftClose,
@@ -23,24 +20,66 @@ import {
   Paperclip,
   Plus,
   RadioTower,
-  RotateCcw,
   SendHorizontal,
-  Server,
-  Settings2,
   ShieldCheck,
-  Sparkles,
   Upload,
   UserRound,
-  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
+import {
+  CORE_FILE_ICONS,
+  DETAIL_SECTION_ITEMS,
+  LOG_PANEL_ITEMS,
+  type CapabilityPanelKey,
+  type DetailSectionKey,
+  type LogPanelKey,
+} from "@/components/claw-hub-next/detail/constants";
+import { ClawResourceSection } from "@/components/claw-hub-next/detail/resource-section";
+import { ClawSecuritySection } from "@/components/claw-hub-next/detail/security-section";
+import { SectionCard } from "@/components/claw-hub-next/detail/section-card";
+import {
+  addLexiconLibrary,
+  applyExecutionTier,
+  applyRuntimeTier,
+  buildInitialLexiconDrafts,
+  deleteScopedCollectionItem,
+  mergeClawSkillSelections,
+  mergeClawToolSelections,
+  removeLexiconLibrary,
+  toggleScopedEnabledCollection,
+  updateAutonomyBoundaryLevel,
+  updateExecutionCapability,
+  updateExecutionNumber,
+  updateLexiconPolicyAction,
+  updateLexiconPolicyEnabled,
+  updateLexiconPolicyMode,
+  updateRuntimeAdvancedNumber,
+  updateRuntimeAdvancedText,
+  updateRuntimeNumber,
+  updateSecurityPolicyAction,
+  updateSecurityPolicyEnabled,
+  updateSecurityPolicyMode,
+  updateSecurityPolicyRuleLevel,
+} from "@/components/claw-hub-next/detail/state";
+import { SkillConfigDialog, type SkillConfigSelection } from "@/components/claw-hub-next/skill-config-dialog";
+import { ToolConfigDialog, type ToolConfigSelection } from "@/components/claw-hub-next/tool-config-dialog";
+import {
+  buildConversationSessionSummaries,
+  cloneResourceConfig,
+  formatDurationMs,
+  getAuditStatusClassName,
+  getAuditTypeClassName,
+  getResourceValidation,
+  getSecurityActionClassName,
+  getSecurityLevelClassName,
+  getTaskRunStatusClassName,
+  getWorkspaceTrail,
+} from "@/components/claw-hub-next/detail/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Card } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -48,174 +87,25 @@ import type {
   CapabilityScope,
   ClawCoreFileKey,
   ClawDetailData,
-  ExecutionResourceTier,
   KnowledgeScope,
   ResourceConfig,
-  RuntimeResourceTier,
-  WorkspaceFolderItem,
 } from "@/lib/mock/claw-hub-next";
 import { createDefaultResourceConfig } from "@/lib/mock/claw-hub-next";
 import { cn } from "@/lib/utils";
 
-type DetailSectionKey =
-  | "chat"
-  | "status"
-  | "core"
-  | "capability"
-  | "channels"
-  | "tasks"
-  | "workspace"
-  | "logs"
-  | "relations"
-  | "resource"
-  | "settings";
-
-type CapabilityPanelKey = "tools" | "skills" | "agents" | "knowledge";
-
-const DETAIL_SECTION_ITEMS: Array<{
-  value: DetailSectionKey;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-}> = [
-  { value: "chat", label: "对话", icon: MessageSquareText },
-  { value: "status", label: "状态", icon: Bot },
-  { value: "core", label: "核心文件", icon: FileText },
-  { value: "capability", label: "能力配置", icon: Sparkles },
-  { value: "channels", label: "渠道与分发", icon: RadioTower },
-  { value: "tasks", label: "任务", icon: Clock3 },
-  { value: "workspace", label: "工作空间", icon: FolderOpen },
-  { value: "logs", label: "日志管理", icon: FileStack },
-  { value: "relations", label: "关系", icon: UserRound },
-  { value: "resource", label: "资源配置", icon: Server },
-  { value: "settings", label: "设置", icon: Settings2 },
-];
-
-const CORE_FILE_ICONS: Record<ClawCoreFileKey, React.ComponentType<{ className?: string }>> = {
-  identity: FileText,
-  soul: Sparkles,
-  memory: FileStack,
-  heartbeat: Gauge,
-};
-
-const CAPABILITY_SCOPE_LABELS: Record<CapabilityScope, string> = {
-  platform: "平台预置",
-  tenant: "租户配置",
-  claw: "Claw配置",
-};
-
-const KNOWLEDGE_SCOPE_LABELS: Record<KnowledgeScope, string> = {
-  tenant: "租户配置",
-  claw: "Claw配置",
-};
-
-const RUNTIME_TIER_OPTIONS: Array<{
-  value: RuntimeResourceTier;
-  title: string;
-  summary: string;
-}> = [
-  { value: "light", title: "轻量型", summary: "2 vCPU / 4 GB 内存" },
-  { value: "standard", title: "标准型", summary: "4 vCPU / 8 GB 内存" },
-  { value: "enhanced", title: "增强型", summary: "8 vCPU / 16 GB 内存" },
-];
-
-const EXECUTION_TIER_OPTIONS: Array<{
-  value: ExecutionResourceTier;
-  title: string;
-  summary: string;
-}> = [
-  { value: "basic", title: "基础型", summary: "2 vCPU / 4 GB / 5 GB 工作目录" },
-  { value: "standard", title: "标准型", summary: "4 vCPU / 8 GB / 10 GB 工作目录" },
-  { value: "enhanced", title: "增强型", summary: "8 vCPU / 16 GB / 20 GB 工作目录" },
-];
-
-const EXECUTION_CAPABILITY_OPTIONS = [
-  { key: "browser", label: "浏览器操作", note: "适合页面巡检和流程自动化。" },
-  { key: "python", label: "Python 代码执行", note: "适合数据处理和脚本分析。" },
-  { key: "shell", label: "Shell 命令执行", note: "高风险", tone: "risk" as const },
-  { key: "file", label: "文件处理", note: "适合临时文件读写和结果整理。" },
-  { key: "document", label: "文档解析", note: "适合提取结构化内容。" },
-  { key: "network", label: "网络访问", note: "受策略约束", tone: "policy" as const },
-] satisfies Array<{
-  key: keyof ResourceConfig["execution"]["capabilities"];
-  label: string;
-  note: string;
-  tone?: "risk" | "policy";
-}>;
-
-function cloneResourceConfig(config: ResourceConfig): ResourceConfig {
-  return {
-    runtime: {
-      ...config.runtime,
-      advanced: { ...config.runtime.advanced },
-    },
-    execution: {
-      ...config.execution,
-      capabilities: { ...config.execution.capabilities },
-    },
-  };
-}
-
-function getResourceValidation(config: ResourceConfig) {
-  return {
-    maxConcurrentTasks:
-      config.runtime.maxConcurrentTasks < 1 || config.runtime.maxConcurrentTasks > 20
-        ? "请输入 1 - 20 之间的并发任务数。"
-        : "",
-    maxTaskDurationMin: config.runtime.maxTaskDurationMin > 0 ? "" : "单任务最大运行时长必须大于 0 分钟。",
-    workspaceDiskGb: config.execution.workspaceDiskGb > 0 ? "" : "工作目录空间必须大于 0 GB。",
-    maxConcurrentExecutions: config.execution.maxConcurrentExecutions >= 1 ? "" : "并发执行环境数上限至少为 1。",
-    maxExecutionTimeoutMin: config.execution.maxExecutionTimeoutMin > 0 ? "" : "单次执行超时时间必须大于 0 分钟。",
-  };
-}
-
-function canDeleteCapability(scope: CapabilityScope | KnowledgeScope) {
-  return scope === "claw";
-}
-
-function getWorkspaceTrail(root: WorkspaceFolderItem, path: string[]) {
-  const trail: WorkspaceFolderItem[] = [root];
-  let current = root;
-
-  for (const folderId of path) {
-    const next = current.children.find((item) => item.id === folderId);
-    if (!next) {
-      break;
-    }
-
-    trail.push(next);
-    current = next;
-  }
-
-  return trail;
-}
-
-function SectionCard({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card className="gap-0 rounded-[28px] border-slate-200 bg-white py-0 shadow-sm">
-      <CardContent className="space-y-5 p-6">
-        <div>
-          <div className="text-xl font-semibold text-slate-950">{title}</div>
-          {description ? <div className="mt-2 text-sm leading-7 text-slate-600">{description}</div> : null}
-        </div>
-        {children}
-      </CardContent>
-    </Card>
-  );
-}
-
 export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [activeSection, setActiveSection] = useState<DetailSectionKey>("chat");
+  const [activeLogPanel, setActiveLogPanel] = useState<LogPanelKey>("conversation");
+  const [conversationHistoryCollapsed, setConversationHistoryCollapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatSessions, setChatSessions] = useState(detail.chatSessions);
+  const [conversationRuns, setConversationRuns] = useState(detail.conversationRuns);
+  const [securityManagement, setSecurityManagement] = useState(detail.securityManagement);
+  const [lexiconDrafts, setLexiconDrafts] = useState<Record<string, string>>(() =>
+    buildInitialLexiconDrafts(detail.securityManagement)
+  );
   const [selectedChatId, setSelectedChatId] = useState(detail.chatSessions[0]?.id ?? "");
+  const [selectedConversationAuditMessageId, setSelectedConversationAuditMessageId] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState("");
   const [queuedFiles, setQueuedFiles] = useState<string[]>([]);
   const [voiceMode, setVoiceMode] = useState(false);
@@ -223,6 +113,8 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [capabilityConfig, setCapabilityConfig] = useState(detail.capabilityConfig);
   const [resourceConfig, setResourceConfig] = useState<ResourceConfig>(() => cloneResourceConfig(detail.resourceConfig));
   const [activeCapabilityPanel, setActiveCapabilityPanel] = useState<CapabilityPanelKey>("tools");
+  const [toolConfigDialogOpen, setToolConfigDialogOpen] = useState(false);
+  const [skillConfigDialogOpen, setSkillConfigDialogOpen] = useState(false);
   const [toolScope, setToolScope] = useState<CapabilityScope>("platform");
   const [skillScope, setSkillScope] = useState<CapabilityScope>("platform");
   const [agentScope, setAgentScope] = useState<CapabilityScope>("platform");
@@ -238,46 +130,26 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const currentSession = chatSessions.find((session) => session.id === selectedChatId) ?? chatSessions[0];
+  const currentConversationRun = conversationRuns.find((session) => session.id === selectedChatId) ?? conversationRuns[0];
+  const conversationSessionSummaries = buildConversationSessionSummaries(chatSessions, conversationRuns);
+  const currentConversationSummary =
+    conversationSessionSummaries.find((session) => session.session.id === currentConversationRun?.id) ??
+    conversationSessionSummaries[0];
+  const currentConversationMessages = currentConversationSummary?.messages ?? [];
+  const selectedConversationAuditMessage =
+    currentConversationMessages.find(
+      (message) => message.id === selectedConversationAuditMessageId && message.auditRecords.length > 0
+    ) ?? null;
   const selectedCoreFile = detail.coreFiles.find((file) => file.key === selectedCoreFileKey) ?? null;
   const workspaceTrail = getWorkspaceTrail(detail.workspaceRoot, workspacePath);
   const currentWorkspaceFolder = workspaceTrail[workspaceTrail.length - 1];
   const resourceValidation = getResourceValidation(resourceConfig);
-  const capabilityPanels: Array<{
-    key: CapabilityPanelKey;
-    title: string;
-    description: string;
-    count: number;
-    icon: React.ComponentType<{ className?: string }>;
-  }> = [
-    {
-      key: "tools",
-      title: "工具配置",
-      description: "管理平台预置、租户配置和 Claw 配置三类工具。",
-      count: Object.values(capabilityConfig.tools).reduce((total, items) => total + items.length, 0),
-      icon: Wrench,
-    },
-    {
-      key: "skills",
-      title: "技能配置",
-      description: "统一管理平台、租户和 Claw 的技能清单与状态。",
-      count: Object.values(capabilityConfig.skills).reduce((total, items) => total + items.length, 0),
-      icon: Sparkles,
-    },
-    {
-      key: "agents",
-      title: "Agent（as Function）",
-      description: "封装平台、租户和 Claw 级别的可调用 Agent 能力。",
-      count: Object.values(capabilityConfig.agents).reduce((total, items) => total + items.length, 0),
-      icon: Bot,
-    },
-    {
-      key: "knowledge",
-      title: "知识",
-      description: "维护租户与 Claw 两层知识库的启用和绑定状态。",
-      count: Object.values(capabilityConfig.knowledge).reduce((total, items) => total + items.length, 0),
-      icon: FileStack,
-    },
-  ];
+  const enabledSecurityPolicies = securityManagement.strategyPolicies.filter((policy) => policy.enabled).length;
+  const approvalBoundaryCount = securityManagement.autonomyBoundaries.filter((item) => item.level === "L3 审批").length;
+  const activeLexiconBindingCount = securityManagement.lexiconPolicies.reduce(
+    (total, policy) => total + policy.selectedLibraries.length,
+    0
+  );
 
   function handleQueueFiles(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []).map((file) => file.name);
@@ -302,6 +174,14 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     setQueuedFiles((current) => current.filter((item) => item !== fileName));
   }
 
+  function handleSelectChatSession(sessionId: string) {
+    setSelectedChatId(sessionId);
+    setSelectedConversationAuditMessageId(null);
+    setChatSessions((current) =>
+      current.map((item) => (item.id === sessionId ? { ...item, unreadCount: 0 } : item))
+    );
+  }
+
   function handleSendMessage() {
     if (!currentSession) {
       return;
@@ -322,6 +202,9 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     ]
       .filter(Boolean)
       .join("\n");
+    const now = Date.now();
+    const traceId = `trace-live-${now}`;
+    const newTurnId = `${currentSession.id}-turn-${now}`;
 
     setChatSessions((current) => {
       const updated = current.map((session) => {
@@ -337,19 +220,20 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           messages: [
             ...session.messages,
             {
-              id: `${session.id}-user-${Date.now()}`,
-              role: "user",
+              id: `${session.id}-user-${now}`,
+              role: "user" as const,
               sender: "你",
               time: "刚刚",
               content: userContent,
               attachments: queuedFiles.length ? queuedFiles : undefined,
             },
             {
-              id: `${session.id}-assistant-${Date.now()}`,
-              role: "assistant",
+              id: `${session.id}-assistant-${now}`,
+              role: "assistant" as const,
               sender: detail.overview.name,
               time: "刚刚",
               content: assistantContent || "已收到，我继续处理。",
+              auditTurnId: queuedFiles.length || voiceMode ? newTurnId : undefined,
             },
           ],
         };
@@ -359,9 +243,169 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
       return active ? [active, ...updated.filter((session) => session.id !== currentSession.id)] : updated;
     });
 
+    setConversationRuns((current) => {
+      const auditRecords = [
+        queuedFiles.length
+          ? {
+              id: `${currentSession.id}-audit-upload-${now}`,
+              turnId: newTurnId,
+              type: "工具执行" as const,
+              targetName: "附件解析器",
+              inputSummary: `接收 ${queuedFiles.length} 个附件并提取结构化内容。`,
+              outputSummary: "附件内容已写入当前会话上下文。",
+              durationMs: 420,
+              status: "成功" as const,
+              traceId,
+            }
+          : null,
+        voiceMode
+          ? {
+              id: `${currentSession.id}-audit-voice-${now}`,
+              turnId: newTurnId,
+              type: "工具执行" as const,
+              targetName: "语音转写",
+              inputSummary: "转写当前语音输入并生成文本草稿。",
+              outputSummary: "语音内容已完成转写并合入当前轮次。",
+              durationMs: 680,
+              status: "成功" as const,
+              traceId,
+            }
+          : null,
+      ].filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+      const nextTurn = {
+        id: newTurnId,
+        turnNumber: (current.find((item) => item.id === currentSession.id)?.turns.length ?? 0) + 1,
+        occurredAt: "刚刚",
+        userInput: userContent,
+        assistantOutput: assistantContent || "已收到，我继续处理。",
+        attachments: queuedFiles.length ? queuedFiles : undefined,
+        traceId,
+        auditRecords,
+      };
+
+      const matched = current.find((item) => item.id === currentSession.id);
+      if (!matched) {
+        return [
+          {
+            id: currentSession.id,
+            title: currentSession.title,
+            channel: currentSession.source,
+            userIdentity: "你",
+            sessionId: currentSession.id,
+            traceId,
+            startedAt: "刚刚",
+            updatedAt: "刚刚",
+            turns: [nextTurn],
+          },
+          ...current,
+        ];
+      }
+
+      const updated = current.map((item) =>
+        item.id === currentSession.id
+          ? {
+              ...item,
+              updatedAt: "刚刚",
+              traceId,
+              turns: [...item.turns, nextTurn],
+            }
+          : item
+      );
+      const active = updated.find((item) => item.id === currentSession.id);
+      return active ? [active, ...updated.filter((item) => item.id !== currentSession.id)] : updated;
+    });
+
     setDraftMessage("");
     setQueuedFiles([]);
     setVoiceMode(false);
+    setSelectedConversationAuditMessageId(null);
+  }
+
+  function handleAutonomyBoundaryLevelChange(
+    boundaryId: string,
+    nextLevel: ClawDetailData["securityManagement"]["autonomyBoundaries"][number]["level"]
+  ) {
+    setSecurityManagement((current) => updateAutonomyBoundaryLevel(current, boundaryId, nextLevel));
+  }
+
+  function handleToggleSecurityPolicy(policyId: string, enabled: boolean) {
+    setSecurityManagement((current) => updateSecurityPolicyEnabled(current, policyId, enabled));
+  }
+
+  function handleSecurityPolicyModeChange(
+    policyId: string,
+    mode: ClawDetailData["securityManagement"]["strategyPolicies"][number]["mode"]
+  ) {
+    setSecurityManagement((current) => updateSecurityPolicyMode(current, policyId, mode));
+  }
+
+  function handleSecurityPolicyActionChange(
+    policyId: string,
+    action: ClawDetailData["securityManagement"]["strategyPolicies"][number]["availableActions"][number]
+  ) {
+    setSecurityManagement((current) => updateSecurityPolicyAction(current, policyId, action));
+  }
+
+  function handleSecurityPolicyRuleLevelChange(
+    policyId: string,
+    ruleId: string,
+    level: ClawDetailData["securityManagement"]["strategyPolicies"][number]["rules"][number]["level"]
+  ) {
+    setSecurityManagement((current) => updateSecurityPolicyRuleLevel(current, policyId, ruleId, level));
+  }
+
+  function handleToggleLexiconPolicy(policyId: string, enabled: boolean) {
+    setSecurityManagement((current) => updateLexiconPolicyEnabled(current, policyId, enabled));
+  }
+
+  function handleLexiconPolicyModeChange(
+    policyId: string,
+    mode: ClawDetailData["securityManagement"]["lexiconPolicies"][number]["mode"]
+  ) {
+    setSecurityManagement((current) => updateLexiconPolicyMode(current, policyId, mode));
+  }
+
+  function handleLexiconPolicyActionChange(
+    policyId: string,
+    action: ClawDetailData["securityManagement"]["lexiconPolicies"][number]["availableActions"][number]
+  ) {
+    setSecurityManagement((current) => updateLexiconPolicyAction(current, policyId, action));
+  }
+
+  function handleLexiconDraftChange(policyId: string, value: string) {
+    setLexiconDrafts((current) => ({
+      ...current,
+      [policyId]: value,
+    }));
+  }
+
+  function handleAddLexiconLibrary(policyId: string) {
+    const selectedLibrary = lexiconDrafts[policyId];
+    if (!selectedLibrary) {
+      return;
+    }
+
+    const result = addLexiconLibrary(securityManagement, policyId, selectedLibrary);
+    setSecurityManagement(result.config);
+    setLexiconDrafts((current) => ({
+      ...current,
+      [policyId]: result.nextDraft,
+    }));
+
+    if (!result.added) {
+      return;
+    }
+
+    toast.success("词库已加入当前策略。");
+  }
+
+  function handleRemoveLexiconLibrary(policyId: string, libraryName: string) {
+    setSecurityManagement((current) => removeLexiconLibrary(current, policyId, libraryName));
+    setLexiconDrafts((current) => ({
+      ...current,
+      [policyId]: current[policyId] || libraryName,
+    }));
   }
 
   function handleSaveCoreFile() {
@@ -375,31 +419,94 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   function handleToggleTool(scope: CapabilityScope, id: string, checked: boolean) {
     setCapabilityConfig((current) => ({
       ...current,
-      tools: {
-        ...current.tools,
-        [scope]: current.tools[scope].map((item) => (item.id === id ? { ...item, enabled: checked } : item)),
-      },
+      tools: toggleScopedEnabledCollection(current.tools, scope, id, checked),
     }));
   }
 
   function handleDeleteTool(scope: CapabilityScope, id: string) {
     setCapabilityConfig((current) => ({
       ...current,
-      tools: {
-        ...current.tools,
-        [scope]: current.tools[scope].filter((item) => item.id !== id),
-      },
+      tools: deleteScopedCollectionItem(current.tools, scope, id),
     }));
     toast.success("工具已删除。");
+  }
+
+  function handleOpenToolConfigDialog() {
+    setToolConfigDialogOpen(true);
+  }
+
+  function handleOpenSkillConfigDialog() {
+    setSkillConfigDialogOpen(true);
+  }
+
+  function handleConfirmToolConfig(selections: ToolConfigSelection[]) {
+    const { items, addedCount, reenabledCount } = mergeClawToolSelections(capabilityConfig.tools.claw, selections);
+
+    setCapabilityConfig((current) => ({
+      ...current,
+      tools: {
+        ...current.tools,
+        claw: items,
+      },
+    }));
+
+    setToolScope("claw");
+    setToolConfigDialogOpen(false);
+
+    if (addedCount > 0 && reenabledCount > 0) {
+      toast.success(`已新增 ${addedCount} 个工具，并重新启用 ${reenabledCount} 个已有工具。`);
+      return;
+    }
+
+    if (addedCount > 0) {
+      toast.success(`已新增 ${addedCount} 个工具到 Claw配置。`);
+      return;
+    }
+
+    if (reenabledCount > 0) {
+      toast.success(`已重新启用 ${reenabledCount} 个已有工具。`);
+      return;
+    }
+
+    toast.info("所选工具已存在于 Claw配置中。");
+  }
+
+  function handleConfirmSkillConfig(selections: SkillConfigSelection[]) {
+    const { items, addedCount, reenabledCount } = mergeClawSkillSelections(capabilityConfig.skills.claw, selections);
+
+    setCapabilityConfig((current) => ({
+      ...current,
+      skills: {
+        ...current.skills,
+        claw: items,
+      },
+    }));
+
+    setSkillScope("claw");
+    setSkillConfigDialogOpen(false);
+
+    if (addedCount > 0 && reenabledCount > 0) {
+      toast.success(`已新增 ${addedCount} 个技能，并重新启用 ${reenabledCount} 个已有技能。`);
+      return;
+    }
+
+    if (addedCount > 0) {
+      toast.success(`已新增 ${addedCount} 个技能到 Claw配置。`);
+      return;
+    }
+
+    if (reenabledCount > 0) {
+      toast.success(`已重新启用 ${reenabledCount} 个已有技能。`);
+      return;
+    }
+
+    toast.info("所选技能已存在于 Claw配置中。");
   }
 
   function handleToggleSkill(scope: CapabilityScope, id: string, enabled: boolean) {
     setCapabilityConfig((current) => ({
       ...current,
-      skills: {
-        ...current.skills,
-        [scope]: current.skills[scope].map((item) => (item.id === id ? { ...item, enabled } : item)),
-      },
+      skills: toggleScopedEnabledCollection(current.skills, scope, id, enabled),
     }));
     toast.success(enabled ? "技能已启用。" : "技能已停用。");
   }
@@ -407,10 +514,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   function handleDeleteSkill(scope: CapabilityScope, id: string) {
     setCapabilityConfig((current) => ({
       ...current,
-      skills: {
-        ...current.skills,
-        [scope]: current.skills[scope].filter((item) => item.id !== id),
-      },
+      skills: deleteScopedCollectionItem(current.skills, scope, id),
     }));
     toast.success("技能已删除。");
   }
@@ -418,10 +522,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   function handleToggleAgent(scope: CapabilityScope, id: string, enabled: boolean) {
     setCapabilityConfig((current) => ({
       ...current,
-      agents: {
-        ...current.agents,
-        [scope]: current.agents[scope].map((item) => (item.id === id ? { ...item, enabled } : item)),
-      },
+      agents: toggleScopedEnabledCollection(current.agents, scope, id, enabled),
     }));
     toast.success(enabled ? "Agent 已启用。" : "Agent 已停用。");
   }
@@ -429,10 +530,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   function handleDeleteAgent(scope: CapabilityScope, id: string) {
     setCapabilityConfig((current) => ({
       ...current,
-      agents: {
-        ...current.agents,
-        [scope]: current.agents[scope].filter((item) => item.id !== id),
-      },
+      agents: deleteScopedCollectionItem(current.agents, scope, id),
     }));
     toast.success("Agent 已删除。");
   }
@@ -440,10 +538,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   function handleToggleKnowledge(scope: KnowledgeScope, id: string, enabled: boolean) {
     setCapabilityConfig((current) => ({
       ...current,
-      knowledge: {
-        ...current.knowledge,
-        [scope]: current.knowledge[scope].map((item) => (item.id === id ? { ...item, enabled } : item)),
-      },
+      knowledge: toggleScopedEnabledCollection(current.knowledge, scope, id, enabled),
     }));
     toast.success(enabled ? "知识已启用。" : "知识已停用。");
   }
@@ -451,117 +546,40 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   function handleDeleteKnowledge(scope: KnowledgeScope, id: string) {
     setCapabilityConfig((current) => ({
       ...current,
-      knowledge: {
-        ...current.knowledge,
-        [scope]: current.knowledge[scope].filter((item) => item.id !== id),
-      },
+      knowledge: deleteScopedCollectionItem(current.knowledge, scope, id),
     }));
     toast.success("知识已删除。");
   }
 
-  function handleRuntimeTierChange(tier: RuntimeResourceTier) {
-    const matched = {
-      light: { cpu: 2, memoryGb: 4, diskGb: 20 },
-      standard: { cpu: 4, memoryGb: 8, diskGb: 40 },
-      enhanced: { cpu: 8, memoryGb: 16, diskGb: 80 },
-    }[tier];
-
-    setResourceConfig((current) => ({
-      ...current,
-      runtime: {
-        ...current.runtime,
-        tier,
-        advanced: {
-          ...current.runtime.advanced,
-          ...matched,
-        },
-      },
-    }));
+  function handleRuntimeTierChange(tier: ResourceConfig["runtime"]["tier"]) {
+    setResourceConfig((current) => applyRuntimeTier(current, tier));
   }
 
-  function handleExecutionTierChange(tier: ExecutionResourceTier) {
-    const matched = {
-      basic: { workspaceDiskGb: 5 },
-      standard: { workspaceDiskGb: 10 },
-      enhanced: { workspaceDiskGb: 20 },
-    }[tier];
-
-    setResourceConfig((current) => ({
-      ...current,
-      execution: {
-        ...current.execution,
-        tier,
-        ...matched,
-      },
-    }));
+  function handleExecutionTierChange(tier: ResourceConfig["execution"]["tier"]) {
+    setResourceConfig((current) => applyExecutionTier(current, tier));
   }
 
   function handleRuntimeNumberChange(field: "maxConcurrentTasks" | "maxTaskDurationMin", value: string) {
-    const nextValue = Number.parseInt(value, 10);
-
-    setResourceConfig((current) => ({
-      ...current,
-      runtime: {
-        ...current.runtime,
-        [field]: Number.isNaN(nextValue) ? 0 : nextValue,
-      },
-    }));
+    setResourceConfig((current) => updateRuntimeNumber(current, field, value));
   }
 
   function handleRuntimeAdvancedNumberChange(field: "cpu" | "memoryGb" | "diskGb" | "startupTimeoutSec", value: string) {
-    const nextValue = Number.parseInt(value, 10);
-
-    setResourceConfig((current) => ({
-      ...current,
-      runtime: {
-        ...current.runtime,
-        advanced: {
-          ...current.runtime.advanced,
-          [field]: Number.isNaN(nextValue) ? 0 : nextValue,
-        },
-      },
-    }));
+    setResourceConfig((current) => updateRuntimeAdvancedNumber(current, field, value));
   }
 
   function handleRuntimeAdvancedTextChange(value: string) {
-    setResourceConfig((current) => ({
-      ...current,
-      runtime: {
-        ...current.runtime,
-        advanced: {
-          ...current.runtime.advanced,
-          runtimeVersion: value,
-        },
-      },
-    }));
+    setResourceConfig((current) => updateRuntimeAdvancedText(current, value));
   }
 
   function handleExecutionNumberChange(
     field: "workspaceDiskGb" | "maxConcurrentExecutions" | "maxExecutionTimeoutMin",
     value: string
   ) {
-    const nextValue = Number.parseInt(value, 10);
-
-    setResourceConfig((current) => ({
-      ...current,
-      execution: {
-        ...current.execution,
-        [field]: Number.isNaN(nextValue) ? 0 : nextValue,
-      },
-    }));
+    setResourceConfig((current) => updateExecutionNumber(current, field, value));
   }
 
   function handleExecutionCapabilityChange(key: keyof ResourceConfig["execution"]["capabilities"], checked: boolean) {
-    setResourceConfig((current) => ({
-      ...current,
-      execution: {
-        ...current.execution,
-        capabilities: {
-          ...current.execution.capabilities,
-          [key]: checked,
-        },
-      },
-    }));
+    setResourceConfig((current) => updateExecutionCapability(current, key, checked));
   }
 
   function handleResetResourceConfig() {
@@ -597,7 +615,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
 
       <Tabs
         value={activeSection}
-        onValueChange={setActiveSection}
+        onValueChange={(value) => setActiveSection(value as DetailSectionKey)}
         className="flex flex-col gap-5 xl:flex-row xl:items-start"
       >
         <aside
@@ -674,12 +692,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                           <button
                             key={session.id}
                             type="button"
-                            onClick={() => {
-                              setSelectedChatId(session.id);
-                              setChatSessions((current) =>
-                                current.map((item) => (item.id === session.id ? { ...item, unreadCount: 0 } : item))
-                              );
-                            }}
+                            onClick={() => handleSelectChatSession(session.id)}
                             className={cn(
                               "w-full rounded-[20px] border px-3 py-3 text-left transition-all",
                               isActive
@@ -1011,417 +1024,29 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="capability" className="mt-0">
-            <SectionCard title="能力配置" description="能力配置包括工具配置、技能配置、Agent（as Function）和知识。">
-              <div className="space-y-5">
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {capabilityPanels.map((panel) => {
-                    const Icon = panel.icon;
-                    const isActive = activeCapabilityPanel === panel.key;
-
-                    return (
-                      <button
-                        key={panel.key}
-                        type="button"
-                        onClick={() => setActiveCapabilityPanel(panel.key)}
-                        className={cn(
-                          "group rounded-[24px] border p-4 text-left transition-all",
-                          isActive
-                            ? "border-sky-200 bg-[linear-gradient(180deg,rgba(240,249,255,0.92),rgba(255,255,255,0.98))] shadow-[0_16px_36px_-28px_rgba(14,165,233,0.5)]"
-                            : "border-slate-200 bg-slate-50/70 hover:border-sky-100 hover:bg-white"
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div
-                            className={cn(
-                              "flex h-11 w-11 items-center justify-center rounded-[18px] border bg-white text-sky-700 shadow-sm shadow-sky-100/50",
-                              isActive ? "border-sky-200" : "border-sky-100"
-                            )}
-                          >
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <Badge className={cn(isActive ? "border-sky-200 bg-white text-sky-700" : "border-slate-200 bg-white text-slate-500")}>
-                            {panel.count} 项
-                          </Badge>
-                        </div>
-
-                        <div className="mt-4">
-                          <div className="text-base font-semibold text-slate-950">{panel.title}</div>
-                          <div className="mt-2 text-sm leading-6 text-slate-600">{panel.description}</div>
-                        </div>
-
-                        <div className="mt-4 flex items-center justify-between text-xs font-medium">
-                          <span className={isActive ? "text-sky-700" : "text-slate-400"}>{isActive ? "当前展开" : "点击查看详情"}</span>
-                          <ChevronRight className={cn("h-4 w-4 transition-transform", isActive ? "text-sky-600" : "text-slate-300 group-hover:text-slate-500")} />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.9),rgba(255,255,255,0.98))] p-5">
-                  {activeCapabilityPanel === "tools" ? (
-                    <div>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-sky-100 bg-white text-sky-700 shadow-sm shadow-sky-100/50">
-                            <Wrench className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <div className="text-lg font-semibold text-slate-950">工具配置</div>
-                            <div className="mt-2 text-sm leading-7 text-slate-600">平台预置、租户配置、Claw 配置三类工具统一在这里管理。</div>
-                          </div>
-                        </div>
-
-                        <Button type="button" variant="outline" size="sm" onClick={() => toast.success("已预留配置工具入口。")}>
-                          <Plus className="h-4 w-4" />
-                          配置工具
-                        </Button>
-                      </div>
-
-                      <div className="mt-5 grid grid-cols-3 gap-2 rounded-[18px] bg-slate-100/80 p-1">
-                        {(["platform", "tenant", "claw"] as CapabilityScope[]).map((scope) => (
-                          <button
-                            key={`tools-${scope}`}
-                            type="button"
-                            onClick={() => setToolScope(scope)}
-                            className={cn(
-                              "rounded-[14px] px-3 py-2 text-sm font-medium transition-all",
-                              toolScope === scope ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-900"
-                            )}
-                          >
-                            {CAPABILITY_SCOPE_LABELS[scope]} ({capabilityConfig.tools[scope].length})
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="mt-5 space-y-3">
-                        {capabilityConfig.tools[toolScope].length ? (
-                          capabilityConfig.tools[toolScope].map((item) => (
-                            <div key={item.id} className="rounded-[22px] border border-slate-200 bg-white px-4 py-4">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div className="text-base font-semibold text-slate-950">{item.name}</div>
-                                    {item.badge ? (
-                                      <Badge className="border-slate-200 bg-slate-100 text-slate-600">{item.badge}</Badge>
-                                    ) : null}
-                                  </div>
-                                  {item.meta ? (
-                                    <div className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                      {item.meta}
-                                    </div>
-                                  ) : null}
-                                  <div className="mt-2 text-sm leading-7 text-slate-600">{item.description}</div>
-                                </div>
-
-                                <div className="flex shrink-0 items-center gap-3">
-                                  <Badge
-                                    className={cn(
-                                      item.enabled
-                                        ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                                        : "border-slate-200 bg-slate-100 text-slate-600"
-                                    )}
-                                  >
-                                    {item.enabled ? "已启用" : "已停用"}
-                                  </Badge>
-                                  {canDeleteCapability(toolScope) ? (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="text-rose-500 hover:bg-rose-50 hover:text-rose-600"
-                                      onClick={() => handleDeleteTool(toolScope, item.id)}
-                                    >
-                                      删除
-                                    </Button>
-                                  ) : null}
-                                  <Switch
-                                    checked={item.enabled}
-                                    onCheckedChange={(checked) => handleToggleTool(toolScope, item.id, checked)}
-                                    aria-label={`${item.name} 开关`}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/80 px-4 py-8 text-center text-sm text-slate-400">
-                            当前分类下还没有工具。
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {activeCapabilityPanel === "skills" ? (
-                    <div>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-sky-100 bg-white text-sky-700 shadow-sm shadow-sky-100/50">
-                            <Sparkles className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <div className="text-lg font-semibold text-slate-950">技能配置</div>
-                            <div className="mt-2 text-sm leading-7 text-slate-600">区分平台预置、租户配置和 Claw 配置的技能清单。</div>
-                          </div>
-                        </div>
-
-                        <Button type="button" variant="outline" size="sm" onClick={() => toast.success("已预留配置技能入口。")}>
-                          <Plus className="h-4 w-4" />
-                          配置技能
-                        </Button>
-                      </div>
-
-                      <div className="mt-5 grid grid-cols-3 gap-2 rounded-[18px] bg-slate-100/80 p-1">
-                        {(["platform", "tenant", "claw"] as CapabilityScope[]).map((scope) => (
-                          <button
-                            key={`skills-${scope}`}
-                            type="button"
-                            onClick={() => setSkillScope(scope)}
-                            className={cn(
-                              "rounded-[14px] px-3 py-2 text-sm font-medium transition-all",
-                              skillScope === scope ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-900"
-                            )}
-                          >
-                            {CAPABILITY_SCOPE_LABELS[scope]} ({capabilityConfig.skills[scope].length})
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="mt-5 space-y-3">
-                        {capabilityConfig.skills[skillScope].length ? (
-                          capabilityConfig.skills[skillScope].map((item) => (
-                            <div key={item.id} className="rounded-[22px] border border-slate-200 bg-white px-4 py-4">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-slate-300">/</span>
-                                    <div className="min-w-0">
-                                      <div className="truncate text-base font-semibold text-slate-950">{item.name}</div>
-                                      <div className="mt-2 text-sm leading-7 text-slate-600">{item.description}</div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <span className="text-sm text-slate-400">{item.sizeLabel}</span>
-                                  <Badge
-                                    className={cn(
-                                      item.enabled
-                                        ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                                        : "border-slate-200 bg-slate-100 text-slate-600"
-                                    )}
-                                  >
-                                    {item.enabled ? "已启用" : "已停用"}
-                                  </Badge>
-                                  {canDeleteCapability(skillScope) ? (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="text-rose-500 hover:bg-rose-50 hover:text-rose-600"
-                                      onClick={() => handleDeleteSkill(skillScope, item.id)}
-                                    >
-                                      删除
-                                    </Button>
-                                  ) : null}
-                                  <Switch
-                                    checked={item.enabled}
-                                    onCheckedChange={(checked) => handleToggleSkill(skillScope, item.id, checked)}
-                                    aria-label={`${item.name} 开关`}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/80 px-4 py-8 text-center text-sm text-slate-400">
-                            当前分类下还没有技能。
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {activeCapabilityPanel === "agents" ? (
-                    <div>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-sky-100 bg-white text-sky-700 shadow-sm shadow-sky-100/50">
-                            <Bot className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <div className="text-lg font-semibold text-slate-950">Agent（as Function）</div>
-                            <div className="mt-2 text-sm leading-7 text-slate-600">把平台、租户和 Claw 级别的 Agent 能力封装成可调用函数。</div>
-                          </div>
-                        </div>
-
-                        <Button type="button" variant="outline" size="sm" onClick={() => toast.success("已预留配置 Agent 入口。")}>
-                          <Plus className="h-4 w-4" />
-                          配置Agent
-                        </Button>
-                      </div>
-
-                      <div className="mt-5 grid grid-cols-3 gap-2 rounded-[18px] bg-slate-100/80 p-1">
-                        {(["platform", "tenant", "claw"] as CapabilityScope[]).map((scope) => (
-                          <button
-                            key={`agents-${scope}`}
-                            type="button"
-                            onClick={() => setAgentScope(scope)}
-                            className={cn(
-                              "rounded-[14px] px-3 py-2 text-sm font-medium transition-all",
-                              agentScope === scope ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-900"
-                            )}
-                          >
-                            {CAPABILITY_SCOPE_LABELS[scope]} ({capabilityConfig.agents[scope].length})
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="mt-5 space-y-3">
-                        {capabilityConfig.agents[agentScope].length ? (
-                          capabilityConfig.agents[agentScope].map((item) => (
-                            <div key={item.id} className="rounded-[22px] border border-slate-200 bg-white px-4 py-4">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <div className="text-base font-semibold text-slate-950">{item.name}</div>
-                                    <Badge className="border-sky-100 bg-sky-50 text-sky-700">{item.target}</Badge>
-                                  </div>
-                                  <div className="mt-2 text-sm leading-7 text-slate-600">{item.description}</div>
-                                </div>
-
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <Badge
-                                    className={cn(
-                                      item.enabled
-                                        ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                                        : "border-slate-200 bg-slate-100 text-slate-600"
-                                    )}
-                                  >
-                                    {item.enabled ? "已启用" : "已停用"}
-                                  </Badge>
-                                  {canDeleteCapability(agentScope) ? (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="text-rose-500 hover:bg-rose-50 hover:text-rose-600"
-                                      onClick={() => handleDeleteAgent(agentScope, item.id)}
-                                    >
-                                      删除
-                                    </Button>
-                                  ) : null}
-                                  <Switch
-                                    checked={item.enabled}
-                                    onCheckedChange={(checked) => handleToggleAgent(agentScope, item.id, checked)}
-                                    aria-label={`${item.name} 开关`}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/80 px-4 py-8 text-center text-sm text-slate-400">
-                            当前分类下还没有 Agent。
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {activeCapabilityPanel === "knowledge" ? (
-                    <div>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-sky-100 bg-white text-sky-700 shadow-sm shadow-sky-100/50">
-                            <FileStack className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <div className="text-lg font-semibold text-slate-950">知识</div>
-                            <div className="mt-2 text-sm leading-7 text-slate-600">知识分为租户配置和 Claw 配置两层，便于统一下发和单独增强。</div>
-                          </div>
-                        </div>
-
-                        <Button type="button" variant="outline" size="sm" onClick={() => toast.success("已预留配置知识入口。")}>
-                          <Plus className="h-4 w-4" />
-                          配置知识
-                        </Button>
-                      </div>
-
-                      <div className="mt-5 grid grid-cols-2 gap-2 rounded-[18px] bg-slate-100/80 p-1">
-                        {(["tenant", "claw"] as KnowledgeScope[]).map((scope) => (
-                          <button
-                            key={`knowledge-${scope}`}
-                            type="button"
-                            onClick={() => setKnowledgeScope(scope)}
-                            className={cn(
-                              "rounded-[14px] px-3 py-2 text-sm font-medium transition-all",
-                              knowledgeScope === scope ? "bg-white text-slate-950 shadow-sm" : "text-slate-500 hover:text-slate-900"
-                            )}
-                          >
-                            {KNOWLEDGE_SCOPE_LABELS[scope]} ({capabilityConfig.knowledge[scope].length})
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="mt-5 space-y-3">
-                        {capabilityConfig.knowledge[knowledgeScope].length ? (
-                          capabilityConfig.knowledge[knowledgeScope].map((item) => (
-                            <div key={item.id} className="rounded-[22px] border border-slate-200 bg-white px-4 py-4">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="min-w-0">
-                                  <div className="text-base font-semibold text-slate-950">{item.name}</div>
-                                  <div className="mt-2 text-sm leading-7 text-slate-600">{item.description}</div>
-                                </div>
-
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <Badge
-                                    className={cn(
-                                      item.enabled
-                                        ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                                        : "border-slate-200 bg-slate-100 text-slate-600"
-                                    )}
-                                  >
-                                    {item.enabled ? "已启用" : "已停用"}
-                                  </Badge>
-                                  {canDeleteCapability(knowledgeScope) ? (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="text-rose-500 hover:bg-rose-50 hover:text-rose-600"
-                                      onClick={() => handleDeleteKnowledge(knowledgeScope, item.id)}
-                                    >
-                                      删除
-                                    </Button>
-                                  ) : null}
-                                  <Switch
-                                    checked={item.enabled}
-                                    onCheckedChange={(checked) => handleToggleKnowledge(knowledgeScope, item.id, checked)}
-                                    aria-label={`${item.name} 开关`}
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="mt-4 flex items-center gap-3 text-xs text-slate-400">
-                                <span>{item.documentCount} 篇文档</span>
-                                <span>最近更新 {item.updatedAt}</span>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/80 px-4 py-8 text-center text-sm text-slate-400">
-                            当前分类下还没有知识库。
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-
-                </div>
-              </div>
-            </SectionCard>
+            <ClawCapabilitySection
+              capabilityConfig={capabilityConfig}
+              activeCapabilityPanel={activeCapabilityPanel}
+              onActiveCapabilityPanelChange={setActiveCapabilityPanel}
+              toolScope={toolScope}
+              onToolScopeChange={setToolScope}
+              skillScope={skillScope}
+              onSkillScopeChange={setSkillScope}
+              agentScope={agentScope}
+              onAgentScopeChange={setAgentScope}
+              knowledgeScope={knowledgeScope}
+              onKnowledgeScopeChange={setKnowledgeScope}
+              onOpenToolConfigDialog={handleOpenToolConfigDialog}
+              onOpenSkillConfigDialog={handleOpenSkillConfigDialog}
+              onToggleTool={handleToggleTool}
+              onDeleteTool={handleDeleteTool}
+              onToggleSkill={handleToggleSkill}
+              onDeleteSkill={handleDeleteSkill}
+              onToggleAgent={handleToggleAgent}
+              onDeleteAgent={handleDeleteAgent}
+              onToggleKnowledge={handleToggleKnowledge}
+              onDeleteKnowledge={handleDeleteKnowledge}
+            />
           </TabsContent>
 
           <TabsContent value="channels" className="mt-0">
@@ -1603,45 +1228,681 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="logs" className="mt-0">
-            <SectionCard title="日志管理" description="日志管理包含消息日志和任务日志。">
-              <div className="grid gap-4 xl:grid-cols-2">
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700">
-                      <MessageSquareText className="h-4 w-4" />
-                    </div>
-                    <div className="text-lg font-semibold text-slate-950">消息</div>
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    {detail.messageLogs.map((log) => (
-                      <div key={`${log.time}-${log.peer}`} className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <div className="text-sm font-semibold text-slate-900">{log.peer}</div>
-                        <div className="mt-1 text-xs text-slate-400">{log.time}</div>
-                        <div className="mt-3 text-sm leading-7 text-slate-600">{log.summary}</div>
-                      </div>
-                    ))}
-                  </div>
+            <div className="space-y-4">
+              <TooltipProvider delayDuration={120}>
+                <div className="flex flex-wrap gap-2">
+                  {LOG_PANEL_ITEMS.map((panel) => (
+                    <button
+                      key={panel.key}
+                      type="button"
+                      onClick={() => setActiveLogPanel(panel.key)}
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors",
+                        activeLogPanel === panel.key
+                          ? "border-sky-200 bg-sky-50 text-sky-700 shadow-sm"
+                          : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900"
+                      )}
+                    >
+                      <span>{panel.label}</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className={cn(
+                              "inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 transition-colors",
+                              activeLogPanel === panel.key ? "text-sky-500" : "text-slate-400"
+                            )}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <CircleHelp className="h-3.5 w-3.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-[280px] text-xs leading-6">
+                          {panel.description}
+                        </TooltipContent>
+                      </Tooltip>
+                    </button>
+                  ))}
                 </div>
+              </TooltipProvider>
 
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700">
-                      <FileStack className="h-4 w-4" />
-                    </div>
-                    <div className="text-lg font-semibold text-slate-950">任务</div>
+              {activeLogPanel === "conversation" ? (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full bg-white/90"
+                      onClick={() => setConversationHistoryCollapsed((current) => !current)}
+                    >
+                      {conversationHistoryCollapsed ? (
+                        <PanelLeftOpen className="h-4 w-4" />
+                      ) : (
+                        <PanelLeftClose className="h-4 w-4" />
+                      )}
+                      {conversationHistoryCollapsed ? "展开会话历史" : "收起会话历史"}
+                    </Button>
+
+                    {!conversationHistoryCollapsed ? (
+                      <div className="text-sm text-slate-500">{conversationRuns.length} 条会话记录</div>
+                    ) : null}
                   </div>
-                  <div className="mt-4 space-y-3">
-                    {detail.taskLogs.map((log) => (
-                      <div key={`${log.time}-${log.taskName}`} className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <div className="text-sm font-semibold text-slate-900">{log.taskName}</div>
-                        <div className="mt-1 text-xs text-slate-400">{log.time}</div>
-                        <div className="mt-3 text-sm leading-7 text-slate-600">{log.result}</div>
+
+                  <div
+                    className={cn(
+                      "grid gap-4",
+                      conversationHistoryCollapsed ? "xl:grid-cols-[minmax(0,1fr)]" : "xl:grid-cols-[280px_minmax(0,1fr)]"
+                    )}
+                  >
+                    {!conversationHistoryCollapsed ? (
+                      <div className="flex min-h-0 flex-col rounded-[24px] border border-slate-200 bg-white/90 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-50 text-slate-700">
+                              <MessageSquareText className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <div className="text-base font-semibold text-slate-950">会话历史</div>
+                              <div className="mt-1 text-sm text-slate-500">{conversationRuns.length} 条记录</div>
+                            </div>
+                          </div>
+                          <Badge className="border-slate-200 bg-white text-slate-600">{conversationRuns.length}</Badge>
+                        </div>
+
+                        <ScrollArea className="mt-4 h-[760px] pr-3">
+                          <div className="space-y-2 pr-4">
+                            {conversationSessionSummaries.map((summary) => (
+                              <button
+                                key={summary.session.id}
+                                type="button"
+                                onClick={() => handleSelectChatSession(summary.session.id)}
+                                className={cn(
+                                  "w-full rounded-[20px] border px-4 py-4 text-left transition-all",
+                                  currentConversationRun?.id === summary.session.id
+                                    ? "border-sky-200 bg-sky-50/70 shadow-sm shadow-sky-100/70"
+                                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70"
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-semibold text-slate-900">
+                                      {summary.session.title}
+                                    </div>
+                                    <div className="mt-1 truncate text-xs text-slate-500">
+                                      {summary.linkedChatSession?.source ?? summary.session.channel}
+                                    </div>
+                                  </div>
+                                  <Badge className="border-slate-200 bg-white text-slate-600">
+                                    {summary.messages.length}
+                                  </Badge>
+                                </div>
+
+                                <div className="mt-3 text-sm text-slate-600">{summary.session.userIdentity}</div>
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                                  <span>{summary.session.updatedAt}</span>
+                                  {summary.auditRecordCount > 0 ? (
+                                    <>
+                                      <span className="text-slate-300">/</span>
+                                      <span>{summary.auditRecordCount} 条留痕</span>
+                                    </>
+                                  ) : null}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </ScrollArea>
                       </div>
-                    ))}
+                    ) : null}
+
+                    <div className="space-y-4">
+                      {currentConversationRun ? (
+                        <>
+                          <div className="rounded-[24px] border border-slate-200 bg-white/90 p-5">
+                            <div className="flex flex-wrap items-start justify-between gap-4">
+                              <div>
+                                <div className="text-xl font-semibold text-slate-950">{currentConversationRun.title}</div>
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                                  <span>{currentConversationRun.channel}</span>
+                                  {currentConversationSummary?.linkedChatSession?.source ? (
+                                    <>
+                                      <span className="text-slate-300">/</span>
+                                      <span>{currentConversationSummary.linkedChatSession.source}</span>
+                                    </>
+                                  ) : null}
+                                  <span className="text-slate-300">/</span>
+                                  <span>{currentConversationRun.userIdentity}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                <Badge className="border-slate-200 bg-slate-100 text-slate-700">
+                                  Session ID · {currentConversationRun.sessionId}
+                                </Badge>
+                                <Badge className="border-sky-100 bg-sky-50 text-sky-700">
+                                  Trace · {currentConversationRun.traceId}
+                                </Badge>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                              <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                  用户身份
+                                </div>
+                                <div className="mt-2 text-sm font-medium text-slate-900">{currentConversationRun.userIdentity}</div>
+                              </div>
+                              <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                  开始时间
+                                </div>
+                                <div className="mt-2 text-sm font-medium text-slate-900">{currentConversationRun.startedAt}</div>
+                              </div>
+                              <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                  消息数
+                                </div>
+                                <div className="mt-2 text-sm font-medium text-slate-900">{currentConversationMessages.length}</div>
+                              </div>
+                              <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                  带执行记录
+                                </div>
+                                <div className="mt-2 text-sm font-medium text-slate-900">
+                                  {currentConversationSummary?.auditMessageCount ?? 0}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            className={cn(
+                              "grid gap-4",
+                              conversationHistoryCollapsed
+                                ? "xl:grid-cols-[minmax(0,1fr)_460px]"
+                                : "xl:grid-cols-[minmax(0,1fr)_340px]"
+                            )}
+                          >
+                            <div className="flex min-h-0 flex-col rounded-[24px] border border-slate-200 bg-[radial-gradient(circle_at_top,rgba(240,249,255,0.42),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.95))] p-5">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="text-lg font-semibold text-slate-950">对话历史</div>
+                                <Badge className="border-slate-200 bg-white text-slate-600">
+                                  {currentConversationMessages.length} 条消息
+                                </Badge>
+                              </div>
+
+                              <ScrollArea className="mt-5 h-[420px] pr-3 md:h-[520px] xl:h-[680px]">
+                                <div className="space-y-3 pr-4">
+                                  {currentConversationMessages.map((message) => {
+                                    const isUser = message.role === "user";
+                                    const isTool = message.role === "tool";
+                                    const hasAudit = message.auditRecords.length > 0;
+                                    const isSelected = selectedConversationAuditMessage?.id === message.id;
+
+                                    if (isTool) {
+                                      return (
+                                        <div key={message.id} className="flex justify-center">
+                                          <button
+                                            type="button"
+                                            disabled={!hasAudit}
+                                            onClick={() =>
+                                              setSelectedConversationAuditMessageId((current) =>
+                                                current === message.id ? null : message.id
+                                              )
+                                            }
+                                            className={cn(
+                                              "max-w-[92%] rounded-full border px-4 py-2.5 text-left transition-all",
+                                              hasAudit
+                                                ? "border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:bg-sky-50/70"
+                                                : "cursor-default border-slate-200 bg-slate-100 text-slate-500",
+                                              isSelected && "border-sky-200 bg-sky-50 text-sky-700 shadow-sm shadow-sky-100/70"
+                                            )}
+                                          >
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                                系统动作
+                                              </span>
+                                              <span className="text-sm font-medium">{message.toolLabel ?? "系统执行"}</span>
+                                              {hasAudit ? (
+                                                <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700">
+                                                  执行 {message.auditRecords.length}
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                          </button>
+                                        </div>
+                                      );
+                                    }
+
+                                    return (
+                                      <div key={message.id} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+                                        <div className={cn("flex max-w-[88%] flex-col space-y-2", isUser && "items-end")}>
+                                          <div
+                                            className={cn(
+                                              "flex flex-wrap items-center gap-2 text-xs text-slate-400",
+                                              isUser ? "justify-end" : "justify-start"
+                                            )}
+                                          >
+                                            <span>{message.sender}</span>
+                                            <span>{message.time}</span>
+                                            {message.turnNumber ? <span>第 {message.turnNumber} 轮</span> : null}
+                                            {hasAudit ? (
+                                              <span
+                                                className={cn(
+                                                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]",
+                                                  isSelected
+                                                    ? "border-sky-200 bg-sky-50 text-sky-700"
+                                                    : "border-slate-200 bg-white text-slate-500"
+                                                )}
+                                              >
+                                                <span
+                                                  className={cn(
+                                                    "h-1.5 w-1.5 rounded-full",
+                                                    isSelected ? "bg-sky-500" : "bg-slate-400"
+                                                  )}
+                                                />
+                                                执行 {message.auditRecords.length}
+                                              </span>
+                                            ) : null}
+                                          </div>
+
+                                          {hasAudit ? (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                setSelectedConversationAuditMessageId((current) =>
+                                                  current === message.id ? null : message.id
+                                                )
+                                              }
+                                              className={cn(
+                                                "rounded-[24px] px-4 py-3 text-left text-sm leading-7 shadow-sm transition-all",
+                                                isUser
+                                                  ? "bg-slate-950 text-white shadow-slate-200 hover:bg-slate-900"
+                                                  : "border border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:bg-sky-50/60",
+                                                isSelected &&
+                                                  (isUser
+                                                    ? "ring-2 ring-sky-200 ring-offset-2 ring-offset-white"
+                                                    : "border-sky-200 bg-sky-50 shadow-sky-100/70")
+                                              )}
+                                            >
+                                              <div className="whitespace-pre-line">{message.content}</div>
+                                              {message.attachments?.length ? (
+                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                  {message.attachments.map((attachment) => (
+                                                    <span
+                                                      key={`${message.id}-${attachment}`}
+                                                      className={cn(
+                                                        "inline-flex items-center rounded-full px-3 py-1 text-xs",
+                                                        isUser ? "bg-white/15 text-white" : "bg-white text-slate-600"
+                                                      )}
+                                                    >
+                                                      {attachment}
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              ) : null}
+                                            </button>
+                                          ) : (
+                                            <div
+                                              className={cn(
+                                                "rounded-[24px] px-4 py-3 text-sm leading-7 shadow-sm",
+                                                isUser
+                                                  ? "bg-slate-950 text-white shadow-slate-200"
+                                                  : "border border-slate-200 bg-white text-slate-700"
+                                              )}
+                                            >
+                                              <div className="whitespace-pre-line">{message.content}</div>
+                                              {message.attachments?.length ? (
+                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                  {message.attachments.map((attachment) => (
+                                                    <span
+                                                      key={`${message.id}-${attachment}`}
+                                                      className={cn(
+                                                        "inline-flex items-center rounded-full px-3 py-1 text-xs",
+                                                        isUser ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"
+                                                      )}
+                                                    >
+                                                      {attachment}
+                                                    </span>
+                                                  ))}
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </ScrollArea>
+                            </div>
+
+                            <div className="flex min-h-0 flex-col rounded-[24px] border border-slate-200 bg-white/95 p-5 xl:sticky xl:top-5">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="text-lg font-semibold text-slate-950">执行明细</div>
+                                {selectedConversationAuditMessage ? (
+                                  <Badge className="border-sky-100 bg-sky-50 text-sky-700">
+                                    {selectedConversationAuditMessage.auditRecords.length} 项执行
+                                  </Badge>
+                                ) : null}
+                              </div>
+
+                              {selectedConversationAuditMessage ? (
+                                <ScrollArea className="mt-4 h-[420px] pr-3 md:h-[520px] xl:h-[680px]">
+                                  <div className="space-y-4 pr-4">
+                                    <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
+                                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                        已选消息
+                                      </div>
+                                      <div className="mt-2 text-sm font-medium text-slate-900">
+                                        {selectedConversationAuditMessage.sender} · {selectedConversationAuditMessage.time}
+                                      </div>
+                                      <div className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">
+                                        {selectedConversationAuditMessage.content}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2">
+                                      {selectedConversationAuditMessage.turnNumber ? (
+                                        <Badge className="border-slate-200 bg-white text-slate-600">
+                                          第 {selectedConversationAuditMessage.turnNumber} 轮
+                                        </Badge>
+                                      ) : null}
+                                      {selectedConversationAuditMessage.traceId ? (
+                                        <Badge className="border-sky-100 bg-sky-50 font-mono text-sky-700">
+                                          {selectedConversationAuditMessage.traceId}
+                                        </Badge>
+                                      ) : null}
+                                      <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                                        成功{" "}
+                                        {
+                                          selectedConversationAuditMessage.auditRecords.filter(
+                                            (record) => record.status === "成功"
+                                          ).length
+                                        }
+                                      </Badge>
+                                      {selectedConversationAuditMessage.auditRecords.some(
+                                        (record) => record.status === "已拦截"
+                                      ) ? (
+                                        <Badge className="border-amber-200 bg-amber-50 text-amber-700">
+                                          拦截{" "}
+                                          {
+                                            selectedConversationAuditMessage.auditRecords.filter(
+                                              (record) => record.status === "已拦截"
+                                            ).length
+                                          }
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+
+                                    <div className="space-y-3">
+                                      {selectedConversationAuditMessage.auditRecords.map((record) => (
+                                        <div key={record.id} className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
+                                          <div className="flex flex-wrap items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <Badge className={cn("border", getAuditTypeClassName(record.type))}>
+                                                  {record.type}
+                                                </Badge>
+                                                <Badge className={cn("border", getAuditStatusClassName(record.status))}>
+                                                  {record.status}
+                                                </Badge>
+                                                <div className="text-sm font-semibold text-slate-900">{record.targetName}</div>
+                                              </div>
+                                              <div className="mt-2 text-xs font-mono text-slate-400">
+                                                Trace · {record.traceId}
+                                              </div>
+                                            </div>
+
+                                            <div className="text-sm font-medium text-slate-700">
+                                              {formatDurationMs(record.durationMs)}
+                                            </div>
+                                          </div>
+
+                                          <div className="mt-4 space-y-3">
+                                            <div className="rounded-[16px] border border-slate-200 bg-white px-4 py-3">
+                                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                                入参摘要
+                                              </div>
+                                              <div className="mt-2 text-sm leading-6 text-slate-600">{record.inputSummary}</div>
+                                            </div>
+                                            <div className="rounded-[16px] border border-slate-200 bg-white px-4 py-3">
+                                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                                结果摘要
+                                              </div>
+                                              <div className="mt-2 text-sm leading-6 text-slate-600">{record.outputSummary}</div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </ScrollArea>
+                              ) : (
+                                <ScrollArea className="mt-4 h-[420px] pr-3 md:h-[520px] xl:h-[680px]">
+                                  <div className="flex min-h-full flex-col items-center justify-center rounded-[20px] border border-dashed border-slate-200 bg-slate-50/60 px-5 text-center">
+                                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
+                                      <FileStack className="h-5 w-5" />
+                                    </div>
+                                    <div className="mt-4 text-base font-semibold text-slate-950">请选择消息以查看执行记录</div>
+                                  </div>
+                                </ScrollArea>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="rounded-[24px] border border-dashed border-slate-200 bg-white px-6 py-14 text-center text-sm text-slate-500">
+                          暂无会话运行记录
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </SectionCard>
+              ) : null}
+
+              {activeLogPanel === "task" ? (
+                <div className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          任务运行总数
+                        </div>
+                        <div className="mt-3 text-2xl font-semibold text-slate-950">{detail.taskRuns.length}</div>
+                      </div>
+                      <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          成功运行
+                        </div>
+                        <div className="mt-3 text-2xl font-semibold text-emerald-700">
+                          {detail.taskRuns.filter((task) => task.status === "成功").length}
+                        </div>
+                      </div>
+                      <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          运行中
+                        </div>
+                        <div className="mt-3 text-2xl font-semibold text-sky-700">
+                          {detail.taskRuns.filter((task) => task.status === "运行中").length}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      {detail.taskRuns.map((task) => (
+                        <div key={task.id} className="rounded-[24px] border border-slate-200 bg-white/90 p-5">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="text-lg font-semibold text-slate-950">{task.taskName}</div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <Badge className="border-slate-200 bg-slate-100 text-slate-700">{task.taskType}</Badge>
+                                <Badge className={cn("border", getTaskRunStatusClassName(task.status))}>
+                                  {task.status}
+                                </Badge>
+                              </div>
+                            </div>
+
+                            <Badge className="border-sky-100 bg-sky-50 font-mono text-sky-700">
+                              {task.traceId}
+                            </Badge>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 md:grid-cols-2">
+                            <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                触发来源
+                              </div>
+                              <div className="mt-2 text-sm font-medium text-slate-900">{task.triggerSource}</div>
+                            </div>
+                            <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                运行时长
+                              </div>
+                              <div className="mt-2 text-sm font-medium text-slate-900">{formatDurationMs(task.durationMs)}</div>
+                            </div>
+                            <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                开始时间
+                              </div>
+                              <div className="mt-2 text-sm font-medium text-slate-900">{task.startedAt}</div>
+                            </div>
+                            <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                结束时间
+                              </div>
+                              <div className="mt-2 text-sm font-medium text-slate-900">{task.finishedAt ?? "仍在运行"}</div>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50/60 px-4 py-4">
+                            <div className="text-sm font-semibold text-slate-900">结果摘要</div>
+                            <div className="mt-3 text-sm leading-7 text-slate-600">{task.resultSummary}</div>
+                          </div>
+
+                          {task.relatedSessionId ? (
+                            <div className="mt-4 text-sm text-slate-500">关联会话：{task.relatedSessionId}</div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+              {activeLogPanel === "security" ? (
+                <div className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          安全事件总数
+                        </div>
+                        <div className="mt-3 text-2xl font-semibold text-slate-950">{detail.securityEvents.length}</div>
+                      </div>
+                      <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          拦截
+                        </div>
+                        <div className="mt-3 text-2xl font-semibold text-rose-700">
+                          {detail.securityEvents.filter((event) => event.action === "拦截").length}
+                        </div>
+                      </div>
+                      <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          脱敏
+                        </div>
+                        <div className="mt-3 text-2xl font-semibold text-amber-700">
+                          {detail.securityEvents.filter((event) => event.action === "脱敏").length}
+                        </div>
+                      </div>
+                      <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          低风险记录
+                        </div>
+                        <div className="mt-3 text-2xl font-semibold text-slate-700">
+                          {
+                            detail.securityEvents.filter(
+                              (event) => event.level === "低" && (event.action === "记录" || event.action === "放行")
+                            ).length
+                          }
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {detail.securityEvents.map((event) => (
+                        <div
+                          key={event.id}
+                          className={cn(
+                            "rounded-[24px] border bg-white/90 p-5",
+                            event.level === "高"
+                              ? "border-rose-200"
+                              : event.level === "中"
+                                ? "border-amber-200"
+                                : "border-slate-200"
+                          )}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge className={cn("border", getSecurityLevelClassName(event.level))}>
+                                  {event.level}风险
+                                </Badge>
+                                <Badge className={cn("border", getSecurityActionClassName(event.action))}>
+                                  {event.action}
+                                </Badge>
+                                <div className="text-base font-semibold text-slate-950">{event.ruleName}</div>
+                              </div>
+                              <div className="mt-2 text-sm text-slate-500">
+                                {event.sourceType} · {event.sourceName}
+                              </div>
+                            </div>
+
+                            <div className="text-right text-sm text-slate-500">
+                              <div>{event.time}</div>
+                              <div className="mt-1 font-mono text-xs text-slate-400">{event.traceId}</div>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 xl:grid-cols-[180px_minmax(0,1fr)]">
+                            <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                命中阶段
+                              </div>
+                              <div className="mt-2 text-sm font-medium text-slate-900">{event.stage}</div>
+                            </div>
+
+                            <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                内容摘要
+                              </div>
+                              <div className="mt-2 text-sm leading-6 text-slate-600">{event.contentSummary}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+              ) : null}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="security" className="mt-0">
+            <ClawSecuritySection
+              securityManagement={securityManagement}
+              lexiconDrafts={lexiconDrafts}
+              enabledSecurityPolicies={enabledSecurityPolicies}
+              approvalBoundaryCount={approvalBoundaryCount}
+              activeLexiconBindingCount={activeLexiconBindingCount}
+              onAutonomyBoundaryLevelChange={handleAutonomyBoundaryLevelChange}
+              onToggleSecurityPolicy={handleToggleSecurityPolicy}
+              onSecurityPolicyModeChange={handleSecurityPolicyModeChange}
+              onSecurityPolicyActionChange={handleSecurityPolicyActionChange}
+              onSecurityPolicyRuleLevelChange={handleSecurityPolicyRuleLevelChange}
+              onToggleLexiconPolicy={handleToggleLexiconPolicy}
+              onLexiconPolicyModeChange={handleLexiconPolicyModeChange}
+              onLexiconPolicyActionChange={handleLexiconPolicyActionChange}
+              onLexiconDraftChange={handleLexiconDraftChange}
+              onAddLexiconLibrary={handleAddLexiconLibrary}
+              onRemoveLexiconLibrary={handleRemoveLexiconLibrary}
+            />
           </TabsContent>
 
           <TabsContent value="relations" className="mt-0">
@@ -1705,361 +1966,20 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="resource" className="mt-0">
-            <SectionCard title="资源配置" description="用于配置 Claw 的运行资源、执行环境上限与基础能力边界。">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-sky-100 bg-white text-sky-700 shadow-sm shadow-sky-100/50">
-                    <Server className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="text-lg font-semibold text-slate-950">资源配置</div>
-                    <div className="mt-2 text-sm leading-7 text-slate-600">
-                      管理 Claw 本体运行资源和执行环境资源规格。
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Badge className="border-slate-200 bg-white text-slate-600">2项</Badge>
-                  <Button type="button" variant="outline" size="sm" onClick={handleResetResourceConfig}>
-                    <RotateCcw className="h-4 w-4" />
-                    恢复默认
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-2">
-                <div className="rounded-[24px] border border-slate-200 bg-white p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Cpu className="h-4 w-4 text-sky-700" />
-                        <div className="text-base font-semibold text-slate-950">Claw 本体资源</div>
-                      </div>
-                      <div className="mt-2 text-sm leading-7 text-slate-600">
-                        用于配置 Claw 在云端运行时的常驻资源规格，影响会话处理、任务规划与调度能力。
-                      </div>
-                    </div>
-
-                    <Badge className="border-sky-100 bg-sky-50 text-sky-700">云端 Docker</Badge>
-                  </div>
-
-                  <div className="mt-5">
-                    <div className="text-sm font-medium text-slate-900">资源档位</div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                      {RUNTIME_TIER_OPTIONS.map((option) => {
-                        const isActive = resourceConfig.runtime.tier === option.value;
-
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => handleRuntimeTierChange(option.value)}
-                            className={cn(
-                              "rounded-[20px] border px-4 py-4 text-left transition-all",
-                              isActive
-                                ? "border-sky-200 bg-sky-50/70 shadow-[0_16px_30px_-28px_rgba(14,165,233,0.5)]"
-                                : "border-slate-200 bg-slate-50/70 hover:border-sky-100 hover:bg-white"
-                            )}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="text-sm font-semibold text-slate-950">{option.title}</div>
-                              {option.value === "standard" ? (
-                                <Badge className="border-emerald-100 bg-emerald-50 text-emerald-700">推荐</Badge>
-                              ) : null}
-                            </div>
-                            <div className="mt-2 text-xs leading-6 text-slate-500">{option.summary}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-2 text-xs text-slate-400">用于承载 Claw 常驻运行资源。</div>
-                  </div>
-
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
-                      <Label className="text-sm font-medium text-slate-900">最大并发任务数</Label>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          max={20}
-                          value={resourceConfig.runtime.maxConcurrentTasks}
-                          onChange={(event) => handleRuntimeNumberChange("maxConcurrentTasks", event.target.value)}
-                          aria-invalid={Boolean(resourceValidation.maxConcurrentTasks)}
-                          className="h-10 rounded-xl border-slate-200 bg-white"
-                        />
-                        <span className="text-sm text-slate-400">个</span>
-                      </div>
-                      <div className={cn("mt-2 text-xs", resourceValidation.maxConcurrentTasks ? "text-rose-500" : "text-slate-400")}>
-                        {resourceValidation.maxConcurrentTasks || "控制该 Claw 可同时处理的任务数上限。"}
-                      </div>
-                    </div>
-
-                    <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
-                      <Label className="text-sm font-medium text-slate-900">单任务最大运行时长</Label>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          value={resourceConfig.runtime.maxTaskDurationMin}
-                          onChange={(event) => handleRuntimeNumberChange("maxTaskDurationMin", event.target.value)}
-                          aria-invalid={Boolean(resourceValidation.maxTaskDurationMin)}
-                          className="h-10 rounded-xl border-slate-200 bg-white"
-                        />
-                        <span className="text-sm text-slate-400">分钟</span>
-                      </div>
-                      <div className={cn("mt-2 text-xs", resourceValidation.maxTaskDurationMin ? "text-rose-500" : "text-slate-400")}>
-                        {resourceValidation.maxTaskDurationMin || "控制单个任务在 Claw 本体侧的最大允许运行时长。"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 rounded-[22px] border border-dashed border-slate-200 bg-slate-50/60 p-4">
-                    <button
-                      type="button"
-                      onClick={() => setRuntimeAdvancedOpen((current) => !current)}
-                      className="flex w-full items-center justify-between gap-3 text-left"
-                    >
-                      <div>
-                        <div className="text-sm font-medium text-slate-900">高级设置</div>
-                        <div className="mt-1 text-xs text-slate-400">可按需要覆盖 CPU、内存、磁盘和启动参数。</div>
-                      </div>
-                      <ChevronRight className={cn("h-4 w-4 text-slate-400 transition-transform", runtimeAdvancedOpen ? "rotate-90" : "")} />
-                    </button>
-
-                    {runtimeAdvancedOpen ? (
-                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                        <div>
-                          <Label className="text-sm font-medium text-slate-900">CPU 核数</Label>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={resourceConfig.runtime.advanced.cpu}
-                            onChange={(event) => handleRuntimeAdvancedNumberChange("cpu", event.target.value)}
-                            className="mt-2 h-10 rounded-xl border-slate-200 bg-white"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium text-slate-900">内存大小</Label>
-                          <div className="mt-2 flex items-center gap-2">
-                            <Input
-                              type="number"
-                              min={1}
-                              value={resourceConfig.runtime.advanced.memoryGb}
-                              onChange={(event) => handleRuntimeAdvancedNumberChange("memoryGb", event.target.value)}
-                              className="h-10 rounded-xl border-slate-200 bg-white"
-                            />
-                            <span className="text-sm text-slate-400">GB</span>
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium text-slate-900">容器磁盘空间</Label>
-                          <div className="mt-2 flex items-center gap-2">
-                            <Input
-                              type="number"
-                              min={1}
-                              value={resourceConfig.runtime.advanced.diskGb}
-                              onChange={(event) => handleRuntimeAdvancedNumberChange("diskGb", event.target.value)}
-                              className="h-10 rounded-xl border-slate-200 bg-white"
-                            />
-                            <span className="text-sm text-slate-400">GB</span>
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium text-slate-900">启动超时时间</Label>
-                          <div className="mt-2 flex items-center gap-2">
-                            <Input
-                              type="number"
-                              min={1}
-                              value={resourceConfig.runtime.advanced.startupTimeoutSec}
-                              onChange={(event) => handleRuntimeAdvancedNumberChange("startupTimeoutSec", event.target.value)}
-                              className="h-10 rounded-xl border-slate-200 bg-white"
-                            />
-                            <span className="text-sm text-slate-400">秒</span>
-                          </div>
-                        </div>
-                        <div className="sm:col-span-2">
-                          <Label className="text-sm font-medium text-slate-900">Runtime 版本</Label>
-                          <Input
-                            type="text"
-                            value={resourceConfig.runtime.advanced.runtimeVersion}
-                            onChange={(event) => handleRuntimeAdvancedTextChange(event.target.value)}
-                            className="mt-2 h-10 rounded-xl border-slate-200 bg-white"
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-slate-200 bg-white p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <HardDrive className="h-4 w-4 text-sky-700" />
-                        <div className="text-base font-semibold text-slate-950">执行环境资源</div>
-                      </div>
-                      <div className="mt-2 text-sm leading-7 text-slate-600">
-                        用于配置 Claw 执行动作时可申请的执行环境规格，影响浏览器操作、代码执行、文件处理等任务的资源上限。
-                      </div>
-                    </div>
-
-                    <Badge className="border-slate-200 bg-slate-100 text-slate-600">平台统一隔离策略</Badge>
-                  </div>
-
-                  <div className="mt-5">
-                    <div className="text-sm font-medium text-slate-900">资源档位</div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                      {EXECUTION_TIER_OPTIONS.map((option) => {
-                        const isActive = resourceConfig.execution.tier === option.value;
-
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => handleExecutionTierChange(option.value)}
-                            className={cn(
-                              "rounded-[20px] border px-4 py-4 text-left transition-all",
-                              isActive
-                                ? "border-sky-200 bg-sky-50/70 shadow-[0_16px_30px_-28px_rgba(14,165,233,0.5)]"
-                                : "border-slate-200 bg-slate-50/70 hover:border-sky-100 hover:bg-white"
-                            )}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="text-sm font-semibold text-slate-950">{option.title}</div>
-                              {option.value === "standard" ? (
-                                <Badge className="border-emerald-100 bg-emerald-50 text-emerald-700">推荐</Badge>
-                              ) : null}
-                            </div>
-                            <div className="mt-2 text-xs leading-6 text-slate-500">{option.summary}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-2 text-xs text-slate-400">用于定义执行环境的资源规格上限。</div>
-                  </div>
-
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
-                      <Label className="text-sm font-medium text-slate-900">工作目录空间</Label>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          value={resourceConfig.execution.workspaceDiskGb}
-                          onChange={(event) => handleExecutionNumberChange("workspaceDiskGb", event.target.value)}
-                          aria-invalid={Boolean(resourceValidation.workspaceDiskGb)}
-                          className="h-10 rounded-xl border-slate-200 bg-white"
-                        />
-                        <span className="text-sm text-slate-400">GB</span>
-                      </div>
-                      <div className={cn("mt-2 text-xs", resourceValidation.workspaceDiskGb ? "text-rose-500" : "text-slate-400")}>
-                        {resourceValidation.workspaceDiskGb || "控制执行环境可使用的临时工作目录空间。"}
-                      </div>
-                    </div>
-
-                    <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
-                      <Label className="text-sm font-medium text-slate-900">并发执行环境数上限</Label>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          value={resourceConfig.execution.maxConcurrentExecutions}
-                          onChange={(event) => handleExecutionNumberChange("maxConcurrentExecutions", event.target.value)}
-                          aria-invalid={Boolean(resourceValidation.maxConcurrentExecutions)}
-                          className="h-10 rounded-xl border-slate-200 bg-white"
-                        />
-                        <span className="text-sm text-slate-400">个</span>
-                      </div>
-                      <div className={cn("mt-2 text-xs", resourceValidation.maxConcurrentExecutions ? "text-rose-500" : "text-slate-400")}>
-                        {resourceValidation.maxConcurrentExecutions || "控制当前 Claw 同时可拉起的执行环境数量上限。"}
-                      </div>
-                    </div>
-
-                    <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4 sm:col-span-2">
-                      <Label className="text-sm font-medium text-slate-900">单次执行超时时间</Label>
-                      <div className="mt-2 flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min={1}
-                          value={resourceConfig.execution.maxExecutionTimeoutMin}
-                          onChange={(event) => handleExecutionNumberChange("maxExecutionTimeoutMin", event.target.value)}
-                          aria-invalid={Boolean(resourceValidation.maxExecutionTimeoutMin)}
-                          className="h-10 rounded-xl border-slate-200 bg-white"
-                        />
-                        <span className="text-sm text-slate-400">分钟</span>
-                      </div>
-                      <div className={cn("mt-2 text-xs", resourceValidation.maxExecutionTimeoutMin ? "text-rose-500" : "text-slate-400")}>
-                        {resourceValidation.maxExecutionTimeoutMin || "控制单次执行动作的最长允许运行时间。"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
-                    <div className="flex items-start gap-3">
-                      <ShieldCheck className="mt-0.5 h-4 w-4 text-slate-500" />
-                      <div>
-                        <div className="text-sm font-medium text-slate-900">执行环境说明</div>
-                        <div className="mt-1 text-xs leading-6 text-slate-500">
-                          执行环境由平台统一按隔离策略运行，当前页面仅配置资源规格与能力范围，不暴露生命周期和复用策略。
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5">
-                    <div className="text-sm font-medium text-slate-900">执行能力范围</div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <TooltipProvider>
-                        {EXECUTION_CAPABILITY_OPTIONS.map((item) => (
-                          <label
-                            key={item.key}
-                            htmlFor={`execution-capability-${item.key}`}
-                            className="flex cursor-pointer items-start gap-3 rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3 transition-colors hover:border-sky-100 hover:bg-white"
-                          >
-                            <Checkbox
-                              id={`execution-capability-${item.key}`}
-                              checked={resourceConfig.execution.capabilities[item.key]}
-                              onCheckedChange={(checked) => handleExecutionCapabilityChange(item.key, checked === true)}
-                              className="mt-0.5"
-                            />
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-medium text-slate-900">{item.label}</span>
-                                {item.tone === "risk" ? (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                                        <CircleAlert className="h-3 w-3" />
-                                        高风险
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent>启用后可执行系统命令，建议仅在必要场景下开放。</TooltipContent>
-                                  </Tooltip>
-                                ) : null}
-                                {item.tone === "policy" ? (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                                        <CircleAlert className="h-3 w-3" />
-                                        受策略约束
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent>网络访问最终受平台统一策略和租户白名单控制。</TooltipContent>
-                                  </Tooltip>
-                                ) : null}
-                              </div>
-                              <div className="mt-1 text-xs leading-6 text-slate-500">{item.note}</div>
-                            </div>
-                          </label>
-                        ))}
-                      </TooltipProvider>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
+            <ClawResourceSection
+              resourceConfig={resourceConfig}
+              resourceValidation={resourceValidation}
+              runtimeAdvancedOpen={runtimeAdvancedOpen}
+              onToggleRuntimeAdvanced={() => setRuntimeAdvancedOpen((current) => !current)}
+              onResetResourceConfig={handleResetResourceConfig}
+              onRuntimeTierChange={handleRuntimeTierChange}
+              onExecutionTierChange={handleExecutionTierChange}
+              onRuntimeNumberChange={handleRuntimeNumberChange}
+              onRuntimeAdvancedNumberChange={handleRuntimeAdvancedNumberChange}
+              onRuntimeAdvancedTextChange={handleRuntimeAdvancedTextChange}
+              onExecutionNumberChange={handleExecutionNumberChange}
+              onExecutionCapabilityChange={handleExecutionCapabilityChange}
+            />
           </TabsContent>
 
           <TabsContent value="settings" className="mt-0">
@@ -2109,6 +2029,12 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
         </div>
       </Tabs>
+      <ToolConfigDialog open={toolConfigDialogOpen} onOpenChange={setToolConfigDialogOpen} onConfirm={handleConfirmToolConfig} />
+      <SkillConfigDialog
+        open={skillConfigDialogOpen}
+        onOpenChange={setSkillConfigDialogOpen}
+        onConfirm={handleConfirmSkillConfig}
+      />
     </div>
   );
 }

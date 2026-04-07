@@ -8,7 +8,6 @@ import {
   Bot,
   Database,
   Key,
-  Layers3,
   Library,
   Network,
   Puzzle,
@@ -19,6 +18,7 @@ import {
   ExternalLink,
   Shield,
   FileText,
+  PanelLeft,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -35,30 +35,30 @@ interface MenuItem {
 interface MenuGroup {
   title: string;
   items: MenuItem[];
+  dividerTop?: boolean;
 }
 
 const menuGroups: MenuGroup[] = [
   {
-    title: "项目开发",
+    title: "AI资产库",
     items: [
-      {
-        key: "ClawHub",
-        label: "ClawHub",
-        icon: Layers3,
-        href: "/claw-hub",
-      },
-      {
-        key: "ClawHubNext",
-        label: "ClawHub 新版",
-        icon: Sparkles,
-        href: "/claw-hub-next",
-      },
       {
         key: "AppMarketplace",
         label: "应用广场",
         icon: AppWindow,
         href: "/app-marketplace",
       },
+      {
+        key: "SkillsHub",
+        label: "SkillsHub",
+        icon: Sparkles,
+        href: "/skills-hub",
+      },
+    ],
+  },
+  {
+    title: "应用管理",
+    items: [
       {
         key: "Agent",
         label: "智能体",
@@ -71,10 +71,16 @@ const menuGroups: MenuGroup[] = [
     title: "资源管理",
     items: [
       {
-        key: "Skills",
-        label: "SkillHub",
+        key: "ClawHubNext",
+        label: "Claw管理",
         icon: Sparkles,
-        href: "/skills",
+        href: "/claw-hub-next",
+      },
+      {
+        key: "SkillsManagement",
+        label: "skills管理",
+        icon: PanelLeft,
+        href: "/skills-management",
       },
       {
         key: "MCPManagement",
@@ -115,7 +121,8 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    title: "工作空间",
+    title: "业务管理",
+    dividerTop: true,
     items: [
       {
         key: "ApiKey",
@@ -135,11 +142,6 @@ const menuGroups: MenuGroup[] = [
         icon: History,
         href: "/trace",
       },
-    ],
-  },
-  {
-    title: "安全防护",
-    items: [
       {
         key: "KeywordLibrary",
         label: "安全词库",
@@ -164,7 +166,10 @@ function Sidebar() {
       {/* Menu */}
       <nav className="flex-1 overflow-y-auto px-4 py-4">
         {menuGroups.map((group) => (
-          <div key={group.title} className="mb-6">
+          <div
+            key={group.title}
+            className={cn("mb-6", group.dividerTop && "border-t border-gray-200 pt-6")}
+          >
             <div className="mb-2 px-3 text-xs font-medium text-gray-500 tracking-wider">
               {group.title}
             </div>
@@ -173,9 +178,7 @@ function Sidebar() {
                 const Icon = item.icon;
                 const isActive =
                   pathname === item.href ||
-                  pathname.startsWith(`${item.href}/`) ||
-                  (item.href === "/claw-hub" &&
-                    (pathname.startsWith("/cloud-claw") || pathname.startsWith("/cec-claw")));
+                  pathname.startsWith(`${item.href}/`);
                 const linkClassName = cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   isActive
