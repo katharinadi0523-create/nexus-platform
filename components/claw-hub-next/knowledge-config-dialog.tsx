@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, GitBranch, Package, Plus, Puzzle, RefreshCw, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileStack, Plus, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,184 +9,90 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-export type ToolConfigKind = "workflow" | "mcp" | "plugin";
-
-export interface ToolConfigSelection {
+export interface KnowledgeConfigSelection {
   id: string;
   name: string;
   description: string;
-  kind: ToolConfigKind;
+  documentCount: number;
+  updatedAt: string;
 }
 
-interface ToolConfigOption extends ToolConfigSelection {
+interface KnowledgeConfigOption extends KnowledgeConfigSelection {
   badge: string;
-  hint: string;
-  updatedAtLabel: string;
 }
 
-type ToolConfigSeed = Omit<ToolConfigOption, "updatedAtLabel">;
-
-interface ToolConfigDialogProps {
+interface KnowledgeConfigDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (selections: ToolConfigSelection[]) => void;
+  onConfirm: (selections: KnowledgeConfigSelection[]) => void;
 }
 
-const TOOL_KIND_META: Record<
-  ToolConfigKind,
+const KNOWLEDGE_CONFIG_OPTIONS: KnowledgeConfigOption[] = [
   {
-    label: string;
-    icon: React.ComponentType<{ className?: string }>;
-    iconBoxClass: string;
-    iconClass: string;
-  }
-> = {
-  workflow: {
-    label: "工作流",
-    icon: GitBranch,
-    iconBoxClass: "bg-emerald-100",
-    iconClass: "text-emerald-700",
+    id: "kb-pick-regulation-2025",
+    name: "制度与合规条款库",
+    description: "收录现行制度、审批红线与合规模板片段，支持条款级检索与引用。",
+    documentCount: 186,
+    updatedAt: "2026-04-08 11:20:00",
+    badge: "制度",
   },
-  mcp: {
-    label: "MCP",
-    icon: Package,
-    iconBoxClass: "bg-cyan-100",
-    iconClass: "text-cyan-700",
+  {
+    id: "kb-pick-product-faq",
+    name: "产品说明与常见问题",
+    description: "面向对客话术、功能说明与常见故障排查，按场景聚合问答对。",
+    documentCount: 542,
+    updatedAt: "2026-04-07 16:05:00",
+    badge: "产品",
   },
-  plugin: {
-    label: "插件",
-    icon: Puzzle,
-    iconBoxClass: "bg-amber-100",
-    iconClass: "text-amber-700",
+  {
+    id: "kb-pick-sales-playbook",
+    name: "销售话术与案例库",
+    description: "行业案例、报价口径与异议处理要点，供销售与售前快速引用。",
+    documentCount: 89,
+    updatedAt: "2026-04-06 09:40:00",
+    badge: "销售",
   },
-};
-
-const TOOL_CONFIG_OPTIONS_BY_KIND: Record<ToolConfigKind, ToolConfigSeed[]> = {
-  workflow: [
-    {
-      id: "workflow-invoice-validation",
-      name: "验票工作流",
-      description: "完成 OCR 识别发票、票据信息结构化提取、系统核查与合规校验。",
-      kind: "workflow",
-      badge: "办公场景",
-      hint: "适合差旅报销、票据审核等标准化办公流程。",
-    },
-    {
-      id: "workflow-expense-submit",
-      name: "差旅表单填写与提交工作流",
-      description: "完成出行信息提取、字段映射、自动填充表单、ERP 写入与审批提交。",
-      kind: "workflow",
-      badge: "办公场景",
-      hint: "适合固定字段映射和 ERP 回写类任务。",
-    },
-    {
-      id: "workflow-intelligence-process-chain",
-      name: "情报处理链路",
-      description: "完成多源采集、去重过滤、敏感校验和结构化拆解。",
-      kind: "workflow",
-      badge: "情报场景",
-      hint: "适合多源情报归集和结构化处理场景。",
-    },
-    {
-      id: "workflow-graph-trace",
-      name: "扩散检索 / 图谱溯源",
-      description: "围绕重点动态做关联扩散、本体检索和图谱关系溯源。",
-      kind: "workflow",
-      badge: "情报场景",
-      hint: "适合需要依据下钻和图谱追踪的分析任务。",
-    },
-    {
-      id: "workflow-intelligence-briefing",
-      name: "情报简报生成流程",
-      description: "聚合多源线索，自动生成结构化情报简报并推送结果。",
-      kind: "workflow",
-      badge: "已发布",
-      hint: "适合研判结论沉淀与固定产出。",
-    },
-    {
-      id: "workflow-incident-escalation",
-      name: "故障升级处置流程",
-      description: "根据告警等级自动关联工单、通知值守人并拉起处置分支。",
-      kind: "workflow",
-      badge: "运维场景",
-      hint: "适合需要联动多个执行节点的任务。",
-    },
-    {
-      id: "workflow-contract-review",
-      name: "合同审阅流程",
-      description: "串联条款识别、风险判定和审批建议输出。",
-      kind: "workflow",
-      badge: "法务模版",
-      hint: "适合高规则约束的业务审批场景。",
-    },
-  ],
-  mcp: [
-    {
-      id: "mcp-policy-center",
-      name: "制度中心 MCP",
-      description: "按标准协议查询制度条款、版本记录和生效范围。",
-      kind: "mcp",
-      badge: "协议接入",
-      hint: "适合需要标准化工具调用与结果透传的场景。",
-    },
-    {
-      id: "mcp-mail-gateway",
-      name: "邮件网关 MCP",
-      description: "统一发送、抄送和归档业务邮件，支持会话上下文回填。",
-      kind: "mcp",
-      badge: "消息能力",
-      hint: "适合外部系统能力已封装为 MCP Server 的情况。",
-    },
-    {
-      id: "mcp-security-validation",
-      name: "安全校验服务 MCP",
-      description: "对敏感词、越权调用和高风险参数进行预校验。",
-      kind: "mcp",
-      badge: "风控",
-      hint: "适合在执行前增加统一的安全防线。",
-    },
-  ],
-  plugin: [
-    {
-      id: "plugin-document-parser",
-      name: "文档解析插件",
-      description: "解析 PDF、Word、图片文档并提取结构化字段。",
-      kind: "plugin",
-      badge: "OpenAPI",
-      hint: "适合通过插件暴露成熟业务接口。",
-    },
-    {
-      id: "plugin-map-navigation",
-      name: "地图导航插件",
-      description: "支持路径规划、位置检索和地理围栏判断。",
-      kind: "plugin",
-      badge: "外部服务",
-      hint: "适合给 Claw 补充垂直领域能力。",
-    },
-    {
-      id: "plugin-code-interpreter",
-      name: "代码解释器插件",
-      description: "执行受控脚本、处理表格数据并产出可下载结果。",
-      kind: "plugin",
-      badge: "执行工具",
-      hint: "适合在对话中补充计算与文件处理能力。",
-    },
-  ],
-};
-
-function formatToolUpdatedAtLabel(index: number): string {
-  const d = 1 + (index % 28);
-  const h = 9 + (index % 10);
-  const m = (index * 7) % 60;
-  return `更新时间: 2026-04-${String(d).padStart(2, "0")} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
-}
-
-const ALL_TOOL_OPTIONS: ToolConfigOption[] = Object.values(TOOL_CONFIG_OPTIONS_BY_KIND)
-  .flat()
-  .map((item, index) => ({
-    ...item,
-    updatedAtLabel: formatToolUpdatedAtLabel(index),
-  }));
+  {
+    id: "kb-pick-ops-runbook",
+    name: "运维排障与变更手册",
+    description: "标准操作步骤、应急预案与变更记录模板，支撑一线运维处置。",
+    documentCount: 124,
+    updatedAt: "2026-04-05 14:12:00",
+    badge: "运维",
+  },
+  {
+    id: "kb-pick-hr-policy",
+    name: "人力政策与流程说明",
+    description: "假期、绩效、入职离职等 HR 政策原文与流程图解。",
+    documentCount: 67,
+    updatedAt: "2026-04-04 10:00:00",
+    badge: "人力",
+  },
+  {
+    id: "kb-pick-security-baseline",
+    name: "安全基线与审计要点",
+    description: "等保要点、日志留存与安全事件分级说明，供审计与自查引用。",
+    documentCount: 41,
+    updatedAt: "2026-04-03 08:55:00",
+    badge: "安全",
+  },
+  {
+    id: "kb-pick-legal-templates",
+    name: "合同与法务模板库",
+    description: "标准合同条款、补充协议范本及风险提示语料。",
+    documentCount: 73,
+    updatedAt: "2026-04-02 17:30:00",
+    badge: "法务",
+  },
+  {
+    id: "kb-pick-research-notes",
+    name: "研报与行业观察摘要",
+    description: "内部整理的公开研报摘要、数据口径与引用来源索引。",
+    documentCount: 215,
+    updatedAt: "2026-04-01 13:18:00",
+    badge: "研究",
+  },
+];
 
 const PAGE_SIZE_OPTIONS = [
   { value: "10", label: "10 条/页" },
@@ -211,7 +117,7 @@ function shouldEllipsisBefore(page: number, prev: number | undefined): boolean {
   return prev !== undefined && page - prev > 1;
 }
 
-export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDialogProps) {
+export function KnowledgeConfigDialog({ open, onOpenChange, onConfirm }: KnowledgeConfigDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -221,10 +127,10 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
   const filteredOptions = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     if (!normalizedQuery) {
-      return ALL_TOOL_OPTIONS;
+      return KNOWLEDGE_CONFIG_OPTIONS;
     }
-    return ALL_TOOL_OPTIONS.filter((item) =>
-      [item.name, item.description, item.badge, item.hint, TOOL_KIND_META[item.kind].label]
+    return KNOWLEDGE_CONFIG_OPTIONS.filter((item) =>
+      [item.name, item.description, item.badge, item.updatedAt]
         .join(" ")
         .toLowerCase()
         .includes(normalizedQuery)
@@ -268,7 +174,15 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
   }
 
   function handleSubmit() {
-    const selections = ALL_TOOL_OPTIONS.filter((item) => selectedIds.includes(item.id));
+    const selections = KNOWLEDGE_CONFIG_OPTIONS.filter((item) => selectedIds.includes(item.id)).map(
+      ({ id, name, description, documentCount, updatedAt }) => ({
+        id,
+        name,
+        description,
+        documentCount,
+        updatedAt,
+      })
+    );
     resetDialogState();
     onConfirm(selections);
   }
@@ -298,7 +212,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
         className="max-w-[880px] gap-0 overflow-hidden rounded-lg border-[#eeeeee] p-0 shadow-lg sm:max-w-[880px]"
       >
         <DialogHeader className="border-b border-[#eeeeee] px-6 py-4 text-left">
-          <DialogTitle className="text-base font-semibold text-slate-950">选择工具</DialogTitle>
+          <DialogTitle className="text-base font-semibold text-slate-950">选择知识库</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-0">
@@ -308,7 +222,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
               <Input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="搜索工具名称"
+                placeholder="搜索知识库名称"
                 className="h-9 border-slate-200 bg-white pl-9 shadow-none"
               />
             </div>
@@ -319,7 +233,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                 size="icon"
                 className="h-9 w-9 border-slate-200 shadow-none"
                 aria-label="刷新列表"
-                onClick={() => toast.success("工具列表已刷新。")}
+                onClick={() => toast.success("知识库列表已刷新。")}
               >
                 <RefreshCw className="h-4 w-4 text-slate-600" />
               </Button>
@@ -327,10 +241,10 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                 type="button"
                 className="h-9 gap-1 border-0 px-4 text-white shadow-none hover:opacity-90"
                 style={{ backgroundColor: PRIMARY }}
-                onClick={() => toast.info("创建工具入口即将接入。")}
+                onClick={() => toast.info("创建知识库入口即将接入。")}
               >
                 <Plus className="h-4 w-4" />
-                创建工具
+                创建知识库
               </Button>
             </div>
           </div>
@@ -339,27 +253,20 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
             {pageItems.length ? (
               <ul className="divide-y divide-[#eeeeee]">
                 {pageItems.map((item) => {
-                  const meta = TOOL_KIND_META[item.kind];
-                  const Icon = meta.icon;
                   const selected = selectedIds.includes(item.id);
                   return (
                     <li key={item.id} className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex min-w-0 flex-1 gap-3">
-                        <div
-                          className={cn(
-                            "flex h-10 w-10 shrink-0 items-center justify-center rounded",
-                            meta.iconBoxClass
-                          )}
-                        >
-                          <Icon className={cn("h-5 w-5", meta.iconClass)} aria-hidden />
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-sky-100">
+                          <FileStack className="h-5 w-5 text-sky-700" aria-hidden />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-[15px] font-medium text-slate-900">{item.name}</span>
-                            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{meta.label}</span>
+                            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{item.documentCount} 篇</span>
                             <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{item.badge}</span>
                           </div>
-                          <p className="mt-1 text-xs text-slate-500">{item.updatedAtLabel}</p>
+                          <p className="mt-1 text-xs text-slate-500">更新时间: {item.updatedAt}</p>
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pl-4">
@@ -368,9 +275,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                           variant="outline"
                           size="sm"
                           className="h-8 border-slate-300 bg-white px-3 text-slate-800 shadow-none hover:bg-slate-50"
-                          onClick={() =>
-                            toast.message(item.name, { description: item.description || item.hint })
-                          }
+                          onClick={() => toast.message(item.name, { description: item.description })}
                         >
                           查看
                         </Button>
@@ -402,7 +307,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                 })}
               </ul>
             ) : (
-              <div className="px-6 py-16 text-center text-sm text-slate-400">暂无匹配的工具，请调整搜索条件。</div>
+              <div className="px-6 py-16 text-center text-sm text-slate-400">暂无匹配的知识库，请调整搜索条件。</div>
             )}
           </div>
 

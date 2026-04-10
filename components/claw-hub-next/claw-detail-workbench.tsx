@@ -1,73 +1,71 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bot,
-  CircleHelp,
+  ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clock3,
   FilePlus2,
-  FileStack,
   FolderOpen,
   FolderPlus,
   Gauge,
-  Mic,
   MessageSquareText,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Paperclip,
   Plus,
   RadioTower,
-  SendHorizontal,
   ShieldCheck,
   Upload,
   UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
+import { ClawInteractiveChatPanel } from "@/components/claw-hub-next/interactive-chat-panel";
 import {
   CORE_FILE_ICONS,
   DETAIL_SECTION_ITEMS,
   LOG_PANEL_ITEMS,
-  type CapabilityPanelKey,
+  SECURITY_PANEL_ITEMS,
   type DetailSectionKey,
   type LogPanelKey,
+  type SecurityPanelKey,
 } from "@/components/claw-hub-next/detail/constants";
 import { ClawResourceSection } from "@/components/claw-hub-next/detail/resource-section";
 import { ClawSecuritySection } from "@/components/claw-hub-next/detail/security-section";
 import { SectionCard } from "@/components/claw-hub-next/detail/section-card";
 import {
-  addLexiconLibrary,
+  addFileProtectionPath,
+  addToolProtectionRule,
   applyExecutionTier,
   applyRuntimeTier,
-  buildInitialLexiconDrafts,
   deleteScopedCollectionItem,
+  normalizeAutonomyBoundaries,
+  mergeClawKnowledgeSelections,
   mergeClawSkillSelections,
   mergeClawToolSelections,
-  removeLexiconLibrary,
+  removeFileProtectionPath,
+  resolveSecurityApproval,
   toggleScopedEnabledCollection,
   updateAutonomyBoundaryLevel,
   updateExecutionCapability,
   updateExecutionNumber,
-  updateLexiconPolicyAction,
-  updateLexiconPolicyEnabled,
-  updateLexiconPolicyMode,
+  updateFileProtectionEnabled,
   updateRuntimeAdvancedNumber,
   updateRuntimeAdvancedText,
   updateRuntimeNumber,
-  updateSecurityPolicyAction,
-  updateSecurityPolicyEnabled,
-  updateSecurityPolicyMode,
-  updateSecurityPolicyRuleLevel,
+  updateToolProtectionEnabled,
+  updateToolProtectionRuleEnabled,
 } from "@/components/claw-hub-next/detail/state";
+import { KnowledgeConfigDialog, type KnowledgeConfigSelection } from "@/components/claw-hub-next/knowledge-config-dialog";
 import { SkillConfigDialog, type SkillConfigSelection } from "@/components/claw-hub-next/skill-config-dialog";
 import { ToolConfigDialog, type ToolConfigSelection } from "@/components/claw-hub-next/tool-config-dialog";
 import {
   buildConversationSessionSummaries,
   cloneResourceConfig,
   formatDurationMs,
+  type ConversationSessionSummary,
   getAuditStatusClassName,
   getAuditTypeClassName,
   getResourceValidation,
@@ -78,48 +76,196 @@ import {
 } from "@/components/claw-hub-next/detail/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type {
   CapabilityScope,
   ClawCoreFileKey,
   ClawDetailData,
+  ConversationAuditItem,
   KnowledgeScope,
   ResourceConfig,
+  SecurityManagementConfig,
+  ToolProtectionRuleItem,
 } from "@/lib/mock/claw-hub-next";
-import { createDefaultResourceConfig } from "@/lib/mock/claw-hub-next";
 import { cn } from "@/lib/utils";
 
+type LogSessionListItem = {
+  id: string;
+  title: string;
+  sessionId: string;
+  channel: string;
+  userIdentity: string;
+  startedAt: string;
+  updatedAt: string;
+  messageCount: number;
+  eventCount: number;
+  traceId: string;
+};
+
+type LogSessionEventKind = "user" | "agent" | "skill" | "tool";
+
+type LogSessionEventItem = {
+  id: string;
+  kind: LogSessionEventKind;
+  label: "User" | "Agent" | "Skill" | "工具";
+  title: string;
+  time: string;
+  summary: string;
+  detail: string;
+  traceId: string;
+  turnNumber: number;
+  status?: ConversationAuditItem["status"];
+  durationLabel?: string;
+  typeLabel?: ConversationAuditItem["type"];
+  inputSummary?: string;
+  outputSummary?: string;
+};
+
+function getLogEventKind(record: ConversationAuditItem): Extract<LogSessionEventKind, "skill" | "tool"> {
+  return /skill/i.test(record.targetName) ? "skill" : "tool";
+}
+
+function getLogEventLabel(kind: LogSessionEventKind): LogSessionEventItem["label"] {
+  if (kind === "user") {
+    return "User";
+  }
+
+  if (kind === "agent") {
+    return "Agent";
+  }
+
+  if (kind === "skill") {
+    return "Skill";
+  }
+
+  return "工具";
+}
+
+function getLogEventBadgeClassName(kind: LogSessionEventKind) {
+  if (kind === "user") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+
+  if (kind === "agent") {
+    return "border-sky-200 bg-sky-50 text-sky-700";
+  }
+
+  if (kind === "skill") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  return "border-amber-200 bg-amber-50 text-amber-700";
+}
+
+function isStructuredLogEvent(event: LogSessionEventItem) {
+  return event.kind === "tool" || event.kind === "skill";
+}
+
+function isCliLogEvent(event: LogSessionEventItem) {
+  return event.typeLabel === "CLI执行";
+}
+
+function getLogEventPrimaryPayloadLabel(event: LogSessionEventItem) {
+  return isCliLogEvent(event) ? "命令行" : "Arguments";
+}
+
+function getLogEventPrimaryPayloadValue(event: LogSessionEventItem) {
+  return isCliLogEvent(event) ? event.title : event.inputSummary || event.detail;
+}
+
+function getLogEventResultValue(event: LogSessionEventItem) {
+  return event.outputSummary || event.detail;
+}
+
+function buildLogSessionEvents(summary: ConversationSessionSummary, agentName: string): LogSessionEventItem[] {
+  return summary.session.turns.flatMap((turn) => {
+    const auditEvents = turn.auditRecords.map((record, index) => {
+      const kind = getLogEventKind(record);
+
+      return {
+        id: `${turn.id}-audit-${record.id}-${index}`,
+        kind,
+        label: getLogEventLabel(kind),
+        title: record.targetName,
+        time: turn.occurredAt,
+        summary: record.outputSummary || record.inputSummary || record.targetName,
+        detail: record.outputSummary || record.inputSummary || record.targetName,
+        traceId: record.traceId,
+        turnNumber: turn.turnNumber,
+        status: record.status,
+        durationLabel: formatDurationMs(record.durationMs),
+        typeLabel: record.type,
+        inputSummary: record.inputSummary,
+        outputSummary: record.outputSummary,
+      } satisfies LogSessionEventItem;
+    });
+
+    return [
+      {
+        id: `${turn.id}-user`,
+        kind: "user",
+        label: getLogEventLabel("user"),
+        title: summary.session.userIdentity,
+        time: turn.occurredAt,
+        summary: turn.userInput,
+        detail: turn.userInput,
+        traceId: turn.traceId,
+        turnNumber: turn.turnNumber,
+      },
+      ...auditEvents,
+      {
+        id: `${turn.id}-agent`,
+        kind: "agent",
+        label: getLogEventLabel("agent"),
+        title: agentName,
+        time: turn.occurredAt,
+        summary: turn.assistantOutput.split("\n")[0] ?? turn.assistantOutput,
+        detail: turn.assistantOutput,
+        traceId: turn.traceId,
+        turnNumber: turn.turnNumber,
+      },
+    ];
+  });
+}
+
+function mergeSecurityManagementWithCanonicalAutonomy(
+  sm: ClawDetailData["securityManagement"]
+): SecurityManagementConfig {
+  return {
+    ...sm,
+    autonomyBoundaries: normalizeAutonomyBoundaries(sm.autonomyBoundaries),
+  };
+}
+
 export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
-  const [activeSection, setActiveSection] = useState<DetailSectionKey>("chat");
+  const [activeSection, setActiveSection] = useState<DetailSectionKey>("core");
   const [activeLogPanel, setActiveLogPanel] = useState<LogPanelKey>("conversation");
-  const [conversationHistoryCollapsed, setConversationHistoryCollapsed] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatSessions, setChatSessions] = useState(detail.chatSessions);
+  const [chatSidebarCollapsed, setChatSidebarCollapsed] = useState(false);
   const [conversationRuns, setConversationRuns] = useState(detail.conversationRuns);
-  const [securityManagement, setSecurityManagement] = useState(detail.securityManagement);
-  const [lexiconDrafts, setLexiconDrafts] = useState<Record<string, string>>(() =>
-    buildInitialLexiconDrafts(detail.securityManagement)
+  const [securityManagement, setSecurityManagement] = useState(() =>
+    mergeSecurityManagementWithCanonicalAutonomy(detail.securityManagement)
   );
+  const [activeSecurityPanel, setActiveSecurityPanel] = useState<SecurityPanelKey>("autonomy-boundaries");
   const [selectedChatId, setSelectedChatId] = useState(detail.chatSessions[0]?.id ?? "");
-  const [selectedConversationAuditMessageId, setSelectedConversationAuditMessageId] = useState<string | null>(null);
-  const [draftMessage, setDraftMessage] = useState("");
-  const [queuedFiles, setQueuedFiles] = useState<string[]>([]);
-  const [voiceMode, setVoiceMode] = useState(false);
   const [selectedCoreFileKey, setSelectedCoreFileKey] = useState<ClawCoreFileKey | null>(null);
   const [capabilityConfig, setCapabilityConfig] = useState(detail.capabilityConfig);
   const [resourceConfig, setResourceConfig] = useState<ResourceConfig>(() => cloneResourceConfig(detail.resourceConfig));
-  const [activeCapabilityPanel, setActiveCapabilityPanel] = useState<CapabilityPanelKey>("tools");
   const [toolConfigDialogOpen, setToolConfigDialogOpen] = useState(false);
   const [skillConfigDialogOpen, setSkillConfigDialogOpen] = useState(false);
+  const [knowledgeConfigDialogOpen, setKnowledgeConfigDialogOpen] = useState(false);
   const [toolScope, setToolScope] = useState<CapabilityScope>("platform");
   const [skillScope, setSkillScope] = useState<CapabilityScope>("platform");
   const [agentScope, setAgentScope] = useState<CapabilityScope>("platform");
   const [knowledgeScope, setKnowledgeScope] = useState<KnowledgeScope>("tenant");
   const [runtimeAdvancedOpen, setRuntimeAdvancedOpen] = useState(false);
+  const [logsMenuOpen, setLogsMenuOpen] = useState(false);
+  const [securityMenuOpen, setSecurityMenuOpen] = useState(false);
+  const [selectedLogSessionId, setSelectedLogSessionId] = useState<string | null>(null);
+  const [selectedLogEventId, setSelectedLogEventId] = useState<string | null>(null);
   const [workspacePath, setWorkspacePath] = useState<string[]>([]);
   const [coreFileDrafts, setCoreFileDrafts] = useState<Record<ClawCoreFileKey, string>>(() =>
     detail.coreFiles.reduce(
@@ -127,199 +273,155 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
       { identity: "", soul: "", memory: "", heartbeat: "" }
     )
   );
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const logsMenuCloseTimerRef = useRef<number | null>(null);
+  const securityMenuCloseTimerRef = useRef<number | null>(null);
 
   const currentSession = chatSessions.find((session) => session.id === selectedChatId) ?? chatSessions[0];
-  const currentConversationRun = conversationRuns.find((session) => session.id === selectedChatId) ?? conversationRuns[0];
+  const matchedConversationRun = conversationRuns.find((session) => session.id === selectedChatId);
   const conversationSessionSummaries = buildConversationSessionSummaries(chatSessions, conversationRuns);
-  const currentConversationSummary =
-    conversationSessionSummaries.find((session) => session.session.id === currentConversationRun?.id) ??
-    conversationSessionSummaries[0];
-  const currentConversationMessages = currentConversationSummary?.messages ?? [];
-  const selectedConversationAuditMessage =
-    currentConversationMessages.find(
-      (message) => message.id === selectedConversationAuditMessageId && message.auditRecords.length > 0
-    ) ?? null;
+  const logSessions = useMemo<LogSessionListItem[]>(
+    () =>
+      conversationSessionSummaries.map((summary) => ({
+        id: summary.session.id,
+        title: summary.session.title,
+        sessionId: summary.session.sessionId,
+        channel: summary.session.channel,
+        userIdentity: summary.session.userIdentity,
+        startedAt: summary.session.startedAt,
+        updatedAt: summary.session.updatedAt,
+        messageCount: summary.messages.length,
+        eventCount: summary.session.turns.length * 2 + summary.auditRecordCount,
+        traceId: summary.session.traceId,
+      })),
+    [conversationSessionSummaries]
+  );
+  const selectedLogSession = logSessions.find((session) => session.id === selectedLogSessionId) ?? null;
+  const selectedLogSessionSummary =
+    conversationSessionSummaries.find((summary) => summary.session.id === selectedLogSessionId) ?? null;
+  const selectedLogSessionEvents = useMemo(
+    () => (selectedLogSessionSummary ? buildLogSessionEvents(selectedLogSessionSummary, detail.overview.name) : []),
+    [detail.overview.name, selectedLogSessionSummary]
+  );
+  const activeLogEvent =
+    selectedLogSessionEvents.find((event) => event.id === selectedLogEventId) ?? selectedLogSessionEvents[0] ?? null;
   const selectedCoreFile = detail.coreFiles.find((file) => file.key === selectedCoreFileKey) ?? null;
   const workspaceTrail = getWorkspaceTrail(detail.workspaceRoot, workspacePath);
   const currentWorkspaceFolder = workspaceTrail[workspaceTrail.length - 1];
   const resourceValidation = getResourceValidation(resourceConfig);
-  const enabledSecurityPolicies = securityManagement.strategyPolicies.filter((policy) => policy.enabled).length;
-  const approvalBoundaryCount = securityManagement.autonomyBoundaries.filter((item) => item.level === "L3 审批").length;
-  const activeLexiconBindingCount = securityManagement.lexiconPolicies.reduce(
-    (total, policy) => total + policy.selectedLibraries.length,
-    0
-  );
+  const statusBadgeClassName =
+    detail.overview.status === "运行中"
+      ? "border-[#d9e1da] bg-[#f5f7f5] text-[#5c6c5f]"
+      : detail.overview.status === "设计中"
+        ? "border-[#e6ddd2] bg-[#faf7f2] text-[#7b6854]"
+        : detail.overview.status === "待评审"
+          ? "border-[#dde2ea] bg-[#f6f8fb] text-[#61708a]"
+          : "border-slate-200 bg-slate-100 text-slate-700";
+  const publishBadgeClassName =
+    detail.overview.publishStatus === "已发布"
+      ? "border-[#d8e0ea] bg-[#f5f7fb] text-[#596b86]"
+      : "border-slate-200 bg-slate-100 text-slate-600";
 
-  function handleQueueFiles(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []).map((file) => file.name);
-    if (!files.length) {
-      return;
-    }
+  useEffect(() => {
+    return () => {
+      if (logsMenuCloseTimerRef.current !== null) {
+        window.clearTimeout(logsMenuCloseTimerRef.current);
+      }
+      if (securityMenuCloseTimerRef.current !== null) {
+        window.clearTimeout(securityMenuCloseTimerRef.current);
+      }
+    };
+  }, []);
 
-    setQueuedFiles((current) => [...current, ...files]);
-    toast.success(`已加入 ${files.length} 个文件。`);
-    event.target.value = "";
-  }
-
-  function handleToggleVoice() {
-    setVoiceMode((current) => {
-      const next = !current;
-      toast.success(next ? "已切换到语音输入模式。" : "已退出语音输入模式。");
-      return next;
-    });
-  }
-
-  function handleRemoveQueuedFile(fileName: string) {
-    setQueuedFiles((current) => current.filter((item) => item !== fileName));
-  }
+  useEffect(() => {
+    setSecurityManagement(mergeSecurityManagementWithCanonicalAutonomy(detail.securityManagement));
+  }, [detail.overview.id]);
 
   function handleSelectChatSession(sessionId: string) {
     setSelectedChatId(sessionId);
-    setSelectedConversationAuditMessageId(null);
     setChatSessions((current) =>
       current.map((item) => (item.id === sessionId ? { ...item, unreadCount: 0 } : item))
     );
   }
 
-  function handleSendMessage() {
-    if (!currentSession) {
-      return;
+  function clearLogsMenuCloseTimer() {
+    if (logsMenuCloseTimerRef.current !== null) {
+      window.clearTimeout(logsMenuCloseTimerRef.current);
+      logsMenuCloseTimerRef.current = null;
+    }
+  }
+
+  function openLogsMenu() {
+    clearLogsMenuCloseTimer();
+    setLogsMenuOpen(true);
+  }
+
+  function scheduleLogsMenuClose() {
+    clearLogsMenuCloseTimer();
+    logsMenuCloseTimerRef.current = window.setTimeout(() => {
+      setLogsMenuOpen(false);
+      logsMenuCloseTimerRef.current = null;
+    }, 120);
+  }
+
+  function handleSelectLogPanel(panel: LogPanelKey) {
+    setActiveSection("logs");
+    setActiveLogPanel(panel);
+    setLogsMenuOpen(false);
+  }
+
+  function clearSecurityMenuCloseTimer() {
+    if (securityMenuCloseTimerRef.current !== null) {
+      window.clearTimeout(securityMenuCloseTimerRef.current);
+      securityMenuCloseTimerRef.current = null;
+    }
+  }
+
+  function openSecurityMenu() {
+    clearSecurityMenuCloseTimer();
+    setSecurityMenuOpen(true);
+  }
+
+  function scheduleSecurityMenuClose() {
+    clearSecurityMenuCloseTimer();
+    securityMenuCloseTimerRef.current = window.setTimeout(() => {
+      setSecurityMenuOpen(false);
+      securityMenuCloseTimerRef.current = null;
+    }, 120);
+  }
+
+  function handleSelectSecurityPanel(panel: SecurityPanelKey) {
+    setActiveSection("security");
+    setActiveSecurityPanel(panel);
+    setSecurityMenuOpen(false);
+  }
+
+  function handleOpenLogSession(sessionId: string) {
+    setSelectedLogSessionId(sessionId);
+    setSelectedLogEventId(null);
+  }
+
+  function handleDeleteLogSession(sessionId: string) {
+    const nextChatSessions = chatSessions.filter((session) => session.id !== sessionId);
+    const nextConversationRuns = conversationRuns.filter((session) => session.id !== sessionId);
+
+    setChatSessions(nextChatSessions);
+    setConversationRuns(nextConversationRuns);
+
+    if (selectedChatId === sessionId) {
+      setSelectedChatId(nextChatSessions[0]?.id ?? "");
     }
 
-    const trimmedMessage = draftMessage.trim();
-    if (!trimmedMessage && !queuedFiles.length && !voiceMode) {
-      toast.info("先输入消息、开启语音或上传文件。");
-      return;
+    if (selectedLogSessionId === sessionId) {
+      setSelectedLogSessionId(null);
+      setSelectedLogEventId(null);
     }
 
-    const userContent = trimmedMessage || (voiceMode ? "请基于这段语音继续处理当前事项。" : "请先处理我刚刚上传的文件。");
+    toast.success("会话已删除。");
+  }
 
-    const assistantContent = [
-      queuedFiles.length ? `已收到 ${queuedFiles.join("、")}，我会先解析附件内容。` : "",
-      voiceMode ? "语音输入入口已接入，后续会先完成转写再继续分析。" : "",
-      trimmedMessage ? "当前消息已进入会话上下文，我会继续根据现有线索推进处理。" : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
-    const now = Date.now();
-    const traceId = `trace-live-${now}`;
-    const newTurnId = `${currentSession.id}-turn-${now}`;
-
-    setChatSessions((current) => {
-      const updated = current.map((session) => {
-        if (session.id !== currentSession.id) {
-          return session;
-        }
-
-        return {
-          ...session,
-          updatedAt: "刚刚",
-          unreadCount: 0,
-          preview: trimmedMessage || (queuedFiles.length ? `已上传 ${queuedFiles.length} 个文件` : "已发送语音输入"),
-          messages: [
-            ...session.messages,
-            {
-              id: `${session.id}-user-${now}`,
-              role: "user" as const,
-              sender: "你",
-              time: "刚刚",
-              content: userContent,
-              attachments: queuedFiles.length ? queuedFiles : undefined,
-            },
-            {
-              id: `${session.id}-assistant-${now}`,
-              role: "assistant" as const,
-              sender: detail.overview.name,
-              time: "刚刚",
-              content: assistantContent || "已收到，我继续处理。",
-              auditTurnId: queuedFiles.length || voiceMode ? newTurnId : undefined,
-            },
-          ],
-        };
-      });
-
-      const active = updated.find((session) => session.id === currentSession.id);
-      return active ? [active, ...updated.filter((session) => session.id !== currentSession.id)] : updated;
-    });
-
-    setConversationRuns((current) => {
-      const auditRecords = [
-        queuedFiles.length
-          ? {
-              id: `${currentSession.id}-audit-upload-${now}`,
-              turnId: newTurnId,
-              type: "工具执行" as const,
-              targetName: "附件解析器",
-              inputSummary: `接收 ${queuedFiles.length} 个附件并提取结构化内容。`,
-              outputSummary: "附件内容已写入当前会话上下文。",
-              durationMs: 420,
-              status: "成功" as const,
-              traceId,
-            }
-          : null,
-        voiceMode
-          ? {
-              id: `${currentSession.id}-audit-voice-${now}`,
-              turnId: newTurnId,
-              type: "工具执行" as const,
-              targetName: "语音转写",
-              inputSummary: "转写当前语音输入并生成文本草稿。",
-              outputSummary: "语音内容已完成转写并合入当前轮次。",
-              durationMs: 680,
-              status: "成功" as const,
-              traceId,
-            }
-          : null,
-      ].filter((item): item is NonNullable<typeof item> => Boolean(item));
-
-      const nextTurn = {
-        id: newTurnId,
-        turnNumber: (current.find((item) => item.id === currentSession.id)?.turns.length ?? 0) + 1,
-        occurredAt: "刚刚",
-        userInput: userContent,
-        assistantOutput: assistantContent || "已收到，我继续处理。",
-        attachments: queuedFiles.length ? queuedFiles : undefined,
-        traceId,
-        auditRecords,
-      };
-
-      const matched = current.find((item) => item.id === currentSession.id);
-      if (!matched) {
-        return [
-          {
-            id: currentSession.id,
-            title: currentSession.title,
-            channel: currentSession.source,
-            userIdentity: "你",
-            sessionId: currentSession.id,
-            traceId,
-            startedAt: "刚刚",
-            updatedAt: "刚刚",
-            turns: [nextTurn],
-          },
-          ...current,
-        ];
-      }
-
-      const updated = current.map((item) =>
-        item.id === currentSession.id
-          ? {
-              ...item,
-              updatedAt: "刚刚",
-              traceId,
-              turns: [...item.turns, nextTurn],
-            }
-          : item
-      );
-      const active = updated.find((item) => item.id === currentSession.id);
-      return active ? [active, ...updated.filter((item) => item.id !== currentSession.id)] : updated;
-    });
-
-    setDraftMessage("");
-    setQueuedFiles([]);
-    setVoiceMode(false);
-    setSelectedConversationAuditMessageId(null);
+  function handleBackToLogSessions() {
+    setSelectedLogSessionId(null);
+    setSelectedLogEventId(null);
   }
 
   function handleAutonomyBoundaryLevelChange(
@@ -329,83 +431,92 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     setSecurityManagement((current) => updateAutonomyBoundaryLevel(current, boundaryId, nextLevel));
   }
 
-  function handleToggleSecurityPolicy(policyId: string, enabled: boolean) {
-    setSecurityManagement((current) => updateSecurityPolicyEnabled(current, policyId, enabled));
+  function handleToolProtectionEnabledChange(enabled: boolean) {
+    setSecurityManagement((current) => updateToolProtectionEnabled(current, enabled));
   }
 
-  function handleSecurityPolicyModeChange(
-    policyId: string,
-    mode: ClawDetailData["securityManagement"]["strategyPolicies"][number]["mode"]
-  ) {
-    setSecurityManagement((current) => updateSecurityPolicyMode(current, policyId, mode));
+  function handleToolProtectionRuleToggle(ruleId: string, enabled: boolean) {
+    setSecurityManagement((current) => updateToolProtectionRuleEnabled(current, ruleId, enabled));
   }
 
-  function handleSecurityPolicyActionChange(
-    policyId: string,
-    action: ClawDetailData["securityManagement"]["strategyPolicies"][number]["availableActions"][number]
-  ) {
-    setSecurityManagement((current) => updateSecurityPolicyAction(current, policyId, action));
+  function handleAddToolProtectionRule(rule: ToolProtectionRuleItem) {
+    setSecurityManagement((current) => addToolProtectionRule(current, rule));
   }
 
-  function handleSecurityPolicyRuleLevelChange(
-    policyId: string,
-    ruleId: string,
-    level: ClawDetailData["securityManagement"]["strategyPolicies"][number]["rules"][number]["level"]
-  ) {
-    setSecurityManagement((current) => updateSecurityPolicyRuleLevel(current, policyId, ruleId, level));
+  function handleAddProtectedTool(name: string) {
+    setSecurityManagement((current) => {
+      if (current.toolProtection.protectedTools.includes(name)) {
+        return current;
+      }
+      return {
+        ...current,
+        toolProtection: {
+          ...current.toolProtection,
+          protectedTools: [...current.toolProtection.protectedTools, name],
+        },
+      };
+    });
   }
 
-  function handleToggleLexiconPolicy(policyId: string, enabled: boolean) {
-    setSecurityManagement((current) => updateLexiconPolicyEnabled(current, policyId, enabled));
-  }
-
-  function handleLexiconPolicyModeChange(
-    policyId: string,
-    mode: ClawDetailData["securityManagement"]["lexiconPolicies"][number]["mode"]
-  ) {
-    setSecurityManagement((current) => updateLexiconPolicyMode(current, policyId, mode));
-  }
-
-  function handleLexiconPolicyActionChange(
-    policyId: string,
-    action: ClawDetailData["securityManagement"]["lexiconPolicies"][number]["availableActions"][number]
-  ) {
-    setSecurityManagement((current) => updateLexiconPolicyAction(current, policyId, action));
-  }
-
-  function handleLexiconDraftChange(policyId: string, value: string) {
-    setLexiconDrafts((current) => ({
+  function handleRemoveProtectedTool(name: string) {
+    setSecurityManagement((current) => ({
       ...current,
-      [policyId]: value,
+      toolProtection: {
+        ...current.toolProtection,
+        protectedTools: current.toolProtection.protectedTools.filter((item) => item !== name),
+      },
     }));
   }
 
-  function handleAddLexiconLibrary(policyId: string) {
-    const selectedLibrary = lexiconDrafts[policyId];
-    if (!selectedLibrary) {
+  function handleAddProhibitedTool(name: string) {
+    setSecurityManagement((current) => {
+      if (current.toolProtection.prohibitedTools.includes(name)) {
+        return current;
+      }
+      return {
+        ...current,
+        toolProtection: {
+          ...current.toolProtection,
+          prohibitedTools: [...current.toolProtection.prohibitedTools, name],
+        },
+      };
+    });
+  }
+
+  function handleRemoveProhibitedTool(name: string) {
+    setSecurityManagement((current) => ({
+      ...current,
+      toolProtection: {
+        ...current.toolProtection,
+        prohibitedTools: current.toolProtection.prohibitedTools.filter((item) => item !== name),
+      },
+    }));
+  }
+
+  function handleFileProtectionEnabledChange(enabled: boolean) {
+    setSecurityManagement((current) => updateFileProtectionEnabled(current, enabled));
+  }
+
+  function handleAddFilePath(rawPath: string) {
+    const path = rawPath.trim();
+    if (!path) {
       return;
     }
-
-    const result = addLexiconLibrary(securityManagement, policyId, selectedLibrary);
-    setSecurityManagement(result.config);
-    setLexiconDrafts((current) => ({
-      ...current,
-      [policyId]: result.nextDraft,
-    }));
-
-    if (!result.added) {
-      return;
-    }
-
-    toast.success("词库已加入当前策略。");
+    const kind: "file" | "directory" = path.endsWith("/") ? "directory" : "file";
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `fp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setSecurityManagement((current) => addFileProtectionPath(current, { id, path, kind }));
   }
 
-  function handleRemoveLexiconLibrary(policyId: string, libraryName: string) {
-    setSecurityManagement((current) => removeLexiconLibrary(current, policyId, libraryName));
-    setLexiconDrafts((current) => ({
-      ...current,
-      [policyId]: current[policyId] || libraryName,
-    }));
+  function handleRemoveFilePath(pathId: string) {
+    setSecurityManagement((current) => removeFileProtectionPath(current, pathId));
+  }
+
+  function handleResolveApproval(approvalId: string, resolution: "approved" | "rejected") {
+    setSecurityManagement((current) => resolveSecurityApproval(current, approvalId, resolution));
+    toast.success(resolution === "approved" ? "已批准该请求。" : "已拒绝该请求。");
   }
 
   function handleSaveCoreFile() {
@@ -439,8 +550,12 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     setSkillConfigDialogOpen(true);
   }
 
+  function handleOpenKnowledgeConfigDialog() {
+    setKnowledgeConfigDialogOpen(true);
+  }
+
   function handleConfirmToolConfig(selections: ToolConfigSelection[]) {
-    const { items, addedCount, reenabledCount } = mergeClawToolSelections(capabilityConfig.tools.claw, selections);
+    const { items } = mergeClawToolSelections(capabilityConfig.tools.claw, selections);
 
     setCapabilityConfig((current) => ({
       ...current,
@@ -452,27 +567,10 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
 
     setToolScope("claw");
     setToolConfigDialogOpen(false);
-
-    if (addedCount > 0 && reenabledCount > 0) {
-      toast.success(`已新增 ${addedCount} 个工具，并重新启用 ${reenabledCount} 个已有工具。`);
-      return;
-    }
-
-    if (addedCount > 0) {
-      toast.success(`已新增 ${addedCount} 个工具到 Claw配置。`);
-      return;
-    }
-
-    if (reenabledCount > 0) {
-      toast.success(`已重新启用 ${reenabledCount} 个已有工具。`);
-      return;
-    }
-
-    toast.info("所选工具已存在于 Claw配置中。");
   }
 
   function handleConfirmSkillConfig(selections: SkillConfigSelection[]) {
-    const { items, addedCount, reenabledCount } = mergeClawSkillSelections(capabilityConfig.skills.claw, selections);
+    const { items } = mergeClawSkillSelections(capabilityConfig.skills.claw, selections);
 
     setCapabilityConfig((current) => ({
       ...current,
@@ -484,23 +582,21 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
 
     setSkillScope("claw");
     setSkillConfigDialogOpen(false);
+  }
 
-    if (addedCount > 0 && reenabledCount > 0) {
-      toast.success(`已新增 ${addedCount} 个技能，并重新启用 ${reenabledCount} 个已有技能。`);
-      return;
-    }
+  function handleConfirmKnowledgeConfig(selections: KnowledgeConfigSelection[]) {
+    const { items } = mergeClawKnowledgeSelections(capabilityConfig.knowledge.claw, selections);
 
-    if (addedCount > 0) {
-      toast.success(`已新增 ${addedCount} 个技能到 Claw配置。`);
-      return;
-    }
+    setCapabilityConfig((current) => ({
+      ...current,
+      knowledge: {
+        ...current.knowledge,
+        claw: items,
+      },
+    }));
 
-    if (reenabledCount > 0) {
-      toast.success(`已重新启用 ${reenabledCount} 个已有技能。`);
-      return;
-    }
-
-    toast.info("所选技能已存在于 Claw配置中。");
+    setKnowledgeScope("claw");
+    setKnowledgeConfigDialogOpen(false);
   }
 
   function handleToggleSkill(scope: CapabilityScope, id: string, enabled: boolean) {
@@ -582,33 +678,71 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     setResourceConfig((current) => updateExecutionCapability(current, key, checked));
   }
 
-  function handleResetResourceConfig() {
-    setResourceConfig(cloneResourceConfig(detail.resourceConfig ?? createDefaultResourceConfig()));
-    setRuntimeAdvancedOpen(false);
-    toast.success("资源配置已恢复默认。");
+  function handlePublish() {
+    if (detail.overview.publishStatus === "已发布") {
+      toast.success(`${detail.overview.name} 已发布。`);
+      return;
+    }
+
+    toast.success(`已发布：${detail.overview.name}`);
   }
 
   return (
-    <div className="space-y-6 pb-10">
-      <section className="rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <Link
-              href="/claw-hub-next"
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              返回
-            </Link>
-            <div className="hidden h-5 w-px bg-slate-200 sm:block" />
-            <h1 className="min-w-0 truncate text-xl font-semibold text-slate-950 sm:text-2xl">
-              {detail.overview.name}
-            </h1>
+    <div className="claw-detail-muted-theme flex h-full min-h-0 flex-col overflow-hidden">
+      <section className="shrink-0 pb-2">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                <Link
+                  href="/claw-hub-next"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                  aria-label="返回 Claw 列表"
+                  title="返回"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+
+                <div className="min-w-0 flex flex-wrap items-center gap-2 sm:gap-3">
+                  <h1 className="truncate text-[30px] font-semibold tracking-[-0.02em] text-slate-950 sm:text-[36px]">
+                    {detail.overview.name}
+                  </h1>
+                  <Badge className={cn("rounded-full border px-3 py-1 text-xs font-medium", statusBadgeClassName)}>
+                    {detail.overview.status}
+                  </Badge>
+                  <Badge className={cn("rounded-full border px-3 py-1 text-xs font-medium", publishBadgeClassName)}>
+                    {detail.overview.publishStatus}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="mt-4 pl-0">
+                <p className="max-w-4xl text-sm leading-7 text-slate-600 sm:text-[15px]">
+                  {detail.overview.summary}
+                </p>
+
+                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-slate-300" />
+                    {detail.overview.updatedBy} 维护
+                  </span>
+                  <span>{detail.overview.creator} 创建</span>
+                  <span>创建于 {detail.overview.createdAt}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="text-sm text-slate-500">
-            最新更新时间
-            <span className="ml-2 font-medium text-slate-900">{detail.overview.updatedAt}</span>
+          <div className="flex shrink-0 items-start xl:justify-end">
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700"
+              onClick={handlePublish}
+            >
+              发布
+              <ChevronDown className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </section>
@@ -616,77 +750,202 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
       <Tabs
         value={activeSection}
         onValueChange={(value) => setActiveSection(value as DetailSectionKey)}
-        className="flex flex-col gap-5 xl:flex-row xl:items-start"
+        className="min-h-0 flex-1 gap-0 overflow-hidden"
       >
-        <aside
-          className={cn(
-            "group relative shrink-0 rounded-[24px] border border-sky-100 bg-[linear-gradient(180deg,rgba(240,249,255,0.92),rgba(248,250,252,0.96))] p-1 shadow-sm shadow-sky-100/40 transition-all duration-200 xl:sticky xl:top-0",
-            sidebarCollapsed ? "xl:w-[72px]" : "xl:w-[178px]"
-          )}
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            title={sidebarCollapsed ? "展开侧边导航" : "收起侧边导航"}
-            aria-label={sidebarCollapsed ? "展开侧边导航" : "收起侧边导航"}
-            className="absolute right-2 top-2 z-10 hidden size-7 rounded-full border border-transparent bg-white/55 text-slate-400 opacity-55 shadow-none backdrop-blur-sm transition-all hover:border-sky-100 hover:bg-white hover:text-sky-700 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-90 xl:inline-flex"
-            onClick={() => setSidebarCollapsed((value) => !value)}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
-          </Button>
+        <div className="shrink-0 border-b border-slate-200/80 px-4 sm:px-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0 flex-1 overflow-x-auto">
+              <TabsList className="h-auto min-w-max gap-1 rounded-none bg-transparent p-0">
+                {DETAIL_SECTION_ITEMS.map((item) => {
+                  if (item.value === "logs") {
+                    return (
+                      <DropdownMenu key={item.value} open={logsMenuOpen} onOpenChange={setLogsMenuOpen} modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            title={item.label}
+                            onClick={() => {
+                              setActiveSection("logs");
+                              openLogsMenu();
+                            }}
+                            onMouseEnter={openLogsMenu}
+                            onMouseLeave={scheduleLogsMenuClose}
+                            onFocus={openLogsMenu}
+                            className={cn(
+                              "inline-flex h-auto flex-none shrink-0 items-center gap-1 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900",
+                              activeSection === "logs" && "border-slate-950 font-semibold text-slate-950"
+                            )}
+                          >
+                            <span>{item.label}</span>
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="start"
+                          side="bottom"
+                          sideOffset={0}
+                          onMouseEnter={openLogsMenu}
+                          onMouseLeave={scheduleLogsMenuClose}
+                          className="min-w-[168px] rounded-none border-slate-200 bg-white p-0 shadow-[0_12px_28px_rgba(15,23,42,0.12)]"
+                        >
+                          {LOG_PANEL_ITEMS.map((panel) => (
+                            <DropdownMenuItem
+                              key={panel.key}
+                              onClick={() => handleSelectLogPanel(panel.key)}
+                              className={cn(
+                                "cursor-pointer rounded-none border-b border-slate-200 px-3 py-2.5 text-sm text-slate-600 last:border-b-0 focus:bg-slate-100 focus:text-slate-950",
+                                activeSection === "logs" && activeLogPanel === panel.key && "bg-slate-100 font-medium text-slate-950"
+                              )}
+                            >
+                              {panel.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    );
+                  }
 
-          <TabsList className="grid h-auto w-full gap-1 bg-transparent p-0">
-            {DETAIL_SECTION_ITEMS.map((item) => {
-              const Icon = item.icon;
+                  if (item.value === "security") {
+                    return (
+                      <DropdownMenu key={item.value} open={securityMenuOpen} onOpenChange={setSecurityMenuOpen} modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            title={item.label}
+                            onClick={() => {
+                              setActiveSection("security");
+                              openSecurityMenu();
+                            }}
+                            onMouseEnter={openSecurityMenu}
+                            onMouseLeave={scheduleSecurityMenuClose}
+                            onFocus={openSecurityMenu}
+                            className={cn(
+                              "inline-flex h-auto flex-none shrink-0 items-center gap-1 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900",
+                              activeSection === "security" && "border-slate-950 font-semibold text-slate-950"
+                            )}
+                          >
+                            <span>{item.label}</span>
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="start"
+                          side="bottom"
+                          sideOffset={0}
+                          onMouseEnter={openSecurityMenu}
+                          onMouseLeave={scheduleSecurityMenuClose}
+                          className="min-w-[200px] rounded-none border-slate-200 bg-white p-0 shadow-[0_12px_28px_rgba(15,23,42,0.12)]"
+                        >
+                          {SECURITY_PANEL_ITEMS.map((panel) => (
+                            <DropdownMenuItem
+                              key={panel.key}
+                              onClick={() => handleSelectSecurityPanel(panel.key)}
+                              className={cn(
+                                "cursor-pointer rounded-none border-b border-slate-200 px-3 py-2.5 text-sm text-slate-600 last:border-b-0 focus:bg-slate-100 focus:text-slate-950",
+                                activeSection === "security" &&
+                                  activeSecurityPanel === panel.key &&
+                                  "bg-slate-100 font-medium text-slate-950"
+                              )}
+                            >
+                              {panel.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    );
+                  }
 
-              return (
-                <TabsTrigger
-                  key={item.value}
-                  value={item.value}
-                  title={item.label}
-                  className={cn(
-                    "h-auto rounded-[16px] border border-transparent py-2.5 text-left text-[13px] font-semibold tracking-[0.01em] text-slate-600 transition-all data-[state=active]:border-sky-200 data-[state=active]:bg-white data-[state=active]:text-sky-700 data-[state=active]:shadow-[0_10px_24px_-16px_rgba(14,116,144,0.45)]",
-                    "justify-start gap-2 px-2.5 hover:bg-white/80 hover:text-slate-900",
-                    !sidebarCollapsed && "pr-8",
-                    sidebarCollapsed && "xl:mx-auto xl:size-11 xl:justify-center xl:rounded-[14px] xl:px-0 xl:py-0"
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span className={cn(sidebarCollapsed && "xl:hidden")}>{item.label}</span>
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-        </aside>
+                  return (
+                    <TabsTrigger
+                      key={item.value}
+                      value={item.value}
+                      title={item.label}
+                      className="h-auto flex-none shrink-0 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 shadow-none transition-colors hover:text-slate-900 data-[state=active]:border-slate-950 data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-slate-950 data-[state=active]:shadow-none"
+                    >
+                      {item.label}
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+            </div>
 
-        <div className="min-w-0 flex-1">
-          <TabsContent value="chat" className="mt-0">
-            <Card className="overflow-hidden rounded-[30px] border-slate-200 bg-white py-0 shadow-sm">
-              <div className="grid min-h-[760px] xl:grid-cols-[286px_minmax(0,1fr)]">
-                <div className="border-b border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(241,245,249,0.92))] xl:border-b-0 xl:border-r">
-                  <div className="border-b border-slate-200/80 px-4 py-4">
-                    <div className="text-lg font-semibold text-slate-950">对话</div>
-                    <div className="mt-3 rounded-[22px] border border-sky-100 bg-white/90 p-3 shadow-sm shadow-sky-100/40">
-                      <div className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_5px_rgba(16,185,129,0.12)]" />
-                        <span className="text-sm font-semibold text-slate-900">
-                          {currentSession?.title ?? "默认会话"}
-                        </span>
-                      </div>
-                      <div className="mt-2 text-xs text-slate-500">
-                        已连接 · {currentSession?.messages.length ?? 0} 条消息
-                      </div>
-                    </div>
+            <button
+              type="button"
+              onClick={() => setActiveSection("chat")}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-2 border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900",
+                activeSection === "chat" && "border-slate-950 font-semibold text-slate-950"
+              )}
+            >
+              <MessageSquareText className="h-4 w-4" />
+              对话调试
+            </button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-3 sm:px-6 sm:pt-4">
+          <TabsContent value="chat" className="mt-0 h-full min-h-0 overflow-hidden">
+            <div
+              className={cn(
+                "grid h-full min-h-0 overflow-hidden border border-blue-100 bg-white",
+                chatSidebarCollapsed ? "xl:grid-cols-[72px_minmax(0,1fr)]" : "xl:grid-cols-[302px_minmax(0,1fr)]"
+              )}
+            >
+              {chatSidebarCollapsed ? (
+                <div className="flex min-h-0 flex-col border-b border-blue-100 bg-[linear-gradient(180deg,rgba(245,249,255,0.98),rgba(238,245,255,0.98))] xl:border-b-0 xl:border-r">
+                  <div className="flex justify-center px-3 py-5">
+                    <button
+                      type="button"
+                      onClick={() => setChatSidebarCollapsed(false)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-blue-100 bg-white text-slate-400 transition hover:border-blue-200 hover:text-slate-700"
+                      aria-label="展开会话列表"
+                      title="展开会话列表"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
                   </div>
 
-                  <div className="px-3 py-3">
-                    <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-                      历史会话
+                  <div className="flex flex-1 flex-col items-center gap-3 px-3 py-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-white text-blue-600">
+                      <MessageSquareText className="h-4 w-4" />
                     </div>
-                    <div className="space-y-2">
+                  </div>
+                </div>
+              ) : (
+                <div className="flex min-h-0 flex-col border-b border-blue-100 bg-[linear-gradient(180deg,rgba(249,251,255,0.98),rgba(243,248,255,0.98))] xl:border-b-0 xl:border-r">
+                  <div className="border-b border-blue-100 px-5 py-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-950">会话列表</h2>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setChatSidebarCollapsed(true)}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-blue-100 bg-white text-slate-400 transition hover:border-blue-200 hover:text-slate-700"
+                        aria-label="收起会话列表"
+                        title="收起会话列表"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-5 h-11 w-full justify-center rounded-lg border-blue-200 bg-white text-[15px] font-medium text-slate-700 shadow-none transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                      onClick={() => toast.info("新建会话入口待接入。")}
+                    >
+                      <Plus className="h-4 w-4" />
+                      新建会话
+                    </Button>
+                  </div>
+
+                  <div className="min-h-0 flex-1 overflow-y-auto py-2">
+                    <div className="space-y-0.5">
                       {chatSessions.map((session) => {
                         const isActive = session.id === currentSession?.id;
+                        const itemCount = session.messages.length;
 
                         return (
                           <button
@@ -694,194 +953,40 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                             type="button"
                             onClick={() => handleSelectChatSession(session.id)}
                             className={cn(
-                              "w-full rounded-[20px] border px-3 py-3 text-left transition-all",
+                              "relative w-full border-l-[3px] px-5 py-4 text-left transition-colors",
                               isActive
-                                ? "border-sky-200 bg-white shadow-sm shadow-sky-100/60"
-                                : "border-transparent bg-white/60 hover:border-slate-200 hover:bg-white"
+                                ? "border-l-blue-600 bg-[linear-gradient(90deg,rgba(239,246,255,0.96),rgba(255,255,255,0.98))]"
+                                : "border-l-transparent bg-transparent hover:bg-blue-50/70"
                             )}
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold text-slate-900">{session.title}</div>
-                                <div className="mt-1 truncate text-xs text-slate-500">{session.source}</div>
-                              </div>
-                              {session.unreadCount > 0 ? (
-                                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-700">
-                                  {session.unreadCount}
-                                </span>
-                              ) : null}
+                            <div className="truncate text-[15px] font-semibold leading-7 text-slate-900">
+                              {session.preview || session.title}
                             </div>
-
-                            <div className="mt-3 line-clamp-2 text-xs leading-5 text-slate-600">{session.preview}</div>
-                            <div className="mt-3 text-[11px] text-slate-400">{session.updatedAt}</div>
+                            <div className="mt-2 flex items-center justify-between gap-3 text-[12px] text-slate-500">
+                              <span>{session.updatedAt}</span>
+                              <span className="shrink-0 text-slate-400">
+                                {session.unreadCount > 0 ? session.unreadCount : itemCount}
+                              </span>
+                            </div>
                           </button>
                         );
                       })}
                     </div>
                   </div>
                 </div>
+              )}
 
-                <div className="flex min-h-[760px] flex-col bg-[radial-gradient(circle_at_top,rgba(240,249,255,0.55),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.95))]">
-                  <div className="border-b border-slate-200/90 px-5 py-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-lg font-semibold text-slate-950">{currentSession?.source ?? "当前会话"}</div>
-                        <div className="mt-1 text-sm text-slate-500">
-                          最近更新 {currentSession?.updatedAt ?? "--"}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Badge className="border-sky-100 bg-sky-50 text-sky-700">
-                          {currentSession?.messages.length ?? 0} 条消息
-                        </Badge>
-                        <Badge className="border-slate-200 bg-white text-slate-600">{detail.overview.type}</Badge>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-                    {currentSession?.messages.map((message) => {
-                      if (message.role === "tool") {
-                        return (
-                          <div
-                            key={message.id}
-                            className="rounded-[22px] border border-amber-100 bg-amber-50/80 px-4 py-3 text-sm text-amber-950"
-                          >
-                            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">
-                              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] text-amber-500">
-                                T
-                              </span>
-                              {message.toolLabel ?? "Tool"}
-                            </div>
-                            <div className="mt-3 whitespace-pre-line font-mono text-[13px] leading-6 text-amber-900/90">
-                              {message.content}
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      const isUser = message.role === "user";
-
-                      return (
-                        <div key={message.id} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
-                          <div className={cn("flex max-w-[88%] flex-col space-y-2", isUser && "items-end")}>
-                            <div
-                              className={cn(
-                                "flex items-center gap-2 text-xs text-slate-400",
-                                isUser ? "justify-end" : "justify-start"
-                              )}
-                            >
-                              <span>{message.sender}</span>
-                              <span>{message.time}</span>
-                            </div>
-
-                            <div
-                              className={cn(
-                                "rounded-[24px] px-4 py-3 text-sm leading-7 shadow-sm",
-                                isUser
-                                  ? "bg-slate-950 text-white shadow-slate-200"
-                                  : "border border-slate-200 bg-white text-slate-700"
-                              )}
-                            >
-                              <div className="whitespace-pre-line">{message.content}</div>
-                              {message.attachments?.length ? (
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  {message.attachments.map((attachment) => (
-                                    <span
-                                      key={`${message.id}-${attachment}`}
-                                      className={cn(
-                                        "inline-flex items-center rounded-full px-3 py-1 text-xs",
-                                        isUser ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"
-                                      )}
-                                    >
-                                      {attachment}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="border-t border-slate-200/90 bg-white/90 px-5 py-4 backdrop-blur-sm">
-                    {queuedFiles.length || voiceMode ? (
-                      <div className="mb-3 flex flex-wrap items-center gap-2">
-                        {queuedFiles.map((file) => (
-                          <button
-                            key={file}
-                            type="button"
-                            onClick={() => handleRemoveQueuedFile(file)}
-                            className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 transition-colors hover:bg-slate-100"
-                          >
-                            {file}
-                          </button>
-                        ))}
-                        {voiceMode ? (
-                          <span className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
-                            <span className="h-2 w-2 rounded-full bg-sky-500" />
-                            语音输入已开启
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-3 shadow-inner shadow-slate-100">
-                      <Textarea
-                        value={draftMessage}
-                        onChange={(event) => setDraftMessage(event.target.value)}
-                        placeholder="输入消息，或通过下方语音 / 文件入口继续补充上下文..."
-                        className="min-h-[108px] resize-none border-0 bg-transparent px-1 py-1 text-sm leading-7 shadow-none focus-visible:ring-0"
-                      />
-
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <input
-                            ref={fileInputRef}
-                            type="file"
-                            multiple
-                            className="hidden"
-                            onChange={handleQueueFiles}
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="rounded-full bg-white"
-                            onClick={() => fileInputRef.current?.click()}
-                          >
-                            <Paperclip className="h-4 w-4" />
-                            上传文件
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className={cn("rounded-full bg-white", voiceMode && "border-sky-200 bg-sky-50 text-sky-700")}
-                            onClick={handleToggleVoice}
-                          >
-                            <Mic className="h-4 w-4" />
-                            语音
-                          </Button>
-                        </div>
-
-                        <Button type="button" className="rounded-full px-5" onClick={handleSendMessage}>
-                          <SendHorizontal className="h-4 w-4" />
-                          发送
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
+              <ClawInteractiveChatPanel
+                key={currentSession?.id ?? detail.overview.id}
+                detail={detail}
+                session={currentSession}
+                run={matchedConversationRun}
+              />
+            </div>
           </TabsContent>
 
           <TabsContent value="status" className="mt-0">
-            <SectionCard title="状态" description="当前 Agent 的基础信息。">
+            <SectionCard>
               <div className="rounded-[28px] border border-sky-100 bg-[linear-gradient(135deg,rgba(240,249,255,0.95),rgba(255,255,255,0.98))] p-6 shadow-sm shadow-sky-100/50">
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex items-start gap-4">
@@ -919,7 +1024,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="core" className="mt-0">
-            <SectionCard title="核心文件" description="当前 Claw 的核心文件由 identity、Soul、memory 和 heartbeat 组成。">
+            <SectionCard>
               {selectedCoreFile ? (
                 <div className="space-y-5">
                   <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1023,11 +1128,10 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
             </SectionCard>
           </TabsContent>
 
-          <TabsContent value="capability" className="mt-0">
+          <TabsContent value="tools" className="mt-0">
             <ClawCapabilitySection
+              panel="tools"
               capabilityConfig={capabilityConfig}
-              activeCapabilityPanel={activeCapabilityPanel}
-              onActiveCapabilityPanelChange={setActiveCapabilityPanel}
               toolScope={toolScope}
               onToolScopeChange={setToolScope}
               skillScope={skillScope}
@@ -1038,6 +1142,85 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onKnowledgeScopeChange={setKnowledgeScope}
               onOpenToolConfigDialog={handleOpenToolConfigDialog}
               onOpenSkillConfigDialog={handleOpenSkillConfigDialog}
+              onOpenKnowledgeConfigDialog={handleOpenKnowledgeConfigDialog}
+              onToggleTool={handleToggleTool}
+              onDeleteTool={handleDeleteTool}
+              onToggleSkill={handleToggleSkill}
+              onDeleteSkill={handleDeleteSkill}
+              onToggleAgent={handleToggleAgent}
+              onDeleteAgent={handleDeleteAgent}
+              onToggleKnowledge={handleToggleKnowledge}
+              onDeleteKnowledge={handleDeleteKnowledge}
+            />
+          </TabsContent>
+
+          <TabsContent value="skills" className="mt-0">
+            <ClawCapabilitySection
+              panel="skills"
+              capabilityConfig={capabilityConfig}
+              toolScope={toolScope}
+              onToolScopeChange={setToolScope}
+              skillScope={skillScope}
+              onSkillScopeChange={setSkillScope}
+              agentScope={agentScope}
+              onAgentScopeChange={setAgentScope}
+              knowledgeScope={knowledgeScope}
+              onKnowledgeScopeChange={setKnowledgeScope}
+              onOpenToolConfigDialog={handleOpenToolConfigDialog}
+              onOpenSkillConfigDialog={handleOpenSkillConfigDialog}
+              onOpenKnowledgeConfigDialog={handleOpenKnowledgeConfigDialog}
+              onToggleTool={handleToggleTool}
+              onDeleteTool={handleDeleteTool}
+              onToggleSkill={handleToggleSkill}
+              onDeleteSkill={handleDeleteSkill}
+              onToggleAgent={handleToggleAgent}
+              onDeleteAgent={handleDeleteAgent}
+              onToggleKnowledge={handleToggleKnowledge}
+              onDeleteKnowledge={handleDeleteKnowledge}
+            />
+          </TabsContent>
+
+          <TabsContent value="agents" className="mt-0">
+            <ClawCapabilitySection
+              panel="agents"
+              capabilityConfig={capabilityConfig}
+              toolScope={toolScope}
+              onToolScopeChange={setToolScope}
+              skillScope={skillScope}
+              onSkillScopeChange={setSkillScope}
+              agentScope={agentScope}
+              onAgentScopeChange={setAgentScope}
+              knowledgeScope={knowledgeScope}
+              onKnowledgeScopeChange={setKnowledgeScope}
+              onOpenToolConfigDialog={handleOpenToolConfigDialog}
+              onOpenSkillConfigDialog={handleOpenSkillConfigDialog}
+              onOpenKnowledgeConfigDialog={handleOpenKnowledgeConfigDialog}
+              onToggleTool={handleToggleTool}
+              onDeleteTool={handleDeleteTool}
+              onToggleSkill={handleToggleSkill}
+              onDeleteSkill={handleDeleteSkill}
+              onToggleAgent={handleToggleAgent}
+              onDeleteAgent={handleDeleteAgent}
+              onToggleKnowledge={handleToggleKnowledge}
+              onDeleteKnowledge={handleDeleteKnowledge}
+            />
+          </TabsContent>
+
+          <TabsContent value="knowledge" className="mt-0">
+            <ClawCapabilitySection
+              panel="knowledge"
+              capabilityConfig={capabilityConfig}
+              toolScope={toolScope}
+              onToolScopeChange={setToolScope}
+              skillScope={skillScope}
+              onSkillScopeChange={setSkillScope}
+              agentScope={agentScope}
+              onAgentScopeChange={setAgentScope}
+              knowledgeScope={knowledgeScope}
+              onKnowledgeScopeChange={setKnowledgeScope}
+              onOpenToolConfigDialog={handleOpenToolConfigDialog}
+              onOpenSkillConfigDialog={handleOpenSkillConfigDialog}
+              onOpenKnowledgeConfigDialog={handleOpenKnowledgeConfigDialog}
               onToggleTool={handleToggleTool}
               onDeleteTool={handleDeleteTool}
               onToggleSkill={handleToggleSkill}
@@ -1050,7 +1233,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="channels" className="mt-0">
-            <SectionCard title="渠道与分发" description="配置当前 OpenClaw 在哪些 IM 渠道进行分发。">
+            <SectionCard>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-sm text-slate-500">
                   当前共接入
@@ -1120,7 +1303,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="tasks" className="mt-0">
-            <SectionCard title="任务" description="当前 Claw 的任务分为定时任务、催办任务和条件触发任务。">
+            <SectionCard>
               <div className="grid gap-4 xl:grid-cols-3">
                 {detail.taskGroups.map((group) => (
                   <div key={group.title} className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
@@ -1153,7 +1336,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="workspace" className="mt-0">
-            <SectionCard title="工作空间" description="工作空间中的内容就是普通文件夹。">
+            <SectionCard>
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-slate-500">
@@ -1227,480 +1410,247 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
             </SectionCard>
           </TabsContent>
 
-          <TabsContent value="logs" className="mt-0">
-            <div className="space-y-4">
-              <TooltipProvider delayDuration={120}>
-                <div className="flex flex-wrap gap-2">
-                  {LOG_PANEL_ITEMS.map((panel) => (
-                    <button
-                      key={panel.key}
-                      type="button"
-                      onClick={() => setActiveLogPanel(panel.key)}
-                      className={cn(
-                        "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors",
-                        activeLogPanel === panel.key
-                          ? "border-sky-200 bg-sky-50 text-sky-700 shadow-sm"
-                          : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900"
-                      )}
-                    >
-                      <span>{panel.label}</span>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span
-                            className={cn(
-                              "inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-400 transition-colors",
-                              activeLogPanel === panel.key ? "text-sky-500" : "text-slate-400"
-                            )}
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            <CircleHelp className="h-3.5 w-3.5" />
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="max-w-[280px] text-xs leading-6">
-                          {panel.description}
-                        </TooltipContent>
-                      </Tooltip>
-                    </button>
-                  ))}
-                </div>
-              </TooltipProvider>
+          <TabsContent value="logs" className="mt-0 h-full min-h-0 overflow-hidden">
+            {activeLogPanel === "conversation" ? (
+              selectedLogSession && selectedLogSessionSummary ? (
+                <div className="flex h-full min-h-0 flex-col">
+                  <div className="shrink-0 border-b border-slate-200 pb-4">
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                      <button
+                        type="button"
+                        onClick={handleBackToLogSessions}
+                        className="transition-colors hover:text-slate-900"
+                      >
+                        会话日志
+                      </button>
+                      <ChevronRight className="h-4 w-4 text-slate-300" />
+                      <span className="font-medium text-slate-900">{selectedLogSession.sessionId}</span>
+                    </div>
 
-              {activeLogPanel === "conversation" ? (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full bg-white/90"
-                      onClick={() => setConversationHistoryCollapsed((current) => !current)}
-                    >
-                      {conversationHistoryCollapsed ? (
-                        <PanelLeftOpen className="h-4 w-4" />
-                      ) : (
-                        <PanelLeftClose className="h-4 w-4" />
-                      )}
-                      {conversationHistoryCollapsed ? "展开会话历史" : "收起会话历史"}
-                    </Button>
-
-                    {!conversationHistoryCollapsed ? (
-                      <div className="text-sm text-slate-500">{conversationRuns.length} 条会话记录</div>
-                    ) : null}
+                    <div className="mt-3">
+                      <div>
+                        <div className="text-xl font-semibold text-slate-950">{selectedLogSession.title}</div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                          <span>{selectedLogSession.channel}</span>
+                          <span className="text-slate-300">/</span>
+                          <span>{selectedLogSession.userIdentity}</span>
+                          <span className="text-slate-300">/</span>
+                          <span className="font-mono text-xs text-slate-400">{selectedLogSession.traceId}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div
-                    className={cn(
-                      "grid gap-4",
-                      conversationHistoryCollapsed ? "xl:grid-cols-[minmax(0,1fr)]" : "xl:grid-cols-[280px_minmax(0,1fr)]"
-                    )}
-                  >
-                    {!conversationHistoryCollapsed ? (
-                      <div className="flex min-h-0 flex-col rounded-[24px] border border-slate-200 bg-white/90 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-50 text-slate-700">
-                              <MessageSquareText className="h-4 w-4" />
-                            </div>
-                            <div>
-                              <div className="text-base font-semibold text-slate-950">会话历史</div>
-                              <div className="mt-1 text-sm text-slate-500">{conversationRuns.length} 条记录</div>
-                            </div>
-                          </div>
-                          <Badge className="border-slate-200 bg-white text-slate-600">{conversationRuns.length}</Badge>
+                  <div className="mt-4 grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <div className="flex min-h-0 flex-col overflow-hidden border border-slate-200 bg-white">
+                      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-950">消息与事件</div>
+                          <div className="mt-1 text-xs text-slate-500">按时间顺序展示 User、Agent、Skill 与工具事件</div>
                         </div>
+                        <div className="text-xs text-slate-400">{selectedLogSessionEvents.length} 项</div>
+                      </div>
 
-                        <ScrollArea className="mt-4 h-[760px] pr-3">
-                          <div className="space-y-2 pr-4">
-                            {conversationSessionSummaries.map((summary) => (
-                              <button
-                                key={summary.session.id}
-                                type="button"
-                                onClick={() => handleSelectChatSession(summary.session.id)}
+                      <ScrollArea className="min-h-0 flex-1">
+                        <div className="divide-y divide-slate-200">
+                          {selectedLogSessionEvents.map((event) => (
+                            <button
+                              key={event.id}
+                              type="button"
+                              onClick={() => setSelectedLogEventId(event.id)}
+                              className={cn(
+                                "grid w-full gap-3 px-4 py-3 text-left transition-colors md:grid-cols-[96px_minmax(0,1fr)_88px]",
+                                activeLogEvent?.id === event.id ? "bg-slate-50" : "hover:bg-slate-50/70"
+                              )}
+                            >
+                              <div className="flex flex-col gap-2">
+                                <Badge
+                                  className={cn(
+                                    "w-fit rounded-none border px-2 py-0.5 text-[11px] font-medium",
+                                    getLogEventBadgeClassName(event.kind)
+                                  )}
+                                >
+                                  {event.label}
+                                </Badge>
+                                <div className="text-xs text-slate-400">第 {event.turnNumber} 轮</div>
+                              </div>
+
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="truncate text-sm font-medium text-slate-950">{event.title}</div>
+                                  {event.status ? (
+                                    <Badge className={cn("rounded-none border px-2 py-0.5 text-[11px]", getAuditStatusClassName(event.status))}>
+                                      {event.status}
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                                <div className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">{event.summary}</div>
+                              </div>
+
+                              <div className="text-left text-xs text-slate-400 md:text-right">{event.time}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+
+                    <div className="flex min-h-0 flex-col overflow-hidden border border-slate-200 bg-white">
+                      {activeLogEvent ? (
+                        <>
+                          <div className="border-b border-slate-200 px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge
                                 className={cn(
-                                  "w-full rounded-[20px] border px-4 py-4 text-left transition-all",
-                                  currentConversationRun?.id === summary.session.id
-                                    ? "border-sky-200 bg-sky-50/70 shadow-sm shadow-sky-100/70"
-                                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70"
+                                  "rounded-none border px-2 py-0.5 text-[11px] font-medium",
+                                  getLogEventBadgeClassName(activeLogEvent.kind)
                                 )}
                               >
-                                <div className="flex items-start justify-between gap-3">
-                                  <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-slate-900">
-                                      {summary.session.title}
-                                    </div>
-                                    <div className="mt-1 truncate text-xs text-slate-500">
-                                      {summary.linkedChatSession?.source ?? summary.session.channel}
-                                    </div>
-                                  </div>
-                                  <Badge className="border-slate-200 bg-white text-slate-600">
-                                    {summary.messages.length}
-                                  </Badge>
-                                </div>
-
-                                <div className="mt-3 text-sm text-slate-600">{summary.session.userIdentity}</div>
-                                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                                  <span>{summary.session.updatedAt}</span>
-                                  {summary.auditRecordCount > 0 ? (
-                                    <>
-                                      <span className="text-slate-300">/</span>
-                                      <span>{summary.auditRecordCount} 条留痕</span>
-                                    </>
-                                  ) : null}
-                                </div>
-                              </button>
-                            ))}
+                                {activeLogEvent.label}
+                              </Badge>
+                              <div className="text-sm font-medium text-slate-950">{activeLogEvent.title}</div>
+                            </div>
+                            <div className="mt-2 text-xs text-slate-400">
+                              {activeLogEvent.time} · 第 {activeLogEvent.turnNumber} 轮
+                            </div>
                           </div>
-                        </ScrollArea>
-                      </div>
-                    ) : null}
 
-                    <div className="space-y-4">
-                      {currentConversationRun ? (
-                        <>
-                          <div className="rounded-[24px] border border-slate-200 bg-white/90 p-5">
-                            <div className="flex flex-wrap items-start justify-between gap-4">
-                              <div>
-                                <div className="text-xl font-semibold text-slate-950">{currentConversationRun.title}</div>
-                                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                                  <span>{currentConversationRun.channel}</span>
-                                  {currentConversationSummary?.linkedChatSession?.source ? (
-                                    <>
-                                      <span className="text-slate-300">/</span>
-                                      <span>{currentConversationSummary.linkedChatSession.source}</span>
-                                    </>
-                                  ) : null}
-                                  <span className="text-slate-300">/</span>
-                                  <span>{currentConversationRun.userIdentity}</span>
-                                </div>
-                              </div>
-
+                          <ScrollArea className="min-h-0 flex-1">
+                            <div className="space-y-4 p-4">
                               <div className="flex flex-wrap gap-2">
-                                <Badge className="border-slate-200 bg-slate-100 text-slate-700">
-                                  Session ID · {currentConversationRun.sessionId}
-                                </Badge>
-                                <Badge className="border-sky-100 bg-sky-50 text-sky-700">
-                                  Trace · {currentConversationRun.traceId}
-                                </Badge>
-                              </div>
-                            </div>
-
-                            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                              <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                  用户身份
-                                </div>
-                                <div className="mt-2 text-sm font-medium text-slate-900">{currentConversationRun.userIdentity}</div>
-                              </div>
-                              <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                  开始时间
-                                </div>
-                                <div className="mt-2 text-sm font-medium text-slate-900">{currentConversationRun.startedAt}</div>
-                              </div>
-                              <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                  消息数
-                                </div>
-                                <div className="mt-2 text-sm font-medium text-slate-900">{currentConversationMessages.length}</div>
-                              </div>
-                              <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                  带执行记录
-                                </div>
-                                <div className="mt-2 text-sm font-medium text-slate-900">
-                                  {currentConversationSummary?.auditMessageCount ?? 0}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div
-                            className={cn(
-                              "grid gap-4",
-                              conversationHistoryCollapsed
-                                ? "xl:grid-cols-[minmax(0,1fr)_460px]"
-                                : "xl:grid-cols-[minmax(0,1fr)_340px]"
-                            )}
-                          >
-                            <div className="flex min-h-0 flex-col rounded-[24px] border border-slate-200 bg-[radial-gradient(circle_at_top,rgba(240,249,255,0.42),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.95))] p-5">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div className="text-lg font-semibold text-slate-950">对话历史</div>
-                                <Badge className="border-slate-200 bg-white text-slate-600">
-                                  {currentConversationMessages.length} 条消息
-                                </Badge>
-                              </div>
-
-                              <ScrollArea className="mt-5 h-[420px] pr-3 md:h-[520px] xl:h-[680px]">
-                                <div className="space-y-3 pr-4">
-                                  {currentConversationMessages.map((message) => {
-                                    const isUser = message.role === "user";
-                                    const isTool = message.role === "tool";
-                                    const hasAudit = message.auditRecords.length > 0;
-                                    const isSelected = selectedConversationAuditMessage?.id === message.id;
-
-                                    if (isTool) {
-                                      return (
-                                        <div key={message.id} className="flex justify-center">
-                                          <button
-                                            type="button"
-                                            disabled={!hasAudit}
-                                            onClick={() =>
-                                              setSelectedConversationAuditMessageId((current) =>
-                                                current === message.id ? null : message.id
-                                              )
-                                            }
-                                            className={cn(
-                                              "max-w-[92%] rounded-full border px-4 py-2.5 text-left transition-all",
-                                              hasAudit
-                                                ? "border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:bg-sky-50/70"
-                                                : "cursor-default border-slate-200 bg-slate-100 text-slate-500",
-                                              isSelected && "border-sky-200 bg-sky-50 text-sky-700 shadow-sm shadow-sky-100/70"
-                                            )}
-                                          >
-                                            <div className="flex flex-wrap items-center gap-2">
-                                              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                                系统动作
-                                              </span>
-                                              <span className="text-sm font-medium">{message.toolLabel ?? "系统执行"}</span>
-                                              {hasAudit ? (
-                                                <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700">
-                                                  执行 {message.auditRecords.length}
-                                                </span>
-                                              ) : null}
-                                            </div>
-                                          </button>
-                                        </div>
-                                      );
-                                    }
-
-                                    return (
-                                      <div key={message.id} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
-                                        <div className={cn("flex max-w-[88%] flex-col space-y-2", isUser && "items-end")}>
-                                          <div
-                                            className={cn(
-                                              "flex flex-wrap items-center gap-2 text-xs text-slate-400",
-                                              isUser ? "justify-end" : "justify-start"
-                                            )}
-                                          >
-                                            <span>{message.sender}</span>
-                                            <span>{message.time}</span>
-                                            {message.turnNumber ? <span>第 {message.turnNumber} 轮</span> : null}
-                                            {hasAudit ? (
-                                              <span
-                                                className={cn(
-                                                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]",
-                                                  isSelected
-                                                    ? "border-sky-200 bg-sky-50 text-sky-700"
-                                                    : "border-slate-200 bg-white text-slate-500"
-                                                )}
-                                              >
-                                                <span
-                                                  className={cn(
-                                                    "h-1.5 w-1.5 rounded-full",
-                                                    isSelected ? "bg-sky-500" : "bg-slate-400"
-                                                  )}
-                                                />
-                                                执行 {message.auditRecords.length}
-                                              </span>
-                                            ) : null}
-                                          </div>
-
-                                          {hasAudit ? (
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                setSelectedConversationAuditMessageId((current) =>
-                                                  current === message.id ? null : message.id
-                                                )
-                                              }
-                                              className={cn(
-                                                "rounded-[24px] px-4 py-3 text-left text-sm leading-7 shadow-sm transition-all",
-                                                isUser
-                                                  ? "bg-slate-950 text-white shadow-slate-200 hover:bg-slate-900"
-                                                  : "border border-slate-200 bg-white text-slate-700 hover:border-sky-200 hover:bg-sky-50/60",
-                                                isSelected &&
-                                                  (isUser
-                                                    ? "ring-2 ring-sky-200 ring-offset-2 ring-offset-white"
-                                                    : "border-sky-200 bg-sky-50 shadow-sky-100/70")
-                                              )}
-                                            >
-                                              <div className="whitespace-pre-line">{message.content}</div>
-                                              {message.attachments?.length ? (
-                                                <div className="mt-3 flex flex-wrap gap-2">
-                                                  {message.attachments.map((attachment) => (
-                                                    <span
-                                                      key={`${message.id}-${attachment}`}
-                                                      className={cn(
-                                                        "inline-flex items-center rounded-full px-3 py-1 text-xs",
-                                                        isUser ? "bg-white/15 text-white" : "bg-white text-slate-600"
-                                                      )}
-                                                    >
-                                                      {attachment}
-                                                    </span>
-                                                  ))}
-                                                </div>
-                                              ) : null}
-                                            </button>
-                                          ) : (
-                                            <div
-                                              className={cn(
-                                                "rounded-[24px] px-4 py-3 text-sm leading-7 shadow-sm",
-                                                isUser
-                                                  ? "bg-slate-950 text-white shadow-slate-200"
-                                                  : "border border-slate-200 bg-white text-slate-700"
-                                              )}
-                                            >
-                                              <div className="whitespace-pre-line">{message.content}</div>
-                                              {message.attachments?.length ? (
-                                                <div className="mt-3 flex flex-wrap gap-2">
-                                                  {message.attachments.map((attachment) => (
-                                                    <span
-                                                      key={`${message.id}-${attachment}`}
-                                                      className={cn(
-                                                        "inline-flex items-center rounded-full px-3 py-1 text-xs",
-                                                        isUser ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"
-                                                      )}
-                                                    >
-                                                      {attachment}
-                                                    </span>
-                                                  ))}
-                                                </div>
-                                              ) : null}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </ScrollArea>
-                            </div>
-
-                            <div className="flex min-h-0 flex-col rounded-[24px] border border-slate-200 bg-white/95 p-5 xl:sticky xl:top-5">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div className="text-lg font-semibold text-slate-950">执行明细</div>
-                                {selectedConversationAuditMessage ? (
-                                  <Badge className="border-sky-100 bg-sky-50 text-sky-700">
-                                    {selectedConversationAuditMessage.auditRecords.length} 项执行
+                                <Badge className="border-slate-200 bg-white text-slate-600">{activeLogEvent.time}</Badge>
+                                {activeLogEvent.traceId ? (
+                                  <Badge className="border-slate-200 bg-white font-mono text-slate-600">
+                                    {activeLogEvent.traceId}
                                   </Badge>
+                                ) : null}
+                                {activeLogEvent.typeLabel ? (
+                                  <Badge className={cn("border", getAuditTypeClassName(activeLogEvent.typeLabel))}>
+                                    {activeLogEvent.typeLabel}
+                                  </Badge>
+                                ) : null}
+                                {activeLogEvent.status ? (
+                                  <Badge className={cn("border", getAuditStatusClassName(activeLogEvent.status))}>
+                                    {activeLogEvent.status}
+                                  </Badge>
+                                ) : null}
+                                {activeLogEvent.durationLabel ? (
+                                  <Badge className="border-slate-200 bg-white text-slate-600">{activeLogEvent.durationLabel}</Badge>
                                 ) : null}
                               </div>
 
-                              {selectedConversationAuditMessage ? (
-                                <ScrollArea className="mt-4 h-[420px] pr-3 md:h-[520px] xl:h-[680px]">
-                                  <div className="space-y-4 pr-4">
-                                    <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
-                                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                        已选消息
-                                      </div>
-                                      <div className="mt-2 text-sm font-medium text-slate-900">
-                                        {selectedConversationAuditMessage.sender} · {selectedConversationAuditMessage.time}
-                                      </div>
-                                      <div className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">
-                                        {selectedConversationAuditMessage.content}
-                                      </div>
+                              {isStructuredLogEvent(activeLogEvent) ? (
+                                <>
+                                  <div className="overflow-hidden border border-slate-200 bg-white">
+                                    <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                      {getLogEventPrimaryPayloadLabel(activeLogEvent)}
                                     </div>
-
-                                    <div className="flex flex-wrap gap-2">
-                                      {selectedConversationAuditMessage.turnNumber ? (
-                                        <Badge className="border-slate-200 bg-white text-slate-600">
-                                          第 {selectedConversationAuditMessage.turnNumber} 轮
-                                        </Badge>
-                                      ) : null}
-                                      {selectedConversationAuditMessage.traceId ? (
-                                        <Badge className="border-sky-100 bg-sky-50 font-mono text-sky-700">
-                                          {selectedConversationAuditMessage.traceId}
-                                        </Badge>
-                                      ) : null}
-                                      <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">
-                                        成功{" "}
-                                        {
-                                          selectedConversationAuditMessage.auditRecords.filter(
-                                            (record) => record.status === "成功"
-                                          ).length
-                                        }
-                                      </Badge>
-                                      {selectedConversationAuditMessage.auditRecords.some(
-                                        (record) => record.status === "已拦截"
-                                      ) ? (
-                                        <Badge className="border-amber-200 bg-amber-50 text-amber-700">
-                                          拦截{" "}
-                                          {
-                                            selectedConversationAuditMessage.auditRecords.filter(
-                                              (record) => record.status === "已拦截"
-                                            ).length
-                                          }
-                                        </Badge>
-                                      ) : null}
-                                    </div>
-
-                                    <div className="space-y-3">
-                                      {selectedConversationAuditMessage.auditRecords.map((record) => (
-                                        <div key={record.id} className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
-                                          <div className="flex flex-wrap items-start justify-between gap-3">
-                                            <div className="min-w-0">
-                                              <div className="flex flex-wrap items-center gap-2">
-                                                <Badge className={cn("border", getAuditTypeClassName(record.type))}>
-                                                  {record.type}
-                                                </Badge>
-                                                <Badge className={cn("border", getAuditStatusClassName(record.status))}>
-                                                  {record.status}
-                                                </Badge>
-                                                <div className="text-sm font-semibold text-slate-900">{record.targetName}</div>
-                                              </div>
-                                              <div className="mt-2 text-xs font-mono text-slate-400">
-                                                Trace · {record.traceId}
-                                              </div>
-                                            </div>
-
-                                            <div className="text-sm font-medium text-slate-700">
-                                              {formatDurationMs(record.durationMs)}
-                                            </div>
-                                          </div>
-
-                                          <div className="mt-4 space-y-3">
-                                            <div className="rounded-[16px] border border-slate-200 bg-white px-4 py-3">
-                                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                                入参摘要
-                                              </div>
-                                              <div className="mt-2 text-sm leading-6 text-slate-600">{record.inputSummary}</div>
-                                            </div>
-                                            <div className="rounded-[16px] border border-slate-200 bg-white px-4 py-3">
-                                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                                结果摘要
-                                              </div>
-                                              <div className="mt-2 text-sm leading-6 text-slate-600">{record.outputSummary}</div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
+                                    <pre className="overflow-x-auto whitespace-pre-wrap px-4 py-3 font-mono text-[13px] leading-6 text-slate-700">
+                                      {getLogEventPrimaryPayloadValue(activeLogEvent)}
+                                    </pre>
                                   </div>
-                                </ScrollArea>
+
+                                  {getLogEventResultValue(activeLogEvent) ? (
+                                    <div className="overflow-hidden border border-slate-200 bg-white">
+                                      <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                        Result
+                                      </div>
+                                      <pre className="overflow-x-auto whitespace-pre-wrap px-4 py-3 font-mono text-[13px] leading-6 text-slate-700">
+                                        {getLogEventResultValue(activeLogEvent)}
+                                      </pre>
+                                    </div>
+                                  ) : null}
+                                </>
                               ) : (
-                                <ScrollArea className="mt-4 h-[420px] pr-3 md:h-[520px] xl:h-[680px]">
-                                  <div className="flex min-h-full flex-col items-center justify-center rounded-[20px] border border-dashed border-slate-200 bg-slate-50/60 px-5 text-center">
-                                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
-                                      <FileStack className="h-5 w-5" />
-                                    </div>
-                                    <div className="mt-4 text-base font-semibold text-slate-950">请选择消息以查看执行记录</div>
+                                <div>
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">内容</div>
+                                  <div className="mt-2 whitespace-pre-line border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                                    {activeLogEvent.detail}
                                   </div>
-                                </ScrollArea>
+                                </div>
                               )}
                             </div>
-                          </div>
+                          </ScrollArea>
                         </>
                       ) : (
-                        <div className="rounded-[24px] border border-dashed border-slate-200 bg-white px-6 py-14 text-center text-sm text-slate-500">
-                          暂无会话运行记录
+                        <div className="flex min-h-full flex-col items-center justify-center px-6 text-center">
+                          <div className="text-sm font-medium text-slate-900">请选择一条消息或事件</div>
+                          <div className="mt-2 text-xs text-slate-500">右侧会展示该条记录的详细内容与审计摘要。</div>
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
-              ) : null}
+              ) : (
+                  <div className="flex min-h-0 flex-col overflow-hidden border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                      <div className="text-sm font-semibold text-slate-950">会话列表</div>
+                    </div>
 
-              {activeLogPanel === "task" ? (
+                    <div className="hidden border-b border-slate-200 bg-slate-50/70 px-4 py-2 text-xs font-medium text-slate-500 lg:grid lg:grid-cols-[minmax(0,1.6fr)_200px_160px_160px_140px]">
+                      <span>会话</span>
+                      <span>来源</span>
+                      <span>创建时间</span>
+                      <span>更新时间</span>
+                      <span>操作项</span>
+                    </div>
+
+                    <ScrollArea className="min-h-0 flex-1">
+                      {logSessions.length ? (
+                        <div className="divide-y divide-slate-200">
+                          {logSessions.map((session) => (
+                            <div
+                              key={session.id}
+                              className="grid gap-3 px-4 py-4 transition-colors hover:bg-slate-50/70 lg:grid-cols-[minmax(0,1.6fr)_200px_160px_160px_140px]"
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-semibold text-slate-950">{session.title}</div>
+                                <div className="mt-1 font-mono text-xs text-slate-400">{session.sessionId}</div>
+                              </div>
+                              <div className="min-w-0 text-sm text-slate-600">
+                                <div className="truncate">{session.channel}</div>
+                                <div className="mt-1 truncate text-xs text-slate-400">{session.userIdentity}</div>
+                              </div>
+                              <div className="text-sm text-slate-600">{session.startedAt}</div>
+                              <div className="text-sm text-slate-600">{session.updatedAt}</div>
+                              <div className="flex items-center gap-3 text-sm">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenLogSession(session.id)}
+                                  className="text-blue-600 transition-colors hover:text-blue-700"
+                                >
+                                  详情
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteLogSession(session.id)}
+                                  className="text-blue-600 transition-colors hover:text-blue-700"
+                                >
+                                  删除
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex min-h-full items-center justify-center px-6 py-16 text-sm text-slate-500">
+                          暂无可展示的 Session。
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </div>
+              )
+            ) : null}
+
+            {activeLogPanel === "task" ? (
+              <div className="min-h-0 h-full overflow-y-auto">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-950">任务运行</div>
+                    <div className="mt-1 text-xs text-slate-500">查看定时、催办与条件触发任务的运行结果。</div>
+                  </div>
+                  <Badge className="border-slate-200 bg-white text-slate-600">{detail.taskRuns.length}</Badge>
+                </div>
+
                 <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-3">
                       <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
@@ -1784,11 +1734,21 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                         </div>
                       ))}
                     </div>
-                  </div>
-                ) : null}
+                </div>
+              </div>
+            ) : null}
 
               {activeLogPanel === "security" ? (
-                <div className="space-y-4">
+                <div className="min-h-0 h-full overflow-y-auto">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-950">安全审计</div>
+                      <div className="mt-1 text-xs text-slate-500">汇总会话和任务中的拦截、脱敏、记录与放行结果。</div>
+                    </div>
+                    <Badge className="border-slate-200 bg-white text-slate-600">{detail.securityEvents.length}</Badge>
+                  </div>
+
+                  <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-4">
                       <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
@@ -1880,33 +1840,31 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                       ))}
                     </div>
                   </div>
+                </div>
               ) : null}
-            </div>
           </TabsContent>
 
-          <TabsContent value="security" className="mt-0">
+          <TabsContent value="security" className="mt-0 w-full min-w-0">
             <ClawSecuritySection
+              activePanel={activeSecurityPanel}
               securityManagement={securityManagement}
-              lexiconDrafts={lexiconDrafts}
-              enabledSecurityPolicies={enabledSecurityPolicies}
-              approvalBoundaryCount={approvalBoundaryCount}
-              activeLexiconBindingCount={activeLexiconBindingCount}
               onAutonomyBoundaryLevelChange={handleAutonomyBoundaryLevelChange}
-              onToggleSecurityPolicy={handleToggleSecurityPolicy}
-              onSecurityPolicyModeChange={handleSecurityPolicyModeChange}
-              onSecurityPolicyActionChange={handleSecurityPolicyActionChange}
-              onSecurityPolicyRuleLevelChange={handleSecurityPolicyRuleLevelChange}
-              onToggleLexiconPolicy={handleToggleLexiconPolicy}
-              onLexiconPolicyModeChange={handleLexiconPolicyModeChange}
-              onLexiconPolicyActionChange={handleLexiconPolicyActionChange}
-              onLexiconDraftChange={handleLexiconDraftChange}
-              onAddLexiconLibrary={handleAddLexiconLibrary}
-              onRemoveLexiconLibrary={handleRemoveLexiconLibrary}
+              onToolProtectionEnabledChange={handleToolProtectionEnabledChange}
+              onToolProtectionRuleToggle={handleToolProtectionRuleToggle}
+              onAddToolProtectionRule={handleAddToolProtectionRule}
+              onAddProtectedTool={handleAddProtectedTool}
+              onRemoveProtectedTool={handleRemoveProtectedTool}
+              onAddProhibitedTool={handleAddProhibitedTool}
+              onRemoveProhibitedTool={handleRemoveProhibitedTool}
+              onFileProtectionEnabledChange={handleFileProtectionEnabledChange}
+              onAddFilePath={handleAddFilePath}
+              onRemoveFilePath={handleRemoveFilePath}
+              onResolveApproval={handleResolveApproval}
             />
           </TabsContent>
 
           <TabsContent value="relations" className="mt-0">
-            <SectionCard title="关系" description="关系分为人和 Agent 两大块。">
+            <SectionCard>
               <div className="grid gap-4 xl:grid-cols-2">
                 <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
                   <div className="flex items-center justify-between gap-4">
@@ -1971,7 +1929,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               resourceValidation={resourceValidation}
               runtimeAdvancedOpen={runtimeAdvancedOpen}
               onToggleRuntimeAdvanced={() => setRuntimeAdvancedOpen((current) => !current)}
-              onResetResourceConfig={handleResetResourceConfig}
               onRuntimeTierChange={handleRuntimeTierChange}
               onExecutionTierChange={handleExecutionTierChange}
               onRuntimeNumberChange={handleRuntimeNumberChange}
@@ -1983,7 +1940,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="settings" className="mt-0">
-            <SectionCard title="设置" description="设置目前包含用量和权限两部分。">
+            <SectionCard>
               <div className="grid gap-4 xl:grid-cols-2">
                 <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
                   <div className="flex items-center gap-3">
@@ -2034,6 +1991,11 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
         open={skillConfigDialogOpen}
         onOpenChange={setSkillConfigDialogOpen}
         onConfirm={handleConfirmSkillConfig}
+      />
+      <KnowledgeConfigDialog
+        open={knowledgeConfigDialogOpen}
+        onOpenChange={setKnowledgeConfigDialogOpen}
+        onConfirm={handleConfirmKnowledgeConfig}
       />
     </div>
   );

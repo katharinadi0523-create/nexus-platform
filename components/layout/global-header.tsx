@@ -48,6 +48,7 @@ export function GlobalHeader() {
       pathname.startsWith("/knowledge-base") ||
       pathname.startsWith("/database") ||
       pathname.startsWith("/term-bank") ||
+      pathname.startsWith("/space-operations") ||
       pathname.startsWith("/api-key") ||
       pathname.startsWith("/tag-management")
     ) {

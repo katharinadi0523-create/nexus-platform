@@ -1,484 +1,732 @@
 "use client";
 
-import { CircleAlert, FileStack, ShieldCheck } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { useState, type ReactNode } from "react";
+import { ChevronDown, Eye, Folder, Info, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import type { SecurityManagementConfig } from "@/lib/mock/claw-hub-next";
+import { Textarea } from "@/components/ui/textarea";
+import type {
+  SecurityManagementConfig,
+  ToolProtectionRuleItem,
+  ToolProtectionSeverity,
+} from "@/lib/mock/claw-hub-next";
 import { cn } from "@/lib/utils";
-import { AUTONOMY_BOUNDARY_LEVELS, SECURITY_RULE_LEVELS } from "./constants";
-import { SectionCard } from "./section-card";
-import {
-  getBoundaryLevelClassName,
-  getGovernanceActionClassName,
-  getSecurityRuleLevelClassName,
-} from "./utils";
+import { AUTONOMY_BOUNDARY_LEVELS, type SecurityPanelKey } from "./constants";
+
+const TOOL_RULE_FORM_DEFAULT = {
+  ruleId: "TOOL_CMD_CUSTOM_RULE",
+  targetTool: "",
+  targetParam: "",
+  severity: "HIGH" as ToolProtectionSeverity,
+  category: "command_injection",
+  regexPattern: String.raw`\brm\b|\bmv\b`,
+  exclusionPattern: "^#",
+  description: "",
+  remediation: "",
+};
+
+type ToolRuleFormState = typeof TOOL_RULE_FORM_DEFAULT;
+
+/** 仅用于选中项文字着色（低饱和绿 / 橙 / 红）；选择框边框与底色保持中性灰、白 */
+function autonomyLevelTextClass(level: string) {
+  switch (level) {
+    case "L1 直接执行":
+      return "text-teal-800";
+    case "L2 通知":
+      return "text-amber-800/90";
+    case "L3 审批":
+      return "text-rose-800";
+    default:
+      return "text-slate-700";
+  }
+}
 
 type SecuritySectionProps = {
+  activePanel: SecurityPanelKey;
   securityManagement: SecurityManagementConfig;
-  lexiconDrafts: Record<string, string>;
-  enabledSecurityPolicies: number;
-  approvalBoundaryCount: number;
-  activeLexiconBindingCount: number;
   onAutonomyBoundaryLevelChange: (
     boundaryId: string,
     level: SecurityManagementConfig["autonomyBoundaries"][number]["level"]
   ) => void;
-  onToggleSecurityPolicy: (policyId: string, enabled: boolean) => void;
-  onSecurityPolicyModeChange: (
-    policyId: string,
-    mode: SecurityManagementConfig["strategyPolicies"][number]["mode"]
-  ) => void;
-  onSecurityPolicyActionChange: (
-    policyId: string,
-    action: SecurityManagementConfig["strategyPolicies"][number]["availableActions"][number]
-  ) => void;
-  onSecurityPolicyRuleLevelChange: (
-    policyId: string,
-    ruleId: string,
-    level: SecurityManagementConfig["strategyPolicies"][number]["rules"][number]["level"]
-  ) => void;
-  onToggleLexiconPolicy: (policyId: string, enabled: boolean) => void;
-  onLexiconPolicyModeChange: (
-    policyId: string,
-    mode: SecurityManagementConfig["lexiconPolicies"][number]["mode"]
-  ) => void;
-  onLexiconPolicyActionChange: (
-    policyId: string,
-    action: SecurityManagementConfig["lexiconPolicies"][number]["availableActions"][number]
-  ) => void;
-  onLexiconDraftChange: (policyId: string, value: string) => void;
-  onAddLexiconLibrary: (policyId: string) => void;
-  onRemoveLexiconLibrary: (policyId: string, libraryName: string) => void;
+  onToolProtectionEnabledChange: (enabled: boolean) => void;
+  onToolProtectionRuleToggle: (ruleId: string, enabled: boolean) => void;
+  onAddToolProtectionRule: (rule: ToolProtectionRuleItem) => void;
+  onAddProtectedTool: (name: string) => void;
+  onRemoveProtectedTool: (name: string) => void;
+  onAddProhibitedTool: (name: string) => void;
+  onRemoveProhibitedTool: (name: string) => void;
+  onFileProtectionEnabledChange: (enabled: boolean) => void;
+  onAddFilePath: (path: string) => void;
+  onRemoveFilePath: (pathId: string) => void;
+  onResolveApproval: (approvalId: string, resolution: "approved" | "rejected") => void;
 };
 
-export function ClawSecuritySection({
-  securityManagement,
-  lexiconDrafts,
-  enabledSecurityPolicies,
-  approvalBoundaryCount,
-  activeLexiconBindingCount,
-  onAutonomyBoundaryLevelChange,
-  onToggleSecurityPolicy,
-  onSecurityPolicyModeChange,
-  onSecurityPolicyActionChange,
-  onSecurityPolicyRuleLevelChange,
-  onToggleLexiconPolicy,
-  onLexiconPolicyModeChange,
-  onLexiconPolicyActionChange,
-  onLexiconDraftChange,
-  onAddLexiconLibrary,
-  onRemoveLexiconLibrary,
-}: SecuritySectionProps) {
-  const getSelectedActions = <Action extends string>(availableActions: Action[], currentAction: Action | Action[]) => {
-    const actionSet = new Set(Array.isArray(currentAction) ? currentAction : [currentAction]);
-    return availableActions.filter((action) => actionSet.has(action));
-  };
-
-  const getActionSummary = (actions: string[]) => actions.join(" + ");
-
-  const getActionTone = (actions: string[]) => actions.find((action) => action !== "记录") ?? actions[0] ?? "记录";
-
+function InfoHint({ label }: { label: string }) {
   return (
-    <SectionCard
-      title="安全管理"
-      description="围绕自主性动作边界、安全策略和内容安全词库，为当前 Claw 建立更适合行动型智能体的治理与防护配置。"
-    >
-      <div className="grid gap-2.5 md:grid-cols-3">
-        <div className="rounded-[20px] border border-slate-200 bg-slate-50/80 p-3.5">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">动作边界</div>
-          <div className="mt-2 text-[22px] font-semibold text-slate-950">{securityManagement.autonomyBoundaries.length}</div>
-          <div className="mt-1.5 text-[13px] leading-5 text-slate-500">已配置可执行动作与边界等级</div>
-        </div>
-        <div className="rounded-[20px] border border-slate-200 bg-slate-50/80 p-3.5">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">已启用策略</div>
-          <div className="mt-2 text-[22px] font-semibold text-slate-950">{enabledSecurityPolicies}</div>
-          <div className="mt-1.5 text-[13px] leading-5 text-slate-500">覆盖内容、提示词、工具、CLI 与外发行为</div>
-        </div>
-        <div className="rounded-[20px] border border-slate-200 bg-slate-50/80 p-3.5">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">重点管控</div>
-          <div className="mt-2 flex items-center gap-2.5">
-            <div className="text-[22px] font-semibold text-slate-950">{approvalBoundaryCount}</div>
-            <Badge className="border-sky-100 bg-sky-50 text-[12px] text-sky-700">词库绑定 {activeLexiconBindingCount}</Badge>
-          </div>
-          <div className="mt-1.5 text-[13px] leading-5 text-slate-500">需要审批的动作与当前生效词库总数</div>
-        </div>
+    <span className="inline-flex h-5 w-5 items-center justify-center text-slate-400" title={label} aria-label={label}>
+      <Info className="h-3.5 w-3.5" />
+    </span>
+  );
+}
+
+function RuleFormRow({
+  label,
+  required,
+  labelHint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  labelHint?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-[128px_1fr] sm:gap-3">
+      <div className="flex flex-wrap items-center justify-start gap-1 sm:justify-end sm:pt-2 sm:pr-1">
+        {required ? <span className="text-sm font-medium text-red-500">*</span> : null}
+        <span className="text-right text-sm text-slate-700">{label}：</span>
+        {labelHint}
       </div>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
 
-      <div className="space-y-4">
-        <div className="rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.88),rgba(255,255,255,0.98))] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-2.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-[18px] bg-emerald-50 text-emerald-700">
-                <ShieldCheck className="h-4 w-4" />
+const inputClass =
+  "h-9 w-full rounded-sm border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-sky-400 focus:ring-1 focus:ring-sky-200";
+
+const textareaClass =
+  "min-h-[72px] w-full rounded-sm border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-sky-400 focus:ring-1 focus:ring-sky-200";
+
+function ToolChipList({
+  items,
+  onRemove,
+  muted,
+}: {
+  items: string[];
+  onRemove: (name: string) => void;
+  muted?: boolean;
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {items.map((name) => (
+        <button
+          key={name}
+          type="button"
+          onClick={() => onRemove(name)}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-sm border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700 transition hover:border-slate-300 hover:bg-slate-100",
+            muted && "opacity-70"
+          )}
+        >
+          {name}
+          <span className="text-slate-400">×</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function ClawSecuritySection({
+  activePanel,
+  securityManagement,
+  onAutonomyBoundaryLevelChange,
+  onToolProtectionEnabledChange,
+  onToolProtectionRuleToggle,
+  onAddToolProtectionRule,
+  onAddProtectedTool,
+  onRemoveProtectedTool,
+  onAddProhibitedTool,
+  onRemoveProhibitedTool,
+  onFileProtectionEnabledChange,
+  onAddFilePath,
+  onRemoveFilePath,
+  onResolveApproval,
+}: SecuritySectionProps) {
+  const [protectedDraft, setProtectedDraft] = useState("");
+  const [prohibitedDraft, setProhibitedDraft] = useState("");
+  const [pathDraft, setPathDraft] = useState("");
+  const [addRuleOpen, setAddRuleOpen] = useState(false);
+  const [ruleForm, setRuleForm] = useState<ToolRuleFormState>(() => ({ ...TOOL_RULE_FORM_DEFAULT }));
+
+  const { autonomyBoundaries, toolProtection, fileProtection, securityApprovals } = securityManagement;
+
+  function submitCustomToolRule() {
+    const id = ruleForm.ruleId.trim();
+    const regex = ruleForm.regexPattern.trim();
+    if (!id) {
+      toast.error("请填写规则 ID。");
+      return;
+    }
+    if (!regex) {
+      toast.error("请填写正则模式。");
+      return;
+    }
+    if (toolProtection.rules.some((r) => r.id === id)) {
+      toast.error("规则 ID 已存在，请更换。");
+      return;
+    }
+    onAddToolProtectionRule({
+      id,
+      severity: ruleForm.severity,
+      description: ruleForm.description.trim() || "自定义检测规则",
+      source: "自定义",
+      enabled: true,
+      targetTool: ruleForm.targetTool.trim() || undefined,
+      targetParam: ruleForm.targetParam.trim() || undefined,
+      category: ruleForm.category,
+      regexPattern: regex,
+      exclusionPattern: ruleForm.exclusionPattern.trim() || undefined,
+      remediation: ruleForm.remediation.trim() || undefined,
+    });
+    toast.success("已添加自定义规则。");
+    setAddRuleOpen(false);
+    setRuleForm({ ...TOOL_RULE_FORM_DEFAULT });
+  }
+
+  if (activePanel === "autonomy-boundaries") {
+    return (
+      <div className="w-full min-w-0 space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">自主性动作边界配置</h2>
+          <p className="mt-1 text-sm text-slate-500">配置赋予工具执行各项操作时的自主性级别</p>
+        </div>
+
+        <div className="w-full min-w-0 space-y-0 border border-slate-200/90 bg-white">
+          {autonomyBoundaries.map((item) => (
+            <div
+              key={item.id}
+              className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-[#303133]">{item.name}</div>
+                <div className="mt-0.5 text-sm text-[#909399]">{item.description}</div>
               </div>
-              <div>
-                <div className="text-base font-semibold text-slate-950">自主性动作边界配置</div>
-                <div className="mt-1.5 max-w-3xl text-[13px] leading-6 text-slate-600">
-                  配置智能体在不同动作上的自主等级，便于把高风险行为收敛到通知或审批链路。
-                </div>
-              </div>
-            </div>
-
-            <Badge className="border-emerald-200 bg-emerald-50 text-[12px] text-emerald-700">
-              {securityManagement.autonomyBoundaries.filter((item) => item.level === "L1 自动执行").length} 项可自动执行
-            </Badge>
-          </div>
-
-          <div className="mt-4 space-y-2.5">
-            {securityManagement.autonomyBoundaries.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-col gap-3 rounded-[18px] border border-slate-200 bg-white/90 px-3.5 py-3 md:flex-row md:items-center md:justify-between"
-              >
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-slate-900">{item.name}</div>
-                  <div className="mt-1 text-[13px] leading-5 text-slate-500">{item.description}</div>
-                </div>
-
-                <div className="md:w-[208px]">
+              <div className="w-full shrink-0 sm:max-w-xs sm:w-56 md:w-64">
+                <div className="relative">
                   <select
                     value={item.level}
                     onChange={(event) =>
                       onAutonomyBoundaryLevelChange(
                         item.id,
-                        event.target.value as (typeof AUTONOMY_BOUNDARY_LEVELS)[number]
+                        event.target.value as SecurityManagementConfig["autonomyBoundaries"][number]["level"]
                       )
                     }
                     className={cn(
-                      "h-10 w-full rounded-[14px] border px-3 text-[13px] font-semibold outline-none transition-colors",
-                      getBoundaryLevelClassName(item.level)
+                      "h-9 w-full appearance-none rounded-sm border border-slate-200 bg-white py-1.5 pl-3 pr-8 text-sm font-semibold outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-200",
+                      autonomyLevelTextClass(item.level)
                     )}
                   >
                     {AUTONOMY_BOUNDARY_LEVELS.map((level) => (
-                      <option key={level} value={level}>
+                      <option key={level} value={level} className="text-slate-800">
                         {level}
                       </option>
                     ))}
                   </select>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.88),rgba(255,255,255,0.98))] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-2.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-[18px] bg-sky-50 text-sky-700">
-                <CircleAlert className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="text-base font-semibold text-slate-950">安全策略配置</div>
-                <div className="mt-1.5 max-w-3xl text-[13px] leading-6 text-slate-600">
-                  在内容安全基础上补齐行动型智能体常见的工具调用、CLI 执行、外发访问和文件写删保护策略。
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 </div>
               </div>
             </div>
-
-            <Badge className="border-slate-200 bg-white text-[12px] text-slate-700">
-              {securityManagement.strategyPolicies.length} 组策略
-            </Badge>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {securityManagement.strategyPolicies.map((policy) => {
-              const selectedActions = getSelectedActions(policy.availableActions, policy.action);
-
-              return (
-                <div key={policy.id} className="rounded-[18px] border border-slate-200 bg-white/90 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-semibold text-slate-950">{policy.title}</div>
-                        <Badge className="border-slate-200 bg-slate-100 text-[12px] text-slate-700">{policy.rules.length} 条规则</Badge>
-                        <Badge className={cn("border text-[12px]", getGovernanceActionClassName(getActionTone(selectedActions)))}>
-                          默认动作 · {getActionSummary(selectedActions)}
-                        </Badge>
-                      </div>
-                      <div className="mt-1.5 text-[13px] leading-6 text-slate-600">{policy.description}</div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="text-[13px] text-slate-500">{policy.enabled ? "已开启" : "已关闭"}</div>
-                      <Switch checked={policy.enabled} onCheckedChange={(checked) => onToggleSecurityPolicy(policy.id, checked)} />
-                    </div>
-                  </div>
-
-                  {policy.enabled ? (
-                    <div className="mt-4 space-y-3">
-                      {policy.mode ? (
-                        <div className="rounded-[16px] border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                          <div className="text-[13px] font-semibold text-slate-900">配置方式</div>
-                          <div className="mt-2.5 flex flex-wrap gap-2">
-                            {(["单独配置", "统一配置"] as const).map((mode) => (
-                              <button
-                                key={mode}
-                                type="button"
-                                onClick={() => onSecurityPolicyModeChange(policy.id, mode)}
-                                className={cn(
-                                  "rounded-full border px-3 py-1.5 text-[13px] transition-colors",
-                                  policy.mode === mode
-                                    ? "border-sky-200 bg-sky-50 text-sky-700"
-                                    : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900"
-                                )}
-                              >
-                                {mode}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      <div className="overflow-hidden rounded-[16px] border border-slate-200">
-                        <div className="hidden bg-slate-50/90 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 md:grid md:grid-cols-[132px_160px_minmax(0,1fr)_138px] md:gap-3">
-                          <div>生效阶段</div>
-                          <div>检测子类</div>
-                          <div>规则说明</div>
-                          <div>防护等级</div>
-                        </div>
-
-                        {policy.rules.map((rule, index) => (
-                          <div
-                            key={rule.id}
-                            className={cn(
-                              "grid gap-2.5 px-3 py-3 md:grid-cols-[132px_160px_minmax(0,1fr)_138px] md:items-center md:gap-3",
-                              index > 0 ? "border-t border-slate-200" : ""
-                            )}
-                          >
-                            <div>
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 md:hidden">生效阶段</div>
-                              <div className="mt-1 text-[13px] font-medium text-slate-900 md:mt-0">{rule.stage}</div>
-                            </div>
-
-                            <div>
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 md:hidden">检测子类</div>
-                              <div className="mt-1 text-[13px] font-medium text-slate-900 md:mt-0">{rule.subtype}</div>
-                            </div>
-
-                            <div>
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 md:hidden">规则说明</div>
-                              <div className="mt-1 text-[13px] leading-5 text-slate-600 md:mt-0">{rule.description}</div>
-                            </div>
-
-                            <div>
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 md:hidden">防护等级</div>
-                              <select
-                                value={rule.level}
-                                onChange={(event) =>
-                                  onSecurityPolicyRuleLevelChange(
-                                    policy.id,
-                                    rule.id,
-                                    event.target.value as (typeof SECURITY_RULE_LEVELS)[number]
-                                  )
-                                }
-                                className={cn(
-                                  "mt-1.5 h-10 w-full rounded-[14px] border px-3 text-[13px] font-semibold outline-none transition-colors md:mt-0",
-                                  getSecurityRuleLevelClassName(rule.level)
-                                )}
-                              >
-                                {SECURITY_RULE_LEVELS.map((level) => (
-                                  <option key={level} value={level}>
-                                    {level}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="rounded-[16px] border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                        <div className="text-[13px] font-semibold text-slate-900">执行动作</div>
-                        <div className="mt-2.5 flex flex-wrap gap-2">
-                          {policy.availableActions.map((action) => (
-                            <button
-                              key={action}
-                              type="button"
-                              onClick={() => onSecurityPolicyActionChange(policy.id, action)}
-                              className={cn(
-                                "rounded-full border px-3 py-1.5 text-[13px] transition-colors",
-                                selectedActions.includes(action)
-                                  ? cn("shadow-sm", getGovernanceActionClassName(action))
-                                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900"
-                              )}
-                            >
-                              {action}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-3 rounded-[16px] border border-dashed border-slate-200 bg-slate-50/70 px-3.5 py-4 text-[13px] leading-5 text-slate-500">
-                      当前策略已关闭，相关风险仅依赖其他模块记录，不会触发主动拦截或审批。
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-[22px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.88),rgba(255,255,255,0.98))] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-2.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-[18px] bg-violet-50 text-violet-700">
-                <FileStack className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="text-base font-semibold text-slate-950">内容安全词库配置</div>
-                <div className="mt-1.5 max-w-3xl text-[13px] leading-6 text-slate-600">
-                  管理黑名单、白名单和高风险动作词库，让内容风险和动作风险都能挂接到同一套留痕链路里。
-                </div>
-              </div>
-            </div>
-
-            <Badge className="border-slate-200 bg-white text-[12px] text-slate-700">
-              {securityManagement.lexiconPolicies.length} 组词库策略
-            </Badge>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {securityManagement.lexiconPolicies.map((policy) => {
-              const selectedActions = getSelectedActions(policy.availableActions, policy.action);
-              const selectableLibraries = policy.availableLibraries.filter(
-                (library) => !policy.selectedLibraries.includes(library) || library === (lexiconDrafts[policy.id] ?? "")
-              );
-
-              return (
-                <div key={policy.id} className="rounded-[18px] border border-slate-200 bg-white/90 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-semibold text-slate-950">{policy.title}</div>
-                        <Badge className={cn("border text-[12px]", getGovernanceActionClassName(getActionTone(selectedActions)))}>
-                          {getActionSummary(selectedActions)}
-                        </Badge>
-                        <Badge className="border-slate-200 bg-slate-100 text-[12px] text-slate-700">{policy.stage}</Badge>
-                      </div>
-                      <div className="mt-1.5 text-[13px] leading-6 text-slate-600">{policy.description}</div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="text-[13px] text-slate-500">{policy.enabled ? "已开启" : "已关闭"}</div>
-                      <Switch checked={policy.enabled} onCheckedChange={(checked) => onToggleLexiconPolicy(policy.id, checked)} />
-                    </div>
-                  </div>
-
-                  {policy.enabled ? (
-                    <div className="mt-4 space-y-3">
-                      <div className="rounded-[16px] border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                        <div className="text-[13px] font-semibold text-slate-900">配置方式</div>
-                        <div className="mt-2.5 flex flex-wrap gap-2">
-                          {(["单独配置", "统一配置"] as const).map((mode) => (
-                            <button
-                              key={mode}
-                              type="button"
-                              onClick={() => onLexiconPolicyModeChange(policy.id, mode)}
-                              className={cn(
-                                "rounded-full border px-3 py-1.5 text-[13px] transition-colors",
-                                policy.mode === mode
-                                  ? "border-sky-200 bg-sky-50 text-sky-700"
-                                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900"
-                              )}
-                            >
-                              {mode}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2.5 md:grid-cols-[190px_minmax(0,1fr)]">
-                        <div className="rounded-[16px] border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">生效阶段</div>
-                          <div className="mt-1.5 text-[13px] font-medium text-slate-900">{policy.stage}</div>
-                        </div>
-
-                        <div className="rounded-[16px] border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">已绑定词库</div>
-                          <div className="mt-2.5 flex flex-wrap gap-2">
-                            {policy.selectedLibraries.length > 0 ? (
-                              policy.selectedLibraries.map((library) => (
-                                <button
-                                  key={library}
-                                  type="button"
-                                  onClick={() => onRemoveLexiconLibrary(policy.id, library)}
-                                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[13px] text-slate-700 transition-colors hover:border-slate-300 hover:text-slate-950"
-                                >
-                                  {library} ×
-                                </button>
-                              ))
-                            ) : (
-                              <div className="text-[13px] text-slate-500">当前未绑定词库</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-[16px] border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                        <div className="text-[13px] font-semibold text-slate-900">新增词库绑定</div>
-                        <div className="mt-2.5 flex flex-col gap-2.5 md:flex-row">
-                          <select
-                            value={lexiconDrafts[policy.id] ?? ""}
-                            onChange={(event) => onLexiconDraftChange(policy.id, event.target.value)}
-                            className="h-10 flex-1 rounded-[14px] border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition-colors focus:border-sky-300"
-                            disabled={selectableLibraries.length === 0}
-                          >
-                            {selectableLibraries.length > 0 ? (
-                              selectableLibraries.map((library) => (
-                                <option key={library} value={library}>
-                                  {library}
-                                </option>
-                              ))
-                            ) : (
-                              <option value="">没有可新增的词库</option>
-                            )}
-                          </select>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => onAddLexiconLibrary(policy.id)}
-                            disabled={!lexiconDrafts[policy.id] || selectableLibraries.length === 0}
-                          >
-                            绑定词库
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="rounded-[16px] border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                        <div className="text-[13px] font-semibold text-slate-900">执行动作</div>
-                        <div className="mt-2.5 flex flex-wrap gap-2">
-                          {policy.availableActions.map((action) => (
-                            <button
-                              key={action}
-                              type="button"
-                              onClick={() => onLexiconPolicyActionChange(policy.id, action)}
-                              className={cn(
-                                "rounded-full border px-3 py-1.5 text-[13px] transition-colors",
-                                selectedActions.includes(action)
-                                  ? cn("shadow-sm", getGovernanceActionClassName(action))
-                                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900"
-                              )}
-                            >
-                              {action}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-3 rounded-[16px] border border-dashed border-slate-200 bg-slate-50/70 px-3.5 py-4 text-[13px] leading-5 text-slate-500">
-                      当前词库策略已关闭，不会在对话、工具入参或输出阶段参与安全判定。
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          ))}
         </div>
       </div>
-    </SectionCard>
+    );
+  }
+
+  if (activePanel === "tool-protection") {
+    return (
+      <>
+        <Dialog
+          open={addRuleOpen}
+          onOpenChange={(open) => {
+            setAddRuleOpen(open);
+            if (!open) {
+              setRuleForm({ ...TOOL_RULE_FORM_DEFAULT });
+            }
+          }}
+        >
+          <DialogContent
+            className="gap-0 rounded-sm border-slate-200 p-0 sm:max-w-xl shadow-[0_8px_24px_rgba(15,23,42,0.12)]"
+            showCloseButton
+          >
+            <DialogHeader className="space-y-0 border-b border-slate-200 px-6 py-4 text-left">
+              <DialogTitle className="text-base font-semibold text-slate-900">添加自定义规则</DialogTitle>
+            </DialogHeader>
+            <div className="max-h-[min(70vh,520px)] space-y-4 overflow-y-auto px-6 py-5">
+              <RuleFormRow label="规则 ID" required>
+                <input
+                  className={inputClass}
+                  value={ruleForm.ruleId}
+                  onChange={(e) => setRuleForm((f) => ({ ...f, ruleId: e.target.value }))}
+                  placeholder="TOOL_CMD_CUSTOM_RULE"
+                />
+              </RuleFormRow>
+              <RuleFormRow label="目标工具">
+                <div className="relative">
+                  <select
+                    className={cn(inputClass, "appearance-none pr-8")}
+                    value={ruleForm.targetTool}
+                    onChange={(e) => setRuleForm((f) => ({ ...f, targetTool: e.target.value }))}
+                  >
+                    <option value="">留空匹配所有工具</option>
+                    <option value="shell.exec">shell.exec</option>
+                    <option value="workspace.write">workspace.write</option>
+                    <option value="erp.submit_approval">erp.submit_approval</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                </div>
+              </RuleFormRow>
+              <RuleFormRow label="目标参数">
+                <div className="relative">
+                  <select
+                    className={cn(inputClass, "appearance-none pr-8")}
+                    value={ruleForm.targetParam}
+                    onChange={(e) => setRuleForm((f) => ({ ...f, targetParam: e.target.value }))}
+                  >
+                    <option value="">留空匹配所有参数</option>
+                    <option value="command">command</option>
+                    <option value="path">path</option>
+                    <option value="args">args</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                </div>
+              </RuleFormRow>
+              <RuleFormRow label="严重程度">
+                <div className="relative">
+                  <select
+                    className={cn(inputClass, "appearance-none pr-8")}
+                    value={ruleForm.severity}
+                    onChange={(e) =>
+                      setRuleForm((f) => ({ ...f, severity: e.target.value as ToolProtectionSeverity }))
+                    }
+                  >
+                    <option value="HIGH">HIGH</option>
+                    <option value="CRITICAL">CRITICAL</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                </div>
+              </RuleFormRow>
+              <RuleFormRow label="分类">
+                <div className="relative">
+                  <select
+                    className={cn(inputClass, "appearance-none pr-8")}
+                    value={ruleForm.category}
+                    onChange={(e) => setRuleForm((f) => ({ ...f, category: e.target.value }))}
+                  >
+                    <option value="command_injection">command_injection</option>
+                    <option value="path_traversal">path_traversal</option>
+                    <option value="credential_exposure">credential_exposure</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                </div>
+              </RuleFormRow>
+              <RuleFormRow
+                label="正则模式"
+                required
+                labelHint={<InfoHint label="用于匹配工具入参或命令文本。" />}
+              >
+                <Textarea
+                  className={textareaClass}
+                  value={ruleForm.regexPattern}
+                  onChange={(e) => setRuleForm((f) => ({ ...f, regexPattern: e.target.value }))}
+                  rows={3}
+                />
+              </RuleFormRow>
+              <RuleFormRow
+                label="排除模式"
+                labelHint={<InfoHint label="命中正则后若同时匹配排除模式，则放行。" />}
+              >
+                <Textarea
+                  className={textareaClass}
+                  value={ruleForm.exclusionPattern}
+                  onChange={(e) => setRuleForm((f) => ({ ...f, exclusionPattern: e.target.value }))}
+                  rows={2}
+                />
+              </RuleFormRow>
+              <RuleFormRow label="描述">
+                <input
+                  className={inputClass}
+                  value={ruleForm.description}
+                  onChange={(e) => setRuleForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="该规则检测什么?"
+                />
+              </RuleFormRow>
+              <RuleFormRow label="修复建议">
+                <input
+                  className={inputClass}
+                  value={ruleForm.remediation}
+                  onChange={(e) => setRuleForm((f) => ({ ...f, remediation: e.target.value }))}
+                  placeholder="触发规则时建议的操作"
+                />
+              </RuleFormRow>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 bg-slate-50/70 px-6 py-4">
+              <Button
+                type="button"
+                className="h-9 rounded-sm border-0 bg-blue-600 px-6 text-sm font-semibold text-white shadow-none hover:bg-blue-700"
+                onClick={submitCustomToolRule}
+              >
+                确认
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 rounded-sm border-slate-300 bg-white px-6 text-sm font-medium text-slate-700 shadow-none hover:bg-slate-50"
+                onClick={() => {
+                  setAddRuleOpen(false);
+                  setRuleForm({ ...TOOL_RULE_FORM_DEFAULT });
+                }}
+              >
+                取消
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <div className="w-full min-w-0 space-y-5">
+          <div>
+            <p className="text-sm leading-6 text-slate-600">
+              配置工具调用的安全扫描。危险操作将在执行前需要你的明确批准。
+            </p>
+          </div>
+
+          <div className="border border-slate-200/90 bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                启用工具防护
+                <InfoHint label="开启后按规则扫描工具调用，命中风险项可拦截或进入审批。" />
+              </div>
+              <Switch
+                checked={toolProtection.enabled}
+                onCheckedChange={onToolProtectionEnabledChange}
+                className="data-[state=checked]:bg-sky-600"
+              />
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <div className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-800">
+                  受保护的工具
+                  <InfoHint label="命中后将触发额外校验或审批流程。" />
+                </div>
+                <div className="relative">
+                  <input
+                    value={protectedDraft}
+                    onChange={(event) => setProtectedDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        const v = protectedDraft.trim();
+                        if (v) {
+                          onAddProtectedTool(v);
+                          setProtectedDraft("");
+                        }
+                      }
+                    }}
+                    placeholder="选择工具或输入自定义工具名"
+                    className="h-9 w-full rounded-sm border border-slate-200 bg-white px-3 pr-9 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-sky-300 focus:ring-1 focus:ring-sky-200"
+                  />
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                </div>
+                <ToolChipList items={toolProtection.protectedTools} onRemove={onRemoveProtectedTool} />
+              </div>
+
+              <div>
+                <div className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-800">
+                  禁止的工具
+                  <InfoHint label="列表中的工具将被直接禁止调用。" />
+                </div>
+                <div className="relative">
+                  <input
+                    value={prohibitedDraft}
+                    onChange={(event) => setProhibitedDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        const v = prohibitedDraft.trim();
+                        if (v) {
+                          onAddProhibitedTool(v);
+                          setProhibitedDraft("");
+                        }
+                      }
+                    }}
+                    placeholder="选择要始终禁止的工具"
+                    className="h-9 w-full rounded-sm border border-slate-200 bg-white px-3 pr-9 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-sky-300 focus:ring-1 focus:ring-sky-200"
+                  />
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                </div>
+                <ToolChipList items={toolProtection.prohibitedTools} onRemove={onRemoveProhibitedTool} />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-slate-900">检测规则</h3>
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 rounded-sm bg-sky-600 px-3 text-xs font-medium text-white shadow-none hover:bg-sky-700"
+                onClick={() => {
+                  setRuleForm({ ...TOOL_RULE_FORM_DEFAULT });
+                  setAddRuleOpen(true);
+                }}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                添加规则
+              </Button>
+            </div>
+
+            <div className="overflow-x-auto border border-slate-200/90 bg-white">
+              <div className="min-w-[640px]">
+                <div className="grid grid-cols-[minmax(0,1.1fr)_100px_minmax(0,1.4fr)_72px_100px] gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+                  <div>规则 ID</div>
+                  <div>严重程度</div>
+                  <div>描述</div>
+                  <div>来源</div>
+                  <div className="text-right">操作</div>
+                </div>
+                {toolProtection.rules.map((rule) => (
+                  <div
+                    key={rule.id}
+                    className="grid grid-cols-[minmax(0,1.1fr)_100px_minmax(0,1.4fr)_72px_100px] items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-sm last:border-b-0"
+                  >
+                    <div className="font-mono text-xs text-slate-800">{rule.id}</div>
+                    <div>
+                      <span
+                        className={cn(
+                          "inline-flex rounded-sm px-2 py-0.5 text-xs font-medium",
+                          rule.severity === "CRITICAL"
+                            ? "bg-rose-50 text-rose-700"
+                            : "bg-sky-50 text-sky-800"
+                        )}
+                      >
+                        {rule.severity}
+                      </span>
+                    </div>
+                    <div className="text-slate-600 leading-snug">{rule.description}</div>
+                    <div>
+                      <span
+                        className={cn(
+                          "inline-flex rounded-sm border px-2 py-0.5 text-xs",
+                          rule.source === "自定义"
+                            ? "border-sky-200 bg-sky-50 text-sky-800"
+                            : "border-slate-200 bg-slate-50 text-slate-600"
+                        )}
+                      >
+                        {rule.source}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-end gap-1">
+                      <Switch
+                        checked={rule.enabled}
+                        onCheckedChange={(checked) => onToolProtectionRuleToggle(rule.id, checked)}
+                        className="scale-90 data-[state=checked]:bg-sky-600"
+                      />
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                        aria-label="查看规则"
+                        onClick={() => {
+                          const lines = [
+                            rule.description,
+                            rule.targetTool && `目标工具: ${rule.targetTool}`,
+                            rule.targetParam && `目标参数: ${rule.targetParam}`,
+                            rule.category && `分类: ${rule.category}`,
+                            rule.regexPattern && `正则: ${rule.regexPattern}`,
+                            rule.exclusionPattern && `排除: ${rule.exclusionPattern}`,
+                            rule.remediation && `修复建议: ${rule.remediation}`,
+                          ].filter(Boolean);
+                          toast.message(rule.id, { description: lines.join("\n") });
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (activePanel === "file-protection") {
+    return (
+      <div className="w-full min-w-0 space-y-4">
+        <p className="text-sm leading-6 text-slate-600">
+          保护敏感文件和目录，防止被 Agent 工具访问。添加的路径将在所有工具调用中被拦截。
+        </p>
+
+        <div className="w-full border border-slate-200/90 bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <span className="text-sm font-medium text-slate-900">启用文件防护</span>
+            <Switch
+              checked={fileProtection.enabled}
+              onCheckedChange={onFileProtectionEnabledChange}
+              className="data-[state=checked]:bg-sky-600"
+            />
+          </div>
+
+          <div className="mt-4 flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              value={pathDraft}
+              onChange={(event) => setPathDraft(event.target.value)}
+              placeholder="输入文件或目录路径 (如 ~/.ssh/ 或 /etc/passwd)"
+              className="h-9 min-w-0 w-full flex-1 rounded-sm border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-sky-300 focus:ring-1 focus:ring-sky-200"
+            />
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 w-full shrink-0 rounded-sm border border-sky-200 bg-sky-50 px-3 text-sm font-medium text-sky-800 shadow-none hover:bg-sky-100 sm:w-auto"
+              onClick={() => {
+                const raw = pathDraft.trim();
+                if (!raw) {
+                  return;
+                }
+                onAddFilePath(raw);
+                setPathDraft("");
+              }}
+            >
+              <Plus className="mr-1 h-4 w-4" />
+              添加
+            </Button>
+          </div>
+        </div>
+
+        <div className="w-full min-w-0 overflow-hidden border border-slate-200/90 bg-white">
+          <div className="grid grid-cols-[1fr_80px] gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+            <div>路径</div>
+            <div className="text-right">操作</div>
+          </div>
+          {fileProtection.paths.length === 0 ? (
+            <div className="px-3 py-12 text-center text-sm text-slate-400">暂无受保护路径</div>
+          ) : (
+            fileProtection.paths.map((row) => (
+              <div
+                key={row.id}
+                className="grid grid-cols-[1fr_80px] items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-sm last:border-b-0"
+              >
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-slate-800">
+                  {row.kind === "directory" ? (
+                    <Folder className="h-4 w-4 shrink-0 text-sky-600" />
+                  ) : (
+                    <Folder className="h-4 w-4 shrink-0 text-slate-400" />
+                  )}
+                  <span className="break-all font-mono text-xs">{row.path}</span>
+                  <span className="inline-flex shrink-0 rounded-sm border border-sky-100 bg-sky-50 px-1.5 py-0.5 text-xs text-sky-800">
+                    {row.kind === "directory" ? "目录" : "文件"}
+                  </span>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-sm text-rose-500 transition hover:bg-rose-50"
+                    aria-label="删除"
+                    onClick={() => onRemoveFilePath(row.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* security-approval */
+  const pending = securityApprovals.pending;
+  const history = securityApprovals.history;
+
+  return (
+    <div className="w-full min-w-0">
+      <div className="grid w-full min-w-0 gap-8 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] xl:gap-10">
+        <section className="min-w-0">
+          <h2 className="text-sm font-semibold text-slate-600">{pending.length} 个待审批</h2>
+          <div className="mt-3 space-y-3">
+            {pending.length === 0 ? (
+              <div className="rounded-sm border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center text-sm text-slate-500">
+                当前没有待审批项
+              </div>
+            ) : (
+              pending.map((item) => (
+                <div key={item.id} className="border border-slate-200/90 bg-slate-50/90 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-sm border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        pending
+                      </span>
+                      <span className="text-sm font-semibold text-slate-900">{item.actionName}</span>
+                    </div>
+                    <span className="text-xs text-slate-400">{item.requestedAt}</span>
+                  </div>
+                  <pre className="mt-3 overflow-x-auto rounded-sm border border-slate-200/80 bg-white p-3 font-mono text-xs leading-relaxed text-slate-700">
+                    {item.payload}
+                  </pre>
+                  <div className="mt-4 flex flex-wrap justify-end gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-9 rounded-md border-0 bg-blue-600 px-5 text-xs font-semibold text-white shadow-none hover:bg-blue-700"
+                      onClick={() => onResolveApproval(item.id, "approved")}
+                    >
+                      批准
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-9 rounded-md border-red-500 bg-white px-5 text-xs font-semibold text-red-600 shadow-none hover:bg-red-50 hover:text-red-700"
+                      onClick={() => onResolveApproval(item.id, "rejected")}
+                    >
+                      拒绝
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        <div className="min-w-0 border-t border-slate-200 pt-6 xl:border-l xl:border-t-0 xl:pl-10 xl:pt-0">
+          <h3 className="text-sm font-semibold text-slate-800">审批历史</h3>
+          {history.length === 0 ? (
+            <p className="mt-4 text-sm text-slate-400">暂无记录</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {history.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex flex-wrap items-start justify-between gap-2 border border-slate-100 bg-white px-3 py-2.5 text-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium text-slate-900">{row.actionName}</span>
+                    <span
+                      className={cn(
+                        "ml-2 inline-flex rounded-sm px-1.5 py-0.5 text-xs font-medium",
+                        row.resolution === "approved" ? "bg-sky-50 text-sky-800" : "bg-rose-50 text-rose-800"
+                      )}
+                    >
+                      {row.resolution === "approved" ? "已批准" : "已拒绝"}
+                    </span>
+                    <p className="mt-1 break-all font-mono text-xs leading-relaxed text-slate-500">{row.detail}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-slate-400">{row.resolvedAt}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

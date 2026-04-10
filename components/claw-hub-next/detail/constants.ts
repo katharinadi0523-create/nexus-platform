@@ -6,15 +6,16 @@ import {
   FileText,
   FolderOpen,
   Gauge,
-  MessageSquareText,
   RadioTower,
   Server,
   Settings2,
   ShieldCheck,
   Sparkles,
   UserRound,
+  Wrench,
 } from "lucide-react";
 import type {
+  AutonomyBoundaryItem,
   CapabilityScope,
   ClawCoreFileKey,
   ExecutionResourceTier,
@@ -28,7 +29,10 @@ export type DetailSectionKey =
   | "chat"
   | "status"
   | "core"
-  | "capability"
+  | "tools"
+  | "skills"
+  | "agents"
+  | "knowledge"
   | "channels"
   | "tasks"
   | "workspace"
@@ -41,20 +45,27 @@ export type DetailSectionKey =
 export type CapabilityPanelKey = "tools" | "skills" | "agents" | "knowledge";
 export type LogPanelKey = "conversation" | "task" | "security";
 
+export type SecurityPanelKey =
+  | "autonomy-boundaries"
+  | "tool-protection"
+  | "file-protection"
+  | "security-approval";
+
 export const DETAIL_SECTION_ITEMS: Array<{
   value: DetailSectionKey;
   label: string;
   icon: ComponentType<{ className?: string }>;
 }> = [
-  { value: "chat", label: "对话", icon: MessageSquareText },
-  { value: "status", label: "状态", icon: Bot },
   { value: "core", label: "核心文件", icon: FileText },
-  { value: "capability", label: "能力配置", icon: Sparkles },
+  { value: "tools", label: "工具", icon: Wrench },
+  { value: "skills", label: "技能", icon: Sparkles },
+  { value: "agents", label: "多智能体", icon: Bot },
+  { value: "knowledge", label: "知识库", icon: FileStack },
   { value: "channels", label: "渠道与分发", icon: RadioTower },
   { value: "tasks", label: "任务", icon: Clock3 },
   { value: "workspace", label: "工作空间", icon: FolderOpen },
   { value: "logs", label: "日志与审计", icon: FileStack },
-  { value: "security", label: "安全管理", icon: ShieldCheck },
+  { value: "security", label: "安全防护", icon: ShieldCheck },
   { value: "relations", label: "关系", icon: UserRound },
   { value: "resource", label: "资源配置", icon: Server },
   { value: "settings", label: "设置", icon: Settings2 },
@@ -67,8 +78,8 @@ export const LOG_PANEL_ITEMS: Array<{
 }> = [
   {
     key: "conversation",
-    label: "会话运行",
-    description: "从业务视角查看每次会话、每一轮输入输出，以及该轮触发的关键执行动作。",
+    label: "会话日志",
+    description: "查看会话列表，以及每个会话中的消息与事件时间流。",
   },
   {
     key: "task",
@@ -77,13 +88,49 @@ export const LOG_PANEL_ITEMS: Array<{
   },
   {
     key: "security",
-    label: "安全事件",
+    label: "安全审计",
     description: "汇总会话与任务中的安全命中、脱敏、拦截与放行记录。",
   },
 ];
 
-export const AUTONOMY_BOUNDARY_LEVELS = ["L1 自动执行", "L2 通知", "L3 审批", "禁止"] as const;
-export const SECURITY_RULE_LEVELS = ["严格", "标准", "宽松"] as const;
+export const SECURITY_PANEL_ITEMS: Array<{
+  key: SecurityPanelKey;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: "autonomy-boundaries",
+    label: "自主性动作边界配置",
+    description: "配置数字员工执行各项操作时的自主性级别。",
+  },
+  {
+    key: "tool-protection",
+    label: "工具防护",
+    description: "配置工具调用的安全扫描与限制规则。",
+  },
+  {
+    key: "file-protection",
+    label: "文件防护",
+    description: "保护敏感路径，防止被工具访问。",
+  },
+  {
+    key: "security-approval",
+    label: "安全审批",
+    description: "处理待审批的高风险动作并查看历史记录。",
+  },
+];
+
+export const AUTONOMY_BOUNDARY_LEVELS = ["L1 直接执行", "L2 通知", "L3 审批", "禁止"] as const;
+
+/** 全平台统一的自主性动作项（不随 Claw 变化）；级别由配置中的 id 匹配或默认值决定 */
+export const AUTONOMY_BOUNDARY_DEFINITIONS: Array<Pick<AutonomyBoundaryItem, "id" | "name" | "description">> = [
+  { id: "boundary-read-file", name: "读取文件", description: "读取工作区和知识库中的文件" },
+  { id: "boundary-write-file", name: "写入文件", description: "创建或修改工作区中的文件" },
+  { id: "boundary-delete-file", name: "删除文件", description: "删除工作区中的文件" },
+  { id: "boundary-feishu", name: "发送飞书消息", description: "通过飞书给用户发送消息" },
+  { id: "boundary-network-search", name: "网络搜索", description: "搜索互联网获取信息" },
+  { id: "boundary-task-manage", name: "管理任务", description: "创建、更新或删除任务" },
+];
 
 export const CORE_FILE_ICONS: Record<ClawCoreFileKey, ComponentType<{ className?: string }>> = {
   identity: FileText,

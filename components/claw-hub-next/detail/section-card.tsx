@@ -1,24 +1,25 @@
 import type { ReactNode } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 
 export function SectionCard({
   title,
   description,
   children,
 }: {
-  title: string;
+  title?: string;
   description?: string;
   children: ReactNode;
 }) {
+  const hasHeader = Boolean(title || description);
+
   return (
-    <Card className="gap-0 rounded-[28px] border-slate-200 bg-white py-0 shadow-sm">
-      <CardContent className="space-y-5 p-6">
+    <section className="space-y-5">
+      {hasHeader ? (
         <div>
-          <div className="text-xl font-semibold text-slate-950">{title}</div>
+          {title ? <div className="text-xl font-semibold text-slate-950">{title}</div> : null}
           {description ? <div className="mt-2 text-sm leading-7 text-slate-600">{description}</div> : null}
         </div>
-        {children}
-      </CardContent>
-    </Card>
+      ) : null}
+      {children}
+    </section>
   );
 }

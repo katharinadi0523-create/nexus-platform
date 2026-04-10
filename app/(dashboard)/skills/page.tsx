@@ -1164,51 +1164,51 @@ const AUDIENCE_VISUAL_META: Record<AudienceCategory, AudienceVisualMeta> = {
   ai: {
     label: "通用",
     icon: Bot,
-    badgeClass: "border-cyan-200/80 bg-cyan-50/90 text-cyan-700",
+    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
     filterClass:
-      "border-cyan-200/80 bg-cyan-50/90 text-cyan-700 shadow-[0_10px_24px_-18px_rgba(14,165,233,0.75)]",
+      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
   },
   dev: {
     label: "开发工具",
     icon: Wrench,
-    badgeClass: "border-indigo-200/80 bg-indigo-50/90 text-indigo-700",
+    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
     filterClass:
-      "border-indigo-200/80 bg-indigo-50/90 text-indigo-700 shadow-[0_10px_24px_-18px_rgba(99,102,241,0.75)]",
+      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
   },
   data: {
     label: "数据分析",
     icon: ChartColumn,
-    badgeClass: "border-amber-200/80 bg-amber-50/95 text-amber-700",
+    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
     filterClass:
-      "border-amber-200/80 bg-amber-50/90 text-amber-700 shadow-[0_10px_24px_-18px_rgba(245,158,11,0.75)]",
+      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
   },
   communication: {
     label: "通讯协作",
     icon: MessagesSquare,
-    badgeClass: "border-emerald-200/80 bg-emerald-50/90 text-emerald-700",
+    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
     filterClass:
-      "border-emerald-200/80 bg-emerald-50/90 text-emerald-700 shadow-[0_10px_24px_-18px_rgba(16,185,129,0.75)]",
+      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
   },
   content: {
     label: "企业服务",
     icon: Building2,
-    badgeClass: "border-slate-300/80 bg-slate-100/90 text-slate-700",
+    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
     filterClass:
-      "border-slate-300/80 bg-slate-100/90 text-slate-700 shadow-[0_10px_24px_-18px_rgba(100,116,139,0.6)]",
+      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
   },
   efficiency: {
     label: "效率工具",
     icon: Sparkles,
-    badgeClass: "border-orange-200/80 bg-orange-50/95 text-orange-700",
+    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
     filterClass:
-      "border-orange-200/80 bg-orange-50/90 text-orange-700 shadow-[0_10px_24px_-18px_rgba(249,115,22,0.75)]",
+      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
   },
   security: {
     label: "安全合规",
     icon: ShieldCheck,
-    badgeClass: "border-teal-200/80 bg-teal-50/90 text-teal-700",
+    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
     filterClass:
-      "border-teal-200/80 bg-teal-50/90 text-teal-700 shadow-[0_10px_24px_-18px_rgba(20,184,166,0.75)]",
+      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
   },
 };
 
@@ -1222,59 +1222,59 @@ type MarketplaceCardPalette = {
 const MARKETPLACE_CARD_PALETTES: MarketplaceCardPalette[] = [
   {
     panelClass:
-      "border-sky-100/80 bg-[linear-gradient(160deg,rgba(240,249,255,0.96),rgba(255,255,255,0.98)_58%,rgba(236,254,255,0.92))]",
+      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
     iconClass:
-      "border-sky-100/80 bg-[linear-gradient(145deg,rgba(236,254,255,0.96),rgba(224,242,254,0.9))] text-sky-700 shadow-[0_14px_30px_-20px_rgba(14,165,233,0.55)]",
-    glowClass: "bg-sky-300/40",
-    tagClass: "border-sky-100/80 bg-sky-50/85 text-sky-700",
+      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
+    glowClass: "bg-slate-200/18",
+    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
   },
   {
     panelClass:
-      "border-amber-100/80 bg-[linear-gradient(160deg,rgba(255,251,235,0.96),rgba(255,255,255,0.98)_58%,rgba(255,247,237,0.92))]",
+      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
     iconClass:
-      "border-amber-100/80 bg-[linear-gradient(145deg,rgba(255,251,235,0.98),rgba(254,243,199,0.9))] text-amber-700 shadow-[0_14px_30px_-20px_rgba(245,158,11,0.5)]",
-    glowClass: "bg-amber-300/40",
-    tagClass: "border-amber-100/80 bg-amber-50/90 text-amber-700",
+      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
+    glowClass: "bg-slate-200/18",
+    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
   },
   {
     panelClass:
-      "border-emerald-100/80 bg-[linear-gradient(160deg,rgba(236,253,245,0.96),rgba(255,255,255,0.98)_58%,rgba(236,254,255,0.9))]",
+      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
     iconClass:
-      "border-emerald-100/80 bg-[linear-gradient(145deg,rgba(236,253,245,0.98),rgba(209,250,229,0.9))] text-emerald-700 shadow-[0_14px_30px_-20px_rgba(16,185,129,0.48)]",
-    glowClass: "bg-emerald-300/38",
-    tagClass: "border-emerald-100/80 bg-emerald-50/85 text-emerald-700",
+      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
+    glowClass: "bg-slate-200/18",
+    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
   },
   {
     panelClass:
-      "border-rose-100/80 bg-[linear-gradient(160deg,rgba(255,241,242,0.95),rgba(255,255,255,0.98)_58%,rgba(255,247,237,0.9))]",
+      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
     iconClass:
-      "border-rose-100/80 bg-[linear-gradient(145deg,rgba(255,241,242,0.98),rgba(255,228,230,0.92))] text-rose-700 shadow-[0_14px_30px_-20px_rgba(244,63,94,0.42)]",
-    glowClass: "bg-rose-300/34",
-    tagClass: "border-rose-100/80 bg-rose-50/85 text-rose-700",
+      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
+    glowClass: "bg-slate-200/18",
+    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
+  },
+  {
+      panelClass:
+      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
+    iconClass:
+      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
+    glowClass: "bg-slate-200/18",
+    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
   },
   {
     panelClass:
-      "border-slate-200/80 bg-[linear-gradient(160deg,rgba(248,250,252,0.96),rgba(255,255,255,0.98)_58%,rgba(241,245,249,0.92))]",
+      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
     iconClass:
-      "border-slate-200/80 bg-[linear-gradient(145deg,rgba(248,250,252,0.98),rgba(226,232,240,0.9))] text-slate-700 shadow-[0_14px_30px_-20px_rgba(100,116,139,0.4)]",
-    glowClass: "bg-slate-300/34",
-    tagClass: "border-slate-200/80 bg-slate-50/90 text-slate-700",
+      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
+    glowClass: "bg-slate-200/18",
+    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
   },
   {
     panelClass:
-      "border-teal-100/80 bg-[linear-gradient(160deg,rgba(240,253,250,0.96),rgba(255,255,255,0.98)_58%,rgba(236,254,255,0.9))]",
+      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
     iconClass:
-      "border-teal-100/80 bg-[linear-gradient(145deg,rgba(240,253,250,0.98),rgba(204,251,241,0.9))] text-teal-700 shadow-[0_14px_30px_-20px_rgba(20,184,166,0.48)]",
-    glowClass: "bg-teal-300/36",
-    tagClass: "border-teal-100/80 bg-teal-50/85 text-teal-700",
-  },
-  {
-    panelClass:
-      "border-indigo-100/80 bg-[linear-gradient(160deg,rgba(238,242,255,0.96),rgba(255,255,255,0.98)_58%,rgba(240,249,255,0.92))]",
-    iconClass:
-      "border-indigo-100/80 bg-[linear-gradient(145deg,rgba(238,242,255,0.98),rgba(224,231,255,0.9))] text-indigo-700 shadow-[0_14px_30px_-20px_rgba(99,102,241,0.45)]",
-    glowClass: "bg-indigo-300/34",
-    tagClass: "border-indigo-100/80 bg-indigo-50/85 text-indigo-700",
+      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
+    glowClass: "bg-slate-200/18",
+    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
   },
 ];
 
@@ -3483,8 +3483,8 @@ source_url: "${parsedUrl.toString()}"
                                 className={cn(
                                   "font-medium",
                                   skill.sourceType === "platform"
-                                    ? "text-sky-700"
-                                    : "text-emerald-700"
+                                    ? "text-slate-700"
+                                    : "text-slate-600"
                                 )}
                               >
                                 {getMarketplaceSourceText(skill)}

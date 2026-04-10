@@ -1,19 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Search, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, FileText, Plus, RefreshCw, Search } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select } from "@/components/ui/select";
 import { getMarketplaceSkillConfigOptions } from "@/lib/mock/skills-marketplace";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +25,8 @@ export interface SkillConfigSelection {
 interface SkillConfigOption extends SkillConfigSelection {
   badge: string;
   hint: string;
+  fileCount: number;
+  createdAtLabel: string;
 }
 
 interface SkillConfigDialogProps {
@@ -37,9 +37,35 @@ interface SkillConfigDialogProps {
 
 const SKILL_CONFIG_OPTIONS: SkillConfigOption[] = getMarketplaceSkillConfigOptions();
 
+const PAGE_SIZE_OPTIONS = [
+  { value: "10", label: "10 条/页" },
+  { value: "20", label: "20 条/页" },
+  { value: "50", label: "50 条/页" },
+];
+
+const PRIMARY = "#1890ff";
+
+function getVisiblePageIndices(current: number, total: number): number[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const s = new Set<number>([1, total]);
+  for (let p = current - 2; p <= current + 2; p++) {
+    if (p >= 1 && p <= total) s.add(p);
+  }
+  return [...s].sort((a, b) => a - b);
+}
+
+function shouldEllipsisBefore(page: number, prev: number | undefined): boolean {
+  return prev !== undefined && page - prev > 1;
+}
+
 export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfigDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [jumpInput, setJumpInput] = useState("");
 
   const filteredOptions = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -49,19 +75,37 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
     }
 
     return SKILL_CONFIG_OPTIONS.filter((item) =>
-      [item.name, item.description, item.badge, item.hint]
+      [item.name, item.description, item.badge, item.hint, item.createdAtLabel]
         .join(" ")
         .toLowerCase()
         .includes(normalizedQuery)
     );
   }, [searchQuery]);
 
-  function handleToggleSelection(id: string, checked: boolean) {
+  const total = filteredOptions.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, pageSize]);
+
+  useEffect(() => {
+    setCurrentPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
+
+  const pageItems = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filteredOptions.slice(start, start + pageSize);
+  }, [filteredOptions, safePage, pageSize]);
+
+  const visiblePages = useMemo(() => getVisiblePageIndices(safePage, totalPages), [safePage, totalPages]);
+
+  function handleToggleSelection(id: string, add: boolean) {
     setSelectedIds((current) => {
-      if (checked) {
+      if (add) {
         return current.includes(id) ? current : [...current, id];
       }
-
       return current.filter((item) => item !== id);
     });
   }
@@ -69,6 +113,9 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
   function resetDialogState() {
     setSearchQuery("");
     setSelectedIds([]);
+    setCurrentPage(1);
+    setPageSize(10);
+    setJumpInput("");
   }
 
   function handleSubmit() {
@@ -81,93 +128,215 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
     if (!nextOpen) {
       resetDialogState();
     }
-
     onOpenChange(nextOpen);
+  }
+
+  function applyJumpPage() {
+    const n = Number.parseInt(jumpInput.trim(), 10);
+    if (Number.isNaN(n) || n < 1) {
+      toast.error("请输入有效页码。");
+      return;
+    }
+    const target = Math.min(n, totalPages);
+    setCurrentPage(target);
+    setJumpInput(String(target));
   }
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="max-w-[1040px] gap-0 overflow-hidden rounded-[32px] border-slate-200 p-0 shadow-[0_30px_80px_-36px_rgba(15,23,42,0.35)]">
-        <DialogHeader className="border-b border-slate-200 bg-[linear-gradient(135deg,rgba(240,249,255,0.94),rgba(255,255,255,0.98))] px-6 py-5">
-          <DialogTitle className="text-left text-xl text-slate-950">配置技能</DialogTitle>
+      <DialogContent
+        showCloseButton
+        className="max-w-[880px] gap-0 overflow-hidden rounded-lg border-[#eeeeee] p-0 shadow-lg sm:max-w-[880px]"
+      >
+        <DialogHeader className="border-b border-[#eeeeee] px-6 py-4 text-left">
+          <DialogTitle className="text-base font-semibold text-slate-950">选择技能</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col gap-5 px-6 py-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700">
-              <Sparkles className="h-4 w-4" />
-              可从已发布 Skill 列表中选择绑定
-            </div>
-
-            <div className="relative w-full lg:max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <div className="flex flex-col gap-0">
+          <div className="flex flex-col gap-3 border-b border-[#eeeeee] px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative min-w-0 flex-1 sm:max-w-[320px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="搜索 Skill 名称或说明"
-                className="h-11 rounded-[16px] border-slate-200 bg-white pl-9 shadow-none"
+                placeholder="搜索技能名称"
+                className="h-9 border-slate-200 bg-white pl-9 shadow-none"
               />
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 border-slate-200 shadow-none"
+                aria-label="刷新列表"
+                onClick={() => toast.success("技能列表已刷新。")}
+              >
+                <RefreshCw className="h-4 w-4 text-slate-600" />
+              </Button>
+              <Button
+                type="button"
+                className="h-9 gap-1 border-0 px-4 text-white shadow-none hover:opacity-90"
+                style={{ backgroundColor: PRIMARY }}
+                onClick={() => toast.info("创建技能入口即将接入。")}
+              >
+                <Plus className="h-4 w-4" />
+                创建技能
+              </Button>
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-slate-200 bg-white">
-            <ScrollArea className="h-[460px]">
-              <div className="space-y-3 p-4">
-                {filteredOptions.length ? (
-                  filteredOptions.map((item) => {
-                    const checked = selectedIds.includes(item.id);
-
-                    return (
-                      <label
-                        key={item.id}
-                        className={cn(
-                          "flex cursor-pointer items-start gap-4 rounded-[22px] border px-4 py-4 transition-all",
-                          checked
-                            ? "border-sky-200 bg-sky-50/80"
-                            : "border-slate-200 bg-slate-50/70 hover:border-sky-100 hover:bg-white"
-                        )}
-                      >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={(value) => handleToggleSelection(item.id, Boolean(value))}
-                          className="mt-0.5"
-                        />
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="truncate text-base font-semibold text-slate-950">{item.name}</div>
-                              <div className="mt-1 text-sm leading-6 text-slate-600">{item.description}</div>
-                            </div>
-                            <Badge className="border-slate-200 bg-white text-slate-600">{item.badge}</Badge>
-                          </div>
-
-                          <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                            <span>{item.sizeLabel}</span>
-                            <span>{item.hint}</span>
-                          </div>
+          <div className="max-h-[min(420px,50vh)] overflow-y-auto">
+            {pageItems.length ? (
+              <ul className="divide-y divide-[#eeeeee]">
+                {pageItems.map((item) => {
+                  const selected = selectedIds.includes(item.id);
+                  return (
+                    <li key={item.id} className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 flex-1 gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-violet-100">
+                          <FileText className="h-5 w-5 text-violet-600" aria-hidden />
                         </div>
-                      </label>
-                    );
-                  })
-                ) : (
-                  <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50/80 px-4 py-12 text-center text-sm text-slate-400">
-                    暂无匹配的 Skill，可尝试更换搜索词。
-                  </div>
-                )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[15px] font-medium text-slate-900">{item.name}</span>
+                            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{item.fileCount} 个</span>
+                            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{item.sizeLabel}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">{item.createdAtLabel}</p>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pl-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 border-slate-300 bg-white px-3 text-slate-800 shadow-none hover:bg-slate-50"
+                          onClick={() =>
+                            toast.message(item.name, { description: item.description || item.hint })
+                          }
+                        >
+                          查看
+                        </Button>
+                        {selected ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 border-slate-300 bg-white px-3 text-slate-800 shadow-none hover:bg-slate-50"
+                            onClick={() => handleToggleSelection(item.id, false)}
+                          >
+                            移除
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 border px-3 shadow-none hover:opacity-90"
+                            style={{ borderColor: PRIMARY, color: PRIMARY }}
+                            onClick={() => handleToggleSelection(item.id, true)}
+                          >
+                            添加
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="px-6 py-16 text-center text-sm text-slate-400">暂无匹配的技能，请调整搜索条件。</div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-4 border-t border-[#eeeeee] px-6 py-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                <span>共 {total} 条</span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 border-slate-200 shadow-none"
+                    disabled={safePage <= 1}
+                    aria-label="上一页"
+                    onClick={() => setCurrentPage((p) => Math.max(1, Math.min(p, totalPages) - 1))}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  {visiblePages.map((page, idx) => (
+                    <span key={page} className="flex items-center">
+                      {shouldEllipsisBefore(page, visiblePages[idx - 1]) ? (
+                        <span className="px-1 text-slate-400">…</span>
+                      ) : null}
+                      <button
+                        type="button"
+                        className={cn(
+                          "min-w-8 rounded px-2.5 py-1 text-sm transition-colors",
+                          safePage === page
+                            ? "font-medium text-white"
+                            : "text-slate-600 hover:bg-slate-100"
+                        )}
+                        style={safePage === page ? { backgroundColor: PRIMARY } : undefined}
+                        onClick={() => setCurrentPage(page)}
+                      >
+                        {page}
+                      </button>
+                    </span>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 border-slate-200 shadow-none"
+                    disabled={safePage >= totalPages}
+                    aria-label="下一页"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, Math.min(p, totalPages) + 1))}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(v) => setPageSize(Number(v))}
+                  options={PAGE_SIZE_OPTIONS}
+                  className="h-8 w-[108px] border-slate-200 text-sm"
+                />
+                <div className="flex items-center gap-2">
+                  <span className="whitespace-nowrap text-slate-600">前往</span>
+                  <Input
+                    value={jumpInput}
+                    onChange={(e) => setJumpInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && applyJumpPage()}
+                    className="h-8 w-14 border-slate-200 px-2 text-center text-sm shadow-none"
+                    inputMode="numeric"
+                  />
+                  <span className="whitespace-nowrap text-slate-600">页</span>
+                  <Button type="button" variant="outline" size="sm" className="h-8 border-slate-200 shadow-none" onClick={applyJumpPage}>
+                    确定
+                  </Button>
+                </div>
               </div>
-            </ScrollArea>
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button type="button" variant="ghost" className="text-slate-600" onClick={() => handleDialogOpenChange(false)}>
+                  取消
+                </Button>
+                <Button
+                  type="button"
+                  className="text-white shadow-none hover:opacity-90 disabled:opacity-40"
+                  style={{ backgroundColor: PRIMARY }}
+                  disabled={!selectedIds.length}
+                  onClick={handleSubmit}
+                >
+                  添加到 Claw配置
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
-
-        <DialogFooter className="border-t border-slate-200 bg-slate-50/80 px-6 py-4">
-          <Button variant="ghost" onClick={() => handleDialogOpenChange(false)}>
-            取消
-          </Button>
-          <Button onClick={handleSubmit} disabled={!selectedIds.length}>
-            添加到 Claw配置
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
