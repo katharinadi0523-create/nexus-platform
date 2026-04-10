@@ -111,6 +111,7 @@ export interface ChatMessageItem {
   sender: string;
   time: string;
   content: string;
+  displayMode?: "thinking" | "output" | "skill" | "tool";
   toolLabel?: string;
   attachments?: string[];
   auditTurnId?: string;
@@ -236,7 +237,7 @@ export interface SecurityEventItem {
   traceId: string;
 }
 
-export type AutonomyBoundaryLevel = "L1 自动执行" | "L2 通知" | "L3 审批" | "禁止";
+export type AutonomyBoundaryLevel = "L1 直接执行" | "L2 通知" | "L3 审批" | "禁止";
 
 export interface AutonomyBoundaryItem {
   id: string;
@@ -245,50 +246,126 @@ export interface AutonomyBoundaryItem {
   level: AutonomyBoundaryLevel;
 }
 
-export type SecurityPolicyMode = "单独配置" | "统一配置";
-export type SecurityPolicyAction = "拦截" | "记录" | "审批";
-export type SecurityPolicyActionSelection = SecurityPolicyAction | SecurityPolicyAction[];
-export type SecurityRuleLevel = "严格" | "标准" | "宽松";
+export type ToolProtectionSeverity = "HIGH" | "CRITICAL";
 
-export interface SecurityPolicyRuleItem {
+export type ToolProtectionRuleSource = "内置" | "自定义";
+
+export interface ToolProtectionRuleItem {
   id: string;
-  stage: string;
-  subtype: string;
+  severity: ToolProtectionSeverity;
   description: string;
-  level: SecurityRuleLevel;
+  source: ToolProtectionRuleSource;
+  enabled: boolean;
+  targetTool?: string;
+  targetParam?: string;
+  category?: string;
+  regexPattern?: string;
+  exclusionPattern?: string;
+  remediation?: string;
 }
 
-export interface SecurityPolicyConfigItem {
-  id: string;
-  title: string;
-  description: string;
+export interface ToolProtectionConfig {
   enabled: boolean;
-  mode?: SecurityPolicyMode;
-  action: SecurityPolicyActionSelection;
-  availableActions: SecurityPolicyAction[];
-  rules: SecurityPolicyRuleItem[];
+  protectedTools: string[];
+  prohibitedTools: string[];
+  rules: ToolProtectionRuleItem[];
 }
 
-export type LexiconPolicyAction = "拦截" | "记录" | "放行";
-export type LexiconPolicyActionSelection = LexiconPolicyAction | LexiconPolicyAction[];
-
-export interface LexiconPolicyItem {
+export interface FileProtectionPathItem {
   id: string;
-  title: string;
-  description: string;
+  path: string;
+  kind: "file" | "directory";
+}
+
+export interface FileProtectionConfig {
   enabled: boolean;
-  mode: SecurityPolicyMode;
-  stage: string;
-  action: LexiconPolicyActionSelection;
-  availableActions: LexiconPolicyAction[];
-  selectedLibraries: string[];
-  availableLibraries: string[];
+  paths: FileProtectionPathItem[];
+}
+
+export interface SecurityPendingApprovalItem {
+  id: string;
+  actionName: string;
+  payload: string;
+  requestedAt: string;
+  requestedBy: string;
+}
+
+export interface SecurityApprovalHistoryItem {
+  id: string;
+  actionName: string;
+  resolution: "approved" | "rejected";
+  resolvedAt: string;
+  detail: string;
+}
+
+export interface SecurityApprovalsConfig {
+  pending: SecurityPendingApprovalItem[];
+  history: SecurityApprovalHistoryItem[];
 }
 
 export interface SecurityManagementConfig {
   autonomyBoundaries: AutonomyBoundaryItem[];
-  strategyPolicies: SecurityPolicyConfigItem[];
-  lexiconPolicies: LexiconPolicyItem[];
+  toolProtection: ToolProtectionConfig;
+  fileProtection: FileProtectionConfig;
+  securityApprovals: SecurityApprovalsConfig;
+}
+
+export const DEFAULT_TOOL_PROTECTION_RULES: ToolProtectionRuleItem[] = [
+  {
+    id: "TOOL_CMD_DANGEROUS_RM",
+    severity: "HIGH",
+    description: "检测可能导致数据丢失的 rm 命令",
+    source: "内置",
+    enabled: true,
+  },
+  {
+    id: "TOOL_CMD_FS_DESTRUCTION",
+    severity: "CRITICAL",
+    description: "检测格式化、整卷删除等文件系统破坏性操作",
+    source: "内置",
+    enabled: true,
+  },
+  {
+    id: "TOOL_CMD_PRIVILEGE_ESCALATION",
+    severity: "CRITICAL",
+    description: "检测 sudo、提权与敏感系统调用组合",
+    source: "内置",
+    enabled: true,
+  },
+  {
+    id: "TOOL_CMD_ARBITRARY_WRITE",
+    severity: "HIGH",
+    description: "检测向系统目录或关键配置路径写入",
+    source: "内置",
+    enabled: true,
+  },
+];
+
+export function createDefaultToolProtection(
+  overrides?: Partial<Pick<ToolProtectionConfig, "enabled" | "protectedTools" | "prohibitedTools">> & {
+    rules?: ToolProtectionRuleItem[];
+  }
+): ToolProtectionConfig {
+  return {
+    enabled: overrides?.enabled ?? true,
+    protectedTools: overrides?.protectedTools ?? [],
+    prohibitedTools: overrides?.prohibitedTools ?? [],
+    rules: overrides?.rules ?? DEFAULT_TOOL_PROTECTION_RULES.map((rule) => ({ ...rule })),
+  };
+}
+
+export function createDefaultFileProtection(paths: FileProtectionPathItem[] = []): FileProtectionConfig {
+  return {
+    enabled: true,
+    paths,
+  };
+}
+
+export function createDefaultSecurityApprovals(
+  pending: SecurityPendingApprovalItem[] = [],
+  history: SecurityApprovalHistoryItem[] = []
+): SecurityApprovalsConfig {
+  return { pending, history };
 }
 
 export interface PersonRelationItem {
@@ -1145,8 +1222,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "ops-alert-turn-1",
                 type: "接口调用",
                 targetName: "Prometheus / error_rate",
-                inputSummary: "查询 api-gateway 最近 60 分钟错误率与异常分布。",
-                outputSummary: "定位到 09:42 - 09:57 出现 12.8% 峰值。",
+                inputSummary:
+                  '{\n  "query": "sum(rate(http_requests_total{job=\\"api-gateway\\",status=~\\"5..\\"}[5m])) by (route)",\n  "range": "60m",\n  "step": "1m"\n}',
+                outputSummary:
+                  '{\n  "peakWindow": { "start": "2026-03-29T09:42:00Z", "end": "2026-03-29T09:57:00Z" },\n  "maxErrorRate": 0.128,\n  "topRoutes": ["/v1/auth/token", "/v1/user/profile"]\n}',
                 durationMs: 460,
                 status: "成功",
                 traceId: "trace-ops-gateway-001",
@@ -1156,8 +1235,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "ops-alert-turn-1",
                 type: "MCP调用",
                 targetName: "Incident_Log.search",
-                inputSummary: "检索 auth-service 与 api-gateway 关联错误日志。",
-                outputSummary: "返回 42 条高相关错误，主要为认证超时与重试放大。",
+                inputSummary:
+                  '{\n  "services": ["auth-service", "api-gateway"],\n  "levels": ["ERROR", "WARN"],\n  "limit": 200,\n  "timeRange": "60m"\n}',
+                outputSummary:
+                  '{\n  "hits": 42,\n  "facets": { "auth_timeout": 28, "retry_amplification": 9 },\n  "cursor": "c2VhcmNoLXJlc3VsdC0wMDE"\n}',
                 durationMs: 820,
                 status: "成功",
                 traceId: "trace-ops-gateway-001",
@@ -1167,8 +1248,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "ops-alert-turn-1",
                 type: "CLI执行",
                 targetName: "kubectl top pods -n prod",
-                inputSummary: "查看认证服务实例 CPU / Memory 波动。",
-                outputSummary: "发现 auth-service 两个实例 CPU 峰值接近 90%。",
+                inputSummary:
+                  "# stderr: none\n# kubeconfig: prod-admin\nkubectl top pods -n prod -l app=auth-service",
+                outputSummary:
+                  "NAME                          CPU(cores)   MEMORY(bytes)\nauth-service-7d8f9c6b4-abcde   889m         512Mi\nauth-service-7d8f9c6b4-fghij   834m         498Mi",
                 durationMs: 1240,
                 status: "成功",
                 traceId: "trace-ops-gateway-001",
@@ -1178,8 +1261,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "ops-alert-turn-1",
                 type: "工具执行",
                 targetName: "故障摘要生成器",
-                inputSummary: "聚合告警、日志和资源数据生成面向值班人的摘要。",
-                outputSummary: "输出 3 条影响面结论和 2 条建议动作。",
+                inputSummary:
+                  '{\n  "tool": "incident_digest",\n  "version": "v2",\n  "inputs": { "alerts": true, "logs": true, "metrics": true },\n  "locale": "zh-CN"\n}',
+                outputSummary:
+                  '{\n  "artifactId": "digest-20260329-1018",\n  "impactStatements": 3,\n  "recommendedActions": 2,\n  "workspacePath": "/workspace/output/digests/20260329.json"\n}',
                 durationMs: 690,
                 status: "成功",
                 traceId: "trace-ops-gateway-001",
@@ -1213,8 +1298,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "ops-report-turn-1",
                 type: "工作流节点",
                 targetName: "夜间巡检摘要工作流",
-                inputSummary: "读取巡检报告、交接清单和未闭环工单列表。",
-                outputSummary: "生成晨会摘要草稿与待办清单。",
+                inputSummary:
+                  '{\n  "node": "ingest.attachments",\n  "files": ["nightly-inspection-20260328.pdf", "handoff-checklist.xlsx"],\n  "extract": ["tables", "bullet_lists", "open_tickets"]\n}',
+                outputSummary:
+                  '{\n  "briefDraftId": "morning-brief-draft-014",\n  "openHighPriority": 7,\n  "pendingConfirm": 3\n}',
                 durationMs: 1780,
                 status: "成功",
                 traceId: "trace-ops-report-014",
@@ -1224,8 +1311,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "ops-report-turn-1",
                 type: "工具执行",
                 targetName: "附件解析器",
-                inputSummary: "解析 2 个附件中的结构化字段与结论段落。",
-                outputSummary: "提取 7 个高优事项和 3 个待确认项。",
+                inputSummary:
+                  '{\n  "tool": "attachment_parser",\n  "mimeTypes": ["application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],\n  "ocr": false\n}',
+                outputSummary:
+                  '{\n  "structuredFields": 42,\n  "highPriorityItems": 7,\n  "needsConfirmation": 3,\n  "parserVersion": "1.8.2"\n}',
                 durationMs: 930,
                 status: "成功",
                 traceId: "trace-ops-report-014",
@@ -1258,8 +1347,9 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "ops-ticket-turn-1",
                 type: "接口调用",
                 targetName: "ITSM / tickets.get",
-                inputSummary: "读取 INC-22031 当前状态、处理人和超时信息。",
-                outputSummary: "确认工单已超时 30 分钟，当前责任人为认证服务值班人。",
+                inputSummary: '{\n  "method": "GET",\n  "path": "/api/v1/tickets/INC-22031",\n  "fields": ["status", "assignee", "sla", "timeline"]\n}',
+                outputSummary:
+                  '{\n  "id": "INC-22031",\n  "status": "in_progress",\n  "breachMinutes": 30,\n  "assignee": "auth-service-oncall"\n}',
                 durationMs: 350,
                 status: "成功",
                 traceId: "trace-ops-ticket-092",
@@ -1269,8 +1359,9 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "ops-ticket-turn-1",
                 type: "工具执行",
                 targetName: "企业微信群通知",
-                inputSummary: "发送催办摘要与影响范围到值班群。",
-                outputSummary: "通知已成功发送到 2 个群聊。",
+                inputSummary:
+                  '{\n  "tool": "wework.notify",\n  "chatIds": ["ww-chat-ops-primary", "ww-chat-ops-escalation"],\n  "template": "ticket_escalation_v1"\n}',
+                outputSummary: '{\n  "delivered": 2,\n  "messageIds": ["msg-aa01", "msg-bb02"],\n  "httpStatus": 200\n}',
                 durationMs: 610,
                 status: "成功",
                 traceId: "trace-ops-ticket-092",
@@ -1387,278 +1478,56 @@ const detailMap: Record<string, ClawDetailData> = {
         {
           id: "boundary-read-file",
           name: "读取文件",
-          description: "读取工作区、知识库和运行上下文中的文件。",
-          level: "L1 自动执行",
+          description: "读取工作台或知识库中的文件",
+          level: "L1 直接执行",
         },
         {
           id: "boundary-write-file",
           name: "写入文件",
-          description: "创建或修改工作区中的文档、报告和摘要。",
+          description: "创建或修改工作区中的文件",
           level: "L2 通知",
         },
         {
           id: "boundary-delete-file",
           name: "删除文件",
-          description: "删除工作区中的文件或清理历史产物。",
+          description: "删除工作区中的文件",
           level: "L3 审批",
         },
         {
-          id: "boundary-external-message",
-          name: "发送外部消息",
-          description: "通过企业微信、飞书或邮件把内容发给用户或群组。",
+          id: "boundary-feishu",
+          name: "发送飞书消息",
+          description: "通过飞书应用向用户发送消息",
           level: "L2 通知",
         },
         {
           id: "boundary-network-search",
           name: "网络搜索",
-          description: "访问互联网搜索公开信息或拉取外部资料。",
-          level: "L1 自动执行",
+          description: "通过互联网获取信息",
+          level: "L1 直接执行",
         },
         {
           id: "boundary-task-manage",
           name: "管理任务",
-          description: "创建、暂停、更新或删除定时任务与催办任务。",
-          level: "L2 通知",
-        },
-        {
-          id: "boundary-api-call",
-          name: "调用外部 API",
-          description: "调用工单、监控、配置中心等外部系统接口。",
-          level: "L2 通知",
-        },
-        {
-          id: "boundary-cli",
-          name: "执行 CLI / Shell",
-          description: "执行命令行、脚本或环境变更相关指令。",
-          level: "L3 审批",
-        },
-        {
-          id: "boundary-knowledge-write",
-          name: "修改知识库",
-          description: "新增、修订或下线知识库文档与结构化条目。",
-          level: "L2 通知",
-        },
-        {
-          id: "boundary-publish",
-          name: "发布或外发内容",
-          description: "将报告、结论或执行结果同步到正式渠道。",
-          level: "L3 审批",
+          description: "创建、更新或删除任务",
+          level: "L1 直接执行",
         },
       ],
-      strategyPolicies: [
-        {
-          id: "policy-content-safety",
-          title: "内容合规防护",
-          description: "检测不符合平台规范的违法、不良、侵权或高风险内容，并在输入输出阶段进行阻断或记录。",
-          enabled: true,
-          mode: "统一配置",
-          action: "拦截",
-          availableActions: ["拦截", "记录"],
-          rules: [
-            {
-              id: "policy-content-safety-rule-1",
-              stage: "输入+输出",
-              subtype: "违法及不良内容",
-              description: "检测涉政、暴恐、色情、诈骗、侵权、人身伤害等不合规内容。",
-              level: "严格",
-            },
-            {
-              id: "policy-content-safety-rule-2",
-              stage: "输出",
-              subtype: "高风险行动建议",
-              description: "限制直接输出可能造成业务损害、舆情风险或违法后果的操作建议。",
-              level: "严格",
-            },
-          ],
-        },
-        {
-          id: "policy-prompt-attack",
-          title: "提示词攻击防护",
-          description: "识别绕过系统提示、诱导泄露内部策略、越权调用工具等提示词攻击行为。",
-          enabled: true,
-          action: "拦截",
-          availableActions: ["拦截", "记录"],
-          rules: [
-            {
-              id: "policy-prompt-attack-rule-1",
-              stage: "输入",
-              subtype: "系统提示绕过",
-              description: "识别让模型忽略系统指令、泄露规则或暴露隐藏上下文的攻击内容。",
-              level: "严格",
-            },
-            {
-              id: "policy-prompt-attack-rule-2",
-              stage: "输入",
-              subtype: "越权工具请求",
-              description: "识别诱导调用受限 MCP、CLI 或管理接口的提示词攻击。",
-              level: "严格",
-            },
-          ],
-        },
-        {
-          id: "policy-sensitive-data",
-          title: "敏感信息防护",
-          description: "检测个人、企业和平台敏感信息在输入、输出和工具回写过程中的泄露风险。",
-          enabled: true,
-          mode: "单独配置",
-          action: "拦截",
-          availableActions: ["拦截", "记录"],
-          rules: [
-            {
-              id: "policy-sensitive-data-rule-1",
-              stage: "输入",
-              subtype: "个人敏感信息",
-              description: "识别身份证号、手机号、住址、医疗记录、财务账号等敏感字段。",
-              level: "严格",
-            },
-            {
-              id: "policy-sensitive-data-rule-2",
-              stage: "输出",
-              subtype: "企业凭据与资产",
-              description: "检测 AK/SK、数据库连接串、内网地址、密钥片段和客户实例标识。",
-              level: "严格",
-            },
-          ],
-        },
-        {
-          id: "policy-tool-call",
-          title: "工具调用防护",
-          description: "针对行动型智能体的工具调用链路进行额外审计，防止越权增删改查和批量操作失控。",
-          enabled: true,
-          mode: "统一配置",
-          action: "审批",
-          availableActions: ["拦截", "记录", "审批"],
-          rules: [
-            {
-              id: "policy-tool-call-rule-1",
-              stage: "工具调用前",
-              subtype: "越权增删改查",
-              description: "识别没有明确授权上下文的新增、修改、删除及批量处理操作。",
-              level: "严格",
-            },
-            {
-              id: "policy-tool-call-rule-2",
-              stage: "工具结果回写前",
-              subtype: "高影响结果写回",
-              description: "在工单、知识库、告警系统等关键位置写回前进行二次确认。",
-              level: "标准",
-            },
-          ],
-        },
-        {
-          id: "policy-cli-shell",
-          title: "CLI / Shell 执行防护",
-          description: "控制命令执行、脚本运行和环境变更，避免高危指令被直接执行到生产环境。",
-          enabled: true,
-          mode: "单独配置",
-          action: "审批",
-          availableActions: ["拦截", "记录", "审批"],
-          rules: [
-            {
-              id: "policy-cli-shell-rule-1",
-              stage: "CLI 执行前",
-              subtype: "高危系统命令",
-              description: "识别删除、覆盖、批量替换、权限变更、服务重启等高风险命令模式。",
-              level: "严格",
-            },
-            {
-              id: "policy-cli-shell-rule-2",
-              stage: "CLI 执行前",
-              subtype: "生产环境目标",
-              description: "当命令目标指向生产集群、核心主机或数据库时提升为审批。",
-              level: "严格",
-            },
-          ],
-        },
-        {
-          id: "policy-egress",
-          title: "外发与网络访问防护",
-          description: "控制对外消息发送、链接访问和外部资源抓取，避免越权外发和数据扩散。",
-          enabled: true,
-          mode: "统一配置",
-          action: "记录",
-          availableActions: ["拦截", "记录", "审批"],
-          rules: [
-            {
-              id: "policy-egress-rule-1",
-              stage: "外发前",
-              subtype: "未授权接收方",
-              description: "识别不在白名单中的群聊、邮箱、Webhook 或第三方系统接收方。",
-              level: "标准",
-            },
-            {
-              id: "policy-egress-rule-2",
-              stage: "网络访问前",
-              subtype: "高风险域名与链接",
-              description: "检测需要登录、需要上传文件或存在数据回传风险的外部站点。",
-              level: "标准",
-            },
-          ],
-        },
-        {
-          id: "policy-file-ops",
-          title: "文件写删防护",
-          description: "针对文件写入、覆盖、删除和批量导出动作增加场景级保护。",
-          enabled: true,
-          mode: "单独配置",
-          action: "审批",
-          availableActions: ["拦截", "记录", "审批"],
-          rules: [
-            {
-              id: "policy-file-ops-rule-1",
-              stage: "写入前",
-              subtype: "关键目录保护",
-              description: "对 workspace/output、交接文档和归档目录的写入动作进行额外确认。",
-              level: "标准",
-            },
-            {
-              id: "policy-file-ops-rule-2",
-              stage: "删除前",
-              subtype: "批量删除与覆盖",
-              description: "识别批量删除、覆盖历史版本和清理归档文件等高影响操作。",
-              level: "严格",
-            },
-          ],
-        },
-      ],
-      lexiconPolicies: [
-        {
-          id: "lexicon-blacklist",
-          title: "黑名单词库",
-          description: "拦截不允许出现在对话、工具入参和输出中的高风险词条。",
-          enabled: true,
-          mode: "统一配置",
-          stage: "输入+输出+工具入参",
-          action: "拦截",
-          availableActions: ["拦截", "记录"],
-          selectedLibraries: ["涉密词库", "违法内容词库", "高危动作词库"],
-          availableLibraries: ["涉密词库", "违法内容词库", "高危动作词库", "越权指令词库", "外发风险词库"],
-        },
-        {
-          id: "lexicon-whitelist",
-          title: "白名单词库",
-          description: "对内部工单编号、系统简称和允许暴露的字段进行放行与留痕。",
-          enabled: true,
-          mode: "统一配置",
-          stage: "输入+输出",
-          action: "放行",
-          availableActions: ["放行", "记录"],
-          selectedLibraries: ["工单编号白名单", "内部系统简称"],
-          availableLibraries: ["工单编号白名单", "内部系统简称", "值守群名称白名单", "客户项目代号白名单"],
-        },
-        {
-          id: "lexicon-action-risk",
-          title: "高风险动作词库",
-          description: "聚焦删除、重启、回滚、批量写入、外发等行动型智能体常见高风险指令。",
-          enabled: true,
-          mode: "单独配置",
-          stage: "工具入参+CLI",
-          action: "记录",
-          availableActions: ["拦截", "记录"],
-          selectedLibraries: ["生产变更命令", "批量删除动作", "对外发送动作"],
-          availableLibraries: ["生产变更命令", "批量删除动作", "对外发送动作", "权限提升动作", "数据导出动作"],
-        },
-      ],
+      toolProtection: createDefaultToolProtection(),
+      fileProtection: createDefaultFileProtection([
+        { id: "fp-copaw-secret", path: "/Users/nanbunan/.copaw.secret/", kind: "directory" },
+      ]),
+      securityApprovals: createDefaultSecurityApprovals(
+        [
+          {
+            id: "approval-del-001",
+            actionName: "delete_files",
+            payload: `{ "tool": "delete_file", "args": "{'path': 'workspace/多智能体协作报告_附录_工具与竞品分析.md'}", "requested_by": "c35c081e-ede7-402b-88ba-7275caae5808" }`,
+            requestedAt: "2026/4/10 16:11:16",
+            requestedBy: "c35c081e-ede7-402b-88ba-7275caae5808",
+          },
+        ],
+        []
+      ),
     },
     personRelations: [
       {
@@ -2155,8 +2024,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-1",
                 type: "工具执行",
                 targetName: "Skill：差旅报销",
-                inputSummary: "识别用户请求为标准差旅报销任务，并匹配办公 Skill。",
-                outputSummary: "已命中差旅报销 Skill，准备串联验票与填单两条标准工作流。",
+                inputSummary:
+                  '{\n  "intent": "travel_expense.submit",\n  "skillId": "skill-travel-expense-v3",\n  "locale": "zh-CN"\n}',
+                outputSummary:
+                  '{\n  "matched": true,\n  "nextWorkflows": ["invoice-verify-v2", "erp-reimbursement-draft-v1"],\n  "confidence": 0.94\n}',
                 durationMs: 230,
                 status: "成功",
                 traceId: "trace-office-shrimp-001",
@@ -2166,8 +2037,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-1",
                 type: "工作流节点",
                 targetName: "验票工作流 / OCR 识别发票",
-                inputSummary: "读取机票行程单、酒店发票和出租车票。",
-                outputSummary: "识别出 3 张票据，抽取金额、税额和开票抬头。",
+                inputSummary:
+                  '{\n  "node": "ocr.ingest",\n  "assets": ["flight-itinerary.pdf", "hotel-invoice.jpg", "taxi-e-receipt.png"],\n  "engine": "tesseract+layoutlm"\n}',
+                outputSummary:
+                  '{\n  "documents": 3,\n  "fieldsExtracted": ["amount", "tax", "sellerName", "buyerTitle"],\n  "avgConfidence": 0.91\n}',
                 durationMs: 820,
                 status: "成功",
                 traceId: "trace-office-shrimp-001",
@@ -2177,8 +2050,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-1",
                 type: "工作流节点",
                 targetName: "验票工作流 / 票据信息结构化提取",
-                inputSummary: "对 OCR 结果做字段清洗和结构化归档。",
-                outputSummary: "形成可供验票系统核查的标准化票据对象。",
+                inputSummary:
+                  '{\n  "node": "normalize.invoices",\n  "schema": "corp.invoice.v2",\n  "strictTypes": true\n}',
+                outputSummary:
+                  '{\n  "normalized": [\n    { "id": "inv-001", "amountCents": 128000, "taxCents": 7680 },\n    { "id": "inv-002", "amountCents": 98000, "taxCents": 5880 },\n    { "id": "inv-003", "amountCents": 260000, "taxCents": 15600 }\n  ]\n}',
                 durationMs: 360,
                 status: "成功",
                 traceId: "trace-office-shrimp-001",
@@ -2188,8 +2063,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-1",
                 type: "接口调用",
                 targetName: "验票工作流 / 调企业验票系统核查",
-                inputSummary: "把标准化票据对象发送到企业验票系统进行查重与真伪校验。",
-                outputSummary: "3 张票据均通过校验，未命中重复报销。",
+                inputSummary:
+                  '{\n  "POST": "/api/v1/invoice/verify-batch",\n  "body": { "invoices": ["inv-001", "inv-002", "inv-003"], "employeeId": "emp-7741" }\n}',
+                outputSummary:
+                  '{\n  "results": [\n    { "id": "inv-001", "duplicate": false, "authentic": true },\n    { "id": "inv-002", "duplicate": false, "authentic": true },\n    { "id": "inv-003", "duplicate": false, "authentic": true }\n  ]\n}',
                 durationMs: 540,
                 status: "成功",
                 traceId: "trace-office-shrimp-001",
@@ -2199,8 +2076,9 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-1",
                 type: "工作流节点",
                 targetName: "验票工作流 / 合规规则校验",
-                inputSummary: "根据差旅制度检查报销标准、票据类型和出差说明。",
-                outputSummary: "未发现超标项，材料完整性校验通过。",
+                inputSummary:
+                  '{\n  "node": "policy.evaluate",\n  "policyPack": "travel-2026-Q2",\n  "ruleset": ["per_diem", "receipt_type", "trip_justification"]\n}',
+                outputSummary: '{\n  "violations": [],\n  "materialCompleteness": "ok",\n  "evaluatedAt": "2026-04-06T02:12:18Z"\n}',
                 durationMs: 290,
                 status: "成功",
                 traceId: "trace-office-shrimp-001",
@@ -2210,8 +2088,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-1",
                 type: "工作流节点",
                 targetName: "差旅表单填写与提交工作流 / 提取出行信息",
-                inputSummary: "从票据与差旅说明中提取行程、时间、事由和预算信息。",
-                outputSummary: "已整理上海 - 深圳往返行程、住宿和交通费用明细。",
+                inputSummary:
+                  '{\n  "node": "trip.extract",\n  "sources": ["normalized_invoices", "travel_memo.md"],\n  "outputShape": "erp.trip_segment[]"\n}',
+                outputSummary:
+                  '{\n  "segments": [\n    { "from": "SHA", "to": "SZX", "depart": "2026-03-28", "return": "2026-03-31" }\n  ],\n  "lodgingNights": 3,\n  "localTransportCents": 186000\n}',
                 durationMs: 310,
                 status: "成功",
                 traceId: "trace-office-shrimp-001",
@@ -2221,8 +2101,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-1",
                 type: "工作流节点",
                 targetName: "差旅表单填写与提交工作流 / 映射报销字段",
-                inputSummary: "按 ERP 表单要求映射费用科目、成本中心和审批链。",
-                outputSummary: "已完成字段映射，报销金额总计 4,860 元。",
+                inputSummary:
+                  '{\n  "node": "erp.map_fields",\n  "form": "BX-DRAFT-V12",\n  "mappingProfile": "finance.cost_center.default"\n}',
+                outputSummary:
+                  '{\n  "totalAmountCents": 486000,\n  "lines": [\n    { "gl": "660203", "costCenter": "CC-SH-RD", "amountCents": 486000 }\n  ],\n  "approvalChain": ["mgr-01", "fin-02"]\n}',
                 durationMs: 270,
                 status: "成功",
                 traceId: "trace-office-shrimp-001",
@@ -2232,8 +2114,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-1",
                 type: "工作流节点",
                 targetName: "差旅表单填写与提交工作流 / 自动填充表单",
-                inputSummary: "把映射后的报销字段填入 ERP 报销单草稿。",
-                outputSummary: "已生成待提交草稿，单号草稿 BX-20260406-018。",
+                inputSummary:
+                  '{\n  "node": "erp.reimbursement.apply_patch",\n  "draftId": null,\n  "patch": { "op": "merge", "path": "/draft/lines", "valueRef": "mapped_lines_v7" }\n}',
+                outputSummary:
+                  '{\n  "draftId": "BX-20260406-018",\n  "status": "pending_submit",\n  "erpRevision": 3\n}',
                 durationMs: 410,
                 status: "成功",
                 traceId: "trace-office-shrimp-001",
@@ -2243,8 +2127,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-1",
                 type: "接口调用",
                 targetName: "差旅表单填写与提交工作流 / 写入 ERP",
-                inputSummary: "将报销草稿写入 ERP 并准备审批动作。",
-                outputSummary: "ERP 草稿写入成功，等待 HitL 确认后发起审批。",
+                inputSummary:
+                  '{\n  "PUT": "/erp/api/reimbursements/drafts/BX-20260406-018",\n  "body": { "state": "draft", "hitlGate": "before_submit" }\n}',
+                outputSummary:
+                  '{\n  "saved": true,\n  "etag": "rev-3",\n  "nextAction": "await_human_confirm"\n}',
                 durationMs: 620,
                 status: "成功",
                 traceId: "trace-office-shrimp-001",
@@ -2254,8 +2140,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-1",
                 type: "工具执行",
                 targetName: "HitL / 发起审批确认",
-                inputSummary: "在 ERP 草稿完成后向员工展示校验结果并请求提交确认。",
-                outputSummary: "已向员工展示最终金额、票据结果和审批链，等待确认。",
+                inputSummary:
+                  '{\n  "tool": "hitl.prompt",\n  "surface": "unified_portal",\n  "payloadRef": "BX-20260406-018.summary.json"\n}',
+                outputSummary:
+                  '{\n  "uiSessionId": "hitl-sess-9f3c",\n  "presented": ["totals", "invoice_results", "approval_chain"],\n  "userDecision": null\n}',
                 durationMs: 120,
                 status: "成功",
                 traceId: "trace-office-shrimp-001",
@@ -2275,8 +2163,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-2",
                 type: "接口调用",
                 targetName: "ERP MCP / 发起报销审批",
-                inputSummary: "接收员工确认，提交 BX-20260406-018 到正式审批链。",
-                outputSummary: "已创建正式审批记录，并同步回待办中心。",
+                inputSummary:
+                  '{\n  "mcp": "erp.reimbursement",\n  "method": "submit_for_approval",\n  "arguments": { "draftId": "BX-20260406-018", "confirmedBy": "emp-7741" }\n}',
+                outputSummary:
+                  '{\n  "approvalInstanceId": "appr-88c1",\n  "todoSynced": true,\n  "workflowEngine": "bpm-prod-01"\n}',
                 durationMs: 540,
                 status: "成功",
                 traceId: "trace-office-shrimp-002",
@@ -2308,8 +2198,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "office-shrimp-turn-reminder-1",
                 type: "工具执行",
                 targetName: "补件提醒 Skill",
-                inputSummary: "汇总待补件报销状态并按员工分组。",
-                outputSummary: "已生成两条提醒文案，并根据接收对象匹配发送渠道。",
+                inputSummary:
+                  '{\n  "skillId": "skill-reimbursement-reminder",\n  "query": { "status": "pending_materials", "window": "7d" },\n  "groupBy": "employeeId"\n}',
+                outputSummary:
+                  '{\n  "groups": 2,\n  "draftMessages": ["dm-template-v4#A", "dm-template-v4#B"],\n  "channels": ["feishu", "email"]\n}',
                 durationMs: 260,
                 status: "成功",
                 traceId: "trace-office-shrimp-101",
@@ -2388,106 +2280,107 @@ const detailMap: Record<string, ClawDetailData> = {
         {
           id: "office-boundary-read-policy",
           name: "读取制度与票据",
-          description: "读取差旅制度、票据附件和历史报销草稿。",
-          level: "L1 自动执行",
+          description: "读取差旅制度、票据附件和历史报销草稿与范畴说明",
+          level: "L1 直接执行",
         },
         {
           id: "office-boundary-write-erp-draft",
-          name: "写入 ERP 草稿",
-          description: "把报销字段写入 ERP 草稿并回传处理状态。",
+          name: "写入 ERP 单据",
+          description: "将报销单据写入 ERP 系统并回传处理状态",
           level: "L2 通知",
         },
         {
           id: "office-boundary-launch-approval",
           name: "发起审批",
-          description: "将报销单提交到正式审批链路。",
+          description: "将报销单据提交到正式审批链路",
           level: "L3 审批",
         },
         {
           id: "office-boundary-send-reminder",
           name: "发送提醒消息",
-          description: "向员工或行政服务群发送补件提醒和处理通知。",
+          description: "向员工或行政服务发送邮件或即时处理通知",
           level: "L2 通知",
         },
-      ],
-      strategyPolicies: [
         {
-          id: "office-policy-sensitive-fields",
-          title: "财务敏感字段防护",
-          description: "在输入输出和 ERP 回写阶段保护银行卡、证件号和报销凭据等敏感字段。",
-          enabled: true,
-          mode: "统一配置",
-          action: "拦截",
-          availableActions: ["拦截", "记录", "审批"],
-          rules: [
-            {
-              id: "office-policy-sensitive-fields-1",
-              stage: "输入+输出",
-              subtype: "个人敏感财务字段",
-              description: "识别银行卡号、身份证号、个人账号等敏感信息并限制直接暴露。",
-              level: "严格",
-            },
-            {
-              id: "office-policy-sensitive-fields-2",
-              stage: "工具结果回写前",
-              subtype: "高风险附件字段",
-              description: "对票据附件和报销凭据中的敏感字段做二次脱敏校验。",
-              level: "标准",
-            },
-          ],
+          id: "office-boundary-search",
+          name: "网络搜索",
+          description: "检索公开政策与费用标准说明",
+          level: "L1 直接执行",
         },
         {
-          id: "office-policy-erp-write",
-          title: "ERP 写入与审批防护",
-          description: "控制 ERP 草稿写入、审批提交和异常覆盖，确保关键动作经过明确确认。",
-          enabled: true,
-          mode: "单独配置",
-          action: "审批",
-          availableActions: ["拦截", "记录", "审批"],
-          rules: [
-            {
-              id: "office-policy-erp-write-1",
-              stage: "工具调用前",
-              subtype: "正式审批提交",
-              description: "发起正式审批前必须通过 HitL 确认，不允许直接跳过人工确认。",
-              level: "严格",
-            },
-            {
-              id: "office-policy-erp-write-2",
-              stage: "工具结果回写前",
-              subtype: "草稿覆盖与字段变更",
-              description: "对草稿覆盖、费用科目修改和预算超标结果进行额外留痕。",
-              level: "标准",
-            },
-          ],
+          id: "office-boundary-task",
+          name: "管理任务",
+          description: "创建或更新报销相关的待办与督办任务",
+          level: "L1 直接执行",
         },
       ],
-      lexiconPolicies: [
+      toolProtection: createDefaultToolProtection({
+        protectedTools: ["erp.write_draft", "feishu.message_batch"],
+        prohibitedTools: ["shell.exec", "workspace.format_disk"],
+      }),
+      fileProtection: createDefaultFileProtection([
         {
-          id: "office-lexicon-finance-blacklist",
-          title: "财务敏感字段词库",
-          description: "保护个人证件号、银行卡号和高敏报销字段，避免在对话和系统回写中泄露。",
-          enabled: true,
-          mode: "统一配置",
-          stage: "输入+输出+工具入参",
-          action: "拦截",
-          availableActions: ["拦截", "记录"],
-          selectedLibraries: ["银行卡号", "个人证件号", "敏感财务字段"],
-          availableLibraries: ["银行卡号", "个人证件号", "敏感财务字段", "发票号码", "预算红线词库"],
+          id: "office-fp-hr-salary",
+          path: "/share/hr/薪酬与个税敏感目录/",
+          kind: "directory",
         },
         {
-          id: "office-lexicon-expense-whitelist",
-          title: "报销白名单词库",
-          description: "对白名单中的费用科目、报销单号和审批节点做放行与留痕。",
-          enabled: true,
-          mode: "统一配置",
-          stage: "输入+输出",
-          action: "放行",
-          availableActions: ["放行", "记录"],
-          selectedLibraries: ["报销单号白名单", "费用科目白名单"],
-          availableLibraries: ["报销单号白名单", "费用科目白名单", "审批节点白名单"],
+          id: "office-fp-finance-keys",
+          path: "/var/oa/finance/.credential_store/",
+          kind: "directory",
         },
-      ],
+        {
+          id: "office-fp-pii-rules",
+          path: "/data/office-shrimp/config/pii_mask_rules.json",
+          kind: "file",
+        },
+        {
+          id: "office-fp-employee-ssn",
+          path: "/archive/reimburse/employee_identities.csv",
+          kind: "file",
+        },
+      ]),
+      securityApprovals: createDefaultSecurityApprovals(
+        [
+          {
+            id: "office-approval-erp-submit",
+            actionName: "submit_erp_approval",
+            payload: `{ "tool": "erp.submit_approval", "args": { "draftId": "BX-20260410-031", "amountCny": 4820.5, "costCenter": "RD-上海", "applicant": "李然" }, "requested_by": "office-shrimp-runtime" }`,
+            requestedAt: "2026/4/10 09:48:22",
+            requestedBy: "office-shrimp-runtime",
+          },
+          {
+            id: "office-approval-bulk-export",
+            actionName: "export_reimbursement_batch",
+            payload: `{ "tool": "workspace.export_excel", "args": { "scope": "部门=研发中心", "month": "2026-03", "containsPii": true }, "requested_by": "office-shrimp-runtime" }`,
+            requestedAt: "2026/4/10 10:05:03",
+            requestedBy: "office-shrimp-runtime",
+          },
+        ],
+        [
+          {
+            id: "office-hist-feishu-bulk",
+            actionName: "send_bulk_feishu",
+            resolution: "approved",
+            resolvedAt: "2026/4/9 18:02:11",
+            detail: `{ "tool": "feishu.message_batch", "template": "reimburse_reminder_v4", "recipients": 12, "channel": "部门群" }`,
+          },
+          {
+            id: "office-hist-delete-temp",
+            actionName: "delete_temp_attachments",
+            resolution: "rejected",
+            resolvedAt: "2026/4/8 11:16:40",
+            detail: `{ "tool": "workspace.delete_files", "paths": ["uploads/tmp/*"], "reason_hint": "批量删除范围过大" }`,
+          },
+          {
+            id: "office-hist-erp-draft",
+            actionName: "overwrite_erp_draft",
+            resolution: "approved",
+            resolvedAt: "2026/4/7 16:21:08",
+            detail: `{ "tool": "erp.patch_draft", "draftId": "BX-20260405-009", "fields": ["costCenter", "invoiceNo"] }`,
+          },
+        ]
+      ),
     },
     personRelations: [
       {
@@ -3028,8 +2921,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-1",
                 type: "工具执行",
                 targetName: "情报处理链路",
-                inputSummary: "识别任务为竞品与政策情报归集，启动标准化情报处理链路。",
-                outputSummary: "已启动情报处理链路，并挂接本体与安全校验能力。",
+                inputSummary:
+                  '{\n  "pipeline": "intel.standard.v3",\n  "taskType": "competitor_and_policy_digest",\n  "hooks": ["ontology_mcp", "security_mcp"]\n}',
+                outputSummary:
+                  '{\n  "runId": "intel-run-9a2f",\n  "status": "started",\n  "stages": ["ingest", "dedupe", "structure", "judge", "export"]\n}',
                 durationMs: 260,
                 status: "成功",
                 traceId: "trace-intel-shrimp-001",
@@ -3039,8 +2934,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-1",
                 type: "MCP调用",
                 targetName: "情报场景本体 MCP / 本体情报源接入",
-                inputSummary: "读取本体中的竞品对象、历史动态和政策标签。",
-                outputSummary: "已接入 14 个相关对象和 27 条历史情报记录作为研判上下文。",
+                inputSummary:
+                  '{\n  "resource": "ontology://intel/competitors",\n  "select": ["entities", "historical_signals", "policy_tags"],\n  "limit": 500\n}',
+                outputSummary:
+                  '{\n  "entityCount": 14,\n  "historicalRecords": 27,\n  "contextHandle": "ctx-ont-441b"\n}',
                 durationMs: 640,
                 status: "成功",
                 traceId: "trace-intel-shrimp-001",
@@ -3050,8 +2947,9 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-1",
                 type: "工作流节点",
                 targetName: "情报处理链路 / 多源采集",
-                inputSummary: "采集公开新闻、公司公告、行业协会和监管网站动态。",
-                outputSummary: "汇集到 23 条原始动态。",
+                inputSummary:
+                  '{\n  "node": "collect.multi_source",\n  "feeds": ["news", "issuer_filings", "trade_assoc", "regulator_portal"],\n  "timeWindow": "7d"\n}',
+                outputSummary: '{\n  "rawItems": 23,\n  "bytesIngested": 1842033,\n  "fetchErrors": 0\n}',
                 durationMs: 1180,
                 status: "成功",
                 traceId: "trace-intel-shrimp-001",
@@ -3061,8 +2959,9 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-1",
                 type: "工作流节点",
                 targetName: "情报处理链路 / 去重过滤",
-                inputSummary: "按来源、主题和时间窗口对原始动态做去重和噪声过滤。",
-                outputSummary: "保留 6 条有效动态，剔除 17 条重复或低相关内容。",
+                inputSummary:
+                  '{\n  "node": "dedupe.filter",\n  "strategy": "simhash+topic",\n  "minScore": 0.72\n}',
+                outputSummary: '{\n  "kept": 6,\n  "dropped": 17,\n  "dropReasons": { "near_dup": 11, "low_signal": 6 }\n}',
                 durationMs: 520,
                 status: "成功",
                 traceId: "trace-intel-shrimp-001",
@@ -3072,8 +2971,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-1",
                 type: "MCP调用",
                 targetName: "安全校验服务 MCP / 敏感内容校验",
-                inputSummary: "对动态摘要、实体名称和导出草稿执行敏感信息校验。",
-                outputSummary: "拦截 1 条含未公开项目代号的草稿片段，其余内容校验通过。",
+                inputSummary:
+                  '{\n  "tool": "security.scan_text",\n  "targets": ["summary", "entity_names", "export_draft"],\n  "ruleset": "external_comms_strict"\n}',
+                outputSummary:
+                  '{\n  "blockedFragments": 1,\n  "ruleHits": ["codename_unpublished"],\n  "passed": ["summary", "entity_names"]\n}',
                 durationMs: 430,
                 status: "成功",
                 traceId: "trace-intel-shrimp-001",
@@ -3083,8 +2984,9 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-1",
                 type: "工作流节点",
                 targetName: "情报处理链路 / 结构化拆解",
-                inputSummary: "把有效动态拆解为主体、动作、时间、来源和影响对象。",
-                outputSummary: "已生成结构化情报对象，待进入真伪和重要性研判。",
+                inputSummary:
+                  '{\n  "node": "structure.extract",\n  "schema": "intel.signal.v1",\n  "fields": ["actor", "action", "time", "source", "impacted"]\n}',
+                outputSummary: '{\n  "signals": 6,\n  "nextStage": "veracity_importance",\n  "artifactRef": "signals-batch-7c91.json"\n}',
                 durationMs: 360,
                 status: "成功",
                 traceId: "trace-intel-shrimp-001",
@@ -3094,8 +2996,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-1",
                 type: "工具执行",
                 targetName: "真伪与重要性研判 / 历史本体比对",
-                inputSummary: "结合历史本体记录、公告来源和公开新闻进行真伪交叉验证。",
-                outputSummary: "重点动态“竞品发布算力调度新品”被判定为高可信，重要性为高。",
+                inputSummary:
+                  '{\n  "tool": "intel.judge.cross_check",\n  "inputs": ["ontology_history", "issuer_filings", "press_wire"],\n  "focusSignalId": "sig-003"\n}',
+                outputSummary:
+                  '{\n  "signalId": "sig-003",\n  "veracity": "high",\n  "importance": "high",\n  "headline": "竞品发布算力调度新品"\n}',
                 durationMs: 870,
                 status: "成功",
                 traceId: "trace-intel-shrimp-001",
@@ -3105,8 +3009,9 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-1",
                 type: "工具执行",
                 targetName: "真伪与重要性研判 / 字段回填",
-                inputSummary: "把可信度和重要性结果回填到当前结构化情报对象。",
-                outputSummary: "已完成 6 条情报对象的真伪与重要性回填。",
+                inputSummary:
+                  '{\n  "tool": "intel.judge.apply_labels",\n  "batchId": "signals-batch-7c91",\n  "writeMode": "merge"\n}',
+                outputSummary: '{\n  "updated": 6,\n  "fields": ["veracity", "importance", "rationale_refs"]\n}',
                 durationMs: 280,
                 status: "成功",
                 traceId: "trace-intel-shrimp-001",
@@ -3116,8 +3021,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-1",
                 type: "工作流节点",
                 targetName: "扩散检索 / 图谱溯源",
-                inputSummary: "围绕重点动态扩散查询关联产品线、监管政策和历史动作。",
-                outputSummary: "已形成可下钻的来源依据和图谱关系，支持“查看依据”展示。",
+                inputSummary:
+                  '{\n  "node": "graph.expand",\n  "seed": "sig-003",\n  "depth": 2,\n  "edgeTypes": ["mentions", "supplies", "regulated_by"]\n}',
+                outputSummary:
+                  '{\n  "nodes": 18,\n  "edges": 27,\n  "evidenceBundles": ["eb-01", "eb-02", "eb-03"]\n}',
                 durationMs: 690,
                 status: "成功",
                 traceId: "trace-intel-shrimp-001",
@@ -3127,8 +3034,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-1",
                 type: "接口调用",
                 targetName: "本体回写 Action / 写入情报对象",
-                inputSummary: "将结构化情报、可信度、重要性和来源依据写回本体。",
-                outputSummary: "已更新 6 条情报对象，并为 2 条高优动态打上重点跟踪标签。",
+                inputSummary:
+                  '{\n  "POST": "/ontology/v2/intel/batch_upsert",\n  "body": { "signals": 6, "includeEvidence": true }\n}',
+                outputSummary:
+                  '{\n  "upserted": 6,\n  "tagsAdded": { "priority_watch": 2 },\n  "transactionId": "tx-ont-8831"\n}',
                 durationMs: 550,
                 status: "成功",
                 traceId: "trace-intel-shrimp-001",
@@ -3138,8 +3047,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-1",
                 type: "工具执行",
                 targetName: "Word 简报生成器",
-                inputSummary: "把结构化简报内容渲染成符合公司规范的 Word 文档。",
-                outputSummary: "已生成 market-intel-weekly-brief.docx，并提供下载入口。",
+                inputSummary:
+                  '{\n  "tool": "docx.render",\n  "templateId": "intel-brief-corporate-v5",\n  "dataRef": "weekly-brief-2026-W14.json"\n}',
+                outputSummary:
+                  '{\n  "path": "/workspace/output/deliverables/market-intel-weekly-brief.docx",\n  "sizeBytes": 482910,\n  "downloadToken": "dl-tok-1f9c"\n}',
                 durationMs: 460,
                 status: "成功",
                 traceId: "trace-intel-shrimp-001",
@@ -3159,8 +3070,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-2",
                 type: "MCP调用",
                 targetName: "情报场景本体 MCP / 读取关联对象",
-                inputSummary: "根据重点动态读取关联产品线、监管政策和历史记录。",
-                outputSummary: "返回 4 个关联对象和 6 条图谱关系。",
+                inputSummary:
+                  '{\n  "method": "related_objects.get",\n  "signalId": "sig-003",\n  "include": ["product_lines", "policies", "historical"]\n}',
+                outputSummary:
+                  '{\n  "objects": 4,\n  "graphEdges": 6,\n  "queryMs": 418\n}',
                 durationMs: 420,
                 status: "成功",
                 traceId: "trace-intel-shrimp-002",
@@ -3170,8 +3083,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-2",
                 type: "工作流节点",
                 targetName: "图谱溯源 / 关系下钻",
-                inputSummary: "沿重点动态的来源节点和关联实体做关系下钻。",
-                outputSummary: "已展开新闻、公告、历史记录和监管政策间的图谱关系。",
+                inputSummary:
+                  '{\n  "node": "graph.drilldown",\n  "from": "sig-003.source_graph",\n  "maxHops": 3\n}',
+                outputSummary:
+                  '{\n  "expandedNodes": ["news", "filing", "history", "policy"],\n  "edgeCount": 14,\n  "layout": "evidence_tree"\n}',
                 durationMs: 510,
                 status: "成功",
                 traceId: "trace-intel-shrimp-002",
@@ -3203,8 +3118,10 @@ const detailMap: Record<string, ClawDetailData> = {
                 turnId: "intel-shrimp-turn-watch-1",
                 type: "MCP调用",
                 targetName: "安全校验服务 MCP / 对外发布校验",
-                inputSummary: "对例会群摘要执行敏感字段和涉密代号校验。",
-                outputSummary: "已移除 1 处未授权代号，仅保留可公开摘要。",
+                inputSummary:
+                  '{\n  "tool": "security.scan_text",\n  "channel": "external_meeting_group",\n  "profile": "redact_codenames"\n}',
+                outputSummary:
+                  '{\n  "redactions": 1,\n  "rules": ["codename_unauthorized"],\n  "exportable": true\n}',
                 durationMs: 240,
                 status: "成功",
                 traceId: "trace-intel-shrimp-101",
@@ -3295,149 +3212,43 @@ const detailMap: Record<string, ClawDetailData> = {
         {
           id: "intel-boundary-public-search",
           name: "公开情报采集",
-          description: "访问公开新闻、公司公告和政策站点采集情报。",
-          level: "L1 自动执行",
+          description: "访问公开新闻、公司公告和政策站点采集情报",
+          level: "L1 直接执行",
         },
         {
           id: "intel-boundary-ontology-lookup",
           name: "本体扩散检索",
-          description: "基于重点动态做本体检索、扩散查询和图谱关系下钻。",
-          level: "L1 自动执行",
+          description: "基于重点动态做本体检索、扩散查询和图谱关系下钻",
+          level: "L1 直接执行",
         },
         {
           id: "intel-boundary-ontology-write",
           name: "本体回写",
-          description: "把真伪、重要性和来源依据写回情报本体。",
+          description: "把真伪、重要性和来源依据写回情报本体",
           level: "L2 通知",
         },
         {
           id: "intel-boundary-export",
           name: "导出情报文档",
-          description: "导出结构化情报简报和正式 Word 文档。",
+          description: "导出结构化情报简报和正式文档",
           level: "L2 通知",
         },
         {
           id: "intel-boundary-publish",
           name: "对外发布情报摘要",
-          description: "向群聊、邮件或例会渠道同步情报摘要。",
+          description: "向群聊、邮件或例会渠道同步情报摘要",
           level: "L3 审批",
         },
-      ],
-      strategyPolicies: [
         {
-          id: "intel-policy-sensitive-content",
-          title: "敏感情报内容防护",
-          description: "保护涉密代号、未公开项目、敏感客户名称和高风险判断结果，避免直接外发。",
-          enabled: true,
-          mode: "统一配置",
-          action: "拦截",
-          availableActions: ["拦截", "记录", "审批"],
-          rules: [
-            {
-              id: "intel-policy-sensitive-content-1",
-              stage: "输入+输出",
-              subtype: "涉密代号与未公开项目",
-              description: "检测涉密代号、未披露项目和未授权客户名称，命中后默认拦截。",
-              level: "严格",
-            },
-            {
-              id: "intel-policy-sensitive-content-2",
-              stage: "输出",
-              subtype: "高风险研判结论",
-              description: "对未完成交叉验证的高风险判断结果限制直接外发。",
-              level: "标准",
-            },
-          ],
-        },
-        {
-          id: "intel-policy-source-trust",
-          title: "来源可信度校验",
-          description: "对多源信息做来源可信度分层和交叉验证，避免单一低可信来源直接进入重点结论。",
-          enabled: true,
-          mode: "单独配置",
-          action: "记录",
-          availableActions: ["拦截", "记录", "审批"],
-          rules: [
-            {
-              id: "intel-policy-source-trust-1",
-              stage: "处理阶段",
-              subtype: "单一来源重点判断",
-              description: "当重点动态仅来自单一来源时，必须保留留痕并降低重要性。",
-              level: "标准",
-            },
-            {
-              id: "intel-policy-source-trust-2",
-              stage: "处理阶段",
-              subtype: "社媒爆料可信度",
-              description: "对社媒爆料类来源强制要求公告或历史记录补证。",
-              level: "严格",
-            },
-          ],
-        },
-        {
-          id: "intel-policy-ontology-write",
-          title: "本体回写防护",
-          description: "对真伪、重要性和标签等关键字段的回写动作做额外审批和留痕。",
-          enabled: true,
-          mode: "单独配置",
-          action: "审批",
-          availableActions: ["拦截", "记录", "审批"],
-          rules: [
-            {
-              id: "intel-policy-ontology-write-1",
-              stage: "工具结果回写前",
-              subtype: "高优字段回写",
-              description: "当重要性=高或影响范围=高时，要求对回写动作做额外确认。",
-              level: "严格",
-            },
-            {
-              id: "intel-policy-ontology-write-2",
-              stage: "工具结果回写前",
-              subtype: "对象标签变更",
-              description: "对竞品标签、监管标签和图谱关系变更进行完整留痕。",
-              level: "标准",
-            },
-          ],
+          id: "intel-boundary-task",
+          name: "管理任务",
+          description: "创建、更新或删除采集与投递相关任务",
+          level: "L1 直接执行",
         },
       ],
-      lexiconPolicies: [
-        {
-          id: "intel-lexicon-blacklist",
-          title: "涉密情报黑名单",
-          description: "在对话、导出文档和本体回写中拦截涉密代号和未公开敏感对象。",
-          enabled: true,
-          mode: "统一配置",
-          stage: "输入+输出+工具入参",
-          action: "拦截",
-          availableActions: ["拦截", "记录"],
-          selectedLibraries: ["涉密代号词库", "未公开项目词库", "监管敏感词库"],
-          availableLibraries: ["涉密代号词库", "未公开项目词库", "监管敏感词库", "客户敏感对象词库"],
-        },
-        {
-          id: "intel-lexicon-public-whitelist",
-          title: "公开来源白名单",
-          description: "对白名单中的公开政策、上市公司公告和权威公开新闻做放行与记录。",
-          enabled: true,
-          mode: "统一配置",
-          stage: "输入+输出",
-          action: "放行",
-          availableActions: ["放行", "记录"],
-          selectedLibraries: ["部委官网白名单", "上市公司公告白名单", "公开媒体白名单"],
-          availableLibraries: ["部委官网白名单", "上市公司公告白名单", "公开媒体白名单", "行业协会白名单"],
-        },
-        {
-          id: "intel-lexicon-watchlist",
-          title: "竞品重点关注词库",
-          description: "对重点竞品、政策主题和监管词条做记录，便于命中后提升关注等级。",
-          enabled: true,
-          mode: "单独配置",
-          stage: "输入+输出",
-          action: "记录",
-          availableActions: ["拦截", "记录"],
-          selectedLibraries: ["竞品重点产品线", "算力调度政策词库"],
-          availableLibraries: ["竞品重点产品线", "算力调度政策词库", "区域监管词库"],
-        },
-      ],
+      toolProtection: createDefaultToolProtection(),
+      fileProtection: createDefaultFileProtection([]),
+      securityApprovals: createDefaultSecurityApprovals([], []),
     },
     personRelations: [
       {
@@ -3844,8 +3655,9 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
                 turnId: `${listItem.id}-turn-001`,
                 type: "工具执行",
                 targetName: "上下文整理器",
-                inputSummary: `读取 ${listItem.scene} 的当前上下文。`,
-                outputSummary: "已完成上下文整理并生成处理建议。",
+                inputSummary: `{\n  "tool": "context.pack",\n  "scope": ${JSON.stringify(listItem.scene)},\n  "sources": ["session", "workspace", "kb"]\n}`,
+                outputSummary:
+                  '{\n  "contextHandle": "ctx-default-001",\n  "tokenEstimate": 1820,\n  "suggestions": ["run_checklist", "draft_reply"]\n}',
                 durationMs: 540,
                 status: "成功",
                 traceId: `${listItem.id}-trace-001`,
@@ -3888,86 +3700,43 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
         {
           id: `${listItem.id}-boundary-read`,
           name: "读取文件",
-          description: "读取工作区和知识库中的文件内容。",
-          level: "L1 自动执行",
+          description: "读取工作区和知识库中的文件内容",
+          level: "L1 直接执行",
         },
         {
           id: `${listItem.id}-boundary-write`,
           name: "写入文件",
-          description: "创建或更新工作区中的文档。",
+          description: "创建或更新工作区中的文档",
           level: "L2 通知",
         },
         {
-          id: `${listItem.id}-boundary-cli`,
-          name: "执行 CLI / Shell",
-          description: "执行命令行或脚本指令。",
+          id: `${listItem.id}-boundary-delete`,
+          name: "删除文件",
+          description: "删除工作区中的文件",
           level: "L3 审批",
         },
-      ],
-      strategyPolicies: [
         {
-          id: `${listItem.id}-policy-content`,
-          title: "内容合规防护",
-          description: "对输入和输出中的不合规内容进行检测与留痕。",
-          enabled: true,
-          mode: "统一配置",
-          action: "拦截",
-          availableActions: ["拦截", "记录"],
-          rules: [
-            {
-              id: `${listItem.id}-policy-content-rule-1`,
-              stage: "输入+输出",
-              subtype: "违法及不良内容",
-              description: "识别常见违法及不良内容并触发拦截。",
-              level: "严格",
-            },
-          ],
+          id: `${listItem.id}-boundary-msg`,
+          name: "发送飞书消息",
+          description: "通过飞书应用向用户发送消息",
+          level: "L2 通知",
         },
         {
-          id: `${listItem.id}-policy-tool`,
-          title: "工具调用防护",
-          description: "对高影响工具调用和结果写回做额外校验。",
-          enabled: true,
-          mode: "单独配置",
-          action: "审批",
-          availableActions: ["拦截", "记录", "审批"],
-          rules: [
-            {
-              id: `${listItem.id}-policy-tool-rule-1`,
-              stage: "工具调用前",
-              subtype: "高影响写操作",
-              description: "识别新增、修改、删除等高影响工具调用。",
-              level: "标准",
-            },
-          ],
+          id: `${listItem.id}-boundary-net`,
+          name: "网络搜索",
+          description: "通过互联网获取信息",
+          level: "L1 直接执行",
+        },
+        {
+          id: `${listItem.id}-boundary-task`,
+          name: "管理任务",
+          description: "创建、更新或删除任务",
+          level: "L1 直接执行",
         },
       ],
-      lexiconPolicies: [
-        {
-          id: `${listItem.id}-lexicon-blacklist`,
-          title: "黑名单词库",
-          description: "拦截输入输出中的高风险词条。",
-          enabled: true,
-          mode: "统一配置",
-          stage: "输入+输出",
-          action: "拦截",
-          availableActions: ["拦截", "记录"],
-          selectedLibraries: ["默认黑名单"],
-          availableLibraries: ["默认黑名单", "高危动作词库"],
-        },
-        {
-          id: `${listItem.id}-lexicon-whitelist`,
-          title: "白名单词库",
-          description: "对白名单词条仅保留记录，不做阻断。",
-          enabled: true,
-          mode: "统一配置",
-          stage: "输入+输出",
-          action: "放行",
-          availableActions: ["放行", "记录"],
-          selectedLibraries: ["默认白名单"],
-          availableLibraries: ["默认白名单", "内部编号白名单"],
-        },
-      ],
+      toolProtection: createDefaultToolProtection(),
+      fileProtection: createDefaultFileProtection([]),
+      securityApprovals: createDefaultSecurityApprovals([], []),
     },
     personRelations: [
       {

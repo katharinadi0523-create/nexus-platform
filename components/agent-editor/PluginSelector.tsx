@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   FileText,
-  Image,
+  Image as ImageIcon,
   Music,
   Cloud,
   Calculator,
@@ -47,7 +47,7 @@ const presetPlugins: Plugin[] = [
     id: "plugin-2",
     name: "图片理解",
     description: "理解图片内容并提取信息",
-    icon: <Image className="w-5 h-5" />,
+    icon: <ImageIcon className="w-5 h-5" />,
     color: "bg-purple-100 text-purple-600",
   },
   {

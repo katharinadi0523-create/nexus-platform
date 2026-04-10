@@ -78,10 +78,11 @@ export const skillMarketplaceItems: SkillMarketplaceItem[] = [
     id: "travel-expense",
     name: "差旅申请与报销",
     author: "共享服务中心",
-    description: "自动生成差旅申请、补充审批说明并衔接报销材料整理。",
+    description:
+      "根据上传的差旅票据图片和行程信息，生成差旅申请说明、整理报销材料，并衔接验票与自动填单流程。",
     category: "通用",
     sourceType: "org",
-    tags: ["差旅", "报销", "审批"],
+    tags: ["差旅", "报销", "审批", "验票", "填单"],
   },
   {
     id: "xlsx",

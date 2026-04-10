@@ -1,8 +1,7 @@
 "use client";
 
-import { ChevronRight, CircleAlert, Cpu, HardDrive, RotateCcw, Server, ShieldCheck } from "lucide-react";
+import { ChevronRight, CircleAlert, Cpu, HardDrive, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +21,6 @@ type ResourceSectionProps = {
   resourceValidation: ResourceValidation;
   runtimeAdvancedOpen: boolean;
   onToggleRuntimeAdvanced: () => void;
-  onResetResourceConfig: () => void;
   onRuntimeTierChange: (tier: RuntimeResourceTier) => void;
   onExecutionTierChange: (tier: ExecutionResourceTier) => void;
   onRuntimeNumberChange: (field: "maxConcurrentTasks" | "maxTaskDurationMin", value: string) => void;
@@ -46,7 +44,6 @@ export function ClawResourceSection({
   resourceValidation,
   runtimeAdvancedOpen,
   onToggleRuntimeAdvanced,
-  onResetResourceConfig,
   onRuntimeTierChange,
   onExecutionTierChange,
   onRuntimeNumberChange,
@@ -56,27 +53,7 @@ export function ClawResourceSection({
   onExecutionCapabilityChange,
 }: ResourceSectionProps) {
   return (
-    <SectionCard title="资源配置" description="用于配置 Claw 的运行资源、执行环境上限与基础能力边界。">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-sky-100 bg-white text-sky-700 shadow-sm shadow-sky-100/50">
-            <Server className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="text-lg font-semibold text-slate-950">资源配置</div>
-            <div className="mt-2 text-sm leading-7 text-slate-600">管理 Claw 本体运行资源和执行环境资源规格。</div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Badge className="border-slate-200 bg-white text-slate-600">2项</Badge>
-          <Button type="button" variant="outline" size="sm" onClick={onResetResourceConfig}>
-            <RotateCcw className="h-4 w-4" />
-            恢复默认
-          </Button>
-        </div>
-      </div>
-
+    <SectionCard>
       <div className="grid gap-5 xl:grid-cols-2">
         <div className="rounded-[24px] border border-slate-200 bg-white p-5">
           <div className="flex items-start justify-between gap-4">
@@ -107,14 +84,14 @@ export function ClawResourceSection({
                     className={cn(
                       "rounded-[20px] border px-4 py-4 text-left transition-all",
                       isActive
-                        ? "border-sky-200 bg-sky-50/70 shadow-[0_16px_30px_-28px_rgba(14,165,233,0.5)]"
-                        : "border-slate-200 bg-slate-50/70 hover:border-sky-100 hover:bg-white"
+                        ? "border-[#d8e0ea] bg-[#f5f7fb] shadow-[0_16px_30px_-28px_rgba(15,23,42,0.12)]"
+                        : "border-slate-200 bg-slate-50/70 hover:border-slate-300 hover:bg-white"
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-semibold text-slate-950">{option.title}</div>
                       {option.value === "standard" ? (
-                        <Badge className="border-emerald-100 bg-emerald-50 text-emerald-700">推荐</Badge>
+                        <Badge className="border-[#d9e1da] bg-[#f5f7f5] text-[#5c6c5f]">推荐</Badge>
                       ) : null}
                     </div>
                     <div className="mt-2 text-xs leading-6 text-slate-500">{option.summary}</div>
@@ -223,14 +200,14 @@ export function ClawResourceSection({
                     className={cn(
                       "rounded-[20px] border px-4 py-4 text-left transition-all",
                       isActive
-                        ? "border-sky-200 bg-sky-50/70 shadow-[0_16px_30px_-28px_rgba(14,165,233,0.5)]"
-                        : "border-slate-200 bg-slate-50/70 hover:border-sky-100 hover:bg-white"
+                        ? "border-[#d8e0ea] bg-[#f5f7fb] shadow-[0_16px_30px_-28px_rgba(15,23,42,0.12)]"
+                        : "border-slate-200 bg-slate-50/70 hover:border-slate-300 hover:bg-white"
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-semibold text-slate-950">{option.title}</div>
                       {option.value === "standard" ? (
-                        <Badge className="border-emerald-100 bg-emerald-50 text-emerald-700">推荐</Badge>
+                        <Badge className="border-[#d9e1da] bg-[#f5f7f5] text-[#5c6c5f]">推荐</Badge>
                       ) : null}
                     </div>
                     <div className="mt-2 text-xs leading-6 text-slate-500">{option.summary}</div>
@@ -299,7 +276,7 @@ export function ClawResourceSection({
                   <label
                     key={item.key}
                     htmlFor={`execution-capability-${item.key}`}
-                    className="flex cursor-pointer items-start gap-3 rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3 transition-colors hover:border-sky-100 hover:bg-white"
+                    className="flex cursor-pointer items-start gap-3 rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3 transition-colors hover:border-slate-300 hover:bg-white"
                   >
                     <Checkbox
                       id={`execution-capability-${item.key}`}

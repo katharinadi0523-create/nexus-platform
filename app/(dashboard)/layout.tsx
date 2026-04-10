@@ -20,6 +20,7 @@ import {
   FileText,
   PanelLeft,
   Sparkles,
+  Shrimp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalHeader } from "@/components/layout/global-header";
@@ -73,7 +74,7 @@ const menuGroups: MenuGroup[] = [
       {
         key: "ClawHubNext",
         label: "Claw管理",
-        icon: Sparkles,
+        icon: Shrimp,
         href: "/claw-hub-next",
       },
       {
@@ -226,6 +227,9 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const isClawDetailPage = pathname.startsWith("/claw-hub-next/claws/");
+
   return (
     <>
       <GlobalHeader />
@@ -235,9 +239,14 @@ export default function DashboardLayout({
           <Sidebar />
         </aside>
         {/* 右侧主体: 自动填满剩余空间 */}
-        <main className="flex-1 flex flex-col h-[calc(100vh-60px)] overflow-hidden relative">
+        <main className="relative flex h-[calc(100vh-60px)] min-h-0 flex-1 flex-col overflow-hidden">
           {/* 页面内容滚动区 */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div
+            className={cn(
+              "flex-1 p-6",
+              isClawDetailPage ? "min-h-0 overflow-hidden" : "overflow-y-auto"
+            )}
+          >
             {children}
           </div>
         </main>

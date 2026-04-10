@@ -78,6 +78,38 @@ export type ConversationSessionSummary = {
   auditRecordCount: number;
 };
 
+export type ConversationTimelineActionStatus = "done" | "running" | "failed";
+
+export type ConversationTimelineActionKind = "skill" | "tool" | "user";
+
+export type ConversationTimelineItem =
+  | {
+      key: string;
+      type: "user";
+      message: ConversationMessageWithAudit;
+    }
+  | {
+      key: string;
+      type: "thinking";
+      message: ConversationMessageWithAudit;
+      active: boolean;
+    }
+  | {
+      key: string;
+      type: "action";
+      title: string;
+      kind: ConversationTimelineActionKind;
+      status: ConversationTimelineActionStatus;
+      logs: string[];
+      time?: string;
+      source: "message" | "audit";
+    }
+  | {
+      key: string;
+      type: "output";
+      message: ConversationMessageWithAudit;
+    };
+
 export function buildConversationMessagesWithAudit(
   chatSession?: ChatSessionItem,
   run?: ConversationRunItem
@@ -162,6 +194,328 @@ export function buildConversationSessionSummaries(
   });
 }
 
+function normalizeConversationActionTitle(value: string) {
+  return value.replace(/\s+/g, "").replace(/：/g, ":").toLowerCase();
+}
+
+function getConversationMessageDisplayMode(message: ConversationMessageWithAudit) {
+  if (message.role === "user") {
+    return "user" as const;
+  }
+
+  const displayMode = message.displayMode;
+
+  if (displayMode === "thinking" || displayMode === "output" || displayMode === "skill" || displayMode === "tool") {
+    return displayMode;
+  }
+
+  if (message.role === "tool") {
+    return /skill/i.test(message.toolLabel ?? message.content) ? ("skill" as const) : ("tool" as const);
+  }
+
+  const normalizedContent = message.content.trim();
+  const thinkingStarters = [
+    "我先",
+    "收到，我先",
+    "收到，我会先",
+    "可以，我先",
+    "可以，我会",
+    "我会先",
+    "我先思考",
+    "好的，我来",
+    "我先拉",
+    "我先读",
+    "我先补齐",
+  ];
+
+  return thinkingStarters.some((starter) => normalizedContent.startsWith(starter))
+    ? ("thinking" as const)
+    : ("output" as const);
+}
+
+function getConversationAuditGroupMeta(record: ConversationAuditItem) {
+  if (/skill/i.test(record.targetName)) {
+    return {
+      title: record.targetName,
+      kind: "skill" as const,
+    };
+  }
+
+  const [title] = record.targetName.split(" / ");
+
+  return {
+    title: title?.trim() || record.targetName,
+    kind: "tool" as const,
+  };
+}
+
+function getConversationActionStatus(records: ConversationAuditItem[]): ConversationTimelineActionStatus {
+  if (records.some((record) => record.status === "失败")) {
+    return "failed";
+  }
+
+  if (records.some((record) => record.status !== "成功")) {
+    return "running";
+  }
+
+  return "done";
+}
+
+function parseConversationActionLogs(content: string, title: string) {
+  const lines = content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^[-•]\s*/, ""));
+
+  if (lines.length <= 1) {
+    return lines;
+  }
+
+  const normalizedTitle = normalizeConversationActionTitle(title);
+  const [, ...restLines] = lines;
+  const firstLine = lines[0] ?? "";
+  const shouldDropSummaryLine =
+    normalizeConversationActionTitle(firstLine).includes(normalizedTitle) ||
+    /^已(调用|启动|执行|接入|触发)/.test(firstLine);
+
+  return shouldDropSummaryLine && restLines.length > 0 ? restLines : lines;
+}
+
+function formatConversationAuditLog(record: ConversationAuditItem, title: string) {
+  const segments = record.targetName.split(" / ").map((segment) => segment.trim());
+  const suffix = segments.length > 1 ? segments.slice(1).join(" / ") : "";
+  const summary = record.outputSummary || record.inputSummary;
+
+  if (!summary) {
+    return record.targetName;
+  }
+
+  return suffix && normalizeConversationActionTitle(segments[0] ?? "") === normalizeConversationActionTitle(title)
+    ? `${suffix}：${summary}`
+    : summary;
+}
+
+function buildConversationActionFromMessage(message: ConversationMessageWithAudit): Extract<ConversationTimelineItem, { type: "action" }> {
+  const title = message.toolLabel ?? message.sender;
+  const displayMode = getConversationMessageDisplayMode(message);
+
+  return {
+    key: `action-${message.id}`,
+    type: "action",
+    title,
+    kind: displayMode === "skill" ? "skill" : "tool",
+    status: "done",
+    logs: parseConversationActionLogs(message.content, title),
+    time: message.time,
+    source: "message",
+  };
+}
+
+function buildConversationActionsFromAudit(
+  records: ConversationAuditItem[],
+  explicitTitles: Set<string>,
+  turnId?: string
+): Extract<ConversationTimelineItem, { type: "action" }>[] {
+  const groupedRecords = new Map<
+    string,
+    {
+      title: string;
+      kind: ConversationTimelineActionKind;
+      records: ConversationAuditItem[];
+    }
+  >();
+
+  records.forEach((record) => {
+    const meta = getConversationAuditGroupMeta(record);
+    const normalizedTitle = normalizeConversationActionTitle(meta.title);
+
+    if (explicitTitles.has(normalizedTitle)) {
+      return;
+    }
+
+    const existingGroup = groupedRecords.get(normalizedTitle);
+
+    if (existingGroup) {
+      existingGroup.records.push(record);
+      return;
+    }
+
+    groupedRecords.set(normalizedTitle, {
+      title: meta.title,
+      kind: meta.kind,
+      records: [record],
+    });
+  });
+
+  return Array.from(groupedRecords.values()).map((group, index) => ({
+    key: `audit-action-${turnId ?? "standalone"}-${index}`,
+    type: "action",
+    title: group.title,
+    kind: group.kind,
+    status: getConversationActionStatus(group.records),
+    logs: group.records
+      .map((record) => formatConversationAuditLog(record, group.title))
+      .filter((log, logIndex, logs) => Boolean(log) && logs.indexOf(log) === logIndex),
+    time: undefined,
+    source: "audit",
+  }));
+}
+
+export function buildConversationTimeline(
+  chatSession?: ChatSessionItem,
+  run?: ConversationRunItem
+): ConversationTimelineItem[] {
+  const messages = buildConversationMessagesWithAudit(chatSession, run);
+
+  if (!messages.length) {
+    return [];
+  }
+
+  if (!run?.turns.length) {
+    return messages.map((message) => {
+      const displayMode = getConversationMessageDisplayMode(message);
+
+      if (displayMode === "user") {
+        return {
+          key: `user-${message.id}`,
+          type: "user",
+          message,
+        };
+      }
+
+      if (displayMode === "thinking") {
+        return {
+          key: `thinking-${message.id}`,
+          type: "thinking",
+          message,
+          active: false,
+        };
+      }
+
+      if (displayMode === "skill" || displayMode === "tool") {
+        return buildConversationActionFromMessage(message);
+      }
+
+      return {
+        key: `output-${message.id}`,
+        type: "output",
+        message,
+      };
+    });
+  }
+
+  const turnByNumber = new Map(run.turns.map((turn) => [turn.turnNumber, turn]));
+  const looseItems: ConversationTimelineItem[] = [];
+  const turnMessages = new Map<string, ConversationMessageWithAudit[]>();
+
+  messages.forEach((message) => {
+    const matchedTurn = (message.turnNumber && turnByNumber.get(message.turnNumber)) ||
+      (message.auditTurnId ? run.turns.find((turn) => turn.id === message.auditTurnId) : undefined);
+
+    if (!matchedTurn) {
+      const displayMode = getConversationMessageDisplayMode(message);
+
+      if (displayMode === "user") {
+        looseItems.push({
+          key: `user-${message.id}`,
+          type: "user",
+          message,
+        });
+      } else if (displayMode === "thinking") {
+        looseItems.push({
+          key: `thinking-${message.id}`,
+          type: "thinking",
+          message,
+          active: false,
+        });
+      } else if (displayMode === "skill" || displayMode === "tool") {
+        looseItems.push(buildConversationActionFromMessage(message));
+      } else {
+        looseItems.push({
+          key: `output-${message.id}`,
+          type: "output",
+          message,
+        });
+      }
+
+      return;
+    }
+
+    const bucket = turnMessages.get(matchedTurn.id) ?? [];
+    bucket.push(message);
+    turnMessages.set(matchedTurn.id, bucket);
+  });
+
+  const turnItems = run.turns.flatMap((turn) => {
+    const messagesInTurn = turnMessages.get(turn.id) ?? [];
+
+    if (!messagesInTurn.length && !turn.auditRecords.length) {
+      return [];
+    }
+
+    const explicitActions = messagesInTurn
+      .filter((message) => {
+        const displayMode = getConversationMessageDisplayMode(message);
+        return displayMode === "skill" || displayMode === "tool";
+      })
+      .map((message) => buildConversationActionFromMessage(message));
+    const explicitActionTitles = new Set(explicitActions.map((item) => normalizeConversationActionTitle(item.title)));
+    const auditActions = buildConversationActionsFromAudit(turn.auditRecords, explicitActionTitles, turn.id);
+    const explicitActionMap = new Map(explicitActions.map((item) => [item.key.replace(/^action-/, ""), item]));
+    let auditInserted = false;
+
+    const renderedItems = messagesInTurn.flatMap((message) => {
+      const displayMode = getConversationMessageDisplayMode(message);
+
+      if (displayMode === "user") {
+        return [
+          {
+            key: `user-${message.id}`,
+            type: "user" as const,
+            message,
+          },
+        ];
+      }
+
+      if (displayMode === "thinking") {
+        return [
+          {
+            key: `thinking-${message.id}`,
+            type: "thinking" as const,
+            message,
+            active: false,
+          },
+        ];
+      }
+
+      if (displayMode === "skill" || displayMode === "tool") {
+        const actionItem = explicitActionMap.get(message.id) ?? buildConversationActionFromMessage(message);
+        return [actionItem];
+      }
+
+      const nextItems: ConversationTimelineItem[] = [];
+
+      if (!auditInserted && auditActions.length > 0) {
+        nextItems.push(...auditActions);
+        auditInserted = true;
+      }
+
+      nextItems.push({
+        key: `output-${message.id}`,
+        type: "output",
+        message,
+      });
+
+      return nextItems;
+    });
+
+    return auditInserted ? renderedItems : [...renderedItems, ...auditActions];
+  });
+
+  return [...looseItems, ...turnItems];
+}
+
 export function formatDurationMs(durationMs?: number) {
   if (!durationMs || durationMs <= 0) {
     return "--";
@@ -237,7 +591,7 @@ export function getSecurityActionClassName(action: string) {
 
 export function getBoundaryLevelClassName(level: string) {
   switch (level) {
-    case "L1 自动执行":
+    case "L1 直接执行":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "L2 通知":
       return "border-amber-200 bg-amber-50 text-amber-700";

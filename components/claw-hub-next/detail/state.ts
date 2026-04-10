@@ -13,44 +13,6 @@ import { TOOL_CONFIG_KIND_LABELS } from "./constants";
 type EnabledItem = { id: string; enabled: boolean };
 type IdentifiableItem = { id: string };
 
-function normalizePolicyActions<Action extends string>(action: Action | Action[]) {
-  return Array.isArray(action) ? action : [action];
-}
-
-function togglePolicyAction<Action extends string>(currentAction: Action | Action[], nextAction: Action) {
-  const selectedActions = normalizePolicyActions(currentAction);
-  const hasRecord = selectedActions.includes("记录" as Action);
-  const hasNextAction = selectedActions.includes(nextAction);
-  const nextIsRecord = nextAction === ("记录" as Action);
-
-  if (nextIsRecord) {
-    if (hasNextAction) {
-      const primaryActions = selectedActions.filter((action) => action !== ("记录" as Action));
-      return primaryActions.length > 0 ? primaryActions : selectedActions;
-    }
-
-    return [...selectedActions, nextAction];
-  }
-
-  if (hasNextAction) {
-    const remainingActions = selectedActions.filter((action) => action !== nextAction);
-    return remainingActions.length > 0 ? remainingActions : selectedActions;
-  }
-
-  return hasRecord ? [nextAction, "记录" as Action] : [nextAction];
-}
-
-export function buildInitialLexiconDrafts(config: SecurityManagementConfig) {
-  return Object.fromEntries(
-    config.lexiconPolicies.map((policy) => [
-      policy.id,
-      policy.availableLibraries.find((library) => !policy.selectedLibraries.includes(library)) ??
-        policy.availableLibraries[0] ??
-        "",
-    ])
-  );
-}
-
 export function updateAutonomyBoundaryLevel(
   config: SecurityManagementConfig,
   boundaryId: string,
@@ -64,140 +26,104 @@ export function updateAutonomyBoundaryLevel(
   };
 }
 
-export function updateSecurityPolicyEnabled(
-  config: SecurityManagementConfig,
-  policyId: string,
-  enabled: boolean
-) {
+export function updateToolProtectionEnabled(config: SecurityManagementConfig, enabled: boolean): SecurityManagementConfig {
   return {
     ...config,
-    strategyPolicies: config.strategyPolicies.map((policy) => (policy.id === policyId ? { ...policy, enabled } : policy)),
+    toolProtection: { ...config.toolProtection, enabled },
   };
 }
 
-export function updateSecurityPolicyMode(
+export function updateToolProtectionRuleEnabled(
   config: SecurityManagementConfig,
-  policyId: string,
-  mode: SecurityManagementConfig["strategyPolicies"][number]["mode"]
-) {
-  return {
-    ...config,
-    strategyPolicies: config.strategyPolicies.map((policy) =>
-      policy.id === policyId ? { ...policy, mode: mode ?? policy.mode } : policy
-    ),
-  };
-}
-
-export function updateSecurityPolicyAction(
-  config: SecurityManagementConfig,
-  policyId: string,
-  action: SecurityManagementConfig["strategyPolicies"][number]["availableActions"][number]
-) {
-  return {
-    ...config,
-    strategyPolicies: config.strategyPolicies.map((policy) =>
-      policy.id === policyId ? { ...policy, action: togglePolicyAction(policy.action, action) } : policy
-    ),
-  };
-}
-
-export function updateSecurityPolicyRuleLevel(
-  config: SecurityManagementConfig,
-  policyId: string,
   ruleId: string,
-  level: SecurityManagementConfig["strategyPolicies"][number]["rules"][number]["level"]
-) {
-  return {
-    ...config,
-    strategyPolicies: config.strategyPolicies.map((policy) =>
-      policy.id === policyId
-        ? {
-            ...policy,
-            rules: policy.rules.map((rule) => (rule.id === ruleId ? { ...rule, level } : rule)),
-          }
-        : policy
-    ),
-  };
-}
-
-export function updateLexiconPolicyEnabled(
-  config: SecurityManagementConfig,
-  policyId: string,
   enabled: boolean
-) {
+): SecurityManagementConfig {
   return {
     ...config,
-    lexiconPolicies: config.lexiconPolicies.map((policy) => (policy.id === policyId ? { ...policy, enabled } : policy)),
+    toolProtection: {
+      ...config.toolProtection,
+      rules: config.toolProtection.rules.map((rule) => (rule.id === ruleId ? { ...rule, enabled } : rule)),
+    },
   };
 }
 
-export function updateLexiconPolicyMode(
+export function addToolProtectionRule(
   config: SecurityManagementConfig,
-  policyId: string,
-  mode: SecurityManagementConfig["lexiconPolicies"][number]["mode"]
-) {
+  rule: SecurityManagementConfig["toolProtection"]["rules"][number]
+): SecurityManagementConfig {
+  if (config.toolProtection.rules.some((item) => item.id === rule.id)) {
+    return config;
+  }
   return {
     ...config,
-    lexiconPolicies: config.lexiconPolicies.map((policy) => (policy.id === policyId ? { ...policy, mode } : policy)),
+    toolProtection: {
+      ...config.toolProtection,
+      rules: [...config.toolProtection.rules, rule],
+    },
   };
 }
 
-export function updateLexiconPolicyAction(
-  config: SecurityManagementConfig,
-  policyId: string,
-  action: SecurityManagementConfig["lexiconPolicies"][number]["availableActions"][number]
-) {
+export function updateFileProtectionEnabled(config: SecurityManagementConfig, enabled: boolean): SecurityManagementConfig {
   return {
     ...config,
-    lexiconPolicies: config.lexiconPolicies.map((policy) =>
-      policy.id === policyId ? { ...policy, action: togglePolicyAction(policy.action, action) } : policy
-    ),
+    fileProtection: { ...config.fileProtection, enabled },
   };
 }
 
-export function addLexiconLibrary(
+export function addFileProtectionPath(
   config: SecurityManagementConfig,
-  policyId: string,
-  selectedLibrary: string
-) {
-  const policy = config.lexiconPolicies.find((item) => item.id === policyId);
-  if (!policy || !selectedLibrary || policy.selectedLibraries.includes(selectedLibrary)) {
-    return { config, added: false, nextDraft: "" };
+  entry: SecurityManagementConfig["fileProtection"]["paths"][number]
+): SecurityManagementConfig {
+  const path = entry.path.trim();
+  if (!path) {
+    return config;
+  }
+  return {
+    ...config,
+    fileProtection: {
+      ...config.fileProtection,
+      paths: [...config.fileProtection.paths, { ...entry, path }],
+    },
+  };
+}
+
+export function removeFileProtectionPath(config: SecurityManagementConfig, pathId: string): SecurityManagementConfig {
+  return {
+    ...config,
+    fileProtection: {
+      ...config.fileProtection,
+      paths: config.fileProtection.paths.filter((item) => item.id !== pathId),
+    },
+  };
+}
+
+export function resolveSecurityApproval(
+  config: SecurityManagementConfig,
+  approvalId: string,
+  resolution: "approved" | "rejected"
+): SecurityManagementConfig {
+  const pending = config.securityApprovals.pending.find((item) => item.id === approvalId);
+  if (!pending) {
+    return config;
   }
 
-  const nextConfig = {
-    ...config,
-    lexiconPolicies: config.lexiconPolicies.map((item) =>
-      item.id === policyId
-        ? {
-            ...item,
-            selectedLibraries: [...item.selectedLibraries, selectedLibrary],
-          }
-        : item
-    ),
-  };
-  const nextPolicy = nextConfig.lexiconPolicies.find((item) => item.id === policyId);
-  const nextDraft =
-    nextPolicy?.availableLibraries.find((library) => !nextPolicy.selectedLibraries.includes(library)) ?? "";
+  const resolvedAt = new Date().toLocaleString("zh-CN", { hour12: false });
 
-  return { config: nextConfig, added: true, nextDraft };
-}
-
-export function removeLexiconLibrary(
-  config: SecurityManagementConfig,
-  policyId: string,
-  libraryName: string
-) {
   return {
     ...config,
-    lexiconPolicies: config.lexiconPolicies.map((policy) =>
-      policy.id === policyId
-        ? {
-            ...policy,
-            selectedLibraries: policy.selectedLibraries.filter((item) => item !== libraryName),
-          }
-        : policy
-    ),
+    securityApprovals: {
+      pending: config.securityApprovals.pending.filter((item) => item.id !== approvalId),
+      history: [
+        {
+          id: `hist-${approvalId}-${resolvedAt}`,
+          actionName: pending.actionName,
+          resolution,
+          resolvedAt,
+          detail: pending.payload,
+        },
+        ...config.securityApprovals.history,
+      ],
+    },
   };
 }
 

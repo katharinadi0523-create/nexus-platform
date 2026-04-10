@@ -582,6 +582,8 @@ export function AutonomousEditor({
   const [workflowSelectorOpen, setWorkflowSelectorOpen] = useState(false);
   const [pluginSelectorOpen, setPluginSelectorOpen] = useState(false);
   const [mcpSelectorOpen, setMcpSelectorOpen] = useState(false);
+  const [pluginSelectorKey, setPluginSelectorKey] = useState(0);
+  const [mcpSelectorKey, setMcpSelectorKey] = useState(0);
   const [selectedOntologies, setSelectedOntologies] = useState<OntologyConfig[]>(
     () => initialOntologies
   );
@@ -709,6 +711,11 @@ export function AutonomousEditor({
     }
   };
 
+  const handleClearKnowledgeBases = () => {
+    setSelectedKnowledgeBases([]);
+    setExpandedSections((prev) => ({ ...prev, knowledge: false }));
+  };
+
   const handleAddWorkflow = (workflow: WorkflowType) => {
     if (!selectedWorkflows.find((w) => w.id === workflow.id)) {
       setSelectedWorkflows([...selectedWorkflows, workflow]);
@@ -724,9 +731,19 @@ export function AutonomousEditor({
     }
   };
 
+  const handleClearWorkflows = () => {
+    setSelectedWorkflows([]);
+    setExpandedSections((prev) => ({ ...prev, workflow: false }));
+  };
+
   const handleAddPlugins = (plugins: Plugin[]) => {
     setSelectedPlugins(plugins);
     setExpandedSections((prev) => ({ ...prev, plugins: plugins.length > 0 }));
+  };
+
+  const openPluginSelector = () => {
+    setPluginSelectorKey((prev) => prev + 1);
+    setPluginSelectorOpen(true);
   };
 
   const handleRemovePlugin = (id: string) => {
@@ -737,9 +754,19 @@ export function AutonomousEditor({
     }
   };
 
+  const handleClearPlugins = () => {
+    setSelectedPlugins([]);
+    setExpandedSections((prev) => ({ ...prev, plugins: false }));
+  };
+
   const handleAddMCPs = (mcps: MCP[]) => {
     setSelectedMCPs(mcps);
     setExpandedSections((prev) => ({ ...prev, mcp: mcps.length > 0 }));
+  };
+
+  const openMcpSelector = () => {
+    setMcpSelectorKey((prev) => prev + 1);
+    setMcpSelectorOpen(true);
   };
 
   const handleRemoveMCP = (id: string) => {
@@ -748,6 +775,11 @@ export function AutonomousEditor({
     if (nextMCPs.length === 0) {
       setExpandedSections((prev) => ({ ...prev, mcp: false }));
     }
+  };
+
+  const handleClearMCPs = () => {
+    setSelectedMCPs([]);
+    setExpandedSections((prev) => ({ ...prev, mcp: false }));
   };
 
   const handleAddOntology = (config: OntologyConfig) => {
@@ -776,6 +808,12 @@ export function AutonomousEditor({
     }
   };
 
+  const handleClearOntologies = () => {
+    setSelectedOntologies([]);
+    setOntologyCardCollapsed({});
+    setExpandedSections((prev) => ({ ...prev, ontology: false }));
+  };
+
   const handleEditOntology = (index: number) => {
     setEditingOntologyIndex(index);
     setOntologyConfigOpen(true);
@@ -794,6 +832,11 @@ export function AutonomousEditor({
     if (nextTerminologies.length === 0) {
       setExpandedSections((prev) => ({ ...prev, terminology: false }));
     }
+  };
+
+  const handleClearTerminologies = () => {
+    setSelectedTerminologies([]);
+    setExpandedSections((prev) => ({ ...prev, terminology: false }));
   };
 
   // Conversation Settings Handlers
@@ -1111,6 +1154,18 @@ export function AutonomousEditor({
                       )}
                     </button>
                     <div className="ml-3 flex items-center gap-2">
+                      {selectedKnowledgeBases.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClearKnowledgeBases();
+                          }}
+                          className="inline-flex h-9 items-center justify-center rounded-2xl px-3 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
+                          title="取消挂载全部知识库"
+                        >
+                          取消挂载
+                        </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1166,7 +1221,7 @@ export function AutonomousEditor({
                             <button
                               onClick={() => handleRemoveKnowledgeBase(kb.id)}
                               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-200"
-                              title="移除"
+                              title="取消挂载"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -1207,17 +1262,31 @@ export function AutonomousEditor({
                         <ChevronDown className="h-5 w-5 text-slate-400" />
                       )}
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingOntologyIndex(null);
-                        setOntologyConfigOpen(true);
-                      }}
-                      className={ACTION_BUTTON_CLASS}
-                      title="添加本体"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {selectedOntologies.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClearOntologies();
+                          }}
+                          className="inline-flex h-9 items-center justify-center rounded-2xl px-3 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
+                          title="取消挂载全部本体"
+                        >
+                          取消挂载
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingOntologyIndex(null);
+                          setOntologyConfigOpen(true);
+                        }}
+                        className={ACTION_BUTTON_CLASS}
+                        title="添加本体"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   {expandedSections.ontology && (
                     <div className="space-y-3 px-5 pb-5 pt-4">
@@ -1346,9 +1415,9 @@ export function AutonomousEditor({
                                     <button
                                       onClick={() => handleRemoveOntology(index)}
                                       className="text-xs text-slate-500 transition-colors hover:text-red-600"
-                                      title="移除"
+                                      title="取消挂载"
                                     >
-                                      移除
+                                      取消挂载
                                     </button>
                                   </div>
                                 </>
@@ -1391,16 +1460,30 @@ export function AutonomousEditor({
                         <ChevronDown className="h-5 w-5 text-slate-400" />
                       )}
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setTerminologySelectorOpen(true);
-                      }}
-                      className={ACTION_BUTTON_CLASS}
-                      title="添加术语库"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {selectedTerminologies.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClearTerminologies();
+                          }}
+                          className="inline-flex h-9 items-center justify-center rounded-2xl px-3 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
+                          title="取消挂载全部术语库"
+                        >
+                          取消挂载
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTerminologySelectorOpen(true);
+                        }}
+                        className={ACTION_BUTTON_CLASS}
+                        title="添加术语库"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   {expandedSections.terminology && (
                     <div className="space-y-3 px-5 pb-5 pt-4">
@@ -1421,7 +1504,7 @@ export function AutonomousEditor({
                             <button
                               onClick={() => handleRemoveTerminology(term.id)}
                               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-200"
-                              title="移除"
+                              title="取消挂载"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -1437,7 +1520,7 @@ export function AutonomousEditor({
                 <div>
                   <h3 className="text-lg font-semibold text-slate-950">工具</h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    连接工作流、插件与协议工具，让智能体具备执行与外部调用能力。
+                    连接工作流、插件与MCP，让智能体具备执行与外部调用能力。
                   </p>
                 </div>
 
@@ -1471,16 +1554,30 @@ export function AutonomousEditor({
                         <ChevronDown className="h-5 w-5 text-slate-400" />
                       )}
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setWorkflowSelectorOpen(true);
-                      }}
-                      className={ACTION_BUTTON_CLASS}
-                      title="添加工作流"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {selectedWorkflows.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClearWorkflows();
+                          }}
+                          className="inline-flex h-9 items-center justify-center rounded-2xl px-3 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
+                          title="取消挂载全部工作流"
+                        >
+                          取消挂载
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWorkflowSelectorOpen(true);
+                        }}
+                        className={ACTION_BUTTON_CLASS}
+                        title="添加工作流"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   {expandedSections.workflow && (
                     <div className="px-5 pb-5 pt-4">
@@ -1518,7 +1615,7 @@ export function AutonomousEditor({
                               <button
                                 onClick={() => handleRemoveWorkflow(workflow.id)}
                                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-200"
-                                title="移除"
+                                title="取消挂载"
                               >
                                 <X className="h-4 w-4" />
                               </button>
@@ -1560,16 +1657,30 @@ export function AutonomousEditor({
                         <ChevronDown className="h-5 w-5 text-slate-400" />
                       )}
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPluginSelectorOpen(true);
-                      }}
-                      className={ACTION_BUTTON_CLASS}
-                      title="添加插件"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {selectedPlugins.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClearPlugins();
+                          }}
+                          className="inline-flex h-9 items-center justify-center rounded-2xl px-3 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
+                          title="取消挂载全部插件"
+                        >
+                          取消挂载
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPluginSelector();
+                        }}
+                        className={ACTION_BUTTON_CLASS}
+                        title="添加插件"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   {expandedSections.plugins && (
                     <div className="px-5 pb-5 pt-4">
@@ -1579,7 +1690,7 @@ export function AutonomousEditor({
                             智能体可以通过插件主动调用 OpenAPI，例如信息查询、数据存储等。
                           </div>
                           <button
-                            onClick={() => setPluginSelectorOpen(true)}
+                            onClick={openPluginSelector}
                             className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600 transition-colors hover:bg-slate-50"
                           >
                             <Plus className="h-4 w-4" />
@@ -1609,7 +1720,7 @@ export function AutonomousEditor({
                               <button
                                 onClick={() => handleRemovePlugin(plugin.id)}
                                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-200"
-                                title="移除"
+                                title="取消挂载"
                               >
                                 <X className="h-4 w-4" />
                               </button>
@@ -1633,7 +1744,7 @@ export function AutonomousEditor({
                         </div>
                         <div className="min-w-0 text-left">
                           <div className="inline-flex items-center gap-2">
-                            <span className="text-sm font-semibold text-slate-950">协议工具</span>
+                            <span className="text-sm font-semibold text-slate-950">MCP</span>
                             <CompatibilityIndicator
                               status={getCompatibilityStatus(compatibility.items.mcp.status)}
                               shortLabel={compatibility.items.mcp.shortLabel}
@@ -1641,7 +1752,7 @@ export function AutonomousEditor({
                             />
                           </div>
                           <p className="mt-1 text-xs leading-5 text-slate-500">
-                            通过标准协议接入多种工具与操作能力。
+                            通过 MCP 接入多种工具与操作能力。
                           </p>
                         </div>
                       </div>
@@ -1651,26 +1762,40 @@ export function AutonomousEditor({
                         <ChevronDown className="h-5 w-5 text-slate-400" />
                       )}
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMcpSelectorOpen(true);
-                      }}
-                      className={ACTION_BUTTON_CLASS}
-                      title="添加协议工具"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {selectedMCPs.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleClearMCPs();
+                          }}
+                          className="inline-flex h-9 items-center justify-center rounded-2xl px-3 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
+                          title="取消挂载全部MCP"
+                        >
+                          取消挂载
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openMcpSelector();
+                        }}
+                        className={ACTION_BUTTON_CLASS}
+                        title="添加MCP"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   {expandedSections.mcp && (
                     <div className="px-5 pb-5 pt-4">
                       {selectedMCPs.length === 0 ? (
                         <div className="space-y-3">
                           <div className={EMPTY_PANEL_CLASS}>
-                            智能体可以通过标准协议连接和调用多个工具。
+                            智能体可以通过 MCP 连接和调用多个工具。
                           </div>
                           <button
-                            onClick={() => setMcpSelectorOpen(true)}
+                            onClick={openMcpSelector}
                             className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600 transition-colors hover:bg-slate-50"
                           >
                             <Plus className="h-4 w-4" />
@@ -1694,7 +1819,7 @@ export function AutonomousEditor({
                               <button
                                 onClick={() => handleRemoveMCP(mcp.id)}
                                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-200"
-                                title="移除"
+                                title="取消挂载"
                               >
                                 <X className="h-4 w-4" />
                               </button>
@@ -1991,6 +2116,7 @@ export function AutonomousEditor({
 
       {/* Plugin Selector Dialog */}
       <PluginSelector
+        key={`plugin-selector-${pluginSelectorKey}`}
         open={pluginSelectorOpen}
         onOpenChange={setPluginSelectorOpen}
         onSelect={handleAddPlugins}
@@ -1999,6 +2125,7 @@ export function AutonomousEditor({
 
       {/* MCP Selector Dialog */}
       <MCPSelector
+        key={`mcp-selector-${mcpSelectorKey}`}
         open={mcpSelectorOpen}
         onOpenChange={setMcpSelectorOpen}
         onSelect={handleAddMCPs}

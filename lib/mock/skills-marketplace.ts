@@ -87,6 +87,11 @@ export const MARKETPLACE_SKILL_DEPENDENCY_OPTIONS: MarketplaceSkillDependency[] 
   { id: "mcp-security-validation", name: "安全校验服务MCP", type: "mcp" },
 ];
 
+const TRAVEL_REIMBURSEMENT_DEPENDENCIES: MarketplaceSkillDependency[] = [
+  { id: "workflow-invoice-verification", name: "验票工作流", type: "plugin" },
+  { id: "workflow-auto-form-fill", name: "自动填单工作流", type: "plugin" },
+];
+
 export const MARKETPLACE_SKILL_SEEDS: MarketplaceSkillSeed[] = [
   {
     id: "af-rag",
@@ -266,16 +271,24 @@ description: "输出适合蓝信群聊和单聊发送的通知消息。"
     author: "共享服务中心-赵明",
     publishedAt: "03-23 09:55",
     publishedBy: "赵明",
+    version: "1.1",
+    releaseNotes:
+      "补充图片上传式使用说明；新增报销材料清单、审批说明模板和异常票据处理提示；依赖声明更新为验票工作流和自动填单工作流。",
     description:
-      "用于自动生成差旅申请、补充审批说明并衔接报销材料整理，减少重复填报和遗漏说明。",
+      "用于生成差旅申请、补充审批说明，并根据上传票据整理报销材料、预校验附件完整性。",
+    detailDescription:
+      "这是一个面向企业行政与共享服务场景的办公 Skill，适合承接员工出差申请、行程说明补充和报销资料预整理。Skill 会根据上传的票据图片、行程信息和审批要求，生成申请说明、材料清单和后续报销建议，减少重复填报和遗漏说明。",
     category: "通用",
+    scene: "智能办公",
+    inputExample: "我上传了机票、酒店发票和出差说明，帮我整理差旅申请并准备后续报销材料。",
+    outputExample: "已生成差旅申请说明，缺少出租车发票，已整理报销材料清单。",
     sourceType: "org",
     audienceCategory: "ai",
     isFavorite: true,
-    tags: ["差旅", "报销", "审批"],
+    tags: ["差旅", "报销", "审批", "验票", "填单"],
     usageInstructions:
-      "填写出差事由、时间、地点、预算和同行人员，Skill 会生成差旅申请说明，并补充报销所需材料与异常说明口径。",
-    declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[5], MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[2]],
+      "上传机票、火车票、酒店发票、出租车票、电子行程单等图片或截图，并补充出差事由、时间、地点、预算和同行人员。Skill 会先生成差旅申请与审批说明，再整理报销所需材料、标记缺失项，并在需要时衔接验票工作流和自动填单工作流。",
+    declaredDependencies: TRAVEL_REIMBURSEMENT_DEPENDENCIES,
     downloads: 2763,
     boundToCEC: false,
     files: [
@@ -283,13 +296,18 @@ description: "输出适合蓝信群聊和单聊发送的通知消息。"
         "SKILL.md",
         `---
 name: travel-expense
-description: "生成差旅申请、预算说明和报销摘要。"
+description: "生成差旅申请说明、整理报销材料，并为后续验票与自动填单提供结构化输入。"
 ---
 
-# 办理要求
-- 写清事由、时间、地点和预算
-- 标记同行人和审批链
-- 报销时补充票据和异常说明
+# 使用要求
+- 上传机票、酒店发票、行程单和其他差旅票据图片
+- 补充出差事由、时间、地点、预算和同行人员
+- 输出差旅申请说明、报销材料清单和待补充项
+
+# 默认执行链路
+- 先生成差旅申请与审批说明
+- 再整理报销材料并检查附件是否齐全
+- 需要时把材料交给验票工作流和自动填单工作流
 `,
         "tpl-travel"
       ),
@@ -301,6 +319,27 @@ description: "生成差旅申请、预算说明和报销摘要。"
 ## 行程安排
 ## 预算说明
 ## 需审批事项
+## 已上传材料
+## 报销准备提示
+`,
+        "tpl-travel"
+      ),
+      createSeedFile(
+        "templates/reimbursement-materials.md",
+        `# 报销材料整理单
+
+## 一、已上传票据
+- 机票 / 火车票：
+- 酒店发票：
+- 市内交通票据：
+
+## 二、待补充材料
+- 缺失附件：
+- 待补充说明：
+
+## 三、后续处理建议
+- 是否进入验票工作流：
+- 是否进入自动填单工作流：
 `,
         "tpl-travel"
       ),
@@ -314,26 +353,22 @@ description: "生成差旅申请、预算说明和报销摘要。"
     publishedBy: "顾宁",
     version: "1.2",
     releaseNotes:
-      "新增差旅报销标准处理流程；支持发票、行程单、差旅说明等材料校验；支持验票校验、表单自动填写与审批提交流程演示。",
+      "补充图片上传式使用说明；依赖声明更新为验票工作流和自动填单工作流；细化材料完整性校验、自动填单结果和审批确认文案。",
     description:
-      "用于处理员工差旅报销申请，完成材料检查、验票校验、表单填写与审批发起。",
+      "用于处理员工差旅报销申请，完成材料检查、验票校验、自动填单与审批发起。",
     detailDescription:
-      "这是一个面向企业办公场景的标准化 Skill，用于承接员工差旅报销相关任务。它会结合企业制度与系统配置，完成材料检查、票据校验、报销字段填写和审批发起，适合在统一入口中作为高频办公 Skill 使用。",
+      "这是一个面向企业办公场景的标准化 Skill，用于承接员工差旅报销相关任务。它会根据上传的票据图片、行程单和差旅说明，先完成材料完整性检查，再调用验票工作流和自动填单工作流，生成 ERP 报销草稿，并在发起审批前给出一次人工确认。",
     category: "通用",
     scene: "智能办公",
-    inputExample: "帮我提交这笔差旅报销，验票、填单并发起审批",
-    outputExample: "已提交，待审批",
+    inputExample: "我上传了机票、酒店发票和行程单，帮我提交这笔差旅报销，验票、填单并发起审批。",
+    outputExample: "验票完成，3 张票据通过校验；报销草稿已自动填写，待你确认后发起审批。",
     sourceType: "platform",
     audienceCategory: "ai",
     isFavorite: false,
-    tags: ["办公", "差旅", "报销", "审批"],
+    tags: ["办公", "差旅", "报销", "审批", "验票", "填单"],
     usageInstructions:
-      "输入你的报销诉求、出差信息和相关材料，例如“帮我提交这笔差旅报销，验票、填单并发起审批”。系统会先检查材料是否齐全，再完成验票校验、表单填写与提交流程，并返回处理结果或待补充项。",
-    declaredDependencies: [
-      MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[8],
-      MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[9],
-      MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[10],
-    ],
+      "上传机票、火车票、酒店发票、出租车票、电子行程单、付款截图等报销材料图片，并补充出差事由、时间范围和审批单号。系统会先检查材料是否齐全，再执行验票工作流和自动填单工作流，生成 ERP 报销草稿，并在提交审批前返回确认结果或待补充项。",
+    declaredDependencies: TRAVEL_REIMBURSEMENT_DEPENDENCIES,
     downloads: 3256,
     boundToCEC: false,
     files: [
@@ -341,12 +376,13 @@ description: "生成差旅申请、预算说明和报销摘要。"
         "SKILL.md",
         `---
 name: travel-expense-reimbursement
-description: "用于处理员工差旅报销申请，完成材料检查、验票校验、表单填写与审批发起。"
+description: "用于处理员工差旅报销申请，完成材料检查、验票校验、自动填单与审批发起。"
 ---
 
 # 处理要求
+- 上传发票、行程单、付款截图等报销材料图片
 - 核对报销事项、行程和费用标准
-- 检查发票、行程单和差旅说明是否齐全
+- 先执行验票工作流，再执行自动填单工作流
 - 输出表单填写结果、审批状态和待补充项
 `,
         "tpl-travel-expense-reimbursement"
@@ -356,9 +392,35 @@ description: "用于处理员工差旅报销申请，完成材料检查、验票
         `# 差旅报销检查清单
 
 ## 一、材料完整性
+### 已上传材料
+### 缺失材料
 ## 二、票据校验结果
+### 验票工作流结果
+### 重复报销/抬头异常检查
 ## 三、报销字段填写
+### 自动填单工作流结果
+### ERP 草稿单号
 ## 四、审批提交状态
+### HitL 确认
+### 审批流去向
+`,
+        "tpl-travel-expense-reimbursement"
+      ),
+      createSeedFile(
+        "templates/approval-summary.md",
+        `# 报销处理结果
+
+## 验票结果
+- 通过票据数：
+- 异常票据：
+
+## 自动填单结果
+- 预计报销金额：
+- ERP 草稿单号：
+
+## 下一步
+- 是否发起审批：
+- 待补充项：
 `,
         "tpl-travel-expense-reimbursement"
       ),

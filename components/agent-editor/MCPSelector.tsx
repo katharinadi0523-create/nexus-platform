@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Search,
   Globe,
@@ -113,7 +113,18 @@ export function MCPSelector({
     selectedMCPs.map((m) => m.id)
   );
   // 本体行动选择状态
-  const [selectedActions, setSelectedActions] = useState<ActionSelectionState>({});
+  const [selectedActions, setSelectedActions] = useState<ActionSelectionState>(() => {
+    const selectedIdSet = new Set(selectedMCPs.map((m) => m.id));
+    const initialSelectedActions: ActionSelectionState = {};
+    ontologyActionsData.forEach((group) => {
+      group.actions.forEach((action) => {
+        if (selectedIdSet.has(action.id)) {
+          initialSelectedActions[action.id] = true;
+        }
+      });
+    });
+    return initialSelectedActions;
+  });
   // 展开的对象类型
   const [expandedObjectTypes, setExpandedObjectTypes] = useState<Set<string>>(
     new Set(["TransitEvent"]) // 默认展开第一个
