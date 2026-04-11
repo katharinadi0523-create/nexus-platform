@@ -33,15 +33,15 @@ export function NumberStepper({
     <div className={cn("inline-flex items-center gap-2", className)}>
       <div
         className={cn(
-          "inline-flex h-9 items-stretch overflow-hidden rounded-md border border-slate-200 bg-white shadow-xs",
-          disabled && "opacity-50 pointer-events-none"
+          "inline-flex h-8 items-stretch overflow-hidden rounded border border-[#cbd5e1] bg-white transition-colors hover:border-[#2773ff]/50",
+          disabled && "pointer-events-none opacity-50"
         )}
       >
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
-          className="h-9 w-9 shrink-0 rounded-none border-0 border-r border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          className="h-8 w-8 shrink-0 rounded-none border-0 border-r border-[#cbd5e1] text-[#5a6779] hover:bg-[#f8f9fb] hover:text-[#1e293b]"
           disabled={disabled || value <= min}
           onClick={() => onChange(clamp(value - step))}
           aria-label="减少"
@@ -61,7 +61,7 @@ export function NumberStepper({
             onChange(clamp(Number.parseInt(raw, 10)));
           }}
           className={cn(
-            "h-9 w-[72px] border-0 bg-transparent text-center text-sm font-medium text-slate-900 outline-none focus-visible:ring-0",
+            "h-8 w-[72px] border-0 bg-transparent text-center text-xs font-medium text-[#1e293b] outline-none focus-visible:ring-0",
             inputClassName
           )}
           disabled={disabled}
@@ -71,7 +71,7 @@ export function NumberStepper({
           type="button"
           variant="ghost"
           size="icon-sm"
-          className="h-9 w-9 shrink-0 rounded-none border-0 border-l border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          className="h-8 w-8 shrink-0 rounded-none border-0 border-l border-[#cbd5e1] text-[#5a6779] hover:bg-[#f8f9fb] hover:text-[#1e293b]"
           disabled={disabled || value >= max}
           onClick={() => onChange(clamp(value + step))}
           aria-label="增加"
@@ -79,7 +79,7 @@ export function NumberStepper({
           <Plus className="h-3.5 w-3.5" />
         </Button>
       </div>
-      {suffix ? <span className="text-sm text-slate-600 tabular-nums">{suffix}</span> : null}
+      {suffix ? <span className="text-xs tabular-nums text-[#5a6779]">{suffix}</span> : null}
     </div>
   );
 }

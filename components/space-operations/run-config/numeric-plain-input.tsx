@@ -49,12 +49,13 @@ export function NumericPlainInput({
           }
         }}
         className={cn(
-          "h-9 w-[220px] max-w-full border-slate-200 bg-white text-left text-sm font-medium text-slate-900 shadow-xs",
-          "focus-visible:border-sky-300 focus-visible:ring-[3px] focus-visible:ring-sky-200/50",
+          "h-8 w-[220px] max-w-full rounded border border-[#cbd5e1] bg-white text-left text-xs font-medium text-[#1e293b] shadow-none",
+          "transition-[border-color,box-shadow] duration-100",
+          "focus-visible:border-[#2773ff] focus-visible:ring-2 focus-visible:ring-[#2773ff]/20",
           inputClassName
         )}
       />
-      {suffix ? <span className="text-sm text-slate-600 tabular-nums">{suffix}</span> : null}
+      {suffix ? <span className="text-xs tabular-nums text-[#5a6779]">{suffix}</span> : null}
     </div>
   );
 }

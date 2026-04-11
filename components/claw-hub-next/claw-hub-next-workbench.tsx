@@ -2,21 +2,9 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Bot,
-  Database,
-  Layers3,
-  Library,
-  Network,
-  Plus,
-  Puzzle,
-  RefreshCw,
-  Search,
-  Sparkles,
-} from "lucide-react";
+import { Bot, Plus, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -26,12 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  clawHubList,
-  tenantSettingSections,
-  type ClawHubListItem,
-} from "@/lib/mock/claw-hub-next";
+import { clawHubList, type ClawHubListItem } from "@/lib/mock/claw-hub-next";
 import { cn } from "@/lib/utils";
 
 const CURRENT_OPERATOR = "RowanDI";
@@ -131,26 +114,7 @@ export function ClawHubNextWorkbench() {
         <h1 className="text-[30px] font-semibold leading-none text-slate-950">Claw管理</h1>
       </div>
 
-      <Tabs defaultValue="list" className="gap-5">
-        <div className="rounded-[24px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] p-1.5 shadow-sm">
-          <TabsList className="grid h-auto w-full grid-cols-1 gap-1.5 bg-transparent p-0 md:grid-cols-2">
-            <TabsTrigger
-              value="list"
-              className="justify-start rounded-[18px] border border-transparent px-5 py-3.5 text-left text-[15px] font-semibold text-slate-500 data-[state=active]:border-sky-200 data-[state=active]:bg-[linear-gradient(135deg,rgba(239,246,255,1),rgba(255,255,255,1))] data-[state=active]:text-sky-700 data-[state=active]:shadow-sm"
-            >
-              Claw列表
-            </TabsTrigger>
-            <TabsTrigger
-              value="tenant"
-              className="justify-start rounded-[18px] border border-transparent px-5 py-3.5 text-left text-[15px] font-semibold text-slate-500 data-[state=active]:border-sky-200 data-[state=active]:bg-[linear-gradient(135deg,rgba(239,246,255,1),rgba(255,255,255,1))] data-[state=active]:text-sky-700 data-[state=active]:shadow-sm"
-            >
-              租户级Claw Setting
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="list" className="mt-0">
-          <div className="space-y-4">
+      <div className="space-y-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="relative w-full max-w-[360px]">
                 <Input
@@ -277,70 +241,7 @@ export function ClawHubNextWorkbench() {
                 </TableBody>
               </Table>
             </section>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="tenant" className="mt-0">
-          <div className="grid gap-5 xl:grid-cols-2">
-            {tenantSettingSections.map((section) => (
-              <Card key={section.title} className="gap-0 rounded-[28px] border-slate-200 bg-white py-0 shadow-sm">
-                <CardContent className="space-y-5 p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white">
-                      {section.title === "资源与环境配置" ? (
-                        <Database className="h-5 w-5" />
-                      ) : (
-                        <Network className="h-5 w-5" />
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-2xl font-semibold text-slate-950">{section.title}</div>
-                      <div className="mt-2 text-sm leading-7 text-slate-600">{section.description}</div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    {section.groups.map((group) => (
-                      <div key={group.title} className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700">
-                            {group.title === "Agent" ? (
-                              <Bot className="h-4 w-4" />
-                            ) : group.title.includes("知识库") ? (
-                              <Library className="h-4 w-4" />
-                            ) : group.title.includes("Skill") ? (
-                              <Sparkles className="h-4 w-4" />
-                            ) : group.title.includes("Tool") ? (
-                              <Puzzle className="h-4 w-4" />
-                            ) : (
-                              <Layers3 className="h-4 w-4" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="text-lg font-semibold text-slate-950">{group.title}</div>
-                            <div className="mt-1 text-sm text-slate-600">{group.description}</div>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 space-y-2">
-                          {group.entries.map((entry) => (
-                            <div
-                              key={`${section.title}-${group.title}-${entry}`}
-                              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
-                            >
-                              {entry}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
+      </div>
     </div>
   );
 }

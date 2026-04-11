@@ -127,6 +127,39 @@
 }
 
 @layer utilities {
+  /**
+   * CeCloud 应用广场（技能广场）— 对齐 cecloud-ai-design / plaza-page.md
+   */
+  .skills-plaza-canvas {
+    --cc-primary: #2773ff;
+    --cc-surface-tint: #e8f0fb;
+    --cc-text-2: #1e293b;
+    --cc-text-3: #334155;
+    --cc-text-4: #6e7b8d;
+    --cc-border: #e2e8f0;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 1440px;
+    min-height: min(1000px, 100%);
+    padding-top: 12px;
+    padding-left: 8px;
+    padding-right: 20px;
+  }
+
+  @media (min-width: 1060px) {
+    .skills-plaza-canvas {
+      min-width: min(100%, 1060px);
+    }
+  }
+
+  .skills-plaza-gradient-title {
+    background-image: linear-gradient(to right, #3cc6ff, #2773ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+
   .claw-detail-muted-theme {
     --claw-muted-info-border: #d8e0ea;
     --claw-muted-info-bg: #f5f7fb;

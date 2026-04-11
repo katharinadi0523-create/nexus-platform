@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NumericPlainInput } from "@/components/space-operations/run-config/numeric-plain-input";
 import { NumberStepper } from "@/components/space-operations/run-config/number-stepper";
@@ -17,19 +16,19 @@ interface ConfigFieldRowProps {
   hint?: string;
 }
 
-/** 标签与一级模块标题左缘对齐；底部分隔线在各字段格内 */
+/** 标签与一级模块标题左缘对齐；字段之间不使用分割线 */
 function ConfigFieldRow({ id, label, required, children, hint }: ConfigFieldRowProps) {
   return (
-    <div className="flex flex-col gap-3 border-b border-slate-100 py-4 sm:flex-row sm:items-center sm:gap-x-6 xl:gap-x-5">
-      <Label htmlFor={id} className="w-full shrink-0 text-left text-sm font-medium text-slate-900 sm:w-36">
+    <div className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:gap-x-5 xl:gap-x-4">
+      <Label htmlFor={id} className="w-full shrink-0 text-left text-sm font-medium text-[#1e293b] sm:w-36">
         <span className="inline-flex flex-wrap items-center gap-1">
-          {required ? <span className="text-red-500">*</span> : null}
+          {required ? <span className="text-[#e5484d]">*</span> : null}
           <span>{label}</span>
         </span>
       </Label>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
         {children}
-        {hint ? <span className="text-sm leading-6 text-slate-400">{hint}</span> : null}
+        {hint ? <span className="text-sm leading-6 text-[#5a6779]">{hint}</span> : null}
       </div>
     </div>
   );
@@ -45,9 +44,9 @@ interface SectionHeaderProps {
 function SectionHeader({ title, description, className }: SectionHeaderProps) {
   return (
     <div className={cn("flex flex-wrap items-baseline gap-x-3 gap-y-1", className)}>
-      <h3 className="shrink-0 text-base font-semibold text-slate-900">{title}</h3>
+      <h3 className="shrink-0 text-base font-semibold leading-6 text-[#000000]">{title}</h3>
       {description ? (
-        <span className="min-w-0 text-sm font-normal leading-relaxed text-slate-500">{description}</span>
+        <span className="min-w-0 text-sm font-normal leading-relaxed text-[#5a6779]">{description}</span>
       ) : null}
     </div>
   );
@@ -55,16 +54,16 @@ function SectionHeader({ title, description, className }: SectionHeaderProps) {
 
 const MODULE_DESCRIPTIONS = {
   resource:
-    "约束单个 Agent 可使用的 CPU、GPU、工作空间与任务规模，以及本空间单日 Token 消耗上限。",
+    "约束单个 Agent 可使用的 CPU、GPU、任务规模，以及本空间单日 Token 消耗上限。",
   agent: "限制 Agent 侧任务并发、单次运行时长、推理迭代步数与上下文长度。",
   llm: "配置大模型调用的重试、并发与按分钟请求上限（QPM），避免瞬时打满网关。",
   trigger: "约束本空间内定时或事件触发器的数量，以及两次触发之间的最短间隔。",
 } as const;
 
-/** 窄屏单列；足够宽时（xl）每行两个字段 */
+/** 窄屏单列；足够宽时（xl）每行两个字段（模块标题与字段区之间不用整页级灰分割线） */
 function SectionFields({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-4 grid grid-cols-1 border-t border-slate-100 xl:grid-cols-2 xl:gap-x-10 2xl:gap-x-14">
+    <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 xl:gap-x-10 2xl:gap-x-14">
       {children}
     </div>
   );
@@ -73,7 +72,6 @@ function SectionFields({ children }: { children: React.ReactNode }) {
 export interface RunConfigurationFormState {
   cpuCores: number;
   gpuCards: number;
-  workspaceStorageGib: number;
   maxConcurrentTasks: number;
   maxTaskDurationMinutes: number;
   dailyTokenLimit: number;
@@ -91,7 +89,6 @@ const GLOBAL_EFFECT_NOTICE_MS = 2000;
 const DEFAULT_STATE: RunConfigurationFormState = {
   cpuCores: 4,
   gpuCards: 0,
-  workspaceStorageGib: 20,
   maxConcurrentTasks: 3,
   maxTaskDurationMinutes: 120,
   dailyTokenLimit: 1_000_000,
@@ -149,15 +146,19 @@ export function RunConfigurationForm() {
           <div
             role="status"
             aria-live="polite"
-            className="pointer-events-auto inline-flex max-w-[min(100%,24rem)] items-center justify-center gap-2 rounded-none border border-slate-200/60 bg-white/80 px-4 py-1.5 text-xs font-medium text-slate-600 shadow-sm backdrop-blur-sm"
+            className="pointer-events-auto inline-flex max-w-[min(100%,24rem)] items-center justify-center gap-2 rounded-none border border-[#dbe7f4] bg-white px-4 py-1.5 text-xs font-medium text-[#5a6779] shadow-[0_2px_12px_rgba(15,23,42,0.06)] backdrop-blur-sm"
           >
-            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" strokeWidth={2.5} aria-hidden />
+            <Check className="h-3.5 w-3.5 shrink-0 text-[#2773ff]" strokeWidth={2.5} aria-hidden />
             运行配置已全局生效
           </div>
         </div>
       ) : null}
 
-      <div className="flex-1 space-y-10 pb-4">
+      {/*
+        底栏使用 fixed 贴齐视口底、横跨主列（侧栏 220px 右侧至视口右缘），避免被 dashboard p-6 与 scroll px 裁成「左右留缝、底下留灰」。
+        pb 预留底栏高度，避免最后字段被遮挡。
+      */}
+      <div className="flex-1 space-y-7 pb-24">
       <section className="space-y-0">
         <SectionHeader title="资源配置" description={MODULE_DESCRIPTIONS.resource} />
         <SectionFields>
@@ -166,16 +167,6 @@ export function RunConfigurationForm() {
           </ConfigFieldRow>
           <ConfigFieldRow id="gpu" label="GPU" required>
             <NumberStepper value={values.gpuCards} onChange={(n) => patch("gpuCards", n)} min={0} max={64} suffix="卡" />
-          </ConfigFieldRow>
-          <ConfigFieldRow id="ws" label="工作空间存储" required>
-            <NumericPlainInput
-              id="ws"
-              value={values.workspaceStorageGib}
-              onChange={(n) => patch("workspaceStorageGib", n)}
-              min={1}
-              max={10_240}
-              suffix="GiB"
-            />
           </ConfigFieldRow>
           <ConfigFieldRow id="tokens" label="单日 Token 消耗上限" required>
             <NumericPlainInput
@@ -260,22 +251,29 @@ export function RunConfigurationForm() {
 
       <div
         className={cn(
-          "sticky bottom-0 z-10 -mx-4 shrink-0 border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-sm",
-          "supports-[backdrop-filter]:bg-white/85",
-          "sm:-mx-6 sm:px-6"
+          "fixed bottom-0 left-0 right-0 z-[45] border-t border-[#dbe7f4]/80 bg-white px-6 py-4 shadow-[0_-4px_16px_rgba(15,23,42,0.05)]",
+          "md:left-[220px]"
         )}
       >
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
+        <div className="flex max-w-5xl flex-wrap items-center gap-3 xl:max-w-6xl 2xl:max-w-7xl">
+          {/*
+            form-page.md §Footer：large 主按钮 36px 高、14px 字、px 19、4px 圆角、主色底、透明描边、字重 600；
+            次按钮 outline：border-1、text-2 #334155，同尺寸；主色用 SKILL #2773ff（与 primary-6 对齐）。
+          */}
+          <button
             type="button"
-            className="min-w-[88px] bg-blue-600 hover:bg-blue-700"
+            className="inline-flex h-9 min-w-[80px] cursor-pointer items-center justify-center rounded border border-transparent bg-[#2773ff] px-[19px] text-sm font-semibold leading-[1.5715] text-white shadow-none transition-all duration-100 hover:bg-[#1f65e6]"
             onClick={handleApplyGlobally}
           >
             全局运用
-          </Button>
-          <Button type="button" variant="outline" className="border-slate-200 text-slate-700" onClick={handleReset}>
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-9 min-w-[80px] cursor-pointer items-center justify-center rounded border border-[#cbd5e1] bg-white px-[19px] text-sm font-semibold leading-[1.5715] text-[#334155] shadow-none transition-all duration-100 hover:border-[#b8c5d3] hover:bg-[#f8f9fb] hover:text-[#1e293b]"
+            onClick={handleReset}
+          >
             恢复默认
-          </Button>
+          </button>
         </div>
       </div>
     </div>

@@ -80,7 +80,7 @@ const menuGroups: MenuGroup[] = [
       },
       {
         key: "SkillsManagement",
-        label: "skills管理",
+        label: "SKILLS管理",
         icon: PanelLeft,
         href: "/skills-management",
       },
@@ -237,21 +237,43 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const isClawDetailPage = pathname.startsWith("/claw-hub-next/claws/");
   const isSpaceOperationsPage = pathname.startsWith("/space-operations");
+  /** 仅技能广场（/skills-hub、/skills）：灰蓝渐变壳底；其它路由不套广场背景 */
+  const isSkillsPlazaPage =
+    pathname.startsWith("/skills-hub") || pathname === "/skills";
+  const isSkillsManagementPage = pathname.startsWith("/skills-management");
 
   return (
     <>
       <GlobalHeader />
-      <div className="flex h-screen overflow-hidden bg-slate-50 pt-[60px]">
+      <div
+        className={cn(
+          "flex h-screen overflow-hidden pt-[60px]",
+          isSkillsPlazaPage
+            ? "bg-[#e8f0fb]"
+            : isSkillsManagementPage || isSpaceOperationsPage
+              ? "bg-white"
+              : "bg-slate-50"
+        )}
+      >
         {/* 左侧侧边栏: 固定宽度 220px, z-50 */}
         <aside className="w-[220px] flex-none z-50 border-r bg-white h-[calc(100vh-60px)] hidden md:block">
           <Sidebar />
         </aside>
         {/* 右侧主体: 自动填满剩余空间 */}
-        <main className="relative flex h-[calc(100vh-60px)] min-h-0 flex-1 flex-col overflow-hidden">
-          {/* 页面内容滚动区 */}
+        <main
+          className={cn(
+            "relative flex h-[calc(100vh-60px)] min-h-0 flex-1 flex-col overflow-hidden",
+            isSkillsPlazaPage && "bg-[#e8f0fb]",
+            (isSkillsManagementPage || isSpaceOperationsPage) && "bg-white"
+          )}
+        >
+          {/* 页面内容滚动区：广场页用渐变；skills 管理用白底 */}
           <div
             className={cn(
               "flex-1 p-6",
+              isSkillsPlazaPage &&
+                "bg-[linear-gradient(180deg,#f2f7fd_0%,#e8f0fb_38%,#e4edf8_100%)]",
+              (isSkillsManagementPage || isSpaceOperationsPage) && "bg-white",
               isClawDetailPage || isSpaceOperationsPage ? "min-h-0 overflow-hidden" : "overflow-y-auto"
             )}
           >

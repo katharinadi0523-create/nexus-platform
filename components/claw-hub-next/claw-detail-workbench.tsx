@@ -8,17 +8,9 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Clock3,
-  FilePlus2,
-  FolderOpen,
-  FolderPlus,
-  Gauge,
   MessageSquareText,
   Plus,
   RadioTower,
-  ShieldCheck,
-  Upload,
-  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
@@ -31,15 +23,13 @@ import {
   type DetailSectionKey,
   type LogPanelKey,
   type SecurityPanelKey,
+  type ToolSkillViewScope,
 } from "@/components/claw-hub-next/detail/constants";
-import { ClawResourceSection } from "@/components/claw-hub-next/detail/resource-section";
 import { ClawSecuritySection } from "@/components/claw-hub-next/detail/security-section";
 import { SectionCard } from "@/components/claw-hub-next/detail/section-card";
 import {
   addFileProtectionPath,
   addToolProtectionRule,
-  applyExecutionTier,
-  applyRuntimeTier,
   deleteScopedCollectionItem,
   normalizeAutonomyBoundaries,
   mergeClawKnowledgeSelections,
@@ -49,12 +39,7 @@ import {
   resolveSecurityApproval,
   toggleScopedEnabledCollection,
   updateAutonomyBoundaryLevel,
-  updateExecutionCapability,
-  updateExecutionNumber,
   updateFileProtectionEnabled,
-  updateRuntimeAdvancedNumber,
-  updateRuntimeAdvancedText,
-  updateRuntimeNumber,
   updateToolProtectionEnabled,
   updateToolProtectionRuleEnabled,
 } from "@/components/claw-hub-next/detail/state";
@@ -63,16 +48,12 @@ import { SkillConfigDialog, type SkillConfigSelection } from "@/components/claw-
 import { ToolConfigDialog, type ToolConfigSelection } from "@/components/claw-hub-next/tool-config-dialog";
 import {
   buildConversationSessionSummaries,
-  cloneResourceConfig,
   formatDurationMs,
   type ConversationSessionSummary,
   getAuditStatusClassName,
   getAuditTypeClassName,
-  getResourceValidation,
   getSecurityActionClassName,
   getSecurityLevelClassName,
-  getTaskRunStatusClassName,
-  getWorkspaceTrail,
 } from "@/components/claw-hub-next/detail/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,7 +67,6 @@ import type {
   ClawDetailData,
   ConversationAuditItem,
   KnowledgeScope,
-  ResourceConfig,
   SecurityManagementConfig,
   ToolProtectionRuleItem,
 } from "@/lib/mock/claw-hub-next";
@@ -253,20 +233,16 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [selectedChatId, setSelectedChatId] = useState(detail.chatSessions[0]?.id ?? "");
   const [selectedCoreFileKey, setSelectedCoreFileKey] = useState<ClawCoreFileKey | null>(null);
   const [capabilityConfig, setCapabilityConfig] = useState(detail.capabilityConfig);
-  const [resourceConfig, setResourceConfig] = useState<ResourceConfig>(() => cloneResourceConfig(detail.resourceConfig));
   const [toolConfigDialogOpen, setToolConfigDialogOpen] = useState(false);
   const [skillConfigDialogOpen, setSkillConfigDialogOpen] = useState(false);
   const [knowledgeConfigDialogOpen, setKnowledgeConfigDialogOpen] = useState(false);
-  const [toolScope, setToolScope] = useState<CapabilityScope>("platform");
-  const [skillScope, setSkillScope] = useState<CapabilityScope>("platform");
-  const [agentScope, setAgentScope] = useState<CapabilityScope>("platform");
+  const [toolScope, setToolScope] = useState<ToolSkillViewScope>("preset");
+  const [skillScope, setSkillScope] = useState<ToolSkillViewScope>("preset");
   const [knowledgeScope, setKnowledgeScope] = useState<KnowledgeScope>("tenant");
-  const [runtimeAdvancedOpen, setRuntimeAdvancedOpen] = useState(false);
   const [logsMenuOpen, setLogsMenuOpen] = useState(false);
   const [securityMenuOpen, setSecurityMenuOpen] = useState(false);
   const [selectedLogSessionId, setSelectedLogSessionId] = useState<string | null>(null);
   const [selectedLogEventId, setSelectedLogEventId] = useState<string | null>(null);
-  const [workspacePath, setWorkspacePath] = useState<string[]>([]);
   const [coreFileDrafts, setCoreFileDrafts] = useState<Record<ClawCoreFileKey, string>>(() =>
     detail.coreFiles.reduce(
       (accumulator, file) => ({ ...accumulator, [file.key]: file.content }),
@@ -305,9 +281,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const activeLogEvent =
     selectedLogSessionEvents.find((event) => event.id === selectedLogEventId) ?? selectedLogSessionEvents[0] ?? null;
   const selectedCoreFile = detail.coreFiles.find((file) => file.key === selectedCoreFileKey) ?? null;
-  const workspaceTrail = getWorkspaceTrail(detail.workspaceRoot, workspacePath);
-  const currentWorkspaceFolder = workspaceTrail[workspaceTrail.length - 1];
-  const resourceValidation = getResourceValidation(resourceConfig);
   const statusBadgeClassName =
     detail.overview.status === "运行中"
       ? "border-[#d9e1da] bg-[#f5f7f5] text-[#5c6c5f]"
@@ -331,10 +304,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
       }
     };
   }, []);
-
-  useEffect(() => {
-    setSecurityManagement(mergeSecurityManagementWithCanonicalAutonomy(detail.securityManagement));
-  }, [detail.overview.id]);
 
   function handleSelectChatSession(sessionId: string) {
     setSelectedChatId(sessionId);
@@ -615,22 +584,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     toast.success("技能已删除。");
   }
 
-  function handleToggleAgent(scope: CapabilityScope, id: string, enabled: boolean) {
-    setCapabilityConfig((current) => ({
-      ...current,
-      agents: toggleScopedEnabledCollection(current.agents, scope, id, enabled),
-    }));
-    toast.success(enabled ? "Agent 已启用。" : "Agent 已停用。");
-  }
-
-  function handleDeleteAgent(scope: CapabilityScope, id: string) {
-    setCapabilityConfig((current) => ({
-      ...current,
-      agents: deleteScopedCollectionItem(current.agents, scope, id),
-    }));
-    toast.success("Agent 已删除。");
-  }
-
   function handleToggleKnowledge(scope: KnowledgeScope, id: string, enabled: boolean) {
     setCapabilityConfig((current) => ({
       ...current,
@@ -645,37 +598,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
       knowledge: deleteScopedCollectionItem(current.knowledge, scope, id),
     }));
     toast.success("知识已删除。");
-  }
-
-  function handleRuntimeTierChange(tier: ResourceConfig["runtime"]["tier"]) {
-    setResourceConfig((current) => applyRuntimeTier(current, tier));
-  }
-
-  function handleExecutionTierChange(tier: ResourceConfig["execution"]["tier"]) {
-    setResourceConfig((current) => applyExecutionTier(current, tier));
-  }
-
-  function handleRuntimeNumberChange(field: "maxConcurrentTasks" | "maxTaskDurationMin", value: string) {
-    setResourceConfig((current) => updateRuntimeNumber(current, field, value));
-  }
-
-  function handleRuntimeAdvancedNumberChange(field: "cpu" | "memoryGb" | "diskGb" | "startupTimeoutSec", value: string) {
-    setResourceConfig((current) => updateRuntimeAdvancedNumber(current, field, value));
-  }
-
-  function handleRuntimeAdvancedTextChange(value: string) {
-    setResourceConfig((current) => updateRuntimeAdvancedText(current, value));
-  }
-
-  function handleExecutionNumberChange(
-    field: "workspaceDiskGb" | "maxConcurrentExecutions" | "maxExecutionTimeoutMin",
-    value: string
-  ) {
-    setResourceConfig((current) => updateExecutionNumber(current, field, value));
-  }
-
-  function handleExecutionCapabilityChange(key: keyof ResourceConfig["execution"]["capabilities"], checked: boolean) {
-    setResourceConfig((current) => updateExecutionCapability(current, key, checked));
   }
 
   function handlePublish() {
@@ -1136,8 +1058,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onToolScopeChange={setToolScope}
               skillScope={skillScope}
               onSkillScopeChange={setSkillScope}
-              agentScope={agentScope}
-              onAgentScopeChange={setAgentScope}
               knowledgeScope={knowledgeScope}
               onKnowledgeScopeChange={setKnowledgeScope}
               onOpenToolConfigDialog={handleOpenToolConfigDialog}
@@ -1147,8 +1067,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onDeleteTool={handleDeleteTool}
               onToggleSkill={handleToggleSkill}
               onDeleteSkill={handleDeleteSkill}
-              onToggleAgent={handleToggleAgent}
-              onDeleteAgent={handleDeleteAgent}
               onToggleKnowledge={handleToggleKnowledge}
               onDeleteKnowledge={handleDeleteKnowledge}
             />
@@ -1162,8 +1080,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onToolScopeChange={setToolScope}
               skillScope={skillScope}
               onSkillScopeChange={setSkillScope}
-              agentScope={agentScope}
-              onAgentScopeChange={setAgentScope}
               knowledgeScope={knowledgeScope}
               onKnowledgeScopeChange={setKnowledgeScope}
               onOpenToolConfigDialog={handleOpenToolConfigDialog}
@@ -1173,34 +1089,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onDeleteTool={handleDeleteTool}
               onToggleSkill={handleToggleSkill}
               onDeleteSkill={handleDeleteSkill}
-              onToggleAgent={handleToggleAgent}
-              onDeleteAgent={handleDeleteAgent}
-              onToggleKnowledge={handleToggleKnowledge}
-              onDeleteKnowledge={handleDeleteKnowledge}
-            />
-          </TabsContent>
-
-          <TabsContent value="agents" className="mt-0">
-            <ClawCapabilitySection
-              panel="agents"
-              capabilityConfig={capabilityConfig}
-              toolScope={toolScope}
-              onToolScopeChange={setToolScope}
-              skillScope={skillScope}
-              onSkillScopeChange={setSkillScope}
-              agentScope={agentScope}
-              onAgentScopeChange={setAgentScope}
-              knowledgeScope={knowledgeScope}
-              onKnowledgeScopeChange={setKnowledgeScope}
-              onOpenToolConfigDialog={handleOpenToolConfigDialog}
-              onOpenSkillConfigDialog={handleOpenSkillConfigDialog}
-              onOpenKnowledgeConfigDialog={handleOpenKnowledgeConfigDialog}
-              onToggleTool={handleToggleTool}
-              onDeleteTool={handleDeleteTool}
-              onToggleSkill={handleToggleSkill}
-              onDeleteSkill={handleDeleteSkill}
-              onToggleAgent={handleToggleAgent}
-              onDeleteAgent={handleDeleteAgent}
               onToggleKnowledge={handleToggleKnowledge}
               onDeleteKnowledge={handleDeleteKnowledge}
             />
@@ -1214,8 +1102,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onToolScopeChange={setToolScope}
               skillScope={skillScope}
               onSkillScopeChange={setSkillScope}
-              agentScope={agentScope}
-              onAgentScopeChange={setAgentScope}
               knowledgeScope={knowledgeScope}
               onKnowledgeScopeChange={setKnowledgeScope}
               onOpenToolConfigDialog={handleOpenToolConfigDialog}
@@ -1225,8 +1111,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onDeleteTool={handleDeleteTool}
               onToggleSkill={handleToggleSkill}
               onDeleteSkill={handleDeleteSkill}
-              onToggleAgent={handleToggleAgent}
-              onDeleteAgent={handleDeleteAgent}
               onToggleKnowledge={handleToggleKnowledge}
               onDeleteKnowledge={handleDeleteKnowledge}
             />
@@ -1298,114 +1182,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                     </div>
                   );
                 })}
-              </div>
-            </SectionCard>
-          </TabsContent>
-
-          <TabsContent value="tasks" className="mt-0">
-            <SectionCard>
-              <div className="grid gap-4 xl:grid-cols-3">
-                {detail.taskGroups.map((group) => (
-                  <div key={group.title} className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700">
-                        <Clock3 className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <div className="text-lg font-semibold text-slate-950">{group.title}</div>
-                        <div className="mt-1 text-sm text-slate-600">{group.description}</div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 space-y-3">
-                      {group.tasks.map((task) => (
-                        <div key={`${group.title}-${task.name}`} className="rounded-2xl border border-slate-200 bg-white p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="text-sm font-semibold text-slate-900">{task.name}</div>
-                            <Badge className="border-slate-200 bg-slate-100 text-slate-700">{task.status}</Badge>
-                          </div>
-                          <div className="mt-2 text-sm text-slate-600">触发方式：{task.trigger}</div>
-                          <div className="mt-3 text-sm leading-7 text-slate-600">{task.note}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-          </TabsContent>
-
-          <TabsContent value="workspace" className="mt-0">
-            <SectionCard>
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-slate-500">
-                    {workspaceTrail.map((folder, index) => (
-                      <div key={folder.id} className="flex items-center gap-2">
-                        {index > 0 ? <ChevronRight className="h-4 w-4 text-slate-300" /> : null}
-                        <button
-                          type="button"
-                          onClick={() => setWorkspacePath(workspaceTrail.slice(1, index + 1).map((item) => item.id))}
-                          className={cn(
-                            "rounded-md px-1 py-0.5 transition-colors",
-                            index === workspaceTrail.length - 1
-                              ? "font-medium text-slate-900"
-                              : "hover:bg-slate-100 hover:text-slate-900"
-                          )}
-                        >
-                          {folder.name}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => toast.success("已预留上传入口。")}>
-                      <Upload className="h-4 w-4" />
-                      Upload
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toast.success("已预留新建文件夹入口。")}
-                    >
-                      <FolderPlus className="h-4 w-4" />
-                      新建文件夹
-                    </Button>
-                    <Button type="button" size="sm" onClick={() => toast.success("已预留新建文件入口。")}>
-                      <FilePlus2 className="h-4 w-4" />
-                      新建文件
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  {currentWorkspaceFolder.children.map((folder) => (
-                    <button
-                      key={folder.id}
-                      type="button"
-                      onClick={() => setWorkspacePath((current) => [...current, folder.id])}
-                      className="flex w-full items-center justify-between rounded-[18px] border border-slate-200 bg-slate-50/60 px-4 py-5 text-left transition-all hover:border-sky-200 hover:bg-white"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <FolderOpen className="h-[18px] w-[18px] shrink-0 text-slate-400" />
-                        <div className="truncate text-sm font-medium text-slate-900">{folder.name}</div>
-                      </div>
-
-                      <div className="flex items-center gap-4 text-sm text-slate-400">
-                        <span>{folder.children.length} 项</span>
-                        <ChevronRight className="h-4 w-4" />
-                      </div>
-                    </button>
-                  ))}
-
-                  {currentWorkspaceFolder.children.length === 0 ? (
-                    <div className="rounded-[18px] border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm text-slate-500">
-                      当前目录为空
-                    </div>
-                  ) : null}
-                </div>
               </div>
             </SectionCard>
           </TabsContent>
@@ -1641,104 +1417,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               )
             ) : null}
 
-            {activeLogPanel === "task" ? (
-              <div className="min-h-0 h-full overflow-y-auto">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-950">任务运行</div>
-                    <div className="mt-1 text-xs text-slate-500">查看定时、催办与条件触发任务的运行结果。</div>
-                  </div>
-                  <Badge className="border-slate-200 bg-white text-slate-600">{detail.taskRuns.length}</Badge>
-                </div>
-
-                <div className="space-y-4">
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                          任务运行总数
-                        </div>
-                        <div className="mt-3 text-2xl font-semibold text-slate-950">{detail.taskRuns.length}</div>
-                      </div>
-                      <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                          成功运行
-                        </div>
-                        <div className="mt-3 text-2xl font-semibold text-emerald-700">
-                          {detail.taskRuns.filter((task) => task.status === "成功").length}
-                        </div>
-                      </div>
-                      <div className="rounded-[22px] border border-slate-200 bg-white/90 p-4">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                          运行中
-                        </div>
-                        <div className="mt-3 text-2xl font-semibold text-sky-700">
-                          {detail.taskRuns.filter((task) => task.status === "运行中").length}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 xl:grid-cols-2">
-                      {detail.taskRuns.map((task) => (
-                        <div key={task.id} className="rounded-[24px] border border-slate-200 bg-white/90 p-5">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <div className="text-lg font-semibold text-slate-950">{task.taskName}</div>
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <Badge className="border-slate-200 bg-slate-100 text-slate-700">{task.taskType}</Badge>
-                                <Badge className={cn("border", getTaskRunStatusClassName(task.status))}>
-                                  {task.status}
-                                </Badge>
-                              </div>
-                            </div>
-
-                            <Badge className="border-sky-100 bg-sky-50 font-mono text-sky-700">
-                              {task.traceId}
-                            </Badge>
-                          </div>
-
-                          <div className="mt-4 grid gap-3 md:grid-cols-2">
-                            <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                触发来源
-                              </div>
-                              <div className="mt-2 text-sm font-medium text-slate-900">{task.triggerSource}</div>
-                            </div>
-                            <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                运行时长
-                              </div>
-                              <div className="mt-2 text-sm font-medium text-slate-900">{formatDurationMs(task.durationMs)}</div>
-                            </div>
-                            <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                开始时间
-                              </div>
-                              <div className="mt-2 text-sm font-medium text-slate-900">{task.startedAt}</div>
-                            </div>
-                            <div className="rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3">
-                              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                结束时间
-                              </div>
-                              <div className="mt-2 text-sm font-medium text-slate-900">{task.finishedAt ?? "仍在运行"}</div>
-                            </div>
-                          </div>
-
-                          <div className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50/60 px-4 py-4">
-                            <div className="text-sm font-semibold text-slate-900">结果摘要</div>
-                            <div className="mt-3 text-sm leading-7 text-slate-600">{task.resultSummary}</div>
-                          </div>
-
-                          {task.relatedSessionId ? (
-                            <div className="mt-4 text-sm text-slate-500">关联会话：{task.relatedSessionId}</div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                </div>
-              </div>
-            ) : null}
-
-              {activeLogPanel === "security" ? (
+            {activeLogPanel === "security" ? (
                 <div className="min-h-0 h-full overflow-y-auto">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
@@ -1864,126 +1543,39 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="relations" className="mt-0">
-            <SectionCard>
-              <div className="grid gap-4 xl:grid-cols-2">
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700">
-                        <UserRound className="h-4 w-4" />
-                      </div>
-                      <div className="text-lg font-semibold text-slate-950">人</div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => toast.success("已预留添加人的入口。")}>
-                      <Plus className="h-4 w-4" />
-                      添加人
-                    </Button>
+            <div className="border border-slate-200 bg-white">
+              <section className="min-w-0">
+                <div className="flex items-center justify-between gap-4 px-6 py-5">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-slate-600" />
+                    <div className="text-lg font-semibold text-slate-950">Agent</div>
                   </div>
-
-                  <div className="mt-4 space-y-3">
-                    {detail.personRelations.map((item) => (
-                      <div key={item.name} className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <div className="flex items-center gap-2">
-                          <div className="text-sm font-semibold text-slate-900">{item.name}</div>
-                          <Badge className="border-slate-200 bg-slate-100 text-slate-700">{item.role}</Badge>
-                        </div>
-                        <div className="mt-3 text-sm leading-7 text-slate-600">{item.description}</div>
-                      </div>
-                    ))}
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-md border-slate-200 bg-white shadow-none"
+                    onClick={() => toast.success("已预留添加 Agent 的入口。")}
+                  >
+                    <Plus className="h-4 w-4" />
+                    添加Agent
+                  </Button>
                 </div>
 
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700">
-                        <Bot className="h-4 w-4" />
+                <div className="divide-y divide-slate-200">
+                  {detail.agentRelations.map((item) => (
+                    <div key={item.name} className="px-6 py-5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-base font-semibold text-slate-950">{item.name}</div>
+                        <Badge className="rounded-sm border-slate-200 bg-slate-100 text-slate-600">{item.goal}</Badge>
                       </div>
-                      <div className="text-lg font-semibold text-slate-950">Agent</div>
+                      <div className="mt-3 text-sm leading-7 text-slate-600">{item.description}</div>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => toast.success("已预留添加 Agent 的入口。")}>
-                      <Plus className="h-4 w-4" />
-                      添加Agent
-                    </Button>
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    {detail.agentRelations.map((item) => (
-                      <div key={item.name} className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <div className="flex items-center gap-2">
-                          <div className="text-sm font-semibold text-slate-900">{item.name}</div>
-                          <Badge className="border-slate-200 bg-slate-100 text-slate-700">{item.goal}</Badge>
-                        </div>
-                        <div className="mt-3 text-sm leading-7 text-slate-600">{item.description}</div>
-                      </div>
-                    ))}
-                  </div>
+                  ))}
                 </div>
-              </div>
-            </SectionCard>
+              </section>
+            </div>
           </TabsContent>
 
-          <TabsContent value="resource" className="mt-0">
-            <ClawResourceSection
-              resourceConfig={resourceConfig}
-              resourceValidation={resourceValidation}
-              runtimeAdvancedOpen={runtimeAdvancedOpen}
-              onToggleRuntimeAdvanced={() => setRuntimeAdvancedOpen((current) => !current)}
-              onRuntimeTierChange={handleRuntimeTierChange}
-              onExecutionTierChange={handleExecutionTierChange}
-              onRuntimeNumberChange={handleRuntimeNumberChange}
-              onRuntimeAdvancedNumberChange={handleRuntimeAdvancedNumberChange}
-              onRuntimeAdvancedTextChange={handleRuntimeAdvancedTextChange}
-              onExecutionNumberChange={handleExecutionNumberChange}
-              onExecutionCapabilityChange={handleExecutionCapabilityChange}
-            />
-          </TabsContent>
-
-          <TabsContent value="settings" className="mt-0">
-            <SectionCard>
-              <div className="grid gap-4 xl:grid-cols-2">
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700">
-                      <Gauge className="h-4 w-4" />
-                    </div>
-                    <div className="text-lg font-semibold text-slate-950">用量</div>
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    {detail.usageSettings.map((item) => (
-                      <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-semibold text-slate-900">{item.label}</div>
-                          <div className="text-sm font-semibold text-slate-950">{item.value}</div>
-                        </div>
-                        <div className="mt-3 text-sm leading-7 text-slate-600">{item.description}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-slate-700">
-                      <ShieldCheck className="h-4 w-4" />
-                    </div>
-                    <div className="text-lg font-semibold text-slate-950">权限</div>
-                  </div>
-                  <div className="mt-4 space-y-3">
-                    {detail.permissionSettings.map((item) => (
-                      <div key={item.name} className="rounded-2xl border border-slate-200 bg-white p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-semibold text-slate-900">{item.name}</div>
-                          <Badge className="border-slate-200 bg-slate-100 text-slate-700">{item.mode}</Badge>
-                        </div>
-                        <div className="mt-2 text-sm text-slate-600">范围：{item.scope}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
-          </TabsContent>
         </div>
       </Tabs>
       <ToolConfigDialog open={toolConfigDialogOpen} onOpenChange={setToolConfigDialogOpen} onConfirm={handleConfirmToolConfig} />

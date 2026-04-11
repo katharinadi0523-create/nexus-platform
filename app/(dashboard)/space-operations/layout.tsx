@@ -3,7 +3,7 @@ import { SpaceOperationsTabNav } from "@/components/space-operations/space-opera
 
 export default function SpaceOperationsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="claw-detail-muted-theme flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
       <SpaceOperationsHeader />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

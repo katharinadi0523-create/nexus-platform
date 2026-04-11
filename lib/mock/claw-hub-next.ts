@@ -416,16 +416,6 @@ export interface ClawDetailData {
   permissionSettings: PermissionSettingItem[];
 }
 
-export interface TenantSettingSection {
-  title: string;
-  description: string;
-  groups: {
-    title: string;
-    description: string;
-    entries: string[];
-  }[];
-}
-
 export const clawHubList: ClawHubListItem[] = [
   {
     id: "claw-ops-watch",
@@ -524,56 +514,6 @@ export const clawHubList: ClawHubListItem[] = [
     updatedAt: "2026-04-06 11:05",
     updatedBy: "RowanDI",
     summary: "负责竞品动态、行业政策、多源情报归集与结构化简报输出。",
-  },
-];
-
-export const tenantSettingSections: TenantSettingSection[] = [
-  {
-    title: "资源与环境配置",
-    description: "统一管理租户级模型、环境、存储和审计策略。",
-    groups: [
-      {
-        title: "模型资源",
-        description: "租户默认可用模型与资源池。",
-        entries: ["默认模型映射", "备用模型策略", "多环境模型白名单"],
-      },
-      {
-        title: "运行环境",
-        description: "测试、预发、生产环境的发布与隔离配置。",
-        entries: ["环境变量管理", "发布分支映射", "网络访问策略"],
-      },
-      {
-        title: "存储与审计",
-        description: "统一管理工作空间配额和日志保留策略。",
-        entries: ["工作空间容量", "日志保留周期", "审计归档策略"],
-      },
-    ],
-  },
-  {
-    title: "能力配置",
-    description: "统一下发租户级共享能力，供多个 Claw 复用。",
-    groups: [
-      {
-        title: "Agent",
-        description: "维护租户可复用的 Agent 模板和协作边界。",
-        entries: ["角色模板", "协同策略", "默认审批规则"],
-      },
-      {
-        title: "租户 Skill",
-        description: "管理租户级 Built in 和 Skill 下发能力。",
-        entries: ["租户级 Built in", "Skill 下发", "版本灰度与回滚"],
-      },
-      {
-        title: "租户 Tool",
-        description: "统一管理租户共用的 Tool 与插件入口。",
-        entries: ["租户级 Tool 白名单", "共享密钥托管", "调用频控"],
-      },
-      {
-        title: "租户级共享知识库",
-        description: "供所有 Claw 共用的公共知识资产。",
-        entries: ["制度库", "业务 FAQ", "公共语料标签"],
-      },
-    ],
   },
 ];
 
@@ -1047,6 +987,12 @@ const detailMap: Record<string, ClawDetailData> = {
     },
     resourceConfig: createDefaultResourceConfig(),
     distributionChannels: [
+      {
+        name: "蓝信",
+        status: "已接入",
+        appId: "lanxin-ops-lx01",
+        secretIdMasked: "lxsec_****_9k3m",
+      },
       {
         name: "企业微信",
         status: "已接入",
@@ -1918,6 +1864,12 @@ const detailMap: Record<string, ClawDetailData> = {
       },
     },
     distributionChannels: [
+      {
+        name: "蓝信",
+        status: "已接入",
+        appId: "office-shrimp-lanxin",
+        secretIdMasked: "lxsec_****_bx00",
+      },
       {
         name: "企业微信",
         status: "已接入",
@@ -2815,6 +2767,12 @@ const detailMap: Record<string, ClawDetailData> = {
     },
     distributionChannels: [
       {
+        name: "蓝信",
+        status: "已接入",
+        appId: "intel-shrimp-lanxin",
+        secretIdMasked: "lxsec_****_iq00",
+      },
+      {
         name: "企业微信",
         status: "已接入",
         appId: "intel-shrimp-wxwork",
@@ -3534,6 +3492,12 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
     },
     resourceConfig: createDefaultResourceConfig(),
     distributionChannels: [
+      {
+        name: "蓝信",
+        status: "已接入",
+        appId: `${listItem.id}-lanxin`,
+        secretIdMasked: "lxsec_****_8fh1",
+      },
       {
         name: "企业微信",
         status: "已接入",

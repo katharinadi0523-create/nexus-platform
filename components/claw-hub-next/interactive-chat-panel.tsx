@@ -731,8 +731,8 @@ export function ClawInteractiveChatPanel({
   }
 
   return (
-    <div className="grid min-h-[760px] xl:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="flex min-h-[760px] flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
+    <div className="grid h-full min-h-0 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-4xl">
             {runtime.stage === "history" ? (

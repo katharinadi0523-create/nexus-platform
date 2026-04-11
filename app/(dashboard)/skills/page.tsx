@@ -1157,126 +1157,49 @@ type AudienceVisualMeta = {
   label: string;
   icon: LucideIcon;
   badgeClass: string;
-  filterClass: string;
 };
 
 const AUDIENCE_VISUAL_META: Record<AudienceCategory, AudienceVisualMeta> = {
   ai: {
     label: "通用",
     icon: Bot,
-    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-    filterClass:
-      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
+    badgeClass: "border-[#e2e8f0] bg-[#f5f9ff] text-[#334155]",
   },
   dev: {
     label: "开发工具",
     icon: Wrench,
-    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-    filterClass:
-      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
+    badgeClass: "border-[#e2e8f0] bg-[#f5f9ff] text-[#334155]",
   },
   data: {
     label: "数据分析",
     icon: ChartColumn,
-    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-    filterClass:
-      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
+    badgeClass: "border-[#e2e8f0] bg-[#f5f9ff] text-[#334155]",
   },
   communication: {
     label: "通讯协作",
     icon: MessagesSquare,
-    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-    filterClass:
-      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
+    badgeClass: "border-[#e2e8f0] bg-[#f5f9ff] text-[#334155]",
   },
   content: {
     label: "企业服务",
     icon: Building2,
-    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-    filterClass:
-      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
+    badgeClass: "border-[#e2e8f0] bg-[#f5f9ff] text-[#334155]",
   },
   efficiency: {
     label: "效率工具",
     icon: Sparkles,
-    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-    filterClass:
-      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
+    badgeClass: "border-[#e2e8f0] bg-[#f5f9ff] text-[#334155]",
   },
   security: {
     label: "安全合规",
     icon: ShieldCheck,
-    badgeClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-    filterClass:
-      "border-slate-200/90 bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.12)]",
+    badgeClass: "border-[#e2e8f0] bg-[#f5f9ff] text-[#334155]",
   },
 };
 
-type MarketplaceCardPalette = {
-  panelClass: string;
-  iconClass: string;
-  glowClass: string;
-  tagClass: string;
-};
-
-const MARKETPLACE_CARD_PALETTES: MarketplaceCardPalette[] = [
-  {
-    panelClass:
-      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
-    iconClass:
-      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
-    glowClass: "bg-slate-200/18",
-    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-  },
-  {
-    panelClass:
-      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
-    iconClass:
-      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
-    glowClass: "bg-slate-200/18",
-    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-  },
-  {
-    panelClass:
-      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
-    iconClass:
-      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
-    glowClass: "bg-slate-200/18",
-    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-  },
-  {
-    panelClass:
-      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
-    iconClass:
-      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
-    glowClass: "bg-slate-200/18",
-    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-  },
-  {
-      panelClass:
-      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
-    iconClass:
-      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
-    glowClass: "bg-slate-200/18",
-    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-  },
-  {
-    panelClass:
-      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
-    iconClass:
-      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
-    glowClass: "bg-slate-200/18",
-    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-  },
-  {
-    panelClass:
-      "border-slate-200/85 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,250,251,0.95))]",
-    iconClass:
-      "border-slate-200/85 bg-white text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.14)]",
-    glowClass: "bg-slate-200/18",
-    tagClass: "border-slate-200/90 bg-slate-50/95 text-slate-700",
-  },
-];
+/** 应用广场卡片 — 白底、4px 圆角、轻阴影（plaza-page.md + SKILL 主色 hover） */
+const SKILLS_PLAZA_CARD_CLASS =
+  "rounded border border-[#e2e8f0] bg-[#ffffff] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_-16px_rgba(39,115,255,0.14)]";
 
 function getMarketplaceSourceText(skill: SkillTemplate) {
   return skill.sourceType === "platform" ? "AgentFoundry 精选" : skill.author;
@@ -1392,51 +1315,43 @@ function getSkillStatusMeta(status: SkillStatus) {
   }
 }
 
-function getMySkillStatusFilterClass(filterValue: MySkillStatusFilter, active: boolean) {
-  if (!active) {
-    return "border-transparent bg-transparent text-slate-500 hover:border-slate-200/80 hover:bg-white hover:text-slate-900";
+/** Arco `.arco-tag` + checked：已上架 green；其余 grey（对齐 Arco Tag green / gray checked） */
+function getSkillStatusArcoTagClass(status: SkillStatus): string {
+  if (status === "published") {
+    return "border border-transparent bg-[#e8ffea] text-[#009a29]";
   }
 
-  switch (filterValue) {
-    case "reviewing":
-      return "border-sky-200/80 bg-sky-50 text-sky-700 shadow-[0_14px_26px_-24px_rgba(14,165,233,0.46)]";
-    case "published":
-      return "border-emerald-200/80 bg-emerald-50 text-emerald-700 shadow-[0_14px_26px_-24px_rgba(16,185,129,0.42)]";
-    case "reviewFailed":
-      return "border-rose-200/80 bg-rose-50 text-rose-700 shadow-[0_14px_26px_-24px_rgba(244,63,94,0.38)]";
-    default:
-      return "border-slate-200/90 bg-white text-slate-900 shadow-[0_14px_26px_-24px_rgba(15,23,42,0.18)]";
-  }
+  return "border border-transparent bg-[#f2f3f5] text-[#86909c]";
 }
 
-function getMarketplaceSourceFilterClass(filterValue: MarketplaceSourceFilter, active: boolean) {
-  if (!active) {
-    return "border-transparent bg-transparent text-slate-500 hover:border-slate-200/80 hover:bg-white hover:text-slate-900";
-  }
+const SKILL_STATUS_ARCO_TAG_FRAME =
+  "inline-flex h-5 items-center gap-1 rounded-sm border border-transparent px-1 text-xs font-normal leading-[18px] whitespace-nowrap";
 
-  switch (filterValue) {
-    case "platform":
-      return "border-sky-200/80 bg-sky-50/90 text-sky-700 shadow-[0_10px_24px_-18px_rgba(14,165,233,0.75)]";
-    case "org":
-      return "border-emerald-200/80 bg-emerald-50/90 text-emerald-700 shadow-[0_10px_24px_-18px_rgba(16,185,129,0.75)]";
-    case "favorite":
-      return "border-rose-200/80 bg-rose-50/90 text-rose-700 shadow-[0_10px_24px_-18px_rgba(244,63,94,0.75)]";
-    default:
-      return "border-slate-200/80 bg-slate-100/90 text-slate-700 shadow-[0_10px_24px_-18px_rgba(148,163,184,0.8)]";
+/** CeCloud 列表页 — 状态筛选为文本 Tab + 底部主题色描边（SKILL.md Primary `#2773ff`） */
+function getMySkillStatusFilterClass(_filterValue: MySkillStatusFilter, active: boolean) {
+  if (!active) {
+    return "border-b-2 border-transparent pb-2.5 text-[13px] font-medium text-[#5a6779] hover:text-[#334155]";
   }
+  return "border-b-2 border-[#2773ff] pb-2.5 text-[13px] font-semibold text-[#2773ff]";
 }
 
-function getAudienceFilterClass(filterValue: AudienceCategoryFilter, active: boolean) {
+/** 胶囊筛选：轨道与页面底一致，仅选中项白底（参考应用广场） */
+function getSkillsPlazaCapsuleFilterClass(active: boolean) {
   if (!active) {
-    return "border-transparent bg-transparent text-slate-500 hover:border-slate-200/80 hover:bg-white hover:text-slate-900";
+    return "border-0 bg-transparent px-3 py-1 text-[13px] leading-6 text-[#6e7b8d] hover:text-[#334155]";
   }
 
-  if (filterValue === "all") {
-    return "border-slate-200/80 bg-slate-100/90 text-slate-700 shadow-[0_10px_24px_-18px_rgba(148,163,184,0.8)]";
-  }
-
-  return AUDIENCE_VISUAL_META[filterValue].filterClass;
+  return "rounded-full border-0 bg-white px-3 py-1 text-[13px] font-medium leading-6 text-[#2773ff] shadow-[0_1px_2px_rgba(15,23,42,0.06)]";
 }
+
+function getMarketplaceSourceFilterClass(_filterValue: MarketplaceSourceFilter, active: boolean) {
+  return getSkillsPlazaCapsuleFilterClass(active);
+}
+
+function getAudienceFilterClass(_filterValue: AudienceCategoryFilter, active: boolean) {
+  return getSkillsPlazaCapsuleFilterClass(active);
+}
+
 
 function getMarketplaceSkillIcon(skill: Pick<SkillTemplate, "name" | "audienceCategory">): LucideIcon {
   if (skill.name.includes("公文")) {
@@ -1579,7 +1494,8 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
   const isSkillDetailView = Boolean(selectedMarketplaceDetailId || selectedMySkillDetailId);
   const showManagementTabs = isManagementModule && !isMvpMode;
   const showExperienceSwitcher = !isSkillDetailView;
-  const showTopControls = showManagementTabs || showExperienceSwitcher;
+  /** 管理页版本切换为右上角 hover 浮层，不在此占位 */
+  const showTopControlsBar = showManagementTabs;
 
   useEffect(() => {
     if (isMvpMode && marketSortMode === "references") {
@@ -2907,49 +2823,49 @@ source_url: "${parsedUrl.toString()}"
     );
 
     return (
-      <section className="relative overflow-hidden rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] shadow-[0_30px_64px_-44px_rgba(15,23,42,0.28)]">
+      <section className="relative overflow-hidden rounded-[24px] border-0 bg-white shadow-[0_28px_72px_-44px_rgba(39,115,255,0.16)]">
         <div aria-hidden className="absolute inset-0">
-          <div className="skills-ambient-orb absolute left-[-3rem] top-0 h-28 w-28 rounded-full bg-cyan-200/24 blur-3xl" />
-          <div className="skills-ambient-orb skills-ambient-orb-delay absolute right-[-2rem] top-8 h-32 w-32 rounded-full bg-emerald-200/20 blur-3xl" />
+          <div className="skills-ambient-orb absolute left-[-3rem] top-0 h-28 w-28 rounded-full bg-[#4fd6ff]/18 blur-3xl" />
+          <div className="skills-ambient-orb skills-ambient-orb-delay absolute right-[-2rem] top-8 h-32 w-32 rounded-full bg-[#dbe7f4]/80 blur-3xl" />
         </div>
 
-        <div className="relative space-y-5 px-5 py-5 md:px-6">
+        <div className="relative space-y-6 px-5 py-6 md:px-8 md:py-8">
           <Button
             variant="ghost"
-            className="h-9 w-fit rounded-2xl px-3 text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+            className="h-9 w-fit rounded-full px-3 text-[#5a6779] hover:bg-[#f8f9fb] hover:text-[#2773ff]"
             onClick={closeMarketplaceDetail}
           >
             <ArrowLeft className="h-4 w-4" />
             返回 SkillsHub
           </Button>
 
-          <div className="space-y-5">
-            <div className="rounded-[26px] border border-white/90 bg-white/86 p-5 shadow-[0_24px_50px_-40px_rgba(15,23,42,0.22)]">
-              <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] border border-slate-200/80 bg-slate-50/95 text-slate-700">
+          <div className="space-y-6">
+            <div className="rounded-[24px] border border-[#dbe7f4]/80 bg-[#f8f9fb] p-6 shadow-[0_18px_48px_-36px_rgba(11,16,32,0.08)] md:p-7">
+              <div className="flex items-start gap-5">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] border-0 bg-[#dbe7f4]/55 text-[#2773ff]">
                   <SkillIcon className="h-6 w-6" />
                 </div>
                 <div className="min-w-0 flex-1 space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="skills-display min-w-0 flex-1 text-[2rem] leading-tight text-slate-950">
+                  <div className="flex w-fit max-w-full min-w-0 flex-wrap items-center gap-2">
+                    <h1 className="skills-display min-w-0 max-w-full shrink break-words text-[2rem] font-bold leading-tight tracking-tight text-[#000000]">
                       {skill.name}
                     </h1>
                     <Badge
                       variant="outline"
                       className={cn(
-                        "inline-flex h-7 items-center rounded-full px-3 text-[12px] font-semibold",
+                        "inline-flex h-7 shrink-0 items-center rounded-full px-3 text-[12px] font-semibold",
                         audienceMeta.badgeClass
                       )}
                     >
                       {skill.category || audienceMeta.label}
                     </Badge>
                   </div>
-                  <p className="max-w-4xl text-[15px] leading-7 text-slate-600">
+                  <p className="max-w-4xl text-[15px] leading-7 text-[#5a6779]">
                     {skill.detailDescription ?? skill.description}
                   </p>
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                    <span className="font-medium text-slate-700">{getMarketplaceSourceText(skill)}</span>
-                    <span className="text-slate-300">·</span>
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-[#5a6779]">
+                    <span className="font-medium text-[#2f5fbf]">{getMarketplaceSourceText(skill)}</span>
+                    <span className="text-[#dbe7f4]">·</span>
                     <span>
                       {skill.sourceType === "platform"
                         ? `更新于 ${skill.publishedAt}`
@@ -2959,23 +2875,23 @@ source_url: "${parsedUrl.toString()}"
                 </div>
               </div>
 
-              <div className="mt-5 flex flex-col gap-3 border-t border-slate-200/70 pt-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="mt-6 flex flex-col gap-3 border-t border-[#dbe7f4]/80 pt-5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-slate-50/85 px-3 py-1.5 text-sm text-slate-600">
-                    <span className="font-medium text-slate-900">{formatSkillVersion(skill.version)}</span>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[#dbe7f4] bg-white px-3 py-1.5 text-sm text-[#5a6779]">
+                    <span className="font-semibold text-[#000000]">{formatSkillVersion(skill.version)}</span>
                     <span>版本</span>
                   </div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-slate-50/85 px-3 py-1.5 text-sm text-slate-600">
-                    <span className="font-medium text-slate-900">{skill.downloads.toLocaleString()}</span>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[#dbe7f4] bg-white px-3 py-1.5 text-sm text-[#5a6779]">
+                    <span className="font-semibold text-[#000000]">{skill.downloads.toLocaleString()}</span>
                     <span>下载</span>
                   </div>
                   {dependencyCount ? (
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-slate-500">依赖声明</span>
+                      <span className="text-sm font-medium text-[#5a6779]">依赖声明</span>
                       {skill.declaredDependencies?.map((dependency) => (
                         <span
                           key={`${skill.id}-${dependency.id}`}
-                          className="rounded-full border border-sky-200/80 bg-sky-50/80 px-2.5 py-1 text-xs font-medium text-sky-700"
+                          className="rounded-full border border-[#dbe7f4] bg-white px-2.5 py-1 text-xs font-medium text-[#2f5fbf]"
                         >
                           {dependency.name}
                         </span>
@@ -2984,22 +2900,28 @@ source_url: "${parsedUrl.toString()}"
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
+                  <button
+                    type="button"
                     className={cn(
-                      "h-11 rounded-2xl border-slate-200/80 bg-white text-left hover:bg-slate-50",
-                      skill.isFavorite
-                        ? "text-amber-600 hover:text-amber-700"
-                        : "text-slate-700 hover:text-slate-950"
+                      "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded p-0 text-[#94a3b8] transition-colors",
+                      "border-0 bg-transparent shadow-none hover:text-[#64748b]",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/25 focus-visible:ring-offset-1"
                     )}
                     onClick={() => handleToggleFavorite(skill.id)}
+                    aria-label={skill.isFavorite ? "取消收藏" : "加入收藏"}
+                    title={skill.isFavorite ? "取消收藏" : "加入收藏"}
                   >
-                    <Star className={cn("h-4 w-4", skill.isFavorite ? "fill-current" : "")} />
-                    {skill.isFavorite ? "取消收藏" : "加入收藏"}
-                  </Button>
+                    <Star
+                      className={cn(
+                        "h-5 w-5 stroke-[1.35]",
+                        skill.isFavorite
+                          ? "fill-[#fff8e6] text-[#d4a017]"
+                          : "fill-transparent text-current"
+                      )}
+                    />
+                  </button>
                   <Button
-                    variant="outline"
-                    className="h-11 rounded-2xl border-slate-200/80 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+                    className="h-11 rounded-full border-0 bg-[#2773ff] px-5 text-white shadow-[0_14px_32px_-14px_rgba(39,115,255,0.55)] hover:bg-[#1f5fe0]"
                     onClick={() => handleDownloadTemplate(skill)}
                   >
                     <Download className="h-4 w-4" />
@@ -3009,37 +2931,43 @@ source_url: "${parsedUrl.toString()}"
               </div>
             </div>
 
-            <div className="rounded-[26px] border border-slate-200/80 bg-white/92 p-5 shadow-[0_24px_50px_-40px_rgba(15,23,42,0.18)]">
+            <div className="rounded-[24px] border border-[#dbe7f4]/70 bg-white p-6 shadow-[0_18px_48px_-40px_rgba(39,115,255,0.1)] md:p-7">
               {shouldShowReleaseNotes ? (
-                <div className="mb-5 rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-4">
-                  <div className="text-base font-semibold text-slate-950">更新说明</div>
-                  <div className="mt-3 text-sm leading-7 text-slate-600">{skill.releaseNotes}</div>
+                <div className="mb-6 rounded-[18px] border border-[#dbe7f4]/80 bg-[#f8f9fb] px-4 py-4">
+                  <div className="text-base font-semibold text-[#000000]">更新说明</div>
+                  <div className="mt-3 text-sm leading-7 text-[#5a6779]">{skill.releaseNotes}</div>
                 </div>
               ) : null}
 
-              <div className="text-base font-semibold text-slate-950">使用说明</div>
-              <div className="mt-4 rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm leading-7 text-slate-600">
+              <div className="text-base font-semibold text-[#000000]">使用说明</div>
+              <div className="mt-4 rounded-[18px] border border-[#dbe7f4]/80 bg-[#f8f9fb] px-4 py-4 text-sm leading-7 text-[#5a6779]">
                 {skill.usageInstructions?.trim() || "暂未填写使用说明"}
               </div>
 
               {shouldShowScenarioBlock ? (
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="mt-6 grid gap-4 sm:grid-cols-3">
                   {skill.scene?.trim() ? (
-                    <div className="rounded-[18px] border border-slate-200/80 bg-white/88 px-4 py-4">
-                      <div className="text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">适用场景</div>
-                      <div className="mt-2 text-sm font-medium text-slate-900">{skill.scene}</div>
+                    <div className="rounded-[18px] border border-[#dbe7f4]/80 bg-[#f8f9fb] px-4 py-4">
+                      <div className="text-[11px] font-semibold tracking-[0.12em] text-[#5a6779] uppercase">
+                        适用场景
+                      </div>
+                      <div className="mt-2 text-sm font-medium text-[#000000]">{skill.scene}</div>
                     </div>
                   ) : null}
                   {skill.inputExample?.trim() ? (
-                    <div className="rounded-[18px] border border-slate-200/80 bg-white/88 px-4 py-4">
-                      <div className="text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">输入示例</div>
-                      <div className="mt-2 text-sm leading-6 text-slate-600">{skill.inputExample}</div>
+                    <div className="rounded-[18px] border border-[#dbe7f4]/80 bg-[#f8f9fb] px-4 py-4">
+                      <div className="text-[11px] font-semibold tracking-[0.12em] text-[#5a6779] uppercase">
+                        输入示例
+                      </div>
+                      <div className="mt-2 text-sm leading-6 text-[#5a6779]">{skill.inputExample}</div>
                     </div>
                   ) : null}
                   {skill.outputExample?.trim() ? (
-                    <div className="rounded-[18px] border border-slate-200/80 bg-white/88 px-4 py-4">
-                      <div className="text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">输出示例</div>
-                      <div className="mt-2 text-sm leading-6 text-slate-600">{skill.outputExample}</div>
+                    <div className="rounded-[18px] border border-[#dbe7f4]/80 bg-[#f8f9fb] px-4 py-4">
+                      <div className="text-[11px] font-semibold tracking-[0.12em] text-[#5a6779] uppercase">
+                        输出示例
+                      </div>
+                      <div className="mt-2 text-sm leading-6 text-[#5a6779]">{skill.outputExample}</div>
                     </div>
                   ) : null}
                 </div>
@@ -3058,21 +2986,11 @@ source_url: "${parsedUrl.toString()}"
     const statusMeta = getSkillStatusMeta(skill.status);
     const StatusIcon = statusMeta.icon;
     const releaseAction = getSkillReleaseActionMeta(skill);
-    const ReleaseActionIcon = releaseAction.icon;
     const linkedTemplate = selectedMySkillPublishedTemplate;
     const downloadsValue = linkedTemplate?.downloads ?? 0;
     const dependencyCount = skill.declaredDependencies.length;
     const shouldShowReleaseNotes =
       compareVersions(skill.version ?? "1.0", "1.0") > 0 && Boolean(skill.releaseNotes?.trim());
-    const statusBadgeClass =
-      skill.status === "published"
-        ? "bg-emerald-50 text-emerald-700"
-        : skill.status === "reviewing"
-          ? "bg-sky-50 text-sky-700"
-          : skill.status === "reviewFailed"
-            ? "bg-rose-50 text-rose-700"
-            : "bg-amber-50 text-amber-700";
-
     return (
       <section className="relative overflow-hidden rounded-[28px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] shadow-[0_30px_64px_-44px_rgba(15,23,42,0.28)]">
         <div aria-hidden className="absolute inset-0">
@@ -3087,7 +3005,7 @@ source_url: "${parsedUrl.toString()}"
             onClick={closeMySkillDetail}
           >
             <ArrowLeft className="h-4 w-4" />
-            返回 skills管理
+            返回 SKILLS管理
           </Button>
 
           <div className="space-y-5">
@@ -3098,25 +3016,27 @@ source_url: "${parsedUrl.toString()}"
                 </div>
                 <div className="min-w-0 flex-1 space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="skills-display min-w-0 flex-1 text-[2rem] leading-tight text-slate-950">
-                      {skill.name}
-                    </h1>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "inline-flex h-7 items-center rounded-full px-3 text-[12px] font-semibold",
-                        audienceMeta.badgeClass
-                      )}
-                    >
-                      {skill.category}
-                    </Badge>
+                    <div className="flex w-fit max-w-full min-w-0 items-center gap-2">
+                      <h1 className="skills-display min-w-0 max-w-full shrink break-words text-[2rem] leading-tight text-slate-950">
+                        {skill.name}
+                      </h1>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "inline-flex h-7 shrink-0 items-center rounded-full px-3 text-[12px] font-semibold",
+                          audienceMeta.badgeClass
+                        )}
+                      >
+                        {skill.category}
+                      </Badge>
+                    </div>
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold",
-                        statusBadgeClass
+                        SKILL_STATUS_ARCO_TAG_FRAME,
+                        getSkillStatusArcoTagClass(skill.status)
                       )}
                     >
-                      <StatusIcon className="h-3.5 w-3.5" />
+                      <StatusIcon className="h-3 w-3 shrink-0" />
                       {statusMeta.label}
                     </span>
                   </div>
@@ -3161,16 +3081,14 @@ source_url: "${parsedUrl.toString()}"
                     className="h-11 rounded-2xl border-slate-200/80 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-950"
                     onClick={() => handleExportMySkill(skill.id)}
                   >
-                    <Download className="h-4 w-4" />
                     导出 .zip
                   </Button>
                   <Button
                     variant="outline"
-                    className="h-11 rounded-2xl border-slate-200/80 bg-white text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:text-slate-300"
+                    className="h-11 rounded-2xl border-slate-200/80 bg-white text-[#2773ff] hover:bg-[#f0f6fe] hover:text-[#2f5fbf] disabled:text-slate-300"
                     onClick={() => openReleaseDialogFromDetail(skill.id)}
                     disabled={releaseAction.disabled}
                   >
-                    <ReleaseActionIcon className="h-4 w-4" />
                     {releaseAction.label}
                   </Button>
                   <Button
@@ -3179,7 +3097,6 @@ source_url: "${parsedUrl.toString()}"
                     onClick={() => handleOfflineMySkill(skill.id)}
                     disabled={skill.status !== "published"}
                   >
-                    <X className="h-4 w-4" />
                     下架
                   </Button>
                   <Button
@@ -3187,7 +3104,6 @@ source_url: "${parsedUrl.toString()}"
                     className="h-11 rounded-2xl border-rose-200/80 bg-white text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                     onClick={() => handleDeleteMySkill(skill.id)}
                   >
-                    <Trash2 className="h-4 w-4" />
                     删除
                   </Button>
                 </div>
@@ -3214,213 +3130,256 @@ source_url: "${parsedUrl.toString()}"
   };
 
   return (
-    <div className="skills-page relative space-y-6 pb-4">
+    <div
+      className={cn(
+        "skills-page relative pb-4",
+        isManagementModule ? "space-y-4" : "space-y-6",
+        isHubModule && "skills-hub-cecloud min-h-[calc(100dvh-5rem)] bg-transparent",
+        isManagementModule && !isHubModule && "min-h-[calc(100dvh-5rem)] bg-white"
+      )}
+    >
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] overflow-hidden">
-        <div className="skills-ambient-orb absolute left-[6%] top-8 h-56 w-56 rounded-full bg-cyan-200/35 blur-3xl" />
-        <div className="skills-ambient-orb skills-ambient-orb-delay absolute right-[8%] top-24 h-64 w-64 rounded-full bg-emerald-200/30 blur-3xl" />
-        <div className="skills-ambient-orb skills-ambient-orb-slow absolute left-[34%] top-36 h-48 w-48 rounded-full bg-slate-200/45 blur-3xl" />
+        {isHubModule ? (
+          <>
+            <div className="skills-ambient-orb absolute left-[4%] top-6 h-56 w-56 rounded-full bg-[#f0f6fe] blur-3xl" />
+            <div className="skills-ambient-orb skills-ambient-orb-delay absolute right-[8%] top-16 h-64 w-64 rounded-full bg-[#dbe7f4]/35 blur-3xl" />
+          </>
+        ) : isManagementModule ? null : (
+          <>
+            <div className="skills-ambient-orb absolute left-[6%] top-8 h-56 w-56 rounded-full bg-cyan-200/35 blur-3xl" />
+            <div className="skills-ambient-orb skills-ambient-orb-delay absolute right-[8%] top-24 h-64 w-64 rounded-full bg-emerald-200/30 blur-3xl" />
+            <div className="skills-ambient-orb skills-ambient-orb-slow absolute left-[34%] top-36 h-48 w-48 rounded-full bg-slate-200/45 blur-3xl" />
+          </>
+        )}
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
-        {showTopControls ? (
-        <div
-          className={cn(
-            "flex flex-col gap-3 lg:flex-row lg:items-start",
-            showManagementTabs ? "lg:justify-between" : "lg:justify-end"
-          )}
-        >
-          {showManagementTabs ? (
-            <TabsList
-              className={cn(
-                "inline-grid h-auto w-fit max-w-full rounded-[20px] border border-white/80 bg-white/86 p-1 shadow-[0_18px_36px_-32px_rgba(15,23,42,0.28)] backdrop-blur-sm",
-                "grid-cols-2"
-              )}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className={cn(isManagementModule ? "space-y-4" : "space-y-5")}>
+        {showTopControlsBar ? (
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <TabsList
+            className={cn(
+              "inline-grid h-auto w-fit max-w-full rounded-[20px] border border-slate-200/80 bg-white p-1 shadow-sm",
+              "grid-cols-2"
+            )}
+          >
+            <TabsTrigger
+              value="mine"
+              className="h-12 min-w-[156px] justify-center gap-2 rounded-[16px] px-4 py-2 text-sm font-semibold data-[state=active]:border-slate-200 data-[state=active]:bg-slate-50 data-[state=active]:text-slate-950 data-[state=active]:shadow-sm"
             >
-              <TabsTrigger
-                value="mine"
-                className="h-12 min-w-[156px] justify-center gap-2 rounded-[16px] px-4 py-2 text-sm font-semibold data-[state=active]:border-white data-[state=active]:bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96)_52%,rgba(239,246,255,0.92))] data-[state=active]:text-slate-950 data-[state=active]:shadow-[0_14px_28px_-24px_rgba(100,116,139,0.4)]"
-              >
-                <PanelLeft className="h-4 w-4" />
-                <span>skills管理</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="foundry"
-                className="h-12 min-w-[156px] justify-center gap-2 rounded-[16px] px-4 py-2 text-sm font-semibold data-[state=active]:border-white data-[state=active]:bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(254,249,195,0.4)_38%,rgba(224,242,254,0.92)_100%)] data-[state=active]:text-slate-950 data-[state=active]:shadow-[0_14px_28px_-24px_rgba(14,165,233,0.34)]"
-              >
-                <Sparkles className="h-4 w-4" />
-                <span>Skills Foundry</span>
-              </TabsTrigger>
-            </TabsList>
-          ) : null}
-
-          {showExperienceSwitcher ? (
-          <div className="flex items-center gap-3 self-end rounded-full border border-white/85 bg-white/86 px-3 py-2 shadow-[0_18px_36px_-32px_rgba(15,23,42,0.28)] backdrop-blur-sm">
-            <div className="text-[11px] font-semibold tracking-[0.16em] text-slate-400 uppercase">
-              版本
-            </div>
-            <div className="relative grid grid-cols-2 rounded-full bg-slate-100/90 p-1">
-              <div
-                aria-hidden
-                className={cn(
-                  "absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-white shadow-[0_10px_20px_-16px_rgba(15,23,42,0.45)] transition-transform duration-200",
-                  isMvpMode ? "translate-x-0" : "translate-x-full"
-                )}
-              />
-              <button
-                type="button"
-                onClick={() => setExperienceMode("mvp")}
-                className={cn(
-                  "relative z-10 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
-                  isMvpMode ? "text-slate-950" : "text-slate-500"
-                )}
-              >
-                MVP
-              </button>
-              <button
-                type="button"
-                onClick={() => setExperienceMode("v2")}
-                className={cn(
-                  "relative z-10 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
-                  isMvpMode ? "text-slate-500" : "text-slate-950"
-                )}
-              >
-                迭代版
-              </button>
-            </div>
-          </div>
-          ) : null}
+              <PanelLeft className="h-4 w-4" />
+              <span>SKILLS管理</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="foundry"
+              className="h-12 min-w-[156px] justify-center gap-2 rounded-[16px] px-4 py-2 text-sm font-semibold data-[state=active]:border-slate-200 data-[state=active]:bg-slate-50 data-[state=active]:text-slate-950 data-[state=active]:shadow-sm"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>Skills Foundry</span>
+            </TabsTrigger>
+          </TabsList>
         </div>
         ) : null}
 
+        {isManagementModule && showExperienceSwitcher ? (
+          <div
+            className="pointer-events-auto fixed bottom-0 right-0 z-50 flex h-36 w-44 flex-col items-end justify-end pb-4 pr-3 pt-0 md:h-40 md:w-52 md:pr-5 md:pb-5 group/mgmt-version"
+            aria-label="右下角版本切换触发区"
+          >
+            <div
+              className={cn(
+                "flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-md transition-opacity duration-200",
+                "pointer-events-none opacity-0 group-hover/mgmt-version:pointer-events-auto group-hover/mgmt-version:opacity-100"
+              )}
+            >
+              <div className="text-[11px] font-semibold tracking-[0.16em] text-slate-500">版本</div>
+              <div className="relative grid grid-cols-2 rounded-full bg-slate-100 p-1">
+                <div
+                  aria-hidden
+                  className={cn(
+                    "absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-slate-900 shadow-sm transition-transform duration-200",
+                    isMvpMode ? "translate-x-0" : "translate-x-full"
+                  )}
+                />
+                <button
+                  type="button"
+                  onClick={() => setExperienceMode("mvp")}
+                  className={cn(
+                    "relative z-10 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
+                    isMvpMode ? "text-white" : "text-slate-600"
+                  )}
+                >
+                  MVP
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExperienceMode("v2")}
+                  className={cn(
+                    "relative z-10 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
+                    isMvpMode ? "text-slate-600" : "text-white"
+                  )}
+                >
+                  迭代版
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {isHubModule ? (
-          <TabsContent value="marketplace" className="space-y-3">
+          <TabsContent value="marketplace" className="mt-0 space-y-0">
           {selectedMarketplaceDetail ? renderMarketplaceDetailPage(selectedMarketplaceDetail) : (
             <>
-          <section className="relative overflow-hidden rounded-[24px] border border-slate-200/75 bg-[linear-gradient(135deg,rgba(255,255,255,0.97),rgba(247,250,255,0.94)_58%,rgba(245,252,248,0.9))] shadow-[0_22px_46px_-42px_rgba(15,23,42,0.24)]">
-            <div aria-hidden className="absolute inset-0">
-              <div className="skills-ambient-orb absolute -left-10 top-4 h-24 w-24 rounded-full bg-cyan-200/28 blur-3xl" />
-              <div className="skills-ambient-orb skills-ambient-orb-delay absolute right-[-2rem] top-2 h-28 w-28 rounded-full bg-emerald-200/22 blur-3xl" />
-              <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(15,23,42,0.03),transparent_36%,rgba(14,165,233,0.05)_100%)]" />
-            </div>
-
-            <div className="relative px-4 py-4 lg:px-5">
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0 flex-1 space-y-2.5">
-                  <div className="flex flex-col gap-1.5 xl:flex-row xl:items-center">
-                    <div className="min-w-[52px] text-[10px] font-semibold tracking-[0.18em] text-slate-400 uppercase">
-                      来源
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {SOURCE_FILTERS.map((filter) => (
-                        <button
-                          key={filter.value}
-                          type="button"
-                          onClick={() => setMarketSourceFilter(filter.value)}
-                          className={cn(
-                            "rounded-full border px-3 py-1.5 text-[13px] font-medium transition-all duration-200",
-                            getMarketplaceSourceFilterClass(
-                              filter.value,
-                              marketSourceFilter === filter.value
-                            )
-                          )}
-                        >
-                          {filter.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5 xl:flex-row xl:items-center">
-                    <div className="min-w-[52px] text-[10px] font-semibold tracking-[0.18em] text-slate-400 uppercase">
-                      类目
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {USER_CATEGORY_FILTERS.map((filter) => (
-                        <button
-                          key={filter.value}
-                          type="button"
-                          onClick={() => setAudienceCategoryFilter(filter.value)}
-                          className={cn(
-                            "rounded-full border px-3 py-1.5 text-[13px] font-medium transition-all duration-200",
-                            getAudienceFilterClass(
-                              filter.value,
-                              audienceCategoryFilter === filter.value
-                            )
-                          )}
-                        >
-                          {filter.label}
-                        </button>
-                      ))}
-                    </div>
+          <div className="skills-plaza-canvas relative">
+            {showExperienceSwitcher && isHubModule ? (
+              <div
+                className="pointer-events-auto absolute right-0 top-0 z-40 flex h-28 w-[min(100%,18rem)] flex-col items-end justify-start pt-1 pr-0 md:pr-1 group/hub-version"
+                aria-label="版本切换触发区"
+              >
+                <div
+                  className={cn(
+                    "flex items-center gap-3 rounded-full px-3 py-2 shadow-md backdrop-blur-sm transition-opacity duration-200",
+                    "pointer-events-none opacity-0 group-hover/hub-version:pointer-events-auto group-hover/hub-version:opacity-100",
+                    "border border-[#dbe7f4]/90 bg-white"
+                  )}
+                >
+                  <div className="text-[11px] font-semibold tracking-[0.16em] text-[#5a6779]">版本</div>
+                  <div className="relative grid grid-cols-2 rounded-full bg-[#f0f6fe] p-1">
+                    <div
+                      aria-hidden
+                      className={cn(
+                        "absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-[#2773ff] shadow-[0_10px_24px_-12px_rgba(39,115,255,0.45)] transition-transform duration-200",
+                        isMvpMode ? "translate-x-0" : "translate-x-full"
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setExperienceMode("mvp")}
+                      className={cn(
+                        "relative z-10 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
+                        isMvpMode ? "text-white" : "text-[#5a6779]"
+                      )}
+                    >
+                      MVP
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExperienceMode("v2")}
+                      className={cn(
+                        "relative z-10 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
+                        isMvpMode ? "text-[#5a6779]" : "text-white"
+                      )}
+                    >
+                      迭代版
+                    </button>
                   </div>
                 </div>
+              </div>
+            ) : null}
 
-                <div className="w-full xl:w-[320px] xl:shrink-0">
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <Input
-                      value={marketSearch}
-                      onChange={(event) => setMarketSearch(event.target.value)}
-                      placeholder="搜索 Skill 名称、类目或标签"
-                      className="h-10 rounded-2xl border-white bg-white/88 pl-11 pr-4 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_28px_-24px_rgba(15,23,42,0.18)] focus-visible:border-sky-200 focus-visible:ring-sky-100"
-                    />
-                  </div>
-                  <div className="mt-2 flex items-center justify-end gap-2">
-                    <span className="text-[11px] font-medium tracking-[0.08em] text-slate-400 uppercase">
-                      排序
-                    </span>
-                    <div className="inline-flex rounded-full border border-white/90 bg-white/76 p-1 shadow-[0_14px_28px_-24px_rgba(15,23,42,0.18)] backdrop-blur-sm">
+            <div className="skills-plaza-filter-top flex flex-col gap-3 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <span className="skills-plaza-gradient-title skills-display inline-block text-[1.75rem] font-bold leading-tight tracking-tight">
+                  技能广场
+                </span>
+                <p className="mt-1 max-w-xl text-[13px] leading-5 text-[#6e7b8d]">
+                  发现、筛选并复用组织内外的标准化技能资产，沉淀为可治理、可扩展的智能体能力。
+                </p>
+              </div>
+              <div className="relative w-full shrink-0 lg:w-[min(320px,100%)]">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6e7b8d]" />
+                <Input
+                  value={marketSearch}
+                  onChange={(event) => setMarketSearch(event.target.value)}
+                  placeholder="搜索 Skill 名称、类目或标签"
+                  className="h-7 w-full rounded border border-[#e2e8f0] bg-white pl-8 pr-2.5 text-[13px] leading-7 text-[#1e293b] placeholder:text-[#6e7b8d] shadow-none focus-visible:border-[#2773ff]/40 focus-visible:ring-1 focus-visible:ring-[#2773ff]/20"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+                <div className="w-11 shrink-0 text-[12px] leading-6 text-[#6e7b8d]">来源</div>
+                <div className="flex min-w-0 flex-1 flex-wrap gap-0.5">
+                  {SOURCE_FILTERS.map((filter) => (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      onClick={() => setMarketSourceFilter(filter.value)}
+                      className={cn(
+                        "shrink-0",
+                        getMarketplaceSourceFilterClass(
+                          filter.value,
+                          marketSourceFilter === filter.value
+                        )
+                      )}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+                <div className="w-11 shrink-0 text-[12px] leading-6 text-[#6e7b8d]">类目</div>
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
+                  {USER_CATEGORY_FILTERS.map((filter) => (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      onClick={() => setAudienceCategoryFilter(filter.value)}
+                      className={cn(
+                        "shrink-0",
+                        getAudienceFilterClass(filter.value, audienceCategoryFilter === filter.value)
+                      )}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:ml-auto sm:pl-3">
+                  <span className="text-[12px] leading-6 text-[#6e7b8d]">排序</span>
+                  <div className="inline-flex flex-wrap items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setMarketSortMode("downloads")}
+                      className={cn(
+                        "shrink-0",
+                        getSkillsPlazaCapsuleFilterClass(marketSortMode === "downloads")
+                      )}
+                    >
+                      下载量
+                    </button>
+                    {!isMvpMode ? (
                       <button
                         type="button"
-                        onClick={() => setMarketSortMode("downloads")}
+                        onClick={() => setMarketSortMode("references")}
                         className={cn(
-                          "rounded-full px-3 py-1.5 text-[12px] font-medium transition-all",
-                          marketSortMode === "downloads"
-                            ? "bg-slate-900 text-white shadow-[0_10px_18px_-14px_rgba(15,23,42,0.65)]"
-                            : "text-slate-500 hover:text-slate-900"
+                          "shrink-0",
+                          getSkillsPlazaCapsuleFilterClass(marketSortMode === "references")
                         )}
                       >
-                        下载量
+                        引用量
                       </button>
-                      {!isMvpMode ? (
-                        <button
-                          type="button"
-                          onClick={() => setMarketSortMode("references")}
-                          className={cn(
-                            "rounded-full px-3 py-1.5 text-[12px] font-medium transition-all",
-                            marketSortMode === "references"
-                              ? "bg-slate-900 text-white shadow-[0_10px_18px_-14px_rgba(15,23,42,0.65)]"
-                              : "text-slate-500 hover:text-slate-900"
-                          )}
-                        >
-                          引用量
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => setMarketSortMode("updatedAt")}
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setMarketSortMode("updatedAt")}
                       className={cn(
-                        "rounded-full px-3 py-1.5 text-[12px] font-medium transition-all",
-                        marketSortMode === "updatedAt"
-                          ? "bg-slate-900 text-white shadow-[0_10px_18px_-14px_rgba(15,23,42,0.65)]"
-                          : "text-slate-500 hover:text-slate-900"
+                        "shrink-0",
+                        getSkillsPlazaCapsuleFilterClass(marketSortMode === "updatedAt")
                       )}
                     >
                       最新更新
                     </button>
-                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </section>
 
           {filteredMarketplaceSkills.length > 0 ? (
-            <div className="grid items-start gap-3 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className="mt-6 grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredMarketplaceSkills.map((skill, index) => {
                 const audienceMeta = AUDIENCE_VISUAL_META[skill.audienceCategory];
-                const showcasePalette =
-                  MARKETPLACE_CARD_PALETTES[index % MARKETPLACE_CARD_PALETTES.length];
                 const SkillIcon = getMarketplaceSkillIcon(skill);
 
                 return (
@@ -3436,60 +3395,44 @@ source_url: "${parsedUrl.toString()}"
                       }
                     }}
                     className={cn(
-                      "skills-marketplace-card skills-stagger group relative self-start overflow-hidden rounded-[24px] border p-4 text-left shadow-[0_20px_40px_-36px_rgba(15,23,42,0.28)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_26px_52px_-38px_rgba(15,23,42,0.34)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70",
-                      "min-h-0",
-                      "cursor-pointer",
-                      showcasePalette.panelClass
+                      "skills-marketplace-card skills-stagger group relative min-h-0 w-full cursor-pointer overflow-hidden p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/30",
+                      SKILLS_PLAZA_CARD_CLASS
                     )}
                     style={{ animationDelay: `${index * 55}ms` }}
                   >
-                    <div
-                      aria-hidden
-                      className={cn(
-                        "skills-card-orb absolute right-[-2rem] top-[-2rem] h-32 w-32 rounded-full opacity-70 blur-3xl",
-                        showcasePalette.glowClass
-                      )}
-                    />
-                    <div className="absolute inset-x-6 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(15,23,42,0.15),transparent)]" />
-
                     <div className="relative flex flex-col">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 gap-3.5">
-                          <div
-                            className={cn(
-                              "flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border",
-                              showcasePalette.iconClass
-                            )}
-                          >
-                            <SkillIcon className="h-4 w-4" />
+                        <div className="flex min-w-0 flex-1 gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#2773ff] text-white shadow-none">
+                            <SkillIcon className="h-6 w-6" />
                           </div>
-                          <div className="min-w-0 pt-0.5">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="skills-display min-w-0 flex-1 text-[1.18rem] leading-7 text-slate-950">
-                                <span className="block truncate">{skill.name}</span>
+                          <div className="min-w-0 flex-1 pt-0.5">
+                            <div className="flex w-fit max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                              <h3 className="min-w-0 shrink truncate text-base font-semibold leading-normal text-[#1e293b]">
+                                {skill.name}
                               </h3>
                               <Badge
                                 variant="outline"
                                 className={cn(
-                                  "inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-[11px] font-semibold leading-none",
+                                  "inline-flex h-6 shrink-0 items-center rounded-sm border px-1.5 text-[11px] font-semibold leading-none",
                                   audienceMeta.badgeClass
                                 )}
                               >
                                 {audienceMeta.label}
                               </Badge>
                             </div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[13px] text-slate-500">
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] leading-5 text-[#6e7b8d]">
                               <span
                                 className={cn(
                                   "font-medium",
                                   skill.sourceType === "platform"
-                                    ? "text-slate-700"
-                                    : "text-slate-600"
+                                    ? "text-[#2773ff]"
+                                    : "text-[#334155]"
                                 )}
                               >
                                 {getMarketplaceSourceText(skill)}
                               </span>
-                              <span className="text-slate-300">·</span>
+                              <span className="text-[#e2e8f0]">·</span>
                               <span>
                                 {skill.sourceType === "platform"
                                   ? `更新于 ${skill.publishedAt}`
@@ -3499,14 +3442,12 @@ source_url: "${parsedUrl.toString()}"
                           </div>
                         </div>
 
-                        <Button
-                          variant="outline"
-                          size="icon"
+                        <button
+                          type="button"
                           className={cn(
-                            "h-9 w-9 rounded-2xl border-white/80 bg-white/80 shadow-sm backdrop-blur-sm",
-                            skill.isFavorite
-                              ? "border-amber-200/80 bg-amber-50/90 text-amber-500 hover:bg-amber-100"
-                              : "text-slate-600 hover:text-slate-900"
+                            "inline-flex shrink-0 items-center justify-center rounded p-0.5 text-[#94a3b8] transition-colors",
+                            "border-0 bg-transparent shadow-none hover:text-[#64748b]",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/25 focus-visible:ring-offset-1"
                           )}
                           onClick={(event) => {
                             event.stopPropagation();
@@ -3515,21 +3456,28 @@ source_url: "${parsedUrl.toString()}"
                           aria-label={skill.isFavorite ? "取消收藏" : "收藏"}
                           title={skill.isFavorite ? "取消收藏" : "收藏"}
                         >
-                          <Star className={cn("h-4 w-4", skill.isFavorite ? "fill-current" : "")} />
-                        </Button>
+                          <Star
+                            className={cn(
+                              "h-[18px] w-[18px] stroke-[1.35]",
+                              skill.isFavorite
+                                ? "fill-[#fff8e6] text-[#d4a017]"
+                                : "fill-transparent text-current"
+                            )}
+                          />
+                        </button>
                       </div>
 
-                      <p className="mt-3 line-clamp-3 text-[13px] leading-5 text-slate-600">
+                      <p className="mt-3 line-clamp-3 min-h-[44px] text-sm leading-[22px] text-[#6e7b8d]">
                         {skill.description}
                       </p>
 
-                      <div className="mt-4 border-t border-slate-200/60 pt-3">
-                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                          <div className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200/70 bg-white/65 px-2.5 py-1">
-                            <span className="font-semibold text-slate-950">
+                      <div className="mt-4 border-t border-[#e2e8f0] pt-3">
+                        <div className="flex items-center gap-2 text-[12px] text-[#6e7b8d]">
+                          <div className="inline-flex shrink-0 items-center gap-1 rounded border border-transparent bg-[#f1f5f9] px-2 py-1 text-[12px] text-[#475569]">
+                            <span className="font-semibold tabular-nums text-[#1e293b]">
                               {skill.downloads.toLocaleString()}
                             </span>
-                            <span>下载</span>
+                            <span className="ml-1">下载</span>
                           </div>
                           {skill.declaredDependencies?.length ? (
                             <TooltipProvider delayDuration={120}>
@@ -3538,7 +3486,7 @@ source_url: "${parsedUrl.toString()}"
                                   <button
                                     type="button"
                                     onClick={(event) => event.stopPropagation()}
-                                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-100/90 bg-sky-50/75 px-2.5 py-1 text-[11px] font-medium text-sky-700 transition-colors hover:border-sky-200 hover:bg-sky-100/70"
+                                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#dbe7f4] bg-[#f8f9fb] px-2.5 py-1 text-[11px] font-medium text-[#2f5fbf] transition-colors hover:border-[#2773ff]/25 hover:bg-white"
                                   >
                                     <Boxes className="h-3 w-3" />
                                     依赖声明
@@ -3546,17 +3494,17 @@ source_url: "${parsedUrl.toString()}"
                                 </TooltipTrigger>
                                 <TooltipContent
                                   align="start"
-                                  className="max-w-[260px] rounded-2xl border-white/90 bg-white/96 px-3 py-3 text-slate-600 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]"
+                                  className="max-w-[260px] rounded-2xl border-[#dbe7f4] bg-white px-3 py-3 text-[#5a6779] shadow-[0_20px_48px_-32px_rgba(39,115,255,0.18)]"
                                 >
                                   <div className="space-y-2">
-                                    <div className="text-[11px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
+                                    <div className="text-[11px] font-semibold tracking-[0.14em] text-[#5a6779] uppercase">
                                       依赖工具
                                     </div>
                                     <div className="grid gap-1">
                                       {skill.declaredDependencies.map((dependency) => (
                                         <div
                                           key={`${skill.id}-${dependency.id}`}
-                                          className="rounded-xl bg-slate-50/90 px-2.5 py-1.5 text-[12px] text-slate-700"
+                                          className="rounded-xl bg-[#f8f9fb] px-2.5 py-1.5 text-[12px] text-[#000000]/80"
                                         >
                                           {dependency.name}
                                         </div>
@@ -3574,9 +3522,9 @@ source_url: "${parsedUrl.toString()}"
                                   <button
                                     type="button"
                                     onClick={(event) => event.stopPropagation()}
-                                    className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-200/70 bg-white/65 px-2.5 py-1 text-[11px] text-slate-500 transition-colors hover:border-slate-300 hover:bg-white hover:text-slate-700"
+                                    className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#dbe7f4] bg-[#f8f9fb] px-2.5 py-1 text-[11px] text-[#5a6779] transition-colors hover:border-[#2773ff]/25 hover:bg-white hover:text-[#2f5fbf]"
                                   >
-                                    <span className="font-semibold text-slate-950">
+                                    <span className="font-semibold text-[#000000]">
                                       {(skill.references ?? 0).toLocaleString()}
                                     </span>
                                     <span>引用</span>
@@ -3584,10 +3532,10 @@ source_url: "${parsedUrl.toString()}"
                                 </TooltipTrigger>
                                 <TooltipContent
                                   align="start"
-                                  className="max-w-[260px] rounded-2xl border-white/90 bg-white/96 px-3 py-3 text-slate-600 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]"
+                                  className="max-w-[260px] rounded-2xl border-[#dbe7f4] bg-white px-3 py-3 text-[#5a6779] shadow-[0_20px_48px_-32px_rgba(39,115,255,0.18)]"
                                 >
                                   <div className="space-y-2">
-                                    <div className="text-[11px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
+                                    <div className="text-[11px] font-semibold tracking-[0.14em] text-[#5a6779] uppercase">
                                       引用智能体
                                     </div>
                                     <div className="grid gap-1">
@@ -3595,13 +3543,13 @@ source_url: "${parsedUrl.toString()}"
                                         (skill.referencedAgents ?? []).map((agent) => (
                                           <div
                                             key={`${skill.id}-${agent}`}
-                                            className="rounded-xl bg-slate-50/90 px-2.5 py-1.5 text-[12px] text-slate-700"
+                                            className="rounded-xl bg-[#f8f9fb] px-2.5 py-1.5 text-[12px] text-[#000000]/80"
                                           >
                                             {agent}
                                           </div>
                                         ))
                                       ) : (
-                                        <div className="rounded-xl bg-slate-50/90 px-2.5 py-1.5 text-[12px] text-slate-500">
+                                        <div className="rounded-xl bg-[#f8f9fb] px-2.5 py-1.5 text-[12px] text-[#5a6779]">
                                           暂无引用中的智能体
                                         </div>
                                       )}
@@ -3615,7 +3563,7 @@ source_url: "${parsedUrl.toString()}"
                             {!isMvpMode ? (
                               <Button
                                 variant="outline"
-                                className="h-9 rounded-2xl border-white/90 bg-white/82 px-3 text-[13px] text-slate-700 hover:bg-white"
+                                className="h-9 rounded-full border border-[#2773ff]/35 bg-white px-3 text-[13px] font-medium text-[#2773ff] shadow-none hover:bg-[#2773ff]/6"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   handleAddToSkillsFoundry(skill);
@@ -3628,7 +3576,7 @@ source_url: "${parsedUrl.toString()}"
                             <Button
                               variant="outline"
                               size="icon"
-                              className="h-9 w-9 rounded-2xl border-white/90 bg-white/82 text-slate-700 hover:bg-white"
+                              className="h-9 w-9 rounded-full border border-[#dbe7f4] bg-white text-[#2773ff] shadow-none hover:border-[#2773ff]/35 hover:bg-[#2773ff]/6"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 handleDownloadTemplate(skill);
@@ -3647,10 +3595,11 @@ source_url: "${parsedUrl.toString()}"
               })}
             </div>
           ) : (
-            <div className="rounded-[30px] border border-dashed border-slate-200/90 bg-white/75 px-6 py-14 text-center text-sm text-slate-500 shadow-[0_28px_60px_-50px_rgba(15,23,42,0.24)] backdrop-blur-sm">
+            <div className="mt-6 rounded border border-dashed border-[#e2e8f0] bg-white px-6 py-16 text-center text-sm leading-6 text-[#6e7b8d] shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
               当前筛选条件下没有匹配的 Skill 模板，试试切换来源、能力类目或搜索关键词。
             </div>
           )}
+          </div>
             </>
           )}
           </TabsContent>
@@ -4414,82 +4363,76 @@ source_url: "${parsedUrl.toString()}"
           {useUnifiedSkillsManagementView ? (
             <>
             {selectedMySkillDetail ? renderMySkillDetailPage(selectedMySkillDetail) : (
-            <section className="relative overflow-hidden rounded-[30px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(248,250,252,0.92))] shadow-[0_28px_60px_-46px_rgba(15,23,42,0.3)] backdrop-blur-sm">
-              <div aria-hidden className="absolute inset-0">
-                <div className="skills-ambient-orb absolute left-[-3rem] top-0 h-24 w-24 rounded-full bg-cyan-200/24 blur-3xl" />
-                <div className="skills-ambient-orb skills-ambient-orb-delay absolute right-[-2rem] top-8 h-28 w-28 rounded-full bg-indigo-200/18 blur-3xl" />
-              </div>
+            <div>
+                {/* list-page: 主标题 */}
+                <div className="mb-5 flex flex-shrink-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <h2 className="text-[20px] font-medium leading-8 tracking-normal text-[#0f172a]">
+                    SKILLS管理
+                  </h2>
+                  {/** list-page §4：强视觉主按钮（Arco primary default），不用 shadcn Button 以免 h-9 / rounded-md 覆盖 */}
+                  <button
+                    type="button"
+                    className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[4px] border border-transparent bg-[#2773ff] px-4 text-[12px] font-semibold leading-[1.5715] text-white shadow-none transition-all duration-100 ease-linear hover:bg-[#1f66f0] active:bg-[#1956d9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/35 focus-visible:ring-offset-0 disabled:pointer-events-none disabled:opacity-50"
+                    onClick={openImportDialog}
+                  >
+                    <Upload className="pointer-events-none h-4 w-4 shrink-0 opacity-100" aria-hidden />
+                    导入 Skills
+                  </button>
+                </div>
 
-              <div className="relative px-5 py-5">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <h2 className="skills-display text-[1.75rem] text-slate-950">skills管理</h2>
-                      <Badge
-                        variant="outline"
-                        className="border-slate-200/80 bg-slate-50/90 text-slate-600"
+                {/* list-page: 工具条（筛选 + 搜索） */}
+                <div className="mb-4 flex flex-shrink-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="-mb-px flex flex-wrap gap-5 border-b border-slate-200">
+                    {MY_SKILL_STATUS_FILTERS.map((filter) => (
+                      <button
+                        key={filter.value}
+                        type="button"
+                        onClick={() => setMySkillStatusFilter(filter.value)}
+                        className={cn(
+                          "transition-colors duration-100",
+                          getMySkillStatusFilterClass(
+                            filter.value,
+                            mySkillStatusFilter === filter.value
+                          )
+                        )}
                       >
-                        {filteredMySkills.length} 项
-                      </Badge>
-                    </div>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <div className="min-w-[52px] text-[10px] font-semibold tracking-[0.18em] text-slate-400 uppercase">
-                        状态
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {MY_SKILL_STATUS_FILTERS.map((filter) => (
-                          <button
-                            key={filter.value}
-                            type="button"
-                            onClick={() => setMySkillStatusFilter(filter.value)}
-                            className={cn(
-                              "rounded-full border px-3 py-1.5 text-[13px] font-medium transition-all duration-200",
-                              getMySkillStatusFilterClass(
-                                filter.value,
-                                mySkillStatusFilter === filter.value
-                              )
-                            )}
-                          >
-                            {filter.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                        {filter.label}
+                      </button>
+                    ))}
                   </div>
-
-                  <div className="flex w-full flex-col gap-2 xl:w-auto xl:min-w-[420px]">
-                    <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                      <Button
-                        variant="outline"
-                        className="rounded-2xl border-white bg-white/88 shadow-sm hover:bg-white"
-                        onClick={openImportDialog}
-                      >
-                        <Upload className="h-4 w-4" />
-                        导入Skills
-                      </Button>
-                    </div>
-                    <div className="relative">
-                      <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                      <Input
-                        value={mySkillSearch}
-                        onChange={(event) => setMySkillSearch(event.target.value)}
-                        placeholder="搜索 skills管理"
-                        className="h-10 rounded-2xl border-slate-200/90 bg-slate-50/96 pl-11 pr-4 text-sm text-slate-700 placeholder:text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_14px_28px_-24px_rgba(15,23,42,0.16)] focus-visible:border-sky-200 focus-visible:ring-sky-100"
-                      />
-                    </div>
+                  <div className="relative w-full min-w-0 lg:max-w-[320px]">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      value={mySkillSearch}
+                      onChange={(event) => setMySkillSearch(event.target.value)}
+                      placeholder="搜索 SKILLS管理"
+                      className="h-8 rounded border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-none focus-visible:border-[#2773ff]/40 focus-visible:ring-[#dbe7f4]"
+                    />
                   </div>
                 </div>
 
-                <div className="mt-5 overflow-hidden rounded-[22px] border border-slate-200/80 bg-white/92 shadow-[0_24px_50px_-40px_rgba(15,23,42,0.2)]">
+                <div className="overflow-x-auto">
                   <Table className="min-w-[1120px]">
-                    <TableHeader className="bg-slate-50/92">
-                      <TableRow className="border-slate-200/80 hover:bg-slate-50/92">
-                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">名称</TableHead>
-                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">创建人</TableHead>
-                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">发布状态</TableHead>
-                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">描述</TableHead>
-                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">更新时间</TableHead>
-                        <TableHead className="h-11 px-5 text-sm font-medium text-slate-700">操作</TableHead>
+                    <TableHeader className="bg-slate-50">
+                      <TableRow className="border-slate-200 hover:bg-slate-50">
+                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
+                          名称
+                        </TableHead>
+                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
+                          创建人
+                        </TableHead>
+                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
+                          发布状态
+                        </TableHead>
+                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
+                          描述
+                        </TableHead>
+                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
+                          更新时间
+                        </TableHead>
+                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
+                          操作
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -4497,10 +4440,10 @@ source_url: "${parsedUrl.toString()}"
                         <TableRow className="border-0 hover:bg-transparent">
                           <TableCell colSpan={6} className="px-6 py-16 text-center">
                             <div className="mx-auto max-w-md space-y-3">
-                              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[10px] border border-slate-200 bg-slate-50 text-slate-500">
+                              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-400">
                                 <Search className="h-5 w-5" />
                               </div>
-                              <div className="text-lg font-semibold text-slate-900">暂无匹配结果</div>
+                              <div className="text-base font-semibold text-slate-900">暂无匹配结果</div>
                               <p className="text-sm leading-6 text-slate-500">
                                 没有匹配的 Skill，试试换个关键词，或者导入一个本地 Skill。
                               </p>
@@ -4508,7 +4451,7 @@ source_url: "${parsedUrl.toString()}"
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredMySkills.map((skill) => {
+                        filteredMySkills.map((skill, rowIndex) => {
                           const audienceCategory = mapEditorCategoryToAudienceCategory(skill.category);
                           const SkillIcon = getMarketplaceSkillIcon({
                             name: skill.name,
@@ -4517,41 +4460,44 @@ source_url: "${parsedUrl.toString()}"
                           const statusMeta = getSkillStatusMeta(skill.status);
                           const StatusIcon = statusMeta.icon;
                           const releaseAction = getSkillReleaseActionMeta(skill);
-                          const ReleaseActionIcon = releaseAction.icon;
                           const statusVersionLabel = skill.version
                             ? skill.status === "draft" && hasPublishedHistory(skill)
                               ? `历史 ${formatSkillVersion(skill.version)}`
                               : formatSkillVersion(skill.version)
                             : null;
 
+                          const rowActionClass =
+                            "inline-flex h-auto items-center rounded px-1 py-1 text-xs font-semibold text-[#2773ff] transition-colors hover:bg-[#f0f6fe] hover:text-[#2f5fbf]";
+
                           return (
                             <TableRow
                               key={skill.id}
-                              className="border-slate-200/80 bg-white hover:bg-slate-50/45"
+                              className={cn(
+                                "border-slate-200 transition-colors duration-100 hover:bg-slate-50",
+                                rowIndex % 2 === 1 && "bg-slate-50/60"
+                              )}
                             >
-                              <TableCell className="px-5 py-4 align-top whitespace-normal">
-                                <div className="flex items-start gap-4">
-                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-slate-200/80 bg-slate-50/95 text-slate-700">
+                              <TableCell className="px-4 py-3 align-top text-sm leading-[1.5715] text-slate-800">
+                                <div className="flex items-start gap-3">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-[#dbe7f4] bg-[#eef4ff] text-[#2773ff]">
                                     <SkillIcon className="h-4 w-4" />
                                   </div>
-                                  <div className="min-w-0 space-y-1">
+                                  <div className="min-w-0 space-y-0.5">
                                     <button
                                       type="button"
                                       onClick={() => openMySkillDetail(skill.id)}
-                                      className="skills-display text-left text-[15px] font-medium leading-6 text-slate-950 transition-colors hover:text-sky-700"
+                                      className="skills-display block text-left text-sm font-semibold text-slate-900 transition-colors hover:text-[#2773ff]"
                                     >
                                       {skill.name}
                                     </button>
-                                    <div className="text-xs text-slate-500">
-                                      Skill ID：{skill.id}
-                                    </div>
+                                    <div className="text-xs text-slate-500">{skill.id}</div>
                                   </div>
                                 </div>
                               </TableCell>
 
-                              <TableCell className="px-5 py-4 align-top whitespace-normal">
-                                <div className="space-y-1">
-                                  <div className="text-sm font-medium text-slate-900">{skill.createdBy}</div>
+                              <TableCell className="px-4 py-3 align-top text-sm leading-[1.5715] text-slate-800">
+                                <div className="space-y-0.5">
+                                  <div className="font-medium text-slate-800">{skill.createdBy}</div>
                                   <div className="text-xs text-slate-500">
                                     {skill.source === "template"
                                       ? "模板导入"
@@ -4562,21 +4508,15 @@ source_url: "${parsedUrl.toString()}"
                                 </div>
                               </TableCell>
 
-                              <TableCell className="px-5 py-4 align-top whitespace-nowrap">
-                                <div className="inline-flex items-center gap-2 text-xs">
+                              <TableCell className="px-4 py-3 align-top whitespace-nowrap text-sm">
+                                <div className="inline-flex items-center gap-2">
                                   <span
                                     className={cn(
-                                      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap",
-                                      skill.status === "published"
-                                        ? "bg-emerald-50 text-emerald-700"
-                                        : skill.status === "reviewing"
-                                          ? "bg-sky-50 text-sky-700"
-                                          : skill.status === "reviewFailed"
-                                            ? "bg-rose-50 text-rose-700"
-                                            : "bg-amber-50 text-amber-700"
+                                      SKILL_STATUS_ARCO_TAG_FRAME,
+                                      getSkillStatusArcoTagClass(skill.status)
                                     )}
                                   >
-                                    <StatusIcon className="h-3.5 w-3.5" />
+                                    <StatusIcon className="h-3 w-3 shrink-0" />
                                     {statusMeta.label}
                                   </span>
                                   {statusVersionLabel ? (
@@ -4587,55 +4527,57 @@ source_url: "${parsedUrl.toString()}"
                                 </div>
                               </TableCell>
 
-                              <TableCell className="px-5 py-4 align-top whitespace-normal">
-                                <p className="line-clamp-2 max-w-[520px] text-sm leading-6 text-slate-600">
-                                  {skill.description}
-                                </p>
+                              <TableCell className="px-4 py-3 align-top text-sm leading-[1.5715] text-slate-600">
+                                <p className="line-clamp-2 max-w-[520px]">{skill.description}</p>
                               </TableCell>
 
-                              <TableCell className="px-5 py-4 align-top whitespace-normal">
-                                <div className="space-y-1">
-                                  <div className="text-sm font-medium text-slate-900">{skill.updatedAt}</div>
+                              <TableCell className="px-4 py-3 align-top text-sm leading-[1.5715] text-slate-800">
+                                <div className="space-y-0.5">
+                                  <div className="font-medium text-slate-800">{skill.updatedAt}</div>
                                   <div className="text-xs text-slate-500">更新人：{skill.updatedBy}</div>
                                 </div>
                               </TableCell>
 
-                              <TableCell className="px-5 py-4 align-top whitespace-normal">
-                                <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
-                                  <Button
-                                    variant="ghost"
-                                    className="h-8 rounded-lg px-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                              <TableCell className="px-4 py-3 align-top">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                  <button
+                                    type="button"
+                                    className={rowActionClass}
                                     onClick={() => handleExportMySkill(skill.id)}
                                   >
-                                    <Download className="h-4 w-4" />
                                     导出
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    className="h-8 rounded-lg px-2 text-sm text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:text-slate-300"
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={cn(
+                                      rowActionClass,
+                                      releaseAction.disabled &&
+                                        "text-[#cbd5e1] hover:bg-transparent hover:text-[#cbd5e1]"
+                                    )}
                                     onClick={() => openReleaseDialog(skill.id)}
                                     disabled={releaseAction.disabled}
                                   >
-                                    <ReleaseActionIcon className="h-4 w-4" />
                                     {releaseAction.label}
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    className="h-8 rounded-lg px-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={rowActionClass}
                                     onClick={() => handleDeleteMySkill(skill.id)}
                                   >
-                                    <Trash2 className="h-4 w-4" />
                                     删除
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    className="h-8 rounded-lg px-2 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:cursor-not-allowed disabled:text-slate-300"
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={cn(
+                                      rowActionClass,
+                                      skill.status !== "published" &&
+                                        "text-[#cbd5e1] hover:bg-transparent hover:text-[#cbd5e1]"
+                                    )}
                                     onClick={() => handleOfflineMySkill(skill.id)}
                                     disabled={skill.status !== "published"}
                                   >
-                                    <X className="h-4 w-4" />
                                     下架
-                                  </Button>
+                                  </button>
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -4643,10 +4585,9 @@ source_url: "${parsedUrl.toString()}"
                         })
                       )}
                     </TableBody>
-	                  </Table>
-	                </div>
-	              </div>
-	            </section>
+                  </Table>
+                </div>
+            </div>
 	            )}
 
               <Dialog
@@ -5132,7 +5073,7 @@ source_url: "${parsedUrl.toString()}"
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                   <div className="space-y-2">
                     <CardTitle className="skills-display text-[1.85rem] text-slate-950">
-                      skills管理
+                      SKILLS管理
                     </CardTitle>
                     <CardDescription className="max-w-2xl leading-6 text-slate-500">
                       支持导入本地压缩包或 URL 链接，继续编辑文件内容、保存修改，并发布到 Skills 广场。
@@ -5270,21 +5211,20 @@ source_url: "${parsedUrl.toString()}"
                               ? "导入"
                               : "空白"}
                         </Badge>
-                        <Badge
-                          className={
-                            activeSkill.status === "published"
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : activeSkill.status === "reviewing"
-                                ? "border-sky-200 bg-sky-50 text-sky-700"
-                                : "border-amber-200 bg-amber-50 text-amber-700"
-                          }
+                        <span
+                          className={cn(
+                            SKILL_STATUS_ARCO_TAG_FRAME,
+                            getSkillStatusArcoTagClass(activeSkill.status)
+                          )}
                         >
                           {activeSkill.status === "published"
                             ? "已发布"
                             : activeSkill.status === "reviewing"
                               ? "审核中"
-                              : "草稿"}
-                        </Badge>
+                              : activeSkill.status === "reviewFailed"
+                                ? "审核失败"
+                                : "草稿"}
+                        </span>
                         {!isMvpMode
                           ? activeSkill.linkedCECClaws.map((cec) => (
                               <Badge
@@ -5399,9 +5339,17 @@ source_url: "${parsedUrl.toString()}"
           font-family: var(--skills-body-font);
         }
 
+        .skills-hub-cecloud {
+          --skills-display-font: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        }
+
         .skills-display {
           font-family: var(--skills-display-font);
           letter-spacing: -0.04em;
+        }
+
+        .skills-hub-cecloud .skills-display {
+          letter-spacing: -0.02em;
         }
 
         .skills-ambient-orb {

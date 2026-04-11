@@ -1,19 +1,5 @@
 import type { ComponentType } from "react";
-import {
-  Bot,
-  Clock3,
-  FileStack,
-  FileText,
-  FolderOpen,
-  Gauge,
-  RadioTower,
-  Server,
-  Settings2,
-  ShieldCheck,
-  Sparkles,
-  UserRound,
-  Wrench,
-} from "lucide-react";
+import { FileStack, FileText, Gauge, RadioTower, ShieldCheck, Sparkles, UserRound, Wrench } from "lucide-react";
 import type {
   AutonomyBoundaryItem,
   CapabilityScope,
@@ -31,19 +17,23 @@ export type DetailSectionKey =
   | "core"
   | "tools"
   | "skills"
-  | "agents"
   | "knowledge"
   | "channels"
-  | "tasks"
-  | "workspace"
   | "logs"
   | "security"
-  | "relations"
-  | "resource"
-  | "settings";
+  | "relations";
 
-export type CapabilityPanelKey = "tools" | "skills" | "agents" | "knowledge";
-export type LogPanelKey = "conversation" | "task" | "security";
+export type CapabilityPanelKey = "tools" | "skills" | "knowledge";
+
+/** 工具 / 技能子 Tab：「公共配置」合并平台预置与租户侧配置 */
+export type ToolSkillViewScope = "preset" | "claw";
+
+export const TOOL_SKILL_VIEW_SCOPE_LABELS: Record<ToolSkillViewScope, string> = {
+  preset: "公共配置",
+  claw: "Claw配置",
+};
+
+export type LogPanelKey = "conversation" | "security";
 
 export type SecurityPanelKey =
   | "autonomy-boundaries"
@@ -59,16 +49,11 @@ export const DETAIL_SECTION_ITEMS: Array<{
   { value: "core", label: "核心文件", icon: FileText },
   { value: "tools", label: "工具", icon: Wrench },
   { value: "skills", label: "技能", icon: Sparkles },
-  { value: "agents", label: "多智能体", icon: Bot },
   { value: "knowledge", label: "知识库", icon: FileStack },
   { value: "channels", label: "渠道与分发", icon: RadioTower },
-  { value: "tasks", label: "任务", icon: Clock3 },
-  { value: "workspace", label: "工作空间", icon: FolderOpen },
   { value: "logs", label: "日志与审计", icon: FileStack },
   { value: "security", label: "安全防护", icon: ShieldCheck },
   { value: "relations", label: "关系", icon: UserRound },
-  { value: "resource", label: "资源配置", icon: Server },
-  { value: "settings", label: "设置", icon: Settings2 },
 ];
 
 export const LOG_PANEL_ITEMS: Array<{
@@ -80,11 +65,6 @@ export const LOG_PANEL_ITEMS: Array<{
     key: "conversation",
     label: "会话日志",
     description: "查看会话列表，以及每个会话中的消息与事件时间流。",
-  },
-  {
-    key: "task",
-    label: "任务运行",
-    description: "查看定时任务、催办任务和条件触发任务的每次运行详情与结果。",
   },
   {
     key: "security",
@@ -116,7 +96,7 @@ export const SECURITY_PANEL_ITEMS: Array<{
   {
     key: "security-approval",
     label: "安全审批",
-    description: "处理待审批的高风险动作并查看历史记录。",
+    description: "处理待审批的高风险动作。",
   },
 ];
 
@@ -141,12 +121,12 @@ export const CORE_FILE_ICONS: Record<ClawCoreFileKey, ComponentType<{ className?
 
 export const CAPABILITY_SCOPE_LABELS: Record<CapabilityScope, string> = {
   platform: "平台预置",
-  tenant: "租户配置",
+  tenant: "公共配置",
   claw: "Claw配置",
 };
 
 export const KNOWLEDGE_SCOPE_LABELS: Record<KnowledgeScope, string> = {
-  tenant: "租户配置",
+  tenant: "公共配置",
   claw: "Claw配置",
 };
 
