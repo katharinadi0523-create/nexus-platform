@@ -62,6 +62,12 @@ const menuGroups: MenuGroup[] = [
     title: "应用管理",
     items: [
       {
+        key: "ClawHubNext",
+        label: "Claw管理",
+        icon: Shrimp,
+        href: "/claw-hub-next",
+      },
+      {
         key: "Agent",
         label: "智能体",
         icon: Bot,
@@ -72,12 +78,6 @@ const menuGroups: MenuGroup[] = [
   {
     title: "资源管理",
     items: [
-      {
-        key: "ClawHubNext",
-        label: "Claw管理",
-        icon: Shrimp,
-        href: "/claw-hub-next",
-      },
       {
         key: "SkillsManagement",
         label: "SKILLS管理",

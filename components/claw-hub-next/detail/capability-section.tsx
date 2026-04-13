@@ -364,7 +364,7 @@ function PresetClawViewTabs({
             onClick={() => onChange(tab.key)}
             className={cn(
               "border-b-2 border-transparent px-1 py-3 text-sm font-medium whitespace-nowrap transition-colors",
-              scope === tab.key ? "border-slate-950 text-slate-950" : "text-slate-500 hover:text-slate-900"
+              scope === tab.key ? "border-blue-600 text-blue-600" : "text-slate-500 hover:text-slate-900"
             )}
           >
             {TOOL_SKILL_VIEW_SCOPE_LABELS[tab.key]}
@@ -401,7 +401,7 @@ function CapabilityScopeTabs<ScopeKey extends string>({
             onClick={() => onChange(currentScope)}
             className={cn(
               "border-b-2 border-transparent px-1 py-3 text-sm font-medium whitespace-nowrap transition-colors",
-              scope === currentScope ? "border-slate-950 text-slate-950" : "text-slate-500 hover:text-slate-900"
+              scope === currentScope ? "border-blue-600 text-blue-600" : "text-slate-500 hover:text-slate-900"
             )}
           >
             {labels[currentScope]}

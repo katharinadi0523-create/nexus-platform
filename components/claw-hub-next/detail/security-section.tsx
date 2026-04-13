@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown, Eye, Folder, Info, Plus, Trash2 } from "lucide-react";
+import { BookOpen, ChevronDown, Eye, Info, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -57,9 +57,6 @@ type SecuritySectionProps = {
   onRemoveProtectedTool: (name: string) => void;
   onAddProhibitedTool: (name: string) => void;
   onRemoveProhibitedTool: (name: string) => void;
-  onFileProtectionEnabledChange: (enabled: boolean) => void;
-  onAddFilePath: (path: string) => void;
-  onRemoveFilePath: (pathId: string) => void;
   onResolveApproval: (approvalId: string, resolution: "approved" | "rejected") => void;
 };
 
@@ -143,18 +140,14 @@ export function ClawSecuritySection({
   onRemoveProtectedTool,
   onAddProhibitedTool,
   onRemoveProhibitedTool,
-  onFileProtectionEnabledChange,
-  onAddFilePath,
-  onRemoveFilePath,
   onResolveApproval,
 }: SecuritySectionProps) {
   const [protectedDraft, setProtectedDraft] = useState("");
   const [prohibitedDraft, setProhibitedDraft] = useState("");
-  const [pathDraft, setPathDraft] = useState("");
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [ruleForm, setRuleForm] = useState<ToolRuleFormState>(() => ({ ...TOOL_RULE_FORM_DEFAULT }));
 
-  const { autonomyBoundaries, toolProtection, fileProtection, securityApprovals } = securityManagement;
+  const { autonomyBoundaries, toolProtection, securityApprovals } = securityManagement;
 
   function submitCustomToolRule() {
     const id = ruleForm.ruleId.trim();
@@ -390,9 +383,20 @@ export function ClawSecuritySection({
 
         <div className="w-full min-w-0 space-y-5">
           <div>
-            <p className="text-sm leading-6 text-slate-600">
-              配置工具调用的安全扫描。危险操作将在执行前需要你的明确批准。
-            </p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-6">
+              <span className="text-slate-600">
+                配置工具调用的安全扫描。危险操作将在执行前需要你的明确批准。
+              </span>
+              <a
+                href="/docs/tool-protection.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex shrink-0 items-center gap-1 rounded-sm px-0.5 text-sm font-medium text-sky-600 no-underline outline-none transition-colors hover:bg-sky-50 hover:text-sky-800 focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1"
+              >
+                <BookOpen className="h-4 w-4 shrink-0 text-current" aria-hidden />
+                工具防护说明
+              </a>
+            </div>
           </div>
 
           <div className="border border-slate-200/90 bg-white p-4">
@@ -555,91 +559,6 @@ export function ClawSecuritySection({
           </div>
         </div>
       </>
-    );
-  }
-
-  if (activePanel === "file-protection") {
-    return (
-      <div className="w-full min-w-0 space-y-4">
-        <p className="text-sm leading-6 text-slate-600">
-          保护敏感文件和目录，防止被 Agent 工具访问。添加的路径将在所有工具调用中被拦截。
-        </p>
-
-        <div className="w-full border border-slate-200/90 bg-white p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
-            <span className="text-sm font-medium text-slate-900">启用文件防护</span>
-            <Switch
-              checked={fileProtection.enabled}
-              onCheckedChange={onFileProtectionEnabledChange}
-              className="data-[state=checked]:bg-sky-600"
-            />
-          </div>
-
-          <div className="mt-4 flex w-full flex-col gap-2 sm:flex-row sm:items-center">
-            <input
-              value={pathDraft}
-              onChange={(event) => setPathDraft(event.target.value)}
-              placeholder="输入文件或目录路径 (如 ~/.ssh/ 或 /etc/passwd)"
-              className="h-9 min-w-0 w-full flex-1 rounded-sm border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-sky-300 focus:ring-1 focus:ring-sky-200"
-            />
-            <Button
-              type="button"
-              size="sm"
-              className="h-9 w-full shrink-0 rounded-sm border border-sky-200 bg-sky-50 px-3 text-sm font-medium text-sky-800 shadow-none hover:bg-sky-100 sm:w-auto"
-              onClick={() => {
-                const raw = pathDraft.trim();
-                if (!raw) {
-                  return;
-                }
-                onAddFilePath(raw);
-                setPathDraft("");
-              }}
-            >
-              <Plus className="mr-1 h-4 w-4" />
-              添加
-            </Button>
-          </div>
-        </div>
-
-        <div className="w-full min-w-0 overflow-hidden border border-slate-200/90 bg-white">
-          <div className="grid grid-cols-[1fr_80px] gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
-            <div>路径</div>
-            <div className="text-right">操作</div>
-          </div>
-          {fileProtection.paths.length === 0 ? (
-            <div className="px-3 py-12 text-center text-sm text-slate-400">暂无受保护路径</div>
-          ) : (
-            fileProtection.paths.map((row) => (
-              <div
-                key={row.id}
-                className="grid grid-cols-[1fr_80px] items-center gap-2 border-b border-slate-100 px-3 py-2.5 text-sm last:border-b-0"
-              >
-                <div className="flex min-w-0 flex-wrap items-center gap-2 text-slate-800">
-                  {row.kind === "directory" ? (
-                    <Folder className="h-4 w-4 shrink-0 text-sky-600" />
-                  ) : (
-                    <Folder className="h-4 w-4 shrink-0 text-slate-400" />
-                  )}
-                  <span className="break-all font-mono text-xs">{row.path}</span>
-                  <span className="inline-flex shrink-0 rounded-sm border border-sky-100 bg-sky-50 px-1.5 py-0.5 text-xs text-sky-800">
-                    {row.kind === "directory" ? "目录" : "文件"}
-                  </span>
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-sm text-rose-500 transition hover:bg-rose-50"
-                    aria-label="删除"
-                    onClick={() => onRemoveFilePath(row.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
     );
   }
 

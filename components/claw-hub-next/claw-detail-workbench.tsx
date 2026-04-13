@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -8,15 +9,15 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  EyeOff,
   MessageSquareText,
   Plus,
-  RadioTower,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
 import { ClawInteractiveChatPanel } from "@/components/claw-hub-next/interactive-chat-panel";
 import {
-  CORE_FILE_ICONS,
   DETAIL_SECTION_ITEMS,
   LOG_PANEL_ITEMS,
   SECURITY_PANEL_ITEMS,
@@ -28,18 +29,15 @@ import {
 import { ClawSecuritySection } from "@/components/claw-hub-next/detail/security-section";
 import { SectionCard } from "@/components/claw-hub-next/detail/section-card";
 import {
-  addFileProtectionPath,
   addToolProtectionRule,
   deleteScopedCollectionItem,
   normalizeAutonomyBoundaries,
   mergeClawKnowledgeSelections,
   mergeClawSkillSelections,
   mergeClawToolSelections,
-  removeFileProtectionPath,
   resolveSecurityApproval,
   toggleScopedEnabledCollection,
   updateAutonomyBoundaryLevel,
-  updateFileProtectionEnabled,
   updateToolProtectionEnabled,
   updateToolProtectionRuleEnabled,
 } from "@/components/claw-hub-next/detail/state";
@@ -57,18 +55,25 @@ import {
 } from "@/components/claw-hub-next/detail/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import type {
-  CapabilityScope,
-  ClawCoreFileKey,
-  ClawDetailData,
-  ConversationAuditItem,
-  KnowledgeScope,
-  SecurityManagementConfig,
-  ToolProtectionRuleItem,
+import {
+  AGENT_RELATION_SELECT_OPTIONS,
+  type AgentRelationItem,
+  type AgentRelationKind,
+  type CapabilityScope,
+  type ClawCoreFileKey,
+  type ClawDetailData,
+  type ConversationAuditItem,
+  type KnowledgeScope,
+  type SecurityManagementConfig,
+  type ToolProtectionRuleItem,
 } from "@/lib/mock/claw-hub-next";
 import { cn } from "@/lib/utils";
 
@@ -103,6 +108,41 @@ type LogSessionEventItem = {
   inputSummary?: string;
   outputSummary?: string;
 };
+
+type EditableDistributionChannel = ClawDetailData["distributionChannels"][number];
+
+const CHANNEL_ICON_MAP = {
+  蓝信: "/icons/蓝信.png",
+  企业微信: "/icons/企业微信.png",
+  飞书: "/icons/飞书.png",
+  钉钉: "/icons/钉钉.png",
+} as const;
+
+const CHANNEL_SUBTITLE_MAP = {
+  蓝信: "Lanxin",
+  企业微信: "WeCom / WeChat Work",
+  飞书: "Feishu / Lark",
+  钉钉: "DingTalk",
+} as const;
+
+const CHANNEL_ORDER = ["蓝信", "企业微信", "飞书", "钉钉"] as const;
+
+function buildEditableDistributionChannels(
+  channels: ClawDetailData["distributionChannels"]
+): EditableDistributionChannel[] {
+  const channelMap = new Map(channels.map((channel) => [channel.name, channel]));
+
+  return CHANNEL_ORDER.map((channelName) => {
+    const existingChannel = channelMap.get(channelName);
+
+    return {
+      name: channelName,
+      status: existingChannel?.status ?? "未接入",
+      appId: existingChannel?.appId ?? "未配置",
+      secretIdMasked: existingChannel?.secretIdMasked ?? "未配置",
+    };
+  });
+}
 
 function getLogEventKind(record: ConversationAuditItem): Extract<LogSessionEventKind, "skill" | "tool"> {
   return /skill/i.test(record.targetName) ? "skill" : "tool";
@@ -232,7 +272,18 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [activeSecurityPanel, setActiveSecurityPanel] = useState<SecurityPanelKey>("autonomy-boundaries");
   const [selectedChatId, setSelectedChatId] = useState(detail.chatSessions[0]?.id ?? "");
   const [selectedCoreFileKey, setSelectedCoreFileKey] = useState<ClawCoreFileKey | null>(null);
+  const [coreFileDrafts, setCoreFileDrafts] = useState<Record<ClawCoreFileKey, string>>(() =>
+    detail.coreFiles.reduce(
+      (accumulator, file) => ({ ...accumulator, [file.key]: file.content }),
+      {} as Record<ClawCoreFileKey, string>
+    )
+  );
   const [capabilityConfig, setCapabilityConfig] = useState(detail.capabilityConfig);
+  const [distributionChannels, setDistributionChannels] = useState<EditableDistributionChannel[]>(() =>
+    buildEditableDistributionChannels(detail.distributionChannels)
+  );
+  const [expandedChannelNames, setExpandedChannelNames] = useState<string[]>([]);
+  const [visibleChannelSecrets, setVisibleChannelSecrets] = useState<Record<string, boolean>>({});
   const [toolConfigDialogOpen, setToolConfigDialogOpen] = useState(false);
   const [skillConfigDialogOpen, setSkillConfigDialogOpen] = useState(false);
   const [knowledgeConfigDialogOpen, setKnowledgeConfigDialogOpen] = useState(false);
@@ -243,14 +294,15 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [securityMenuOpen, setSecurityMenuOpen] = useState(false);
   const [selectedLogSessionId, setSelectedLogSessionId] = useState<string | null>(null);
   const [selectedLogEventId, setSelectedLogEventId] = useState<string | null>(null);
-  const [coreFileDrafts, setCoreFileDrafts] = useState<Record<ClawCoreFileKey, string>>(() =>
-    detail.coreFiles.reduce(
-      (accumulator, file) => ({ ...accumulator, [file.key]: file.content }),
-      { identity: "", soul: "", memory: "", heartbeat: "" }
-    )
-  );
+  const [agentRelations, setAgentRelations] = useState<AgentRelationItem[]>(() => [...detail.agentRelations]);
+  const [agentRelationDraft, setAgentRelationDraft] = useState<AgentRelationItem | null>(null);
   const logsMenuCloseTimerRef = useRef<number | null>(null);
   const securityMenuCloseTimerRef = useRef<number | null>(null);
+
+  const relationSelectOptions = useMemo(
+    () => AGENT_RELATION_SELECT_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label })),
+    []
+  );
 
   const currentSession = chatSessions.find((session) => session.id === selectedChatId) ?? chatSessions[0];
   const matchedConversationRun = conversationRuns.find((session) => session.id === selectedChatId);
@@ -310,6 +362,52 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     setChatSessions((current) =>
       current.map((item) => (item.id === sessionId ? { ...item, unreadCount: 0 } : item))
     );
+  }
+
+  function handleToggleChannelExpand(channelName: string) {
+    setExpandedChannelNames((current) =>
+      current.includes(channelName) ? current.filter((name) => name !== channelName) : [...current, channelName]
+    );
+  }
+
+  function handleChannelFieldChange(
+    channelName: string,
+    field: "appId" | "secretIdMasked",
+    value: string
+  ) {
+    setDistributionChannels((current) =>
+      current.map((channel) => (channel.name === channelName ? { ...channel, [field]: value } : channel))
+    );
+  }
+
+  function handleToggleChannelSecretVisibility(channelName: string) {
+    setVisibleChannelSecrets((current) => ({
+      ...current,
+      [channelName]: !current[channelName],
+    }));
+  }
+
+  function handleSaveDistributionChannel(channelName: string) {
+    setDistributionChannels((current) =>
+      current.map((channel) => {
+        if (channel.name !== channelName) {
+          return channel;
+        }
+
+        const isConfigured =
+          Boolean(channel.appId.trim()) &&
+          Boolean(channel.secretIdMasked.trim()) &&
+          channel.appId !== "未配置" &&
+          channel.secretIdMasked !== "未配置";
+
+        return {
+          ...channel,
+          status: isConfigured ? "已接入" : "未接入",
+        };
+      })
+    );
+
+    toast.success(`${channelName} 渠道配置已保存。`);
   }
 
   function clearLogsMenuCloseTimer() {
@@ -462,27 +560,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     }));
   }
 
-  function handleFileProtectionEnabledChange(enabled: boolean) {
-    setSecurityManagement((current) => updateFileProtectionEnabled(current, enabled));
-  }
-
-  function handleAddFilePath(rawPath: string) {
-    const path = rawPath.trim();
-    if (!path) {
-      return;
-    }
-    const kind: "file" | "directory" = path.endsWith("/") ? "directory" : "file";
-    const id =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `fp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    setSecurityManagement((current) => addFileProtectionPath(current, { id, path, kind }));
-  }
-
-  function handleRemoveFilePath(pathId: string) {
-    setSecurityManagement((current) => removeFileProtectionPath(current, pathId));
-  }
-
   function handleResolveApproval(approvalId: string, resolution: "approved" | "rejected") {
     setSecurityManagement((current) => resolveSecurityApproval(current, approvalId, resolution));
     toast.success(resolution === "approved" ? "已批准该请求。" : "已拒绝该请求。");
@@ -492,7 +569,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     if (!selectedCoreFile) {
       return;
     }
-
     toast.success(`${selectedCoreFile.title} 已保存。`);
   }
 
@@ -600,6 +676,29 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     toast.success("知识已删除。");
   }
 
+  function openEditAgentRelation(item: AgentRelationItem) {
+    setAgentRelationDraft({ ...item });
+  }
+
+  function closeEditAgentRelation() {
+    setAgentRelationDraft(null);
+  }
+
+  function saveAgentRelation() {
+    if (!agentRelationDraft) {
+      return;
+    }
+    setAgentRelations((rows) => rows.map((r) => (r.id === agentRelationDraft.id ? { ...agentRelationDraft } : r)));
+    toast.success("已保存。");
+    closeEditAgentRelation();
+  }
+
+  function deleteAgentRelation(id: string) {
+    setAgentRelations((rows) => rows.filter((r) => r.id !== id));
+    setAgentRelationDraft((draft) => (draft?.id === id ? null : draft));
+    toast.success("已删除。");
+  }
+
   function handlePublish() {
     if (detail.overview.publishStatus === "已发布") {
       toast.success(`${detail.overview.name} 已发布。`);
@@ -695,7 +794,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                             onFocus={openLogsMenu}
                             className={cn(
                               "inline-flex h-auto flex-none shrink-0 items-center gap-1 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900",
-                              activeSection === "logs" && "border-slate-950 font-semibold text-slate-950"
+                              activeSection === "logs" && "border-blue-600 font-semibold text-blue-600"
                             )}
                           >
                             <span>{item.label}</span>
@@ -715,8 +814,8 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                               key={panel.key}
                               onClick={() => handleSelectLogPanel(panel.key)}
                               className={cn(
-                                "cursor-pointer rounded-none border-b border-slate-200 px-3 py-2.5 text-sm text-slate-600 last:border-b-0 focus:bg-slate-100 focus:text-slate-950",
-                                activeSection === "logs" && activeLogPanel === panel.key && "bg-slate-100 font-medium text-slate-950"
+                                "cursor-pointer rounded-none border-b border-slate-200 px-3 py-2.5 text-sm text-slate-600 last:border-b-0 focus:bg-blue-50 focus:text-blue-700",
+                                activeSection === "logs" && activeLogPanel === panel.key && "bg-blue-50 font-medium text-blue-700"
                               )}
                             >
                               {panel.label}
@@ -743,7 +842,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                             onFocus={openSecurityMenu}
                             className={cn(
                               "inline-flex h-auto flex-none shrink-0 items-center gap-1 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900",
-                              activeSection === "security" && "border-slate-950 font-semibold text-slate-950"
+                              activeSection === "security" && "border-blue-600 font-semibold text-blue-600"
                             )}
                           >
                             <span>{item.label}</span>
@@ -763,10 +862,10 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                               key={panel.key}
                               onClick={() => handleSelectSecurityPanel(panel.key)}
                               className={cn(
-                                "cursor-pointer rounded-none border-b border-slate-200 px-3 py-2.5 text-sm text-slate-600 last:border-b-0 focus:bg-slate-100 focus:text-slate-950",
+                                "cursor-pointer rounded-none border-b border-slate-200 px-3 py-2.5 text-sm text-slate-600 last:border-b-0 focus:bg-blue-50 focus:text-blue-700",
                                 activeSection === "security" &&
                                   activeSecurityPanel === panel.key &&
-                                  "bg-slate-100 font-medium text-slate-950"
+                                  "bg-blue-50 font-medium text-blue-700"
                               )}
                             >
                               {panel.label}
@@ -782,7 +881,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                       key={item.value}
                       value={item.value}
                       title={item.label}
-                      className="h-auto flex-none shrink-0 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 shadow-none transition-colors hover:text-slate-900 data-[state=active]:border-slate-950 data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-slate-950 data-[state=active]:shadow-none"
+                      className="h-auto flex-none shrink-0 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 shadow-none transition-colors hover:text-slate-900 data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
                     >
                       {item.label}
                     </TabsTrigger>
@@ -796,7 +895,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onClick={() => setActiveSection("chat")}
               className={cn(
                 "inline-flex shrink-0 items-center gap-2 border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900",
-                activeSection === "chat" && "border-slate-950 font-semibold text-slate-950"
+                activeSection === "chat" && "border-blue-600 font-semibold text-blue-600"
               )}
             >
               <MessageSquareText className="h-4 w-4" />
@@ -948,41 +1047,25 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           <TabsContent value="core" className="mt-0">
             <SectionCard>
               {selectedCoreFile ? (
-                <div className="space-y-5">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="flex min-w-0 items-start gap-3">
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
                       <Button type="button" variant="outline" size="sm" onClick={() => setSelectedCoreFileKey(null)}>
                         <ArrowLeft className="h-4 w-4" />
                         返回
                       </Button>
-
                       <div className="min-w-0">
-                        <div className="truncate text-lg font-semibold text-slate-950">
-                          {selectedCoreFile.title} - {selectedCoreFile.note}
-                        </div>
-                        <div className="mt-2 text-sm leading-7 text-slate-600">{selectedCoreFile.description}</div>
-                        {selectedCoreFile.tags?.length ? (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {selectedCoreFile.tags.map((tag) => (
-                              <Badge key={`${selectedCoreFile.key}-${tag}`} className="border-sky-100 bg-sky-50 text-sky-700">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : null}
+                        <div className="truncate text-base font-semibold text-slate-950">{selectedCoreFile.title}</div>
+                        <div className="text-sm text-slate-500">{selectedCoreFile.note}</div>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <Badge className="border-slate-200 bg-white text-slate-600">{selectedCoreFile.sizeLabel}</Badge>
-                      <Button type="button" onClick={handleSaveCoreFile}>
-                        保存
-                      </Button>
-                    </div>
+                    <Button type="button" size="sm" onClick={handleSaveCoreFile}>
+                      保存
+                    </Button>
                   </div>
 
-                  <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.92),rgba(255,255,255,0.98))] p-3 shadow-sm shadow-slate-100">
-                    <div className="mb-3 flex items-center justify-between px-2 text-xs text-slate-500">
+                  <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3">
+                    <div className="mb-2 flex items-center justify-between px-1 text-xs text-slate-500">
                       <span>Markdown 编辑器</span>
                       <span>{coreFileDrafts[selectedCoreFile.key].split("\n").length} 行</span>
                     </div>
@@ -994,57 +1077,26 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                           [selectedCoreFile.key]: event.target.value,
                         }))
                       }
-                      className="min-h-[620px] resize-none rounded-[22px] border-slate-200 bg-white px-5 py-4 font-mono text-[13px] leading-7 text-slate-700 shadow-none focus-visible:ring-0"
+                      className="min-h-[520px] resize-none rounded-md border-slate-200 bg-white px-4 py-3 font-mono text-[13px] leading-7 text-slate-700 shadow-none focus-visible:ring-0"
                     />
                   </div>
                 </div>
               ) : (
-                <div className="grid gap-4 xl:grid-cols-2">
-                  {detail.coreFiles.map((item) => {
-                    const Icon = CORE_FILE_ICONS[item.key];
-
-                    return (
-                      <button
-                        key={item.key}
-                        type="button"
-                        onClick={() => setSelectedCoreFileKey(item.key)}
-                        className="rounded-[26px] border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.88),rgba(255,255,255,0.98))] p-5 text-left transition-all hover:border-sky-200 hover:bg-sky-50/60 hover:shadow-sm hover:shadow-sky-100/60"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex min-w-0 items-start gap-3">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-sky-100 bg-white text-sky-700 shadow-sm shadow-sky-100/50">
-                              <Icon className="h-5 w-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="truncate text-lg font-semibold text-slate-950">{item.title}</div>
-                              <div className="mt-1 text-sm text-slate-500">{item.note}</div>
-                            </div>
-                          </div>
-
-                          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                            编辑
-                          </span>
-                        </div>
-
-                        <div className="mt-4 text-sm leading-7 text-slate-600">{item.description}</div>
-
-                        {item.tags?.length ? (
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {item.tags.map((tag) => (
-                              <Badge key={`${item.key}-${tag}`} className="border-sky-100 bg-sky-50 text-sky-700">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : null}
-
-                        <div className="mt-5 flex items-center justify-between text-xs text-slate-400">
-                          <span>{item.sizeLabel}</span>
-                          <span>点击展开 Markdown 编辑器</span>
-                        </div>
-                      </button>
-                    );
-                  })}
+                <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
+                  {detail.coreFiles.map((item) => (
+                    <div
+                      key={item.key}
+                      className="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5"
+                    >
+                      <div className="min-w-0 flex flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
+                        <span className="shrink-0 font-medium text-slate-950">{item.title}</span>
+                        <span className="text-sm text-slate-500">{item.note}</span>
+                      </div>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setSelectedCoreFileKey(item.key)}>
+                        编辑
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               )}
             </SectionCard>
@@ -1122,63 +1174,127 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                 <div className="text-sm text-slate-500">
                   当前共接入
                   <span className="mx-2 font-semibold text-slate-950">
-                    {detail.distributionChannels.filter((item) => item.status === "已接入").length}
+                    {distributionChannels.filter((item) => item.status === "已接入").length}
                   </span>
                   个渠道
                 </div>
-                <Button variant="outline" size="sm" onClick={() => toast.success("已预留接入新渠道的入口。")}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-md border-slate-200 bg-white shadow-none"
+                  onClick={() => toast.success("已预留接入新渠道的入口。")}
+                >
                   <Plus className="h-4 w-4" />
                   接入新渠道
                 </Button>
               </div>
 
-              <div className="grid gap-4 xl:grid-cols-2">
-                {detail.distributionChannels.map((channel) => {
+              <div className="overflow-hidden border border-slate-200 bg-white">
+                {distributionChannels.map((channel) => {
                   const isConnected = channel.status === "已接入";
+                  const isExpanded = expandedChannelNames.includes(channel.name);
+                  const channelIcon = CHANNEL_ICON_MAP[channel.name as keyof typeof CHANNEL_ICON_MAP];
+                  const channelSubtitle = CHANNEL_SUBTITLE_MAP[channel.name as keyof typeof CHANNEL_SUBTITLE_MAP] ?? channel.name;
 
                   return (
-                    <div
-                      key={channel.name}
-                      className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5 transition-colors hover:border-sky-100 hover:bg-sky-50/50"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="text-lg font-semibold text-slate-950">{channel.name}</div>
-                          <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                            <span
-                              className={cn(
-                                "h-2.5 w-2.5 rounded-full",
-                                isConnected ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" : "bg-slate-300"
-                              )}
-                            />
-                            {channel.status}
+                    <div key={channel.name} className="border-b border-slate-200 last:border-b-0">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleChannelExpand(channel.name)}
+                        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-slate-50/70"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center">
+                            <Image src={channelIcon} alt={channel.name} width={28} height={28} className="h-7 w-7 object-contain" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-slate-950">{channel.name}</div>
+                            <div className="mt-1 text-xs text-slate-500">{channelSubtitle}</div>
                           </div>
                         </div>
 
-                        <div
-                          className={cn(
-                            "flex h-11 w-11 items-center justify-center rounded-2xl border",
-                            isConnected
-                              ? "border-emerald-100 bg-emerald-50 text-emerald-600"
-                              : "border-slate-200 bg-white text-slate-400"
-                          )}
-                        >
-                          <RadioTower className="h-[18px] w-[18px]" />
+                        <div className="flex shrink-0 items-center gap-3">
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded-sm border px-2 py-0.5 text-xs font-medium",
+                              isConnected
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-slate-200 bg-slate-100 text-slate-500"
+                            )}
+                          >
+                            {isConnected ? "已接入" : "未接入"}
+                          </span>
+                          <ChevronDown
+                            className={cn("h-4 w-4 text-slate-400 transition-transform", isExpanded ? "rotate-180" : "")}
+                          />
                         </div>
-                      </div>
+                      </button>
 
-                      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">APP ID</div>
-                          <div className="mt-2 text-sm font-medium text-slate-900">{channel.appId}</div>
-                        </div>
-                        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                            Secret ID
+                      {isExpanded ? (
+                        <div className="border-t border-slate-200 px-5 py-5">
+                          <div className="space-y-4">
+                            <div className="grid gap-4">
+                              <div className="grid items-center gap-3 md:grid-cols-[140px_minmax(0,1fr)]">
+                                <Label
+                                  htmlFor={`${channel.name}-app-id`}
+                                  className="flex items-center gap-1 text-sm font-medium text-slate-800"
+                                >
+                                  <span className="text-rose-500">*</span>
+                                  <span>App ID</span>
+                                </Label>
+                                <Input
+                                  id={`${channel.name}-app-id`}
+                                  value={channel.appId}
+                                  onChange={(event) => handleChannelFieldChange(channel.name, "appId", event.target.value)}
+                                  className="h-10 rounded-md border-slate-200 bg-white text-sm shadow-none"
+                                />
+                              </div>
+
+                              <div className="grid items-center gap-3 md:grid-cols-[140px_minmax(0,1fr)]">
+                                <Label
+                                  htmlFor={`${channel.name}-secret`}
+                                  className="flex items-center gap-1 text-sm font-medium text-slate-800"
+                                >
+                                  <span className="text-rose-500">*</span>
+                                  <span>App Secret</span>
+                                </Label>
+                                <div className="relative">
+                                  <Input
+                                    id={`${channel.name}-secret`}
+                                    type={visibleChannelSecrets[channel.name] ? "text" : "password"}
+                                    value={channel.secretIdMasked}
+                                    onChange={(event) =>
+                                      handleChannelFieldChange(channel.name, "secretIdMasked", event.target.value)
+                                    }
+                                    className="h-10 rounded-md border-slate-200 bg-white pr-10 text-sm shadow-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleChannelSecretVisibility(channel.name)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+                                    aria-label={visibleChannelSecrets[channel.name] ? "隐藏密文" : "显示密文"}
+                                  >
+                                    {visibleChannelSecrets[channel.name] ? (
+                                      <EyeOff className="h-4 w-4" />
+                                    ) : (
+                                      <Eye className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                              onClick={() => handleSaveDistributionChannel(channel.name)}
+                            >
+                              保存配置
+                            </Button>
                           </div>
-                          <div className="mt-2 font-mono text-sm text-slate-900">{channel.secretIdMasked}</div>
                         </div>
-                      </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -1535,9 +1651,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onRemoveProtectedTool={handleRemoveProtectedTool}
               onAddProhibitedTool={handleAddProhibitedTool}
               onRemoveProhibitedTool={handleRemoveProhibitedTool}
-              onFileProtectionEnabledChange={handleFileProtectionEnabledChange}
-              onAddFilePath={handleAddFilePath}
-              onRemoveFilePath={handleRemoveFilePath}
               onResolveApproval={handleResolveApproval}
             />
           </TabsContent>
@@ -1561,14 +1674,46 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                   </Button>
                 </div>
 
+                <div className="border-t border-slate-200" />
+
                 <div className="divide-y divide-slate-200">
-                  {detail.agentRelations.map((item) => (
-                    <div key={item.name} className="px-6 py-5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-base font-semibold text-slate-950">{item.name}</div>
-                        <Badge className="rounded-sm border-slate-200 bg-slate-100 text-slate-600">{item.goal}</Badge>
+                  {agentRelations.length === 0 ? (
+                    <div className="px-6 py-12 text-center text-sm text-slate-500">暂无关联 Agent。</div>
+                  ) : null}
+                  {agentRelations.map((item) => (
+                    <div key={item.id} className="px-6 py-5">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1 space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-base font-semibold text-slate-950">{item.name}</span>
+                            <Badge className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
+                              {item.relationship}
+                            </Badge>
+                          </div>
+                          <p className="text-sm leading-6 text-slate-500">{item.originalDescription}</p>
+                          <p className="text-sm leading-6 text-slate-800">
+                            <span className="font-medium text-slate-700">关系说明</span>
+                            <span className="text-slate-600">：</span>
+                            {item.personalizedDescription}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-5 text-sm font-medium">
+                          <button
+                            type="button"
+                            className="text-blue-600 transition-colors hover:text-blue-700"
+                            onClick={() => openEditAgentRelation(item)}
+                          >
+                            编辑
+                          </button>
+                          <button
+                            type="button"
+                            className="text-blue-600 transition-colors hover:text-blue-700"
+                            onClick={() => deleteAgentRelation(item.id)}
+                          >
+                            删除
+                          </button>
+                        </div>
                       </div>
-                      <div className="mt-3 text-sm leading-7 text-slate-600">{item.description}</div>
                     </div>
                   ))}
                 </div>
@@ -1578,6 +1723,84 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
 
         </div>
       </Tabs>
+      <Dialog
+        open={agentRelationDraft !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeEditAgentRelation();
+          }
+        }}
+      >
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-lg" showCloseButton>
+          {agentRelationDraft ? (
+            <>
+              <DialogHeader className="border-b border-slate-200 px-6 py-5 text-left">
+                <DialogTitle className="sr-only">编辑 Agent 关系</DialogTitle>
+                <div className="flex gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-800">
+                    {agentRelationDraft.name.slice(0, 1)}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-base font-semibold text-slate-950">{agentRelationDraft.name}</span>
+                      <Badge className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                        {agentRelationDraft.relationship}
+                      </Badge>
+                    </div>
+                    <p className="text-sm leading-6 text-slate-500">{agentRelationDraft.originalDescription}</p>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="space-y-5 px-6 py-5">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-slate-800">关系</Label>
+                  <Select
+                    value={agentRelationDraft.relationship}
+                    onValueChange={(value) =>
+                      setAgentRelationDraft((current) =>
+                        current ? { ...current, relationship: value as AgentRelationKind } : current
+                      )
+                    }
+                    options={relationSelectOptions}
+                    placeholder="请选择关系"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="agent-relation-personal" className="text-sm font-medium text-slate-800">
+                    关系说明
+                  </Label>
+                  <Textarea
+                    id="agent-relation-personal"
+                    value={agentRelationDraft.personalizedDescription}
+                    onChange={(event) =>
+                      setAgentRelationDraft((current) =>
+                        current ? { ...current, personalizedDescription: event.target.value } : current
+                      )
+                    }
+                    className="min-h-[120px] resize-y rounded-md border-slate-200 text-sm leading-6"
+                    placeholder="说明该 Agent 的能力、专长及在本 Claw 中的用途…"
+                  />
+                </div>
+              </div>
+
+              <DialogFooter className="border-t border-slate-200 bg-slate-50/80 px-6 py-4 sm:justify-start">
+                <Button
+                  type="button"
+                  className="rounded-md bg-slate-900 px-5 text-white hover:bg-slate-800"
+                  onClick={saveAgentRelation}
+                >
+                  保存
+                </Button>
+                <Button type="button" variant="outline" className="rounded-md border-slate-200 bg-white" onClick={closeEditAgentRelation}>
+                  取消
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
       <ToolConfigDialog open={toolConfigDialogOpen} onOpenChange={setToolConfigDialogOpen} onConfirm={handleConfirmToolConfig} />
       <SkillConfigDialog
         open={skillConfigDialogOpen}

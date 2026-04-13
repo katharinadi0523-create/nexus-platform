@@ -87,40 +87,6 @@ export function addToolProtectionRule(
   };
 }
 
-export function updateFileProtectionEnabled(config: SecurityManagementConfig, enabled: boolean): SecurityManagementConfig {
-  return {
-    ...config,
-    fileProtection: { ...config.fileProtection, enabled },
-  };
-}
-
-export function addFileProtectionPath(
-  config: SecurityManagementConfig,
-  entry: SecurityManagementConfig["fileProtection"]["paths"][number]
-): SecurityManagementConfig {
-  const path = entry.path.trim();
-  if (!path) {
-    return config;
-  }
-  return {
-    ...config,
-    fileProtection: {
-      ...config.fileProtection,
-      paths: [...config.fileProtection.paths, { ...entry, path }],
-    },
-  };
-}
-
-export function removeFileProtectionPath(config: SecurityManagementConfig, pathId: string): SecurityManagementConfig {
-  return {
-    ...config,
-    fileProtection: {
-      ...config.fileProtection,
-      paths: config.fileProtection.paths.filter((item) => item.id !== pathId),
-    },
-  };
-}
-
 export function resolveSecurityApproval(
   config: SecurityManagementConfig,
   approvalId: string,

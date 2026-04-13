@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>工具防护说明 — Nexus Platform</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --border: #e2e8f0;
+        --text: #0f172a;
+        --muted: #64748b;
+        --code-bg: #f1f5f9;
+        --sky: #0369a1;
+        --rose: #be123c;
+        --emerald: #047857;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      header {
+        border-bottom: 1px solid var(--border);
+        background: var(--card);
+        padding: 1.25rem 1.5rem;
+      }
+      header h1 {
+        margin: 0 0 0.35rem;
+        font-size: 1.35rem;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      header p {
+        margin: 0;
+        font-size: 0.875rem;
+        color: var(--muted);
+      }
+      .wrap {
+        max-width: 1320px;
+        margin: 0 auto;
+        padding: 1.5rem;
+      }
+      .doc-grid {
+        display: grid;
+        gap: 1.25rem;
+      }
+      @media (min-width: 1180px) {
+        .doc-grid {
+          grid-template-columns: minmax(260px, 0.88fr) minmax(300px, 1.12fr) minmax(280px, 1fr);
+          align-items: start;
+        }
+        .col-figure {
+          position: sticky;
+          top: 1rem;
+        }
+      }
+      .col {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem 1.35rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      }
+      .col h2 {
+        margin: 0 0 1rem;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #0f172a;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .sec {
+        margin-bottom: 1.35rem;
+      }
+      .sec:last-child {
+        margin-bottom: 0;
+      }
+      .sec-num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 999px;
+        background: #e0f2fe;
+        color: var(--sky);
+        font-size: 0.75rem;
+        font-weight: 700;
+        margin-right: 0.45rem;
+        vertical-align: middle;
+      }
+      .sec h3 {
+        margin: 0 0 0.55rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #1e293b;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+      }
+      p,
+      li {
+        font-size: 0.875rem;
+        color: #475569;
+        margin: 0.35rem 0;
+      }
+      ol.steps {
+        margin: 0.4rem 0 0;
+        padding-left: 1.2rem;
+      }
+      ol.steps li {
+        margin: 0.35rem 0;
+      }
+      ul {
+        padding-left: 1.15rem;
+        margin: 0.35rem 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+        margin: 0.45rem 0 0;
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 0.4rem 0.5rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #f8fafc;
+        color: #334155;
+        font-weight: 600;
+      }
+      pre,
+      .example {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.76rem;
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.65rem 0.75rem;
+        overflow-x: auto;
+        color: #334155;
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .codeblock-wrap {
+        margin-top: 0.45rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        background: #fff;
+      }
+      .codeblock-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 0.75rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #334155;
+        background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+        border-bottom: 1px solid var(--border);
+      }
+      .codeblock-title span.tag {
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+        border: 1px solid #cbd5e1;
+        border-radius: 4px;
+        padding: 0.1rem 0.35rem;
+        background: #fff;
+      }
+      .codeblock-wrap pre {
+        border: none;
+        border-radius: 0;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 0.8rem;
+        margin-top: 0.35rem;
+      }
+      .principle {
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 0.75rem 0.9rem;
+        margin-top: 0.5rem;
+        font-size: 0.84rem;
+        color: #475569;
+      }
+      .principle strong {
+        color: #0f172a;
+      }
+      /* 中间栏：守卫主流程图 */
+      .guard-flow {
+        margin: 0.35rem 0 0.75rem;
+        padding: 0.85rem 0.75rem 1rem;
+        border-radius: 12px;
+        border: 1px solid #cbd5e1;
+        background: linear-gradient(165deg, #f8fafc 0%, #fff 45%, #f1f5f9 100%);
+        font-size: 0.78rem;
+        color: #334155;
+      }
+      .guard-flow .gf-step {
+        text-align: center;
+        padding: 0.55rem 0.65rem;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        font-weight: 600;
+        color: #1e293b;
+        line-height: 1.35;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+      }
+      .guard-flow .gf-step--emph {
+        background: #eff6ff;
+        border-color: #93c5fd;
+        color: #1e3a8a;
+      }
+      .guard-flow .gf-step--pause {
+        background: #fffbeb;
+        border-color: #fcd34d;
+        color: #92400e;
+      }
+      .guard-flow .gf-arr {
+        text-align: center;
+        color: #94a3b8;
+        font-size: 0.95rem;
+        line-height: 1.1;
+        padding: 0.2rem 0;
+      }
+      .guard-flow .gf-decision {
+        margin: 0 auto;
+        max-width: 17.5rem;
+        padding: 0.55rem 0.65rem;
+        text-align: center;
+        font-weight: 600;
+        color: #713f12;
+        background: #fef9c3;
+        border: 2px solid #eab308;
+        border-radius: 10px;
+        line-height: 1.4;
+        box-shadow: 0 1px 3px rgba(113, 63, 18, 0.12);
+      }
+      .guard-flow .gf-decision--scope {
+        max-width: 100%;
+        width: 100%;
+        background: #eef2ff;
+        border-color: #6366f1;
+        color: #312e81;
+        box-shadow: 0 1px 3px rgba(49, 46, 129, 0.1);
+      }
+      .guard-flow .gf-fork {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        margin-top: 0.35rem;
+        align-items: start;
+      }
+      /* 外层分叉：左侧「否」收窄，右侧主链占宽 */
+      .guard-flow .gf-fork--asymm {
+        grid-template-columns: 1fr 3.35fr;
+        gap: 0.45rem;
+      }
+      .guard-flow .gf-fork--asymm > .gf-branch:first-child {
+        padding: 0.4rem 0.3rem 0.5rem;
+      }
+      .guard-flow .gf-fork--asymm > .gf-branch:first-child .gf-branch-h {
+        font-size: 0.62rem;
+        line-height: 1.25;
+      }
+      .guard-flow .gf-fork--asymm > .gf-branch:first-child .gf-step {
+        font-size: 0.68rem;
+        padding: 0.4rem 0.3rem;
+        line-height: 1.3;
+      }
+      .guard-flow .gf-fork--asymm > .gf-branch:last-child .gf-decision:not(.gf-decision--sub) {
+        max-width: none;
+        width: 100%;
+      }
+      @media (max-width: 420px) {
+        .guard-flow .gf-fork {
+          grid-template-columns: 1fr;
+        }
+        .guard-flow .gf-fork--asymm {
+          grid-template-columns: 1fr;
+        }
+        .guard-flow .gf-fork--asymm > .gf-branch:first-child .gf-branch-h,
+        .guard-flow .gf-fork--asymm > .gf-branch:first-child .gf-step {
+          font-size: inherit;
+        }
+      }
+      /* 正则命中分叉：左窄「未命中」，右宽「命中」主链（与外层分叉比例一致） */
+      .guard-flow .gf-fork--nested {
+        grid-template-columns: 1fr 3.35fr;
+        gap: 0.45rem;
+        align-items: start;
+      }
+      .guard-flow .gf-fork--nested > .gf-branch:first-child {
+        padding: 0.4rem 0.3rem 0.5rem;
+      }
+      .guard-flow .gf-fork--nested > .gf-branch:first-child .gf-branch-h {
+        font-size: 0.62rem;
+        line-height: 1.25;
+      }
+      .guard-flow .gf-fork--nested > .gf-branch:first-child .gf-step {
+        font-size: 0.68rem;
+        padding: 0.4rem 0.3rem;
+        line-height: 1.3;
+      }
+      .guard-flow .gf-fork--nested > .gf-branch:last-child {
+        min-width: 0;
+      }
+      .guard-flow .gf-branch {
+        border: 1px dashed #94a3b8;
+        border-radius: 10px;
+        padding: 0.5rem 0.45rem 0.65rem;
+        background: rgba(255, 255, 255, 0.75);
+      }
+      .guard-flow .gf-branch-h {
+        text-align: center;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: none;
+        letter-spacing: 0.02em;
+        color: #475569;
+        margin-bottom: 0.15rem;
+      }
+      .guard-flow .gf-branch-h.tag-no {
+        color: #047857;
+      }
+      .guard-flow .gf-branch-h.tag-yes {
+        color: #b45309;
+      }
+      .guard-flow .gf-branch-h.h-confirm {
+        color: #047857;
+      }
+      .guard-flow .gf-branch-h.h-cancel {
+        color: #be123c;
+      }
+      .guard-flow .gf-out {
+        font-size: 0.74rem;
+        font-weight: 600;
+        padding: 0.45rem 0.4rem;
+      }
+      .guard-flow .gf-out--ok {
+        background: #ecfdf5;
+        border-color: #6ee7b7 !important;
+        color: #065f46;
+      }
+      .guard-flow .gf-out--bad {
+        background: #fff1f2;
+        border-color: #fda4af !important;
+        color: #9f1239;
+      }
+      .guard-flow .gf-out-tag {
+        text-align: center;
+        font-size: 0.65rem;
+        font-weight: 700;
+        margin-top: 0.25rem;
+        letter-spacing: 0.06em;
+      }
+      .guard-flow .gf-out-tag--ok {
+        color: #047857;
+      }
+      .guard-flow .gf-out-tag--bad {
+        color: #be123c;
+      }
+      .guard-flow .gf-split2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.35rem;
+        margin-top: 0.35rem;
+      }
+      .guard-flow .gf-mini {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 0.35rem 0.3rem 0.45rem;
+        background: #fff;
+      }
+      .guard-flow .gf-mini .gf-branch-h {
+        font-size: 0.65rem;
+      }
+      .guard-flow .gf-decision--sub {
+        max-width: none;
+        margin: 0;
+        font-size: 0.72rem;
+        padding: 0.45rem 0.4rem;
+        border-width: 1px;
+      }
+      /* HITL diagram */
+      .hitl-wrap {
+        margin-top: 0.65rem;
+        padding: 1rem;
+        border-radius: 12px;
+        border: 1px dashed #94a3b8;
+        background: linear-gradient(180deg, #fff, #f8fafc);
+      }
+      .hitl-flow {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+        max-width: 22rem;
+        margin: 0 auto;
+      }
+      .hitl-node {
+        text-align: center;
+        padding: 0.65rem 0.75rem;
+        border-radius: 10px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #1e293b;
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+      }
+      .hitl-node.sys {
+        background: #eff6ff;
+        border-color: #93c5fd;
+        color: #1e40af;
+      }
+      .hitl-arrow {
+        text-align: center;
+        font-size: 1.1rem;
+        color: #94a3b8;
+        line-height: 1;
+      }
+      .hitl-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        justify-content: center;
+      }
+      .hitl-btn {
+        flex: 1;
+        min-width: 8.5rem;
+        padding: 0.55rem 0.75rem;
+        border-radius: 8px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-align: center;
+        border: 2px solid transparent;
+      }
+      .hitl-btn.deny {
+        border-color: #fecdd3;
+        background: #fff1f2;
+        color: var(--rose);
+      }
+      .hitl-btn.approve {
+        border-color: #6ee7b7;
+        background: #ecfdf5;
+        color: var(--emerald);
+      }
+      .hitl-caption {
+        text-align: center;
+        font-size: 0.72rem;
+        color: var(--muted);
+        margin-top: 0.35rem;
+      }
+      footer {
+        text-align: center;
+        font-size: 0.75rem;
+        color: var(--muted);
+        padding: 2rem 1rem 2.5rem;
+      }
+      code {
+        font-size: 0.82em;
+        background: #f1f5f9;
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+      }
+      /* 左栏：规则示例图 + 说明 */
+      .form-figure {
+        margin: 0 0 0.75rem;
+      }
+      .form-figure img {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: #fff;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+      }
+      .form-figure figcaption {
+        margin-top: 0.5rem;
+        font-size: 0.78rem;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .example-notes {
+        margin-top: 0.85rem;
+        padding-top: 0.85rem;
+        border-top: 1px solid var(--border);
+      }
+      .example-notes .ex-block {
+        margin-bottom: 1rem;
+      }
+      .example-notes .ex-block:last-child {
+        margin-bottom: 0;
+      }
+      .example-notes .ex-title {
+        margin: 0 0 0.4rem;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .example-notes p {
+        font-size: 0.8125rem;
+        line-height: 1.55;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>工具防护（Tool Guard）说明</h1>
+      <p>说明工具守卫的配置对象、命中与失败原理，并附结构化示例（含入参块标题与人工确认示意）。</p>
+    </header>
+    <div class="wrap">
+      <div class="doc-grid">
+        <div class="col col-figure">
+          <h2>防护规则示例</h2>
+          <figure class="form-figure">
+            <img
+              src="/docs/tool-protection-custom-rule-modal.png"
+              alt="添加自定义规则对话框：规则 ID TOOL_CMD_DANGEROUS_RM，目标工具留空匹配所有工具，目标参数 command，严重程度 CRITICAL，正则模式与排除模式等"
+              width="720"
+              height="900"
+              loading="lazy"
+            />
+            <figcaption>产品内「添加自定义规则」弹窗示例：在 <code>command</code> 入参上识别危险删除类命令行（具体字段以界面为准）。</figcaption>
+          </figure>
+          <div class="example-notes">
+            <div class="ex-block">
+              <h4 class="ex-title">1. 为什么要这样配</h4>
+              <p>
+                为降低 Agent <strong>误删或滥用删除类命令</strong>导致的数据丢失风险，通过自定义规则盯住<strong>命令文本所在入参</strong>；本例将<strong>目标参数</strong>设为 <code>command</code>，<strong>目标工具</strong>留空表示对所有工具生效，用于拦截经命令行删除文件的危险操作。
+              </p>
+            </div>
+            <div class="ex-block">
+              <h4 class="ex-title">2. 正则模式与排除模式各表示什么</h4>
+              <p>
+                <strong>正则模式</strong>：匹配删除文件相关的三条命令，例如：<code>rm /Users/example/Desktop/这是一个重要的文件.docx</code>
+              </p>
+              <p>
+                <strong>排除模式</strong>：<code>^\s*#</code> 表示注释行，即在注释行写了 <code>rm</code> 会放行，不算做危险操作。
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="col">
+          <h2>规则与配置说明</h2>
+
+          <div class="sec">
+            <h3><span class="sec-num">1</span>从用户发消息到放行或拦截（主流程）</h3>
+            <p>下列流程覆盖「自然语言指令 → Agent 拟调用工具 → <strong>是否落入受保护范围</strong> → <strong>正则是否命中</strong> → 直接执行或人工确认」的完整路径。图中<strong>命中（正则）</strong>指：在规则作用域内，入参匹配该规则的<strong>正则模式</strong>，且<strong>未</strong>被<strong>排除模式</strong>放行。</p>
+            <div class="guard-flow" role="img" aria-label="工具防护：从用户消息到放行或拦截的流程图">
+              <div class="gf-step">用户发送消息</div>
+              <div class="gf-arr">▾</div>
+              <div class="gf-step gf-step--emph">Agent 发起工具调用</div>
+              <div class="gf-arr">▾</div>
+              <div class="gf-decision gf-decision--scope">当前工具与工具参数是否在防护规则「保护」范围内？</div>
+              <div class="gf-arr">▾</div>
+              <div class="gf-fork gf-fork--asymm">
+                <div class="gf-branch">
+                  <div class="gf-branch-h tag-no">否 · 不在受保护范围内</div>
+                  <div class="gf-arr">▾</div>
+                  <div class="gf-step gf-out gf-out--ok">不进入受保护扫描链，直接执行工具</div>
+                  <div class="gf-out-tag gf-out-tag--ok">放行</div>
+                </div>
+                <div class="gf-branch">
+                  <div class="gf-branch-h tag-yes">是 · 在受保护范围内</div>
+                  <div class="gf-arr">▾</div>
+                  <div class="gf-decision">当前工具入参是否<strong>命中</strong>任一已启用规则的正则？</div>
+                  <div class="gf-arr">▾</div>
+                  <div class="gf-fork gf-fork--nested">
+                    <div class="gf-branch">
+                      <div class="gf-branch-h tag-no">否 · 未命中任何规则</div>
+                      <div class="gf-arr">▾</div>
+                      <div class="gf-step gf-out gf-out--ok">直接执行工具</div>
+                      <div class="gf-out-tag gf-out-tag--ok">放行</div>
+                    </div>
+                    <div class="gf-branch">
+                      <div class="gf-branch-h tag-yes">是 · 命中规则</div>
+                      <div class="gf-arr">▾</div>
+                      <div class="gf-step gf-step--pause">暂停执行，进入人工确认（HITL）</div>
+                      <div class="gf-arr">▾</div>
+                      <div class="gf-decision gf-decision--sub">是否确认执行该次工具操作？</div>
+                      <div class="gf-arr">▾</div>
+                      <div class="gf-split2">
+                        <div class="gf-mini">
+                          <div class="gf-branch-h h-confirm">确认</div>
+                          <div class="gf-arr">▾</div>
+                          <div class="gf-step gf-out gf-out--ok">执行该次操作</div>
+                          <div class="gf-out-tag gf-out-tag--ok">放行</div>
+                        </div>
+                        <div class="gf-mini">
+                          <div class="gf-branch-h h-cancel">取消</div>
+                          <div class="gf-arr">▾</div>
+                          <div class="gf-step gf-out gf-out--bad">拒绝执行</div>
+                          <div class="gf-out-tag gf-out-tag--bad">拦截</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="principle">
+              <strong>与流程图外的配置关系：</strong>若<strong>总开关</strong>关闭，守卫不运行。若工具名在<strong>禁止列表</strong>，应在到达「受保护范围」判定之前即失败终止。若策略配置为「命中即硬拦截、不要求人工确认」，则正则命中后可能不经过「确认 / 取消」而直接失败，以实际产品策略为准。若产品对未列入受保护列表的工具仍执行「规则表全量扫描」，可在实现上将「受保护范围」扩展为与规则作用域一致，此时以实际配置为准。
+            </div>
+          </div>
+
+          <div class="sec">
+            <h3><span class="sec-num">2</span>界面上的四类配置（与流程的衔接）</h3>
+            <ol class="steps">
+              <li><strong>总开关</strong>：关闭则整段流程不执行。</li>
+              <li><strong>禁止的工具</strong>：仅按工具名拦截，不进正则分支。</li>
+              <li><strong>受保护的工具</strong>：声明哪些工具（及策略下的参数域）必须先过流程图<strong>第一颗菱形</strong>；通过后才进入正则与后续分支。</li>
+              <li><strong>规则表</strong>：定义目标工具、目标参数、正则模式与排除模式等匹配逻辑；预置与自定义规则机制相同。</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="col">
+          <h2>规则生效示例</h2>
+
+          <div class="sec">
+            <h3><span class="sec-num">1</span>用户说了什么</h3>
+            <p>用户输入：</p>
+            <p style="margin-top: 0.25rem; padding: 0.55rem 0.75rem; background: #fff; border: 1px solid var(--border); border-radius: 8px; font-size: 0.875rem; color: #334155">
+              请帮我彻底删除桌面上的「驱逐舰与测量船」这张图片文件。
+            </p>
+          </div>
+
+          <div class="sec">
+            <h3><span class="sec-num">2</span>Agent 发起的工具调用</h3>
+            <p class="muted" style="margin-bottom: 0.35rem">以下为该次调用传给工具的 <strong>Arguments / 入参</strong>（JSON，与界面上的 Input 一致）。</p>
+            <div class="codeblock-wrap">
+              <div class="codeblock-title">
+                <span>工具入参</span><span class="tag">Arguments / Input · JSON</span>
+              </div>
+              <pre>{
+  "command": "rm /Users/example/Desktop/驱逐舰与测量船.jpg"
+}</pre>
+            </div>
+            <p class="muted">工具名示意：<code>execute_shell_command</code>（命令行执行类工具；具体名称以环境为准）。</p>
+          </div>
+
+          <div class="sec">
+            <h3><span class="sec-num">3</span>未命中任何规则时</h3>
+            <div class="codeblock-wrap">
+              <div class="codeblock-title"><span>工具返回</span><span class="tag">Success</span></div>
+              <pre>Command executed successfully (no output).</pre>
+            </div>
+          </div>
+
+          <div class="sec">
+            <h3><span class="sec-num">4</span>命中「危险 rm」类规则时</h3>
+            <p>正则命中后，本次调用<strong>执行失败</strong>，并返回风险说明（节选示意）：</p>
+            <div class="codeblock-wrap">
+              <div class="codeblock-title"><span>工具返回</span><span class="tag">Blocked · HIGH</span></div>
+              <pre>⚠️ **Risk Detected / 检测到风险**
+
+- Tool / 工具: `execute_shell_command`
+- Severity / 严重性: `HIGH`
+- Findings / 发现: `1`
+
+- [HIGH] Rule TOOL_CMD_DANGEROUS_RM matched parameter 'command' of tool 'execute_shell_command'.
+
+以下文件位于工作区外 Files outside workspace:
+  • /Users/example/Desktop/驱逐舰与测量船.jpg
+
+Type `/approve` to approve, or send any message to deny.
+输入 `/approve` 批准执行，或发送任意消息拒绝。</pre>
+            </div>
+          </div>
+
+          <div class="sec">
+            <h3><span class="sec-num">5</span>人工确认（HITL）</h3>
+            <p>当策略要求<strong>人工介入</strong>时，Agent 会发起确认流；需在对话中<strong>明确拒绝</strong>或<strong>明确同意</strong>后，后续流程才会继续或终止。</p>
+            <div class="hitl-wrap">
+              <div class="hitl-caption" style="margin-top: 0; margin-bottom: 0.25rem; font-weight: 600; color: #334155">交互示意</div>
+              <div class="hitl-flow">
+                <div class="hitl-node sys">Agent 推送：本次工具调用已触发安全规则<br />请确认是否允许执行</div>
+                <div class="hitl-arrow">▼</div>
+                <div class="hitl-node">用户在对话中做出选择</div>
+                <div class="hitl-arrow">▼</div>
+                <div class="hitl-actions">
+                  <div class="hitl-btn deny">拒绝<br /><span style="font-weight: 400; font-size: 0.72rem">发送<strong>任意消息</strong>（非 /approve）</span></div>
+                  <div class="hitl-btn approve">确认执行<br /><span style="font-weight: 400; font-size: 0.72rem">输入 <strong>/approve</strong></span></div>
+                </div>
+              </div>
+              <p class="hitl-caption">上图仅表达交互结构；实际按钮形态以产品内对话界面为准。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer>Nexus Platform · 工具防护说明</footer>
+  </body>
+</html>

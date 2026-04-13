@@ -17,7 +17,7 @@ export interface ClawHubListItem {
   summary: string;
 }
 
-export type ClawCoreFileKey = "identity" | "soul" | "memory" | "heartbeat";
+export type ClawCoreFileKey = "identity" | "soul" | "memory";
 
 export interface ClawDetailFileItem {
   key: ClawCoreFileKey;
@@ -374,10 +374,29 @@ export interface PersonRelationItem {
   description: string;
 }
 
+export const AGENT_RELATION_KINDS = [
+  "上级",
+  "下级",
+  "协作",
+  "同事",
+  "导师",
+  "利益相关者",
+  "其他",
+] as const;
+
+export type AgentRelationKind = (typeof AGENT_RELATION_KINDS)[number];
+
+export const AGENT_RELATION_SELECT_OPTIONS: Array<{ value: AgentRelationKind; label: string }> =
+  AGENT_RELATION_KINDS.map((value) => ({ value, label: value }));
+
 export interface AgentRelationItem {
+  id: string;
   name: string;
-  goal: string;
-  description: string;
+  relationship: AgentRelationKind;
+  /** 被添加 Claw 的平台侧原始说明，只读 */
+  originalDescription: string;
+  /** 面向当前 Claw 的个性化说明（能力、专长、用途），可编辑 */
+  personalizedDescription: string;
 }
 
 export interface UsageSettingItem {
@@ -516,75 +535,6 @@ export const clawHubList: ClawHubListItem[] = [
     summary: "负责竞品动态、行业政策、多源情报归集与结构化简报输出。",
   },
 ];
-
-const HEARTBEAT_TEMPLATE = `HEARTBEAT
-
-When this file is read during a heartbeat, you are performing a periodic awareness check.
-
-
-Phase 1: Review Context & Discover Interest Points
-
-Review your recent conversations and your role/responsibilities.
-
-Identify topics or questions that:
-
-Are directly relevant to your role and current work
-Were mentioned by users but not fully explored at the time
-Represent emerging trends or changes in your professional domain
-Could improve your ability to serve your users
-
-If no genuine, informative topics emerge from recent context, skip exploration and go directly to Phase 3.
-
-Do NOT search for generic or obvious topics just to fill time. Quality over quantity.
-
-
-Phase 2: Targeted Exploration (Conditional)
-
-Only if you identified genuine interest points in Phase 1:
-
-
-Use web_search to investigate (maximum 5 searches per heartbeat)
-Keep searches tightly scoped to your role and recent work topics
-For each discovery worth keeping:
-Record it using writefile to memory/curiosityjournal.md
-Include the source URL and a brief note on why it matters to your work
-Rate its relevance (high/medium/low) to your current responsibilities
-
-Format for curiosity_journal.md entries:
-
-### [Date] - [Topic]
-- **Finding**: [What you learned]
-- **Source**: [URL]
-- **Relevance**: [high/medium/low] — [Why it matters to your work]
-- **Follow-up**: [Optional: questions this raises for next time]
-
-Phase 3: Agent Plaza
-
-Call plazagetnew_posts to check recent activity
-If you found something genuinely valuable in Phase 2:
-Share the most impactful discovery to plaza (max 1 post)
-Always include the source URL when sharing internet findings
-Frame it in terms of how it's relevant to your team/domain
-Comment on relevant existing posts (max 2 comments)
-
-Phase 4: Wrap Up
-
-If nothing needed attention and no exploration was warranted: reply with HEARTBEAT_OK
-Otherwise, briefly summarize what you explored and why
-
-Key Principles
-Always ground exploration in YOUR role and YOUR recent work context
-Never search for random unrelated topics out of idle curiosity
-If you don't have a specific angle worth investigating, don't search
-Prefer depth over breadth — one thoroughly explored topic > five surface-level queries
-Generate follow-up questions only when you genuinely want to know more
-
-Rules
-⛔ NEVER share private information: user conversations, memory contents, workspace files, task details
-✅ Share only public-safe content: general insights, tips, industry news, web search discoveries with links
-📝 Limits per heartbeat: max 1 post + 2 comments
-🔍 Search limits: max 5 web searches per heartbeat
-🤐 If nothing interesting to explore or share, respond with HEARTBEAT_OK`;
 
 export function createDefaultResourceConfig(): ResourceConfig {
   return {
@@ -808,14 +758,6 @@ const detailMap: Record<string, ClawDetailData> = {
 - 高优工单 INC-22031 超时 30 分钟，已完成催办
 - 夜间巡检结果已归档到工作空间 /巡检报告
 - 值守交接中新增 2 个待跟进事项`,
-      },
-      {
-        key: "heartbeat",
-        title: "heartbeat.md",
-        description: "定义周期性感知与自检策略，控制心跳时该探索什么、记录什么、分享什么。",
-        note: "周期心跳策略",
-        sizeLabel: "3.0 KB",
-        content: HEARTBEAT_TEMPLATE,
       },
     ],
     capabilityConfig: {
@@ -1494,14 +1436,18 @@ const detailMap: Record<string, ClawDetailData> = {
     ],
     agentRelations: [
       {
+        id: "ar-ops-sales",
         name: "销售 Claw",
-        goal: "帮助销售团队理解故障对客户的业务影响。",
-        description: "接收运维值守 Claw 输出的事件摘要，再转换成面向客户的解释口径。",
+        relationship: "协作",
+        originalDescription: "接收运维值守 Claw 输出的事件摘要，再转换成面向客户的解释口径。",
+        personalizedDescription: "帮助销售团队理解故障对客户的业务影响，需要对外口径时优先咨询。",
       },
       {
+        id: "ar-ops-ticket",
         name: "工单 Claw",
-        goal: "负责工单流转和状态同步。",
-        description: "当运维值守 Claw 判断需要补录或催办时，把结构化信息发给工单 Claw 执行。",
+        relationship: "同事",
+        originalDescription: "当运维值守 Claw 判断需要补录或催办时，把结构化信息发给工单 Claw 执行。",
+        personalizedDescription: "负责工单流转和状态同步，值守侧补录与催办走该通道。",
       },
     ],
     usageSettings: [
@@ -1696,14 +1642,6 @@ const detailMap: Record<string, ClawDetailData> = {
 - 已完成 7 笔差旅报销处理，其中 6 笔自动完成验票与填单
 - 今日展示重点是标准化 Skill 调用、工作流执行和 HitL 确认链路
 - 报销单 BX-20260406-018 已发起审批并回写 ERP`,
-      },
-      {
-        key: "heartbeat",
-        title: "heartbeat.md",
-        description: "办公虾的周期感知与自检机制。",
-        note: "周期心跳策略",
-        sizeLabel: "3.0 KB",
-        content: HEARTBEAT_TEMPLATE,
       },
     ],
     capabilityConfig: {
@@ -2353,14 +2291,18 @@ const detailMap: Record<string, ClawDetailData> = {
     ],
     agentRelations: [
       {
+        id: "ar-office-gateway",
         name: "企业虾总入口",
-        goal: "统一承接员工办公诉求并把任务分发给专属虾。",
-        description: "当识别到差旅报销任务时，把上下文和材料交给办公虾处理。",
+        relationship: "协作",
+        originalDescription: "当识别到差旅报销任务时，把上下文和材料交给办公虾处理。",
+        personalizedDescription: "统一承接员工办公诉求并把任务分发给专属虾。",
       },
       {
+        id: "ar-office-finance",
         name: "财务规则 Agent",
-        goal: "把企业制度与财务规则转换成可执行的字段校验和审批约束。",
-        description: "与办公虾配合，确保制度解释和报销校验口径一致。",
+        relationship: "协作",
+        originalDescription: "与办公虾配合，确保制度解释和报销校验口径一致。",
+        personalizedDescription: "把企业制度与财务规则转换成可执行的字段校验和审批约束。",
       },
     ],
     usageSettings: [
@@ -2565,14 +2507,6 @@ const detailMap: Record<string, ClawDetailData> = {
 - 已完成本周竞品动态和行业政策变化的多源归集
 - 重点案例“竞品发布算力调度新品”已完成真伪研判与重要性回填
 - market-intel-weekly-brief.docx 已生成，并完成本体回写留痕`,
-      },
-      {
-        key: "heartbeat",
-        title: "heartbeat.md",
-        description: "情报虾的周期感知与情报监控策略。",
-        note: "周期心跳策略",
-        sizeLabel: "3.0 KB",
-        content: HEARTBEAT_TEMPLATE,
       },
     ],
     capabilityConfig: {
@@ -3227,14 +3161,18 @@ const detailMap: Record<string, ClawDetailData> = {
     ],
     agentRelations: [
       {
+        id: "ar-intel-gateway",
         name: "企业虾总入口",
-        goal: "统一承接员工的情报需求并分发给情报虾处理。",
-        description: "识别为情报分析任务后，把需求、时间范围和主题上下文交给情报虾。",
+        relationship: "上级",
+        originalDescription: "识别为情报分析任务后，把需求、时间范围和主题上下文交给情报虾。",
+        personalizedDescription: "统一承接员工的情报需求并分发给情报虾处理。",
       },
       {
+        id: "ar-intel-graph",
         name: "图谱溯源 Agent",
-        goal: "负责重点动态的来源依据展开和图谱关系下钻。",
-        description: "配合情报虾在“查看依据”时展示来源节点和关联对象。",
+        relationship: "协作",
+        originalDescription: "配合情报虾在“查看依据”时展示来源节点和关联对象。",
+        personalizedDescription: "负责重点动态的来源依据展开和图谱关系下钻。",
       },
     ],
     usageSettings: [
@@ -3366,14 +3304,6 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
 ### ${listItem.updatedAt}
 - 最近一次围绕 ${listItem.scene} 的任务已记录
 - 当前上下文和阶段性产出可从工作空间中继续追溯`,
-      },
-      {
-        key: "heartbeat",
-        title: "heartbeat.md",
-        description: `${listItem.name} 的状态检查与周期更新机制。`,
-        note: "周期心跳策略",
-        sizeLabel: "3.0 KB",
-        content: HEARTBEAT_TEMPLATE,
       },
     ],
     capabilityConfig: {
@@ -3711,9 +3641,11 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
     ],
     agentRelations: [
       {
+        id: `ar-${listItem.id}-collab`,
         name: "协作 Agent",
-        goal: "接受指令并完成协作目标。",
-        description: "这是一个对 Agent 关系的描述示例。",
+        relationship: "协作",
+        originalDescription: "这是一个对 Agent 关系的描述示例。",
+        personalizedDescription: "接受指令并完成协作目标。",
       },
     ],
     usageSettings: [

@@ -1,9 +1,8 @@
 import type { ComponentType } from "react";
-import { FileStack, FileText, Gauge, RadioTower, ShieldCheck, Sparkles, UserRound, Wrench } from "lucide-react";
+import { FileStack, FileText, RadioTower, ShieldCheck, Sparkles, UserRound, Wrench } from "lucide-react";
 import type {
   AutonomyBoundaryItem,
   CapabilityScope,
-  ClawCoreFileKey,
   ExecutionResourceTier,
   KnowledgeScope,
   ResourceConfig,
@@ -38,7 +37,6 @@ export type LogPanelKey = "conversation" | "security";
 export type SecurityPanelKey =
   | "autonomy-boundaries"
   | "tool-protection"
-  | "file-protection"
   | "security-approval";
 
 export const DETAIL_SECTION_ITEMS: Array<{
@@ -89,11 +87,6 @@ export const SECURITY_PANEL_ITEMS: Array<{
     description: "配置工具调用的安全扫描与限制规则。",
   },
   {
-    key: "file-protection",
-    label: "文件防护",
-    description: "保护敏感路径，防止被工具访问。",
-  },
-  {
     key: "security-approval",
     label: "安全审批",
     description: "处理待审批的高风险动作。",
@@ -111,13 +104,6 @@ export const AUTONOMY_BOUNDARY_DEFINITIONS: Array<Pick<AutonomyBoundaryItem, "id
   { id: "boundary-network-search", name: "网络搜索", description: "搜索互联网获取信息" },
   { id: "boundary-task-manage", name: "管理任务", description: "创建、更新或删除任务" },
 ];
-
-export const CORE_FILE_ICONS: Record<ClawCoreFileKey, ComponentType<{ className?: string }>> = {
-  identity: FileText,
-  soul: Sparkles,
-  memory: FileStack,
-  heartbeat: Gauge,
-};
 
 export const CAPABILITY_SCOPE_LABELS: Record<CapabilityScope, string> = {
   platform: "平台预置",

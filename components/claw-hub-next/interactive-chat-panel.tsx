@@ -12,7 +12,6 @@ import {
   Loader2,
   Paperclip,
   Plug,
-  Plus,
   SendHorizontal,
   Sparkles,
   Wrench,
@@ -909,14 +908,14 @@ export function ClawInteractiveChatPanel({
                 placeholder="请输入任务，或继续补充上下文"
               />
 
-              <div className="mt-2.5 flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="mt-2.5 flex flex-wrap items-center gap-2.5 sm:flex-nowrap">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5 sm:flex-nowrap">
                   <button
                     type="button"
                     onClick={handleSelectWorkspace}
                     disabled={isLocked}
                     title={selectedWorkspace || "工作空间"}
-                    className="inline-flex h-10 min-w-[164px] max-w-[240px] items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-blue-300 disabled:cursor-not-allowed"
+                    className="inline-flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-blue-300 disabled:cursor-not-allowed"
                   >
                     <FolderOpen className="h-4 w-4 shrink-0 text-slate-500" />
                     <span className="truncate">{selectedWorkspace || "工作空间"}</span>
@@ -929,13 +928,13 @@ export function ClawInteractiveChatPanel({
                     onChange={handleWorkspaceInputChange}
                   />
 
-                  <div className="relative">
+                  <div className="relative min-w-0 flex-1">
                     <Wrench className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                     <select
                       value={selectedSkill}
                       onChange={(event) => setSelectedSkill(event.target.value)}
                       disabled={isLocked}
-                      className="h-10 appearance-none rounded-xl border border-blue-200 bg-white pl-9 pr-9 text-sm font-medium text-slate-700 outline-none transition hover:border-blue-300 disabled:cursor-not-allowed"
+                      className="h-10 w-full appearance-none rounded-xl border border-blue-200 bg-white pl-9 pr-9 text-sm font-medium text-slate-700 outline-none transition hover:border-blue-300 disabled:cursor-not-allowed"
                     >
                       <option value="">技能</option>
                       {skillOptions.map((skill) => (
@@ -950,11 +949,11 @@ export function ClawInteractiveChatPanel({
                   <label
                     title="上传附件"
                     className={cn(
-                      "inline-flex h-10 w-10 items-center justify-center rounded-xl border border-blue-200 bg-white text-blue-600 transition hover:border-blue-300",
+                      "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-white text-blue-600 transition hover:border-blue-300",
                       isLocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"
                     )}
                   >
-                    <Plus className="h-4 w-4" />
+                    <Paperclip className="h-4 w-4" />
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -971,7 +970,7 @@ export function ClawInteractiveChatPanel({
                   onClick={handleSend}
                   disabled={!draftMessage.trim() || isLocked}
                   aria-label={isLocked ? "执行中" : "发送"}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center self-end rounded-xl bg-blue-600 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-200"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-200"
                 >
                   {runtime.stage === "planning" || runtime.stage === "running" ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

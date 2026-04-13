@@ -54,7 +54,7 @@ function SectionHeader({ title, description, className }: SectionHeaderProps) {
 
 const MODULE_DESCRIPTIONS = {
   resource:
-    "约束单个 Agent 可使用的 CPU、GPU、任务规模，以及本空间单日 Token 消耗上限。",
+    "约束本空间存储、任务规模，以及单日 Token 消耗上限。",
   agent: "限制 Agent 侧任务并发、单次运行时长、推理迭代步数与上下文长度。",
   llm: "配置大模型调用的重试、并发与按分钟请求上限（QPM），避免瞬时打满网关。",
   trigger: "约束本空间内定时或事件触发器的数量，以及两次触发之间的最短间隔。",
@@ -70,8 +70,8 @@ function SectionFields({ children }: { children: React.ReactNode }) {
 }
 
 export interface RunConfigurationFormState {
-  cpuCores: number;
-  gpuCards: number;
+  /** 空间存储（GiB） */
+  spaceStorageGib: number;
   maxConcurrentTasks: number;
   maxTaskDurationMinutes: number;
   dailyTokenLimit: number;
@@ -87,8 +87,7 @@ export interface RunConfigurationFormState {
 const GLOBAL_EFFECT_NOTICE_MS = 2000;
 
 const DEFAULT_STATE: RunConfigurationFormState = {
-  cpuCores: 4,
-  gpuCards: 0,
+  spaceStorageGib: 20,
   maxConcurrentTasks: 3,
   maxTaskDurationMinutes: 120,
   dailyTokenLimit: 1_000_000,
@@ -162,11 +161,15 @@ export function RunConfigurationForm() {
       <section className="space-y-0">
         <SectionHeader title="资源配置" description={MODULE_DESCRIPTIONS.resource} />
         <SectionFields>
-          <ConfigFieldRow id="cpu" label="CPU" required>
-            <NumberStepper value={values.cpuCores} onChange={(n) => patch("cpuCores", n)} min={1} max={256} suffix="核" />
-          </ConfigFieldRow>
-          <ConfigFieldRow id="gpu" label="GPU" required>
-            <NumberStepper value={values.gpuCards} onChange={(n) => patch("gpuCards", n)} min={0} max={64} suffix="卡" />
+          <ConfigFieldRow id="space-storage" label="空间存储" required>
+            <NumericPlainInput
+              id="space-storage"
+              value={values.spaceStorageGib}
+              onChange={(n) => patch("spaceStorageGib", n)}
+              min={1}
+              max={10_240}
+              suffix="GiB"
+            />
           </ConfigFieldRow>
           <ConfigFieldRow id="tokens" label="单日 Token 消耗上限" required>
             <NumericPlainInput
