@@ -31,8 +31,8 @@ export function SkillMarketplacePickerDialog({
   onOpenChange,
   selectedIds,
   onSelect,
-  title = "从 Skills 广场添加技能",
-  description = "选择资源管理 - Skills 广场中已存在的技能，添加到当前 Claw 配置中。",
+  title = "从技能广场添加技能",
+  description = "选择资源管理 - 技能广场中已存在的技能，添加到当前 Claw 配置中。",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -128,7 +128,7 @@ export function SkillMarketplacePickerDialog({
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
                 <div className="text-base font-semibold text-slate-900">没有匹配到技能</div>
-                <div className="mt-2 text-sm text-slate-500">换个关键词试试，或者直接浏览 Skills 广场已有技能。</div>
+                <div className="mt-2 text-sm text-slate-500">换个关键词试试，或者直接浏览技能广场已有技能。</div>
               </div>
             )}
           </div>

@@ -1,7 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, GitBranch, Package, Plus, Puzzle, RefreshCw, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  GitBranch,
+  Layers,
+  Package,
+  Plus,
+  Puzzle,
+  RefreshCw,
+  Search,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-export type ToolConfigKind = "workflow" | "mcp" | "plugin";
+export type ToolConfigKind = "workflow" | "mcp" | "plugin" | "ontology_action";
 
 export interface ToolConfigSelection {
   id: string;
@@ -54,11 +64,33 @@ const TOOL_KIND_META: Record<
     iconClass: "text-cyan-700",
   },
   plugin: {
-    label: "插件",
+    label: "OpenAPI",
     icon: Puzzle,
     iconBoxClass: "bg-amber-100",
     iconClass: "text-amber-700",
   },
+  ontology_action: {
+    label: "本体动作",
+    icon: Layers,
+    iconBoxClass: "bg-violet-100",
+    iconClass: "text-violet-700",
+  },
+};
+
+const TOOL_TAB_ORDER: ToolConfigKind[] = ["mcp", "plugin", "workflow", "ontology_action"];
+
+const TOOL_TAB_LABELS: Record<ToolConfigKind, string> = {
+  mcp: "MCP",
+  plugin: "OpenAPI",
+  workflow: "工作流",
+  ontology_action: "本体动作",
+};
+
+const CREATE_TOOL_BUTTON_LABELS: Record<ToolConfigKind, string> = {
+  mcp: "创建MCP服务",
+  plugin: "创建 OpenAPI",
+  workflow: "创建工作流",
+  ontology_action: "创建本体动作",
 };
 
 const TOOL_CONFIG_OPTIONS_BY_KIND: Record<ToolConfigKind, ToolConfigSeed[]> = {
@@ -127,7 +159,7 @@ const TOOL_CONFIG_OPTIONS_BY_KIND: Record<ToolConfigKind, ToolConfigSeed[]> = {
       description: "按标准协议查询制度条款、版本记录和生效范围。",
       kind: "mcp",
       badge: "协议接入",
-      hint: "适合需要标准化工具调用与结果透传的场景。",
+      hint: "适合需要标准化协议调用与结果透传的场景。",
     },
     {
       id: "mcp-mail-gateway",
@@ -149,15 +181,15 @@ const TOOL_CONFIG_OPTIONS_BY_KIND: Record<ToolConfigKind, ToolConfigSeed[]> = {
   plugin: [
     {
       id: "plugin-document-parser",
-      name: "文档解析插件",
+      name: "文档解析 OpenAPI",
       description: "解析 PDF、Word、图片文档并提取结构化字段。",
       kind: "plugin",
-      badge: "OpenAPI",
-      hint: "适合通过插件暴露成熟业务接口。",
+      badge: "文档",
+      hint: "适合通过 OpenAPI 暴露成熟业务接口。",
     },
     {
       id: "plugin-map-navigation",
-      name: "地图导航插件",
+      name: "地图导航 OpenAPI",
       description: "支持路径规划、位置检索和地理围栏判断。",
       kind: "plugin",
       badge: "外部服务",
@@ -165,11 +197,37 @@ const TOOL_CONFIG_OPTIONS_BY_KIND: Record<ToolConfigKind, ToolConfigSeed[]> = {
     },
     {
       id: "plugin-code-interpreter",
-      name: "代码解释器插件",
+      name: "代码解释器 OpenAPI",
       description: "执行受控脚本、处理表格数据并产出可下载结果。",
       kind: "plugin",
-      badge: "执行工具",
+      badge: "执行",
       hint: "适合在对话中补充计算与文件处理能力。",
+    },
+  ],
+  ontology_action: [
+    {
+      id: "ontology-entity-upsert",
+      name: "本体实体写入",
+      description: "向企业本体写入或更新实体及其属性、关系边与来源依据。",
+      kind: "ontology_action",
+      badge: "本体",
+      hint: "适合结构化业务对象落库与图谱对齐。",
+    },
+    {
+      id: "ontology-relation-bind",
+      name: "关系绑定动作",
+      description: "在本体中建立、调整或解除实体间的业务关系与约束。",
+      kind: "ontology_action",
+      badge: "图谱",
+      hint: "适合多对象协同与依赖建模场景。",
+    },
+    {
+      id: "ontology-query-expand",
+      name: "本体扩散查询",
+      description: "基于种子实体按策略做关联扩散、过滤与结果裁剪。",
+      kind: "ontology_action",
+      badge: "检索",
+      hint: "适合依据下钻与关联发现。",
     },
   ],
 };
@@ -194,8 +252,6 @@ const PAGE_SIZE_OPTIONS = [
   { value: "50", label: "50 条/页" },
 ];
 
-const PRIMARY = "#1890ff";
-
 function getVisiblePageIndices(current: number, total: number): number[] {
   if (total <= 7) {
     return Array.from({ length: total }, (_, i) => i + 1);
@@ -212,6 +268,7 @@ function shouldEllipsisBefore(page: number, prev: number | undefined): boolean {
 }
 
 export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDialogProps) {
+  const [activeKind, setActiveKind] = useState<ToolConfigKind>("mcp");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -219,29 +276,17 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
   const [jumpInput, setJumpInput] = useState("");
 
   const filteredOptions = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return ALL_TOOL_OPTIONS;
+    const inTab = ALL_TOOL_OPTIONS.filter((item) => item.kind === activeKind);
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) {
+      return inTab;
     }
-    return ALL_TOOL_OPTIONS.filter((item) =>
-      [item.name, item.description, item.badge, item.hint, TOOL_KIND_META[item.kind].label]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalizedQuery)
-    );
-  }, [searchQuery]);
+    return inTab.filter((item) => item.name.toLowerCase().includes(q));
+  }, [searchQuery, activeKind]);
 
   const total = filteredOptions.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(currentPage, totalPages);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, pageSize]);
-
-  useEffect(() => {
-    setCurrentPage((p) => Math.min(p, totalPages));
-  }, [totalPages]);
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
 
   const pageItems = useMemo(() => {
     const start = (safePage - 1) * pageSize;
@@ -260,6 +305,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
   }
 
   function resetDialogState() {
+    setActiveKind("mcp");
     setSearchQuery("");
     setSelectedIds([]);
     setCurrentPage(1);
@@ -298,8 +344,29 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
         className="max-w-[880px] gap-0 overflow-hidden rounded-lg border-[#eeeeee] p-0 shadow-lg sm:max-w-[880px]"
       >
         <DialogHeader className="border-b border-[#eeeeee] px-6 py-4 text-left">
-          <DialogTitle className="text-base font-semibold text-slate-950">选择工具</DialogTitle>
+          <DialogTitle className="text-base font-semibold text-slate-950">添加工具</DialogTitle>
         </DialogHeader>
+
+        <div className="flex border-b border-[#eeeeee] px-6">
+          {TOOL_TAB_ORDER.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => {
+                setActiveKind(kind);
+                setCurrentPage(1);
+              }}
+              className={cn(
+                "flex-1 border-b-2 py-3 text-sm font-medium transition-colors",
+                activeKind === kind
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              )}
+            >
+              {TOOL_TAB_LABELS[kind]}
+            </button>
+          ))}
+        </div>
 
         <div className="flex flex-col gap-0">
           <div className="flex flex-col gap-3 border-b border-[#eeeeee] px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -308,8 +375,9 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
               <Input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="搜索工具名称"
+                placeholder="输入名称检索"
                 className="h-9 border-slate-200 bg-white pl-9 shadow-none"
+                aria-label="按名称检索"
               />
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -319,18 +387,17 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                 size="icon"
                 className="h-9 w-9 border-slate-200 shadow-none"
                 aria-label="刷新列表"
-                onClick={() => toast.success("工具列表已刷新。")}
+                onClick={() => toast.success("列表已刷新。")}
               >
                 <RefreshCw className="h-4 w-4 text-slate-600" />
               </Button>
               <Button
                 type="button"
-                className="h-9 gap-1 border-0 px-4 text-white shadow-none hover:opacity-90"
-                style={{ backgroundColor: PRIMARY }}
-                onClick={() => toast.info("创建工具入口即将接入。")}
+                className="h-9 gap-1 border-0 bg-blue-600 px-4 text-white shadow-none hover:bg-blue-700"
+                onClick={() => toast.info(`${CREATE_TOOL_BUTTON_LABELS[activeKind]}入口即将接入。`)}
               >
                 <Plus className="h-4 w-4" />
-                创建工具
+                {CREATE_TOOL_BUTTON_LABELS[activeKind]}
               </Button>
             </div>
           </div>
@@ -389,8 +456,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="h-8 border px-3 shadow-none hover:opacity-90"
-                            style={{ borderColor: PRIMARY, color: PRIMARY }}
+                            className="h-8 border border-blue-600 px-3 text-blue-600 shadow-none hover:bg-blue-50"
                             onClick={() => handleToggleSelection(item.id, true)}
                           >
                             添加
@@ -402,7 +468,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                 })}
               </ul>
             ) : (
-              <div className="px-6 py-16 text-center text-sm text-slate-400">暂无匹配的工具，请调整搜索条件。</div>
+              <div className="px-6 py-16 text-center text-sm text-slate-400">暂无匹配项，请调整搜索条件。</div>
             )}
           </div>
 
@@ -431,9 +497,10 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                         type="button"
                         className={cn(
                           "min-w-8 rounded px-2.5 py-1 text-sm transition-colors",
-                          safePage === page ? "font-medium text-white" : "text-slate-600 hover:bg-slate-100"
+                          safePage === page
+                            ? "bg-blue-600 font-medium text-white"
+                            : "text-slate-600 hover:bg-slate-100"
                         )}
-                        style={safePage === page ? { backgroundColor: PRIMARY } : undefined}
                         onClick={() => setCurrentPage(page)}
                       >
                         {page}
@@ -480,8 +547,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                 </Button>
                 <Button
                   type="button"
-                  className="text-white shadow-none hover:opacity-90 disabled:opacity-40"
-                  style={{ backgroundColor: PRIMARY }}
+                  className="bg-blue-600 text-white shadow-none hover:bg-blue-700 disabled:opacity-40"
                   disabled={!selectedIds.length}
                   onClick={handleSubmit}
                 >

@@ -279,7 +279,7 @@ description: "输出适合蓝信群聊和单聊发送的通知消息。"
     description:
       "用于生成差旅申请、补充审批说明，并根据上传票据整理报销材料、预校验附件完整性。",
     detailDescription:
-      "这是一个面向企业行政与共享服务场景的办公 Skill，适合承接员工出差申请、行程说明补充和报销资料预整理。Skill 会根据上传的票据图片、行程信息和审批要求，生成申请说明、材料清单和后续报销建议，减少重复填报和遗漏说明。",
+      "这是一个面向企业行政与共享服务场景的办公技能，适合承接员工出差申请、行程说明补充和报销资料预整理。技能会根据上传的票据图片、行程信息和审批要求，生成申请说明、材料清单和后续报销建议，减少重复填报和遗漏说明。",
     category: "通用",
     scene: "智能办公",
     inputExample: "我上传了机票、酒店发票和出差说明，帮我整理差旅申请并准备后续报销材料。",
@@ -289,7 +289,7 @@ description: "输出适合蓝信群聊和单聊发送的通知消息。"
     isFavorite: true,
     tags: ["差旅", "报销", "审批", "验票", "填单"],
     usageInstructions:
-      "上传机票、火车票、酒店发票、出租车票、电子行程单等图片或截图，并补充出差事由、时间、地点、预算和同行人员。Skill 会先生成差旅申请与审批说明，再整理报销所需材料、标记缺失项，并在需要时衔接验票工作流和自动填单工作流。",
+      "上传机票、火车票、酒店发票、出租车票、电子行程单等图片或截图，并补充出差事由、时间、地点、预算和同行人员。技能会先生成差旅申请与审批说明，再整理报销所需材料、标记缺失项，并在需要时衔接验票工作流和自动填单工作流。",
     declaredDependencies: TRAVEL_REIMBURSEMENT_DEPENDENCIES,
     downloads: 2763,
     boundToCEC: false,
@@ -359,7 +359,7 @@ description: "生成差旅申请说明、整理报销材料，并为后续验票
     description:
       "用于处理员工差旅报销申请，完成材料检查、验票校验、自动填单与审批发起。",
     detailDescription:
-      "这是一个面向企业办公场景的标准化 Skill，用于承接员工差旅报销相关任务。它会根据上传的票据图片、行程单和差旅说明，先完成材料完整性检查，再调用验票工作流和自动填单工作流，生成 ERP 报销草稿，并在发起审批前给出一次人工确认。",
+      "这是一个面向企业办公场景的标准化技能，用于承接员工差旅报销相关任务。它会根据上传的票据图片、行程单和差旅说明，先完成材料完整性检查，再调用验票工作流和自动填单工作流，生成 ERP 报销草稿，并在发起审批前给出一次人工确认。",
     category: "通用",
     scene: "智能办公",
     inputExample: "我上传了机票、酒店发票和行程单，帮我提交这笔差旅报销，验票、填单并发起审批。",
@@ -445,7 +445,7 @@ description: "用于处理员工差旅报销申请，完成材料检查、验票
     isFavorite: true,
     tags: ["生产", "制造", "日报"],
     usageInstructions:
-      "上传或整理班组产量、停机、质量和交付数据后，Skill 会自动汇总当日情况，标记异常波动，并输出适合报送的生产日报。",
+      "上传或整理班组产量、停机、质量和交付数据后，技能会自动汇总当日情况，标记异常波动，并输出适合报送的生产日报。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[4]],
     downloads: 3076,
     boundToCEC: true,
@@ -498,7 +498,7 @@ description: "汇总生产、停机、质量和交付数据，形成生产日报
     description:
       "用于汇集竞品动态、行业政策等多源情报，并结合本体能力完成真伪研判、重点识别与结构化输出。",
     detailDescription:
-      "这是一个面向企业情报场景的标准化 Skill，用于承接竞品、政策、行业动态等分析任务。它会调用本体能力完成情报汇集、真伪研判、重要性判断、关联扩散与结果沉淀，适合在情报归集和辅助决策场景中使用。",
+      "这是一个面向企业情报场景的标准化技能，用于承接竞品、政策、行业动态等分析任务。它会调用本体能力完成情报汇集、真伪研判、重要性判断、关联扩散与结果沉淀，适合在情报归集和辅助决策场景中使用。",
     category: "通用",
     scene: "情报研判",
     inputExample: "搜集本周竞品动态和行业政策变化，输出一份符合公司规范的情报简报",
@@ -649,7 +649,7 @@ description: "整理会议记录并形成正式纪要。"
     isFavorite: false,
     tags: ["合同", "法务", "合规"],
     usageInstructions:
-      "输入合同正文或关键条款片段，说明当前业务场景和关注点，Skill 会识别履约、付款、违约等重点风险，并生成审阅意见。",
+      "输入合同正文或关键条款片段，说明当前业务场景和关注点，技能会识别履约、付款、违约等重点风险，并生成审阅意见。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[1]],
     downloads: 1934,
     boundToCEC: false,
@@ -693,7 +693,7 @@ description: "识别合同关键风险并形成审阅意见。"
     isFavorite: false,
     tags: ["巡检", "台账", "电力"],
     usageInstructions:
-      "导入巡检记录、缺陷照片说明和处理意见后，Skill 会自动整理缺陷台账、整改清单和复查建议，便于现场闭环。",
+      "导入巡检记录、缺陷照片说明和处理意见后，技能会自动整理缺陷台账、整改清单和复查建议，便于现场闭环。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[4]],
     downloads: 2415,
     boundToCEC: true,
@@ -738,7 +738,7 @@ description: "整理巡检记录并形成设备缺陷台账。"
     isFavorite: false,
     tags: ["招采", "投标", "合规"],
     usageInstructions:
-      "输入本次投标项目的材料目录或上传拟递交文件，Skill 会逐项检查资质、授权、盖章、报价说明等是否齐套，并输出缺漏清单。",
+      "输入本次投标项目的材料目录或上传拟递交文件，技能会逐项检查资质、授权、盖章、报价说明等是否齐套，并输出缺漏清单。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[6]],
     downloads: 1862,
     boundToCEC: false,
@@ -782,7 +782,7 @@ description: "检查投标材料是否齐套、合规、可递交。"
     isFavorite: true,
     tags: ["公文", "请示", "报告"],
     usageInstructions:
-      "输入事项背景、报送对象、希望生成的公文类型，以及关键事实和请示点，Skill 会输出结构规范、语气正式的公文初稿。",
+      "输入事项背景、报送对象、希望生成的公文类型，以及关键事实和请示点，技能会输出结构规范、语气正式的公文初稿。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[0], MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[4]],
     downloads: 4826,
     boundToCEC: true,
@@ -868,7 +868,7 @@ description: "汇总运输执行情况并形成日报。"
     isFavorite: false,
     tags: ["舆情", "金融", "风控"],
     usageInstructions:
-      "输入目标企业名称、关注时间范围和研判目的，Skill 会汇总公开资料并输出舆情摘要、风险提示和待核实事项。",
+      "输入目标企业名称、关注时间范围和研判目的，技能会汇总公开资料并输出舆情摘要、风险提示和待核实事项。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[7]],
     downloads: 2286,
     boundToCEC: true,
@@ -965,4 +965,42 @@ export function getMarketplaceSkillConfigOptions(): MarketplaceSkillConfigOption
     fileCount: skill.files.length,
     createdAtLabel: formatSkillCreatedAtLabel(skill.publishedAt),
   }));
+}
+
+/** 技能管理侧可选技能（与技能广场列表分离，用于 Claw 配置弹窗第二 Tab） */
+const MANAGED_SKILL_CONFIG_OPTIONS: MarketplaceSkillConfigOption[] = [
+  {
+    id: "skill-managed-compliance-pack",
+    name: "合规审查技能包",
+    description: "已在租户技能管理中发布，支持制度条款比对与引用追溯。",
+    sizeLabel: "18.2 KB",
+    badge: "技能管理",
+    hint: "来源：本租户 · 已发布",
+    fileCount: 11,
+    createdAtLabel: "更新时间: 2026-02-18 14:30:00",
+  },
+  {
+    id: "skill-managed-hr-onboarding",
+    name: "入职材料归集",
+    description: "从邮箱与网盘拉取材料、分类命名并写入 HR 系统草稿。",
+    sizeLabel: "9.6 KB",
+    badge: "技能管理",
+    hint: "来源：本租户 · 已发布",
+    fileCount: 6,
+    createdAtLabel: "更新时间: 2026-03-05 09:12:00",
+  },
+  {
+    id: "skill-managed-ops-daily",
+    name: "运维日报生成",
+    description: "汇总监控告警、变更记录与值班备注，输出结构化日报。",
+    sizeLabel: "14.0 KB",
+    badge: "技能管理",
+    hint: "来源：本租户 · 草稿",
+    fileCount: 9,
+    createdAtLabel: "更新时间: 2026-03-28 16:45:00",
+  },
+];
+
+export function getManagedSkillConfigOptions(): MarketplaceSkillConfigOption[] {
+  return MANAGED_SKILL_CONFIG_OPTIONS;
 }

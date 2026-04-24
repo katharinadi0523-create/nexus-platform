@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, FileText, Plus, RefreshCw, Search } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, FileText, RefreshCw, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { getMarketplaceSkillConfigOptions } from "@/lib/mock/skills-marketplace";
+import { getManagedSkillConfigOptions, getMarketplaceSkillConfigOptions } from "@/lib/mock/skills-marketplace";
 import { cn } from "@/lib/utils";
 
 export interface SkillConfigSelection {
@@ -35,7 +35,16 @@ interface SkillConfigDialogProps {
   onConfirm: (selections: SkillConfigSelection[]) => void;
 }
 
-const SKILL_CONFIG_OPTIONS: SkillConfigOption[] = getMarketplaceSkillConfigOptions();
+const SKILL_HUB_OPTIONS: SkillConfigOption[] = getMarketplaceSkillConfigOptions();
+const SKILL_MANAGED_OPTIONS: SkillConfigOption[] = getManagedSkillConfigOptions();
+const ALL_SKILL_OPTIONS: SkillConfigOption[] = [...SKILL_HUB_OPTIONS, ...SKILL_MANAGED_OPTIONS];
+
+type SkillSourceTab = "skillshub" | "skills_mgmt";
+
+const SKILL_SOURCE_TABS: { id: SkillSourceTab; label: string }[] = [
+  { id: "skillshub", label: "技能广场" },
+  { id: "skills_mgmt", label: "技能管理" },
+];
 
 const PAGE_SIZE_OPTIONS = [
   { value: "10", label: "10 条/页" },
@@ -61,6 +70,7 @@ function shouldEllipsisBefore(page: number, prev: number | undefined): boolean {
 }
 
 export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfigDialogProps) {
+  const [sourceTab, setSourceTab] = useState<SkillSourceTab>("skillshub");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,31 +78,24 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
   const [jumpInput, setJumpInput] = useState("");
 
   const filteredOptions = useMemo(() => {
+    const pool = sourceTab === "skillshub" ? SKILL_HUB_OPTIONS : SKILL_MANAGED_OPTIONS;
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     if (!normalizedQuery) {
-      return SKILL_CONFIG_OPTIONS;
+      return pool;
     }
 
-    return SKILL_CONFIG_OPTIONS.filter((item) =>
+    return pool.filter((item) =>
       [item.name, item.description, item.badge, item.hint, item.createdAtLabel]
         .join(" ")
         .toLowerCase()
         .includes(normalizedQuery)
     );
-  }, [searchQuery]);
+  }, [searchQuery, sourceTab]);
 
   const total = filteredOptions.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(currentPage, totalPages);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, pageSize]);
-
-  useEffect(() => {
-    setCurrentPage((p) => Math.min(p, totalPages));
-  }, [totalPages]);
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
 
   const pageItems = useMemo(() => {
     const start = (safePage - 1) * pageSize;
@@ -111,6 +114,7 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
   }
 
   function resetDialogState() {
+    setSourceTab("skillshub");
     setSearchQuery("");
     setSelectedIds([]);
     setCurrentPage(1);
@@ -119,7 +123,7 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
   }
 
   function handleSubmit() {
-    const selections = SKILL_CONFIG_OPTIONS.filter((item) => selectedIds.includes(item.id));
+    const selections = ALL_SKILL_OPTIONS.filter((item) => selectedIds.includes(item.id));
     resetDialogState();
     onConfirm(selections);
   }
@@ -161,6 +165,7 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="搜索技能名称"
                 className="h-9 border-slate-200 bg-white pl-9 shadow-none"
+                aria-label="按名称检索技能"
               />
             </div>
             <div className="flex shrink-0 items-center gap-2">
@@ -178,12 +183,33 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
                 type="button"
                 className="h-9 gap-1 border-0 px-4 text-white shadow-none hover:opacity-90"
                 style={{ backgroundColor: PRIMARY }}
-                onClick={() => toast.info("创建技能入口即将接入。")}
+                onClick={() => toast.info("导入技能入口即将接入。")}
               >
-                <Plus className="h-4 w-4" />
-                创建技能
+                <Upload className="h-4 w-4" />
+                导入技能
               </Button>
             </div>
+          </div>
+
+          <div className="flex border-b border-[#eeeeee] px-6">
+            {SKILL_SOURCE_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setSourceTab(tab.id);
+                  setCurrentPage(1);
+                }}
+                className={cn(
+                  "flex-1 border-b-2 py-3 text-sm font-medium transition-colors",
+                  sourceTab === tab.id
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           <div className="max-h-[min(420px,50vh)] overflow-y-auto">

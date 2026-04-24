@@ -296,7 +296,7 @@ export function SkillsFoundryTab({
       if (alreadyAdded) {
         setSelectedFoundryDirectoryId(targetDirectoryId);
         setIsFoundryTreeVisible(true);
-        toast.info(`已在 Skills Foundry 中：${pendingTemplate.name}`);
+        toast.info(`已在技能工场中：${pendingTemplate.name}`);
         onPendingTemplateHandled?.();
         return;
       }
@@ -317,7 +317,7 @@ export function SkillsFoundryTab({
       setFoundryActiveFileId(nextDirectory.files[0]?.id ?? "");
       setIsFoundryTreeVisible(true);
       setIsFoundryEditorVisible(false);
-      toast.success(`已添加到 Skills Foundry：${pendingTemplate.name}`);
+      toast.success(`已添加到技能工场：${pendingTemplate.name}`);
       onPendingTemplateHandled?.();
     }, 0);
 
@@ -602,7 +602,7 @@ export function SkillsFoundryTab({
       return;
     }
 
-    toast.success("已提交到 Skills Foundry，会基于你的要求开始创建或优化 Skill。");
+    toast.success("已提交到技能工场，会基于你的要求开始创建或优化技能。");
     setFoundryPrompt("");
     setFoundryAttachmentNames([]);
   };
@@ -718,7 +718,7 @@ export function SkillsFoundryTab({
               <div className="border-b border-slate-200/70 px-4 py-4">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <div className="text-[11px] font-semibold tracking-[0.18em] text-slate-400 uppercase">
-                    Skills目录
+                    技能目录
                   </div>
                   <Button
                     type="button"
@@ -823,7 +823,7 @@ export function SkillsFoundryTab({
                         onClick={handleCreateFoundryDirectory}
                       >
                         <FolderPlus className="h-4 w-4" />
-                        新建 Skill 目录
+                        新建技能目录
                       </Button>
                     </div>
                   )}
@@ -889,10 +889,10 @@ export function SkillsFoundryTab({
             <div className="max-w-3xl space-y-3">
               <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/70 bg-amber-50/80 px-3 py-1 text-[12px] font-semibold text-amber-700">
                 <Sparkles className="h-3.5 w-3.5" />
-                Skills Foundry
+                技能工场
               </div>
               <h2 className="skills-display text-[clamp(2.2rem,3.6vw,3.35rem)] leading-[1.05] text-slate-950">
-                创建、试用、优化Skills，构建AI提效飞轮。
+                创建、试用、优化技能，构建AI提效飞轮。
               </h2>
             </div>
 
@@ -960,7 +960,7 @@ export function SkillsFoundryTab({
                       <Textarea
                         value={foundryPrompt}
                         onChange={(event) => setFoundryPrompt(event.target.value)}
-                        placeholder="欢迎使用 Skills Foundry，可以在此输入你的要求。"
+                        placeholder="欢迎使用技能工场，可以在此输入你的要求。"
                         className="min-h-[190px] resize-none border-0 bg-transparent px-0 py-0 text-base leading-8 text-slate-700 shadow-none focus-visible:ring-0"
                       />
 

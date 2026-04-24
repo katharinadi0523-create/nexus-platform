@@ -46,6 +46,14 @@ export interface ModelSelectorProps {
   onParamsChange?: (params: ModelParams) => void;
   showParams?: boolean;
   triggerClassName?: string;
+  /**
+   * When true, hides the「预置模型服务 / 我的模型服务」tabs and only shows the preset model list.
+   */
+  presetOnly?: boolean;
+  /**
+   * Hide specific schema params (e.g. context_turns) and/or global switches (current_time, sp_anti_leak).
+   */
+  hiddenParamKeys?: readonly ModelParamKey[];
 }
 
 const presetModels = PRESET_MODEL_IDS;
@@ -104,7 +112,13 @@ export function ModelSelector({
   onParamsChange,
   showParams = true,
   triggerClassName,
+  presetOnly = false,
+  hiddenParamKeys,
 }: ModelSelectorProps) {
+  const hiddenParamKeySet = useMemo(
+    () => new Set<ModelParamKey>(hiddenParamKeys ?? []),
+    [hiddenParamKeys]
+  );
   const initialModel = selectedModel ?? "Qwen3-32B";
   const isModelControlled = selectedModel !== undefined;
   const isParamsControlled = modelParams !== undefined;
@@ -159,11 +173,13 @@ export function ModelSelector({
     onModelChange?.(model);
     onParamsChange?.(nextParams);
 
-    // 根据选择的模型切换 tab
-    if (exclusiveModels.includes(model)) {
-      setActiveTab("exclusive");
-    } else {
-      setActiveTab("preset");
+    // 根据选择的模型切换 tab（presetOnly 下仅展示预置列表，无需切换）
+    if (!presetOnly) {
+      if (exclusiveModels.includes(model)) {
+        setActiveTab("exclusive");
+      } else {
+        setActiveTab("preset");
+      }
     }
   };
 
@@ -317,50 +333,12 @@ export function ModelSelector({
             <h3 className="text-sm font-medium text-slate-900 mb-2">
               模型服务选择
             </h3>
-            <Tabs
-              value={activeTab}
-              onValueChange={(v) => setActiveTab(v as "preset" | "exclusive")}
-              className="w-full"
-            >
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="preset">预置模型服务</TabsTrigger>
-                <TabsTrigger value="exclusive">
-                  <span className="inline-flex items-center gap-1">
-                    我的模型服务
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <span
-                          role="img"
-                          aria-label="我的模型服务说明"
-                          className="cursor-help inline-flex"
-                          onClick={(e) => e.stopPropagation()}
-                          onPointerDown={(e) => e.stopPropagation()}
-                        >
-                          <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={8} className="max-w-72 p-3 text-xs text-slate-700">
-                        <span>
-                          本项目在模型开发平台「
-                          <a
-                            href="/model-dev/online-services"
-                            className="text-blue-600 hover:text-blue-700 underline"
-                          >
-                            在线服务
-                          </a>
-                          」中部署的大语言模型。若该模型不支持深度思考或工具调用，Agent 的规划与执行能力可能受限，输出效果可能不稳定
-                        </span>
-                      </TooltipContent>
-                    </Tooltip>
-                  </span>
-                </TabsTrigger>
-              </TabsList>
-
-              {/* Preset Models */}
-              <TabsContent value="preset" className="mt-4 space-y-1">
+            {presetOnly ? (
+              <div className="space-y-1">
                 {presetModels.map((model) => (
                   <button
                     key={model}
+                    type="button"
                     onClick={() => handleModelSelect(model)}
                     className={cn(
                       "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
@@ -376,27 +354,91 @@ export function ModelSelector({
                     )}
                   </button>
                 ))}
-              </TabsContent>
+              </div>
+            ) : (
+              <Tabs
+                value={activeTab}
+                onValueChange={(v) => setActiveTab(v as "preset" | "exclusive")}
+                className="w-full"
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="preset">预置模型服务</TabsTrigger>
+                  <TabsTrigger value="exclusive">
+                    <span className="inline-flex items-center gap-1">
+                      我的模型服务
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <span
+                            role="img"
+                            aria-label="我的模型服务说明"
+                            className="cursor-help inline-flex"
+                            onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                          >
+                            <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" sideOffset={8} className="max-w-72 p-3 text-xs text-slate-700">
+                          <span>
+                            本项目在模型开发平台「
+                            <a
+                              href="/model-dev/online-services"
+                              className="text-blue-600 hover:text-blue-700 underline"
+                            >
+                              在线服务
+                            </a>
+                            」中部署的大语言模型。若该模型不支持深度思考或工具调用，Agent 的规划与执行能力可能受限，输出效果可能不稳定
+                          </span>
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
+                  </TabsTrigger>
+                </TabsList>
 
-              {/* Exclusive Models */}
-              <TabsContent value="exclusive" className="mt-4 space-y-1">
-                {exclusiveModels.map((model) => (
-                  <button
-                    key={model}
-                    onClick={() => handleModelSelect(model)}
-                    className={cn(
-                      "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
-                      currentModel === model && "bg-blue-50"
-                    )}
-                  >
-                    <span className="text-sm text-slate-900">{model}</span>
-                    {currentModel === model && (
-                      <Check className="w-4 h-4 text-blue-600" />
-                    )}
-                  </button>
-                ))}
-              </TabsContent>
-            </Tabs>
+                {/* Preset Models */}
+                <TabsContent value="preset" className="mt-4 space-y-1">
+                  {presetModels.map((model) => (
+                    <button
+                      key={model}
+                      type="button"
+                      onClick={() => handleModelSelect(model)}
+                      className={cn(
+                        "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
+                        currentModel === model && "bg-blue-50"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        {getModelIcon(model)}
+                        <span className="text-sm text-slate-900">{model}</span>
+                      </div>
+                      {currentModel === model && (
+                        <Check className="w-4 h-4 text-blue-600" />
+                      )}
+                    </button>
+                  ))}
+                </TabsContent>
+
+                {/* Exclusive Models */}
+                <TabsContent value="exclusive" className="mt-4 space-y-1">
+                  {exclusiveModels.map((model) => (
+                    <button
+                      key={model}
+                      type="button"
+                      onClick={() => handleModelSelect(model)}
+                      className={cn(
+                        "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
+                        currentModel === model && "bg-blue-50"
+                      )}
+                    >
+                      <span className="text-sm text-slate-900">{model}</span>
+                      {currentModel === model && (
+                        <Check className="w-4 h-4 text-blue-600" />
+                      )}
+                    </button>
+                  ))}
+                </TabsContent>
+              </Tabs>
+            )}
           </div>
 
           {showParams && (
@@ -405,53 +447,59 @@ export function ModelSelector({
                 参数配置
               </h3>
               <div className="space-y-4">
-                {currentSchema.supportedParams.map((p) => (
-                  <div key={p.key}>{renderParam(p)}</div>
-                ))}
+                {currentSchema.supportedParams
+                  .filter((p) => !hiddenParamKeySet.has(p.key))
+                  .map((p) => (
+                    <div key={p.key}>{renderParam(p)}</div>
+                  ))}
 
                 {/* 全局开关：当前时间、SP防泄漏指令（所有模型均展示，默认关闭） */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-1.5">
-                      <Label className="text-xs text-slate-700">当前时间</Label>
-                      <Tooltip delayDuration={0}>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="cursor-help">
-                            <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
-                          {TOOLTIP_CONTENT.current_time}
-                        </TooltipContent>
-                      </Tooltip>
+                {!hiddenParamKeySet.has("current_time") ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-xs text-slate-700">当前时间</Label>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <button type="button" className="cursor-help">
+                              <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
+                            {TOOLTIP_CONTENT.current_time}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Switch
+                        checked={params.current_time ?? false}
+                        onCheckedChange={(checked) => handleParamChange("current_time", checked)}
+                      />
                     </div>
-                    <Switch
-                      checked={params.current_time ?? false}
-                      onCheckedChange={(checked) => handleParamChange("current_time", checked)}
-                    />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-1.5">
-                      <Label className="text-xs text-slate-700">SP防泄漏指令</Label>
-                      <Tooltip delayDuration={0}>
-                        <TooltipTrigger asChild>
-                          <button type="button" className="cursor-help">
-                            <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
-                          {TOOLTIP_CONTENT.sp_anti_leak}
-                        </TooltipContent>
-                      </Tooltip>
+                ) : null}
+                {!hiddenParamKeySet.has("sp_anti_leak") ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-xs text-slate-700">SP防泄漏指令</Label>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <button type="button" className="cursor-help">
+                              <HelpCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" sideOffset={8} className="max-w-64 p-3 text-xs text-slate-700">
+                            {TOOLTIP_CONTENT.sp_anti_leak}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Switch
+                        checked={params.sp_anti_leak ?? false}
+                        onCheckedChange={(checked) => handleParamChange("sp_anti_leak", checked)}
+                      />
                     </div>
-                    <Switch
-                      checked={params.sp_anti_leak ?? false}
-                      onCheckedChange={(checked) => handleParamChange("sp_anti_leak", checked)}
-                    />
                   </div>
-                </div>
+                ) : null}
               </div>
             </div>
           )}

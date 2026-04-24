@@ -591,11 +591,11 @@ export function getSecurityActionClassName(action: string) {
 
 export function getBoundaryLevelClassName(level: string) {
   switch (level) {
-    case "L1 直接执行":
+    case "L1：直接放行":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "L2 通知":
+    case "L2：需用户审批":
       return "border-amber-200 bg-amber-50 text-amber-700";
-    case "L3 审批":
+    case "L3：禁止":
       return "border-rose-200 bg-rose-50 text-rose-700";
     default:
       return "border-slate-300 bg-slate-100 text-slate-700";

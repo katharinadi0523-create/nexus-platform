@@ -57,7 +57,7 @@ const MODULE_DESCRIPTIONS = {
     "约束本空间存储、任务规模，以及单日 Token 消耗上限。",
   agent: "限制 Agent 侧任务并发、单次运行时长、推理迭代步数与上下文长度。",
   llm: "配置大模型调用的重试、并发与按分钟请求上限（QPM），避免瞬时打满网关。",
-  trigger: "约束本空间内定时或事件触发器的数量，以及两次触发之间的最短间隔。",
+  trigger: "约束本空间内自动化任务的数量，以及两次执行之间的最短间隔。",
 } as const;
 
 /** 窄屏单列；足够宽时（xl）每行两个字段（模块标题与字段区之间不用整页级灰分割线） */
@@ -234,9 +234,9 @@ export function RunConfigurationForm() {
       </section>
 
       <section className="space-y-0">
-        <SectionHeader title="触发器限制" description={MODULE_DESCRIPTIONS.trigger} />
+        <SectionHeader title="自动化任务限制" description={MODULE_DESCRIPTIONS.trigger} />
         <SectionFields>
-          <ConfigFieldRow id="trig" label="最大触发器数" required>
+          <ConfigFieldRow id="trig" label="最大任务数" required>
             <NumberStepper value={values.maxTriggers} onChange={(n) => patch("maxTriggers", n)} min={0} max={10_000} />
           </ConfigFieldRow>
           <ConfigFieldRow id="interval" label="最短间隔" required>

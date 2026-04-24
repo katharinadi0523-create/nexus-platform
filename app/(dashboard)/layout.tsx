@@ -18,10 +18,10 @@ import {
   ExternalLink,
   Shield,
   FileText,
-  PanelLeft,
   Sparkles,
   Shrimp,
   Building2,
+  FileCode,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalHeader } from "@/components/layout/global-header";
@@ -30,8 +30,10 @@ interface MenuItem {
   key: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  href: string;
+  href?: string;
   external?: boolean;
+  /** 占位项，不可跳转 */
+  disabled?: boolean;
 }
 
 interface MenuGroup {
@@ -42,7 +44,7 @@ interface MenuGroup {
 
 const menuGroups: MenuGroup[] = [
   {
-    title: "AI资产库",
+    title: "广场",
     items: [
       {
         key: "AppMarketplace",
@@ -51,19 +53,25 @@ const menuGroups: MenuGroup[] = [
         href: "/app-marketplace",
       },
       {
-        key: "SkillsHub",
-        label: "SkillsHub",
+        key: "ToolMarketplace",
+        label: "插件广场",
+        icon: Puzzle,
+        href: "/tool-marketplace",
+      },
+      {
+        key: "SkillsPlaza",
+        label: "技能广场",
         icon: Sparkles,
         href: "/skills-hub",
       },
     ],
   },
   {
-    title: "应用管理",
+    title: "智能体开发",
     items: [
       {
         key: "ClawHubNext",
-        label: "Claw管理",
+        label: "Claw",
         icon: Shrimp,
         href: "/claw-hub-next",
       },
@@ -76,14 +84,8 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    title: "资源管理",
+    title: "插件",
     items: [
-      {
-        key: "SkillsManagement",
-        label: "SKILLS管理",
-        icon: PanelLeft,
-        href: "/skills-management",
-      },
       {
         key: "MCPManagement",
         label: "MCP管理",
@@ -91,10 +93,10 @@ const menuGroups: MenuGroup[] = [
         href: "/mcp-management",
       },
       {
-        key: "ToolMarketplace",
-        label: "插件广场",
-        icon: Puzzle,
-        href: "/tool-marketplace",
+        key: "OpenAPI",
+        label: "OpenAPI",
+        icon: FileCode,
+        href: "/openapi-management",
       },
       {
         key: "Workflow",
@@ -102,6 +104,11 @@ const menuGroups: MenuGroup[] = [
         icon: Workflow,
         href: "/workflow",
       },
+    ],
+  },
+  {
+    title: "知识",
+    items: [
       {
         key: "KnowledgeBase",
         label: "知识库",
@@ -184,9 +191,22 @@ function Sidebar() {
             <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
+                if (item.disabled) {
+                  return (
+                    <div
+                      key={item.key}
+                      className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-gray-400"
+                      title="正在集成中，敬请期待"
+                    >
+                      <Icon className="h-4 w-4 shrink-0 text-gray-400" />
+                      <span className="min-w-0 flex-1">{item.label}</span>
+                      <span className="shrink-0 text-xs text-gray-400">敬请期待</span>
+                    </div>
+                  );
+                }
+                const href = item.href!;
                 const isActive =
-                  pathname === item.href ||
-                  pathname.startsWith(`${item.href}/`);
+                  pathname === href || pathname.startsWith(`${href}/`);
                 const linkClassName = cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   isActive
@@ -198,7 +218,7 @@ function Sidebar() {
                   return (
                     <a
                       key={item.key}
-                      href={item.href}
+                      href={href}
                       target="_blank"
                       rel="noopener noreferrer"
                       className={linkClassName}
@@ -213,7 +233,7 @@ function Sidebar() {
                 return (
                   <Link
                     key={item.key}
-                    href={item.href}
+                    href={href}
                     className={linkClassName}
                   >
                     <Icon className={cn("h-4 w-4", isActive ? "text-blue-600" : "text-gray-500")} />

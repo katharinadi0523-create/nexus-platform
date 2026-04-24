@@ -1,5 +1,16 @@
 import type { ComponentType } from "react";
-import { FileStack, FileText, RadioTower, ShieldCheck, Sparkles, UserRound, Wrench } from "lucide-react";
+import {
+  Brain,
+  CalendarClock,
+  Cpu,
+  FileStack,
+  FileText,
+  RadioTower,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  Wrench,
+} from "lucide-react";
 import type {
   AutonomyBoundaryItem,
   CapabilityScope,
@@ -14,25 +25,65 @@ export type DetailSectionKey =
   | "chat"
   | "status"
   | "core"
+  | "model"
   | "tools"
   | "skills"
   | "knowledge"
   | "channels"
+  | "automated-tasks"
+  | "memory"
   | "logs"
   | "security"
   | "relations";
 
-export type CapabilityPanelKey = "tools" | "skills" | "knowledge";
+export type CapabilityPanelKey = "tools" | "skills";
 
-/** 工具 / 技能子 Tab：「公共配置」合并平台预置与租户侧配置 */
+/** 插件 / 技能子 Tab：内置层 + Claw 专属配置 */
 export type ToolSkillViewScope = "preset" | "claw";
 
-export const TOOL_SKILL_VIEW_SCOPE_LABELS: Record<ToolSkillViewScope, string> = {
-  preset: "公共配置",
+/** 技能 Tab：平台预置 + 租户侧合并展示 */
+export const SKILL_VIEW_SCOPE_LABELS: Record<ToolSkillViewScope, string> = {
+  preset: "内置技能",
+  claw: "Claw配置",
+};
+
+/** 插件 Tab：平台预置 + 租户侧合并展示 */
+export const PLUGIN_VIEW_SCOPE_LABELS: Record<ToolSkillViewScope, string> = {
+  preset: "内置插件",
   claw: "Claw配置",
 };
 
 export type LogPanelKey = "conversation" | "security";
+
+/** 知识一级菜单下的四个子面板 */
+export type KnowledgePanelKey = "knowledge-base" | "database" | "ontology" | "term-bank";
+
+export const KNOWLEDGE_PANEL_ITEMS: Array<{
+  key: KnowledgePanelKey;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: "knowledge-base",
+    label: "知识库",
+    description: "挂载文档与切片，供对话与任务检索、引用与溯源。",
+  },
+  {
+    key: "database",
+    label: "数据库",
+    description: "绑定业务库或图库连接，为查询、统计与图谱能力提供数据源。",
+  },
+  {
+    key: "ontology",
+    label: "本体对象",
+    description: "维护场景本体与对象定义，支撑关联、推理与一致性约束。",
+  },
+  {
+    key: "term-bank",
+    label: "术语库",
+    description: "沉淀标准术语与别名映射，保证输出与检索口径统一。",
+  },
+];
 
 export type SecurityPanelKey =
   | "autonomy-boundaries"
@@ -45,10 +96,13 @@ export const DETAIL_SECTION_ITEMS: Array<{
   icon: ComponentType<{ className?: string }>;
 }> = [
   { value: "core", label: "核心文件", icon: FileText },
-  { value: "tools", label: "工具", icon: Wrench },
+  { value: "model", label: "模型配置", icon: Cpu },
   { value: "skills", label: "技能", icon: Sparkles },
-  { value: "knowledge", label: "知识库", icon: FileStack },
-  { value: "channels", label: "渠道与分发", icon: RadioTower },
+  { value: "tools", label: "插件", icon: Wrench },
+  { value: "knowledge", label: "知识", icon: FileStack },
+  { value: "channels", label: "渠道", icon: RadioTower },
+  { value: "automated-tasks", label: "自动化任务", icon: CalendarClock },
+  { value: "memory", label: "记忆", icon: Brain },
   { value: "logs", label: "日志与审计", icon: FileStack },
   { value: "security", label: "安全防护", icon: ShieldCheck },
   { value: "relations", label: "关系", icon: UserRound },
@@ -93,16 +147,18 @@ export const SECURITY_PANEL_ITEMS: Array<{
   },
 ];
 
-export const AUTONOMY_BOUNDARY_LEVELS = ["L1 直接执行", "L2 通知", "L3 审批", "禁止"] as const;
+export const AUTONOMY_BOUNDARY_LEVELS = ["L1：直接放行", "L2：需用户审批", "L3：禁止"] as const;
 
 /** 全平台统一的自主性动作项（不随 Claw 变化）；级别由配置中的 id 匹配或默认值决定 */
 export const AUTONOMY_BOUNDARY_DEFINITIONS: Array<Pick<AutonomyBoundaryItem, "id" | "name" | "description">> = [
   { id: "boundary-read-file", name: "读取文件", description: "读取工作区和知识库中的文件" },
   { id: "boundary-write-file", name: "写入文件", description: "创建或修改工作区中的文件" },
   { id: "boundary-delete-file", name: "删除文件", description: "删除工作区中的文件" },
-  { id: "boundary-feishu", name: "发送飞书消息", description: "通过飞书给用户发送消息" },
-  { id: "boundary-network-search", name: "网络搜索", description: "搜索互联网获取信息" },
-  { id: "boundary-task-manage", name: "管理任务", description: "创建、更新或删除任务" },
+  {
+    id: "boundary-task-manage",
+    name: "管理自动化任务",
+    description: "创建、更新、启停或删除自动化任务",
+  },
 ];
 
 export const CAPABILITY_SCOPE_LABELS: Record<CapabilityScope, string> = {
@@ -119,7 +175,8 @@ export const KNOWLEDGE_SCOPE_LABELS: Record<KnowledgeScope, string> = {
 export const TOOL_CONFIG_KIND_LABELS: Record<ToolConfigKind, string> = {
   workflow: "工作流",
   mcp: "MCP",
-  plugin: "插件",
+  plugin: "OpenAPI",
+  ontology_action: "本体动作",
 };
 
 export const RUNTIME_TIER_OPTIONS: Array<{

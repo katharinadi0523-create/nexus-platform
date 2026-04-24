@@ -18,22 +18,44 @@ type IdentifiableItem = { id: string };
 type AutonomyLevel = SecurityManagementConfig["autonomyBoundaries"][number]["level"];
 
 const DEFAULT_AUTONOMY_LEVEL_BY_ID: Record<string, AutonomyLevel> = {
-  "boundary-read-file": "L1 直接执行",
-  "boundary-write-file": "L2 通知",
-  "boundary-delete-file": "L3 审批",
-  "boundary-feishu": "L2 通知",
-  "boundary-network-search": "L1 直接执行",
-  "boundary-task-manage": "L1 直接执行",
+  "boundary-read-file": "L1：直接放行",
+  "boundary-write-file": "L2：需用户审批",
+  "boundary-delete-file": "L3：禁止",
+  "boundary-task-manage": "L1：直接放行",
 };
+
+/** 兼容历史四档配置与旧文案 */
+const LEGACY_AUTONOMY_LEVEL_MAP: Record<string, AutonomyLevel> = {
+  "L1 直接执行": "L1：直接放行",
+  "L2 通知": "L2：需用户审批",
+  "L3 审批": "L2：需用户审批",
+  "禁止": "L3：禁止",
+};
+
+const KNOWN_AUTONOMY_LEVELS = new Set<AutonomyLevel>(["L1：直接放行", "L2：需用户审批", "L3：禁止"]);
+
+function coerceAutonomyLevel(raw: string): AutonomyLevel {
+  const mapped = LEGACY_AUTONOMY_LEVEL_MAP[raw];
+  if (mapped) {
+    return mapped;
+  }
+  if (KNOWN_AUTONOMY_LEVELS.has(raw as AutonomyLevel)) {
+    return raw as AutonomyLevel;
+  }
+  return "L1：直接放行";
+}
 
 export function normalizeAutonomyBoundaries(
   saved: SecurityManagementConfig["autonomyBoundaries"]
 ): SecurityManagementConfig["autonomyBoundaries"] {
   const levelById = new Map(saved.map((item) => [item.id, item.level]));
-  return AUTONOMY_BOUNDARY_DEFINITIONS.map((def) => ({
-    ...def,
-    level: levelById.get(def.id) ?? DEFAULT_AUTONOMY_LEVEL_BY_ID[def.id] ?? "L1 直接执行",
-  }));
+  return AUTONOMY_BOUNDARY_DEFINITIONS.map((def) => {
+    const raw = levelById.get(def.id) ?? DEFAULT_AUTONOMY_LEVEL_BY_ID[def.id] ?? "L1：直接放行";
+    return {
+      ...def,
+      level: coerceAutonomyLevel(raw),
+    };
+  });
 }
 
 export function updateAutonomyBoundaryLevel(
@@ -129,6 +151,36 @@ export function toggleScopedEnabledCollection<ScopeKey extends string, Item exte
   };
 }
 
+export function setAllToolsEnabled(
+  tools: {
+    platform: CapabilityToolItem[];
+    tenant: CapabilityToolItem[];
+    claw: CapabilityToolItem[];
+  },
+  enabled: boolean
+) {
+  return {
+    platform: tools.platform.map((item) => ({ ...item, enabled })),
+    tenant: tools.tenant.map((item) => ({ ...item, enabled })),
+    claw: tools.claw.map((item) => ({ ...item, enabled })),
+  };
+}
+
+export function setAllSkillsEnabled(
+  skills: {
+    platform: CapabilitySkillItem[];
+    tenant: CapabilitySkillItem[];
+    claw: CapabilitySkillItem[];
+  },
+  enabled: boolean
+) {
+  return {
+    platform: skills.platform.map((item) => ({ ...item, enabled })),
+    tenant: skills.tenant.map((item) => ({ ...item, enabled })),
+    claw: skills.claw.map((item) => ({ ...item, enabled })),
+  };
+}
+
 export function deleteScopedCollectionItem<ScopeKey extends string, Item extends IdentifiableItem>(
   collection: Record<ScopeKey, Item[]>,
   scope: ScopeKey,
@@ -154,6 +206,8 @@ export function mergeClawToolSelections(clawTools: CapabilityToolItem[], selecti
       enabled: true,
       badge: "Claw配置",
       meta: TOOL_CONFIG_KIND_LABELS[selection.kind],
+      kind: selection.kind,
+      origin: "claw_only",
     };
 
     const existingIndex = existingIndexMap.get(selection.id);

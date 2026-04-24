@@ -20,7 +20,8 @@ export const SPACE_OPERATIONS_TABS: SpaceOperationsTab[] = [
   { segment: "logs", label: "日志" },
 ];
 
-export const DEFAULT_SPACE_OPERATIONS_SEGMENT = SPACE_OPERATIONS_TABS[0].segment;
+/** 从侧栏进入「空间运营」时的默认子页（与 Tab 顺序无关） */
+export const DEFAULT_SPACE_OPERATIONS_SEGMENT = "run-config";
 
 export function spaceOperationsHref(segment: string): string {
   return `${SPACE_OPERATIONS_BASE}/${segment}`;

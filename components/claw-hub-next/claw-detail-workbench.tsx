@@ -6,22 +6,31 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bot,
+  CalendarClock,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Eye,
   EyeOff,
+  GripVertical,
+  Loader2,
   MessageSquareText,
   Plus,
+  RefreshCw,
+  Search,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
+import { ClawKnowledgeAssetsSection } from "@/components/claw-hub-next/detail/claw-knowledge-assets-section";
 import { ClawInteractiveChatPanel } from "@/components/claw-hub-next/interactive-chat-panel";
 import {
   DETAIL_SECTION_ITEMS,
+  KNOWLEDGE_PANEL_ITEMS,
   LOG_PANEL_ITEMS,
   SECURITY_PANEL_ITEMS,
   type DetailSectionKey,
+  type KnowledgePanelKey,
   type LogPanelKey,
   type SecurityPanelKey,
   type ToolSkillViewScope,
@@ -36,12 +45,18 @@ import {
   mergeClawSkillSelections,
   mergeClawToolSelections,
   resolveSecurityApproval,
+  setAllSkillsEnabled,
+  setAllToolsEnabled,
   toggleScopedEnabledCollection,
   updateAutonomyBoundaryLevel,
   updateToolProtectionEnabled,
   updateToolProtectionRuleEnabled,
 } from "@/components/claw-hub-next/detail/state";
 import { KnowledgeConfigDialog, type KnowledgeConfigSelection } from "@/components/claw-hub-next/knowledge-config-dialog";
+import {
+  CreateAutomatedTaskDialog,
+  type AutomatedTaskExecutionMode,
+} from "@/components/claw-hub-next/create-automated-task-dialog";
 import { SkillConfigDialog, type SkillConfigSelection } from "@/components/claw-hub-next/skill-config-dialog";
 import { ToolConfigDialog, type ToolConfigSelection } from "@/components/claw-hub-next/tool-config-dialog";
 import {
@@ -61,21 +76,84 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AGENT_RELATION_SELECT_OPTIONS,
+  AUTOMATED_TASK_DELIVERY_CHANNELS,
+  type AutomatedTaskDeliveryChannel,
   type AgentRelationItem,
   type AgentRelationKind,
   type CapabilityScope,
+  type ClawAutomatedTaskExecutionItem,
+  type ClawAutomatedTaskExecutionStatus,
+  type ClawAutomatedTaskItem,
+  type ClawAutomatedTaskRecentResult,
   type ClawCoreFileKey,
   type ClawDetailData,
+  type ClawCapabilityConfig,
   type ConversationAuditItem,
   type KnowledgeScope,
   type SecurityManagementConfig,
   type ToolProtectionRuleItem,
+  buildKnowledgeAssetsFromLegacy,
 } from "@/lib/mock/claw-hub-next";
+import { ModelSelector, type ModelParams } from "@/components/agent-editor/ModelSelector";
+import { PRESET_MODEL_IDS, getDefaultModelParams, type ModelParamKey } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
+
+const CLAW_MODEL_SELECTOR_HIDDEN_KEYS: readonly ModelParamKey[] = ["context_turns", "current_time"];
+
+type AutomatedTaskPanelKey = "task-list" | "execution-history";
+type AutomatedTaskExecutionScope = "all" | "specified";
+type AutomatedTaskExecutionStatusFilter = "all" | ClawAutomatedTaskExecutionStatus;
+type AutomatedTaskExecutionChannelFilter = "all" | AutomatedTaskDeliveryChannel;
+
+const AUTOMATED_TASK_PANEL_ITEMS: Array<{ key: AutomatedTaskPanelKey; label: string; description: string }> = [
+  { key: "task-list", label: "任务列表", description: "管理当前 Claw 已配置的自动化任务。" },
+  { key: "execution-history", label: "执行历史", description: "查看每次触发与执行产生的历史记录。" },
+];
+
+const AUTOMATED_EXECUTION_SCOPE_OPTIONS = [
+  { value: "all", label: "全部任务" },
+  { value: "specified", label: "指定任务" },
+];
+
+const AUTOMATED_EXECUTION_STATUS_OPTIONS = [
+  { value: "all", label: "全部" },
+  { value: "success", label: "成功" },
+  { value: "failure", label: "失败" },
+];
+
+type ClawFallbackModelRow = { id: string; model: string; params: ModelParams };
+
+function pickDefaultFallbackModel(primaryModel: string): string {
+  const different = PRESET_MODEL_IDS.find((id) => id !== primaryModel);
+  return different ?? PRESET_MODEL_IDS[0] ?? "Qwen3-8B";
+}
+
+/** 当前 Fallback 行是否与主力或更早的 Fallback 选了同一模型（重复项） */
+function isClawFallbackModelDuplicate(
+  primaryModel: string,
+  rows: ClawFallbackModelRow[],
+  rowIndex: number
+): boolean {
+  const model = rows[rowIndex]?.model;
+  if (!model) {
+    return false;
+  }
+  if (model === primaryModel) {
+    return true;
+  }
+  for (let i = 0; i < rowIndex; i++) {
+    if (rows[i]?.model === model) {
+      return true;
+    }
+  }
+  return false;
+}
 
 type LogSessionListItem = {
   id: string;
@@ -95,7 +173,7 @@ type LogSessionEventKind = "user" | "agent" | "skill" | "tool";
 type LogSessionEventItem = {
   id: string;
   kind: LogSessionEventKind;
-  label: "User" | "Agent" | "Skill" | "工具";
+  label: "User" | "Agent" | "技能" | "插件";
   title: string;
   time: string;
   summary: string;
@@ -116,6 +194,7 @@ const CHANNEL_ICON_MAP = {
   企业微信: "/icons/企业微信.png",
   飞书: "/icons/飞书.png",
   钉钉: "/icons/钉钉.png",
+  QQ: "/icons/QQ.svg",
 } as const;
 
 const CHANNEL_SUBTITLE_MAP = {
@@ -123,9 +202,10 @@ const CHANNEL_SUBTITLE_MAP = {
   企业微信: "WeCom / WeChat Work",
   飞书: "Feishu / Lark",
   钉钉: "DingTalk",
+  QQ: "Tencent QQ",
 } as const;
 
-const CHANNEL_ORDER = ["蓝信", "企业微信", "飞书", "钉钉"] as const;
+const CHANNEL_ORDER = ["蓝信", "企业微信", "飞书", "钉钉", "QQ"] as const;
 
 function buildEditableDistributionChannels(
   channels: ClawDetailData["distributionChannels"]
@@ -158,10 +238,10 @@ function getLogEventLabel(kind: LogSessionEventKind): LogSessionEventItem["label
   }
 
   if (kind === "skill") {
-    return "Skill";
+    return "技能";
   }
 
-  return "工具";
+  return "插件";
 }
 
 function getLogEventBadgeClassName(kind: LogSessionEventKind) {
@@ -260,6 +340,56 @@ function mergeSecurityManagementWithCanonicalAutonomy(
   };
 }
 
+function AutomatedTaskResultCell({ result }: { result: ClawAutomatedTaskRecentResult }) {
+  if (result === "success") {
+    return (
+      <span className="inline-flex items-center gap-2 text-sm font-medium text-green-700">
+        <span className="h-2 w-2 shrink-0 rounded-full bg-green-500 ring-1 ring-green-600/25" aria-hidden />
+        成功
+      </span>
+    );
+  }
+  if (result === "failure") {
+    return (
+      <span className="inline-flex items-center gap-2 text-sm font-medium text-red-600">
+        <span className="h-2 w-2 shrink-0 rounded-full bg-red-500 ring-1 ring-red-600/30" aria-hidden />
+        失败
+      </span>
+    );
+  }
+  if (result === "running") {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-md border border-amber-300/80 bg-amber-50 px-2 py-1 text-sm font-medium text-amber-900">
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-500" aria-hidden />
+        执行中
+      </span>
+    );
+  }
+  return <span className="text-sm text-slate-500">从未执行</span>;
+}
+
+function AutomatedTaskExecutionStatusBadge({ status }: { status: ClawAutomatedTaskExecutionStatus }) {
+  if (status === "failure") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-red-600">
+        <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden />
+        失败
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
+      <span className="h-2 w-2 shrink-0 rounded-full bg-green-500" aria-hidden />
+      成功
+    </span>
+  );
+}
+
+function normalizeAutomatedTaskExecutionStatus(status: string): ClawAutomatedTaskExecutionStatus {
+  return status === "failure" ? "failure" : "success";
+}
+
 export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [activeSection, setActiveSection] = useState<DetailSectionKey>("core");
   const [activeLogPanel, setActiveLogPanel] = useState<LogPanelKey>("conversation");
@@ -279,6 +409,11 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     )
   );
   const [capabilityConfig, setCapabilityConfig] = useState(detail.capabilityConfig);
+  const [clawPrimaryModel, setClawPrimaryModel] = useState("Qwen3-32B");
+  const [clawPrimaryModelParams, setClawPrimaryModelParams] = useState<ModelParams>(() =>
+    getDefaultModelParams("Qwen3-32B")
+  );
+  const [clawFallbackModels, setClawFallbackModels] = useState<ClawFallbackModelRow[]>([]);
   const [distributionChannels, setDistributionChannels] = useState<EditableDistributionChannel[]>(() =>
     buildEditableDistributionChannels(detail.distributionChannels)
   );
@@ -287,9 +422,35 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [toolConfigDialogOpen, setToolConfigDialogOpen] = useState(false);
   const [skillConfigDialogOpen, setSkillConfigDialogOpen] = useState(false);
   const [knowledgeConfigDialogOpen, setKnowledgeConfigDialogOpen] = useState(false);
+  const [knowledgeMenuOpen, setKnowledgeMenuOpen] = useState(false);
+  const [createAutomatedTaskOpen, setCreateAutomatedTaskOpen] = useState(false);
+  const [createAutomatedTaskInitialMode, setCreateAutomatedTaskInitialMode] =
+    useState<AutomatedTaskExecutionMode>("scheduled");
   const [toolScope, setToolScope] = useState<ToolSkillViewScope>("preset");
   const [skillScope, setSkillScope] = useState<ToolSkillViewScope>("preset");
-  const [knowledgeScope, setKnowledgeScope] = useState<KnowledgeScope>("tenant");
+  const [activeKnowledgePanel, setActiveKnowledgePanel] = useState<KnowledgePanelKey>("knowledge-base");
+  const [knowledgeAssets, setKnowledgeAssets] = useState(
+    () =>
+      detail.knowledgeAssets ??
+      buildKnowledgeAssetsFromLegacy(
+        detail.capabilityConfig.knowledge,
+        detail.overview.updatedBy || detail.overview.creator
+      )
+  );
+  const [automatedTasks, setAutomatedTasks] = useState<ClawAutomatedTaskItem[]>(() => [...detail.automatedTasks]);
+  const [automatedTaskExecutions] = useState<ClawAutomatedTaskExecutionItem[]>(() => [
+    ...detail.automatedTaskExecutions,
+  ]);
+  const [activeAutomatedTaskPanel, setActiveAutomatedTaskPanel] = useState<AutomatedTaskPanelKey>("task-list");
+  const [automatedTaskQuery, setAutomatedTaskQuery] = useState("");
+  const [automatedExecutionScope, setAutomatedExecutionScope] = useState<AutomatedTaskExecutionScope>("all");
+  const [automatedExecutionTaskId, setAutomatedExecutionTaskId] = useState("all");
+  const [automatedExecutionQuery, setAutomatedExecutionQuery] = useState("");
+  const [automatedExecutionStatus, setAutomatedExecutionStatus] =
+    useState<AutomatedTaskExecutionStatusFilter>("all");
+  const [automatedExecutionChannel, setAutomatedExecutionChannel] =
+    useState<AutomatedTaskExecutionChannelFilter>("all");
+  const [clawMemoryEnabled, setClawMemoryEnabled] = useState(false);
   const [logsMenuOpen, setLogsMenuOpen] = useState(false);
   const [securityMenuOpen, setSecurityMenuOpen] = useState(false);
   const [selectedLogSessionId, setSelectedLogSessionId] = useState<string | null>(null);
@@ -298,11 +459,101 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [agentRelationDraft, setAgentRelationDraft] = useState<AgentRelationItem | null>(null);
   const logsMenuCloseTimerRef = useRef<number | null>(null);
   const securityMenuCloseTimerRef = useRef<number | null>(null);
+  const knowledgeMenuCloseTimerRef = useRef<number | null>(null);
 
   const relationSelectOptions = useMemo(
     () => AGENT_RELATION_SELECT_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label })),
     []
   );
+
+  const filteredAutomatedTasks = useMemo(() => {
+    const q = automatedTaskQuery.trim().toLowerCase();
+    if (!q) {
+      return automatedTasks;
+    }
+    return automatedTasks.filter(
+      (task) =>
+        task.name.toLowerCase().includes(q) || task.description.toLowerCase().includes(q)
+    );
+  }, [automatedTaskQuery, automatedTasks]);
+
+  const automatedExecutionTaskOptions = useMemo(
+    () => [
+      { value: "all", label: "请选择任务" },
+      ...automatedTasks.map((task) => ({ value: task.id, label: task.name })),
+    ],
+    [automatedTasks]
+  );
+
+  const automatedExecutionChannelOptions = useMemo(
+    () => [
+      { value: "all", label: "全部" },
+      ...AUTOMATED_TASK_DELIVERY_CHANNELS.map((channel) => ({ value: channel, label: channel })),
+    ],
+    []
+  );
+
+  const filteredAutomatedTaskExecutions = useMemo(() => {
+    const q = automatedExecutionQuery.trim().toLowerCase();
+
+    return automatedTaskExecutions
+      .filter((execution) => {
+        if (automatedExecutionScope === "specified") {
+          return automatedExecutionTaskId !== "all" && execution.taskId === automatedExecutionTaskId;
+        }
+        return true;
+      })
+      .filter((execution) => {
+        if (!q) {
+          return true;
+        }
+        const name = execution.taskName.toLowerCase();
+        const output = execution.finalOutput.toLowerCase();
+        return name.includes(q) || output.includes(q);
+      })
+      .filter(
+        (execution) =>
+          automatedExecutionStatus === "all" ||
+          normalizeAutomatedTaskExecutionStatus(execution.status) === automatedExecutionStatus
+      )
+      .filter(
+        (execution) => automatedExecutionChannel === "all" || execution.deliveryChannel === automatedExecutionChannel
+      )
+      .sort((a, b) => b.executedAt.localeCompare(a.executedAt));
+  }, [
+    automatedExecutionChannel,
+    automatedExecutionQuery,
+    automatedExecutionScope,
+    automatedExecutionStatus,
+    automatedExecutionTaskId,
+    automatedTaskExecutions,
+  ]);
+
+  function addClawFallbackModel() {
+    const model = pickDefaultFallbackModel(clawPrimaryModel);
+    setClawFallbackModels((rows) => [
+      ...rows,
+      { id: crypto.randomUUID(), model, params: getDefaultModelParams(model) },
+    ]);
+  }
+
+  function removeClawFallbackModel(rowId: string) {
+    setClawFallbackModels((rows) => rows.filter((row) => row.id !== rowId));
+  }
+
+  function reorderClawFallbackModels(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) {
+      return;
+    }
+    setClawFallbackModels((rows) => {
+      const next = [...rows];
+      const from = Math.max(0, Math.min(fromIndex, next.length - 1));
+      const to = Math.max(0, Math.min(toIndex, next.length - 1));
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }
 
   const currentSession = chatSessions.find((session) => session.id === selectedChatId) ?? chatSessions[0];
   const matchedConversationRun = conversationRuns.find((session) => session.id === selectedChatId);
@@ -353,6 +604,9 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
       }
       if (securityMenuCloseTimerRef.current !== null) {
         window.clearTimeout(securityMenuCloseTimerRef.current);
+      }
+      if (knowledgeMenuCloseTimerRef.current !== null) {
+        window.clearTimeout(knowledgeMenuCloseTimerRef.current);
       }
     };
   }, []);
@@ -460,6 +714,45 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     setActiveSection("security");
     setActiveSecurityPanel(panel);
     setSecurityMenuOpen(false);
+  }
+
+  function clearKnowledgeMenuCloseTimer() {
+    if (knowledgeMenuCloseTimerRef.current !== null) {
+      window.clearTimeout(knowledgeMenuCloseTimerRef.current);
+      knowledgeMenuCloseTimerRef.current = null;
+    }
+  }
+
+  function openKnowledgeMenu() {
+    clearKnowledgeMenuCloseTimer();
+    setKnowledgeMenuOpen(true);
+  }
+
+  function scheduleKnowledgeMenuClose() {
+    clearKnowledgeMenuCloseTimer();
+    knowledgeMenuCloseTimerRef.current = window.setTimeout(() => {
+      setKnowledgeMenuOpen(false);
+      knowledgeMenuCloseTimerRef.current = null;
+    }, 120);
+  }
+
+  function handleSelectKnowledgePanel(panel: KnowledgePanelKey) {
+    setActiveSection("knowledge");
+    setActiveKnowledgePanel(panel);
+    setKnowledgeMenuOpen(false);
+  }
+
+  function resolveKnowledgeItemScope(
+    knowledge: ClawCapabilityConfig["knowledge"],
+    id: string
+  ): KnowledgeScope | null {
+    if (knowledge.tenant.some((row) => row.id === id)) {
+      return "tenant";
+    }
+    if (knowledge.claw.some((row) => row.id === id)) {
+      return "claw";
+    }
+    return null;
   }
 
   function handleOpenLogSession(sessionId: string) {
@@ -579,12 +872,28 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     }));
   }
 
+  function handleSetAllToolsEnabled(enabled: boolean) {
+    setCapabilityConfig((current) => ({
+      ...current,
+      tools: setAllToolsEnabled(current.tools, enabled),
+    }));
+    toast.success(enabled ? "已全部启用插件。" : "已全部停用插件。");
+  }
+
+  function handleSetAllSkillsEnabled(enabled: boolean) {
+    setCapabilityConfig((current) => ({
+      ...current,
+      skills: setAllSkillsEnabled(current.skills, enabled),
+    }));
+    toast.success(enabled ? "已全部启用技能。" : "已全部停用技能。");
+  }
+
   function handleDeleteTool(scope: CapabilityScope, id: string) {
     setCapabilityConfig((current) => ({
       ...current,
       tools: deleteScopedCollectionItem(current.tools, scope, id),
     }));
-    toast.success("工具已删除。");
+    toast.success("插件已移除。");
   }
 
   function handleOpenToolConfigDialog() {
@@ -630,17 +939,35 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   }
 
   function handleConfirmKnowledgeConfig(selections: KnowledgeConfigSelection[]) {
-    const { items } = mergeClawKnowledgeSelections(capabilityConfig.knowledge.claw, selections);
+    const creatorFallback = detail.overview.updatedBy || detail.overview.creator;
 
-    setCapabilityConfig((current) => ({
-      ...current,
-      knowledge: {
-        ...current.knowledge,
-        claw: items,
-      },
-    }));
+    setCapabilityConfig((current) => {
+      const { items } = mergeClawKnowledgeSelections(current.knowledge.claw, selections);
+      return {
+        ...current,
+        knowledge: {
+          ...current.knowledge,
+          claw: items,
+        },
+      };
+    });
 
-    setKnowledgeScope("claw");
+    setKnowledgeAssets((current) => {
+      const byId = new Map(current.knowledgeBases.map((row) => [row.id, row]));
+      selections.forEach((sel) => {
+        const prev = byId.get(sel.id);
+        byId.set(sel.id, {
+          id: sel.id,
+          name: sel.name,
+          description: sel.description,
+          creator: prev?.creator ?? creatorFallback,
+          updatedAt: sel.updatedAt,
+          enabled: true,
+        });
+      });
+      return { ...current, knowledgeBases: Array.from(byId.values()) };
+    });
+
     setKnowledgeConfigDialogOpen(false);
   }
 
@@ -657,23 +984,126 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
       ...current,
       skills: deleteScopedCollectionItem(current.skills, scope, id),
     }));
-    toast.success("技能已删除。");
+    toast.success("技能已移除。");
   }
 
-  function handleToggleKnowledge(scope: KnowledgeScope, id: string, enabled: boolean) {
-    setCapabilityConfig((current) => ({
+  function handleToggleKnowledgeBase(id: string, enabled: boolean) {
+    setKnowledgeAssets((current) => ({
       ...current,
-      knowledge: toggleScopedEnabledCollection(current.knowledge, scope, id, enabled),
+      knowledgeBases: current.knowledgeBases.map((row) => (row.id === id ? { ...row, enabled } : row)),
     }));
-    toast.success(enabled ? "知识已启用。" : "知识已停用。");
+    setCapabilityConfig((current) => {
+      const scope = resolveKnowledgeItemScope(current.knowledge, id);
+      if (!scope) {
+        return current;
+      }
+      return {
+        ...current,
+        knowledge: toggleScopedEnabledCollection(current.knowledge, scope, id, enabled),
+      };
+    });
+    toast.success(enabled ? "知识库已启用。" : "知识库已停用。");
   }
 
-  function handleDeleteKnowledge(scope: KnowledgeScope, id: string) {
-    setCapabilityConfig((current) => ({
+  function handleDeleteKnowledgeBase(id: string) {
+    setKnowledgeAssets((current) => ({
       ...current,
-      knowledge: deleteScopedCollectionItem(current.knowledge, scope, id),
+      knowledgeBases: current.knowledgeBases.filter((row) => row.id !== id),
     }));
-    toast.success("知识已删除。");
+    setCapabilityConfig((current) => {
+      const scope = resolveKnowledgeItemScope(current.knowledge, id);
+      if (!scope) {
+        return current;
+      }
+      return {
+        ...current,
+        knowledge: deleteScopedCollectionItem(current.knowledge, scope, id),
+      };
+    });
+    toast.success("知识库已移除。");
+  }
+
+  function handleToggleDatabase(id: string, enabled: boolean) {
+    setKnowledgeAssets((current) => ({
+      ...current,
+      databases: current.databases.map((row) => (row.id === id ? { ...row, enabled } : row)),
+    }));
+    toast.success(enabled ? "数据库已启用。" : "数据库已停用。");
+  }
+
+  function handleDeleteDatabase(id: string) {
+    setKnowledgeAssets((current) => ({
+      ...current,
+      databases: current.databases.filter((row) => row.id !== id),
+    }));
+    toast.success("数据库已移除。");
+  }
+
+  function handleToggleOntologyObject(id: string, enabled: boolean) {
+    setKnowledgeAssets((current) => ({
+      ...current,
+      ontologyObjects: current.ontologyObjects.map((row) => (row.id === id ? { ...row, enabled } : row)),
+    }));
+    toast.success(enabled ? "本体对象已启用。" : "本体对象已停用。");
+  }
+
+  function handleDeleteOntologyObject(id: string) {
+    setKnowledgeAssets((current) => ({
+      ...current,
+      ontologyObjects: current.ontologyObjects.filter((row) => row.id !== id),
+    }));
+    toast.success("本体对象已移除。");
+  }
+
+  function handleToggleTermBank(id: string, enabled: boolean) {
+    setKnowledgeAssets((current) => ({
+      ...current,
+      termBanks: current.termBanks.map((row) => (row.id === id ? { ...row, enabled } : row)),
+    }));
+    toast.success(enabled ? "术语库已启用。" : "术语库已停用。");
+  }
+
+  function handleDeleteTermBank(id: string) {
+    setKnowledgeAssets((current) => ({
+      ...current,
+      termBanks: current.termBanks.filter((row) => row.id !== id),
+    }));
+    toast.success("术语库已移除。");
+  }
+
+  function handleToggleAutomatedTask(id: string, enabled: boolean) {
+    setAutomatedTasks((rows) => rows.map((task) => (task.id === id ? { ...task, enabled } : task)));
+  }
+
+  function handleEditAutomatedTask(task: ClawAutomatedTaskItem) {
+    toast.info(`编辑「${task.name}」入口即将接入。`);
+  }
+
+  function handleDeleteAutomatedTask(id: string) {
+    setAutomatedTasks((rows) => rows.filter((task) => task.id !== id));
+    setAutomatedExecutionTaskId((current) => (current === id ? "all" : current));
+    toast.success("任务已删除。");
+  }
+
+  function openCreateAutomatedTask(mode: AutomatedTaskExecutionMode) {
+    setCreateAutomatedTaskInitialMode(mode);
+    setCreateAutomatedTaskOpen(true);
+  }
+
+  function handleViewAutomatedTaskExecutionDetail(execution: ClawAutomatedTaskExecutionItem) {
+    const targetSessionId =
+      execution.relatedSessionId && conversationRuns.some((run) => run.id === execution.relatedSessionId)
+        ? execution.relatedSessionId
+        : conversationRuns[0]?.id;
+
+    if (!targetSessionId) {
+      toast.info("这条执行记录暂未关联会话。");
+      return;
+    }
+
+    setSelectedChatId(targetSessionId);
+    setActiveSection("chat");
+    toast.success("已切换到关联会话。");
   }
 
   function openEditAgentRelation(item: AgentRelationItem) {
@@ -865,6 +1295,56 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                                 "cursor-pointer rounded-none border-b border-slate-200 px-3 py-2.5 text-sm text-slate-600 last:border-b-0 focus:bg-blue-50 focus:text-blue-700",
                                 activeSection === "security" &&
                                   activeSecurityPanel === panel.key &&
+                                  "bg-blue-50 font-medium text-blue-700"
+                              )}
+                            >
+                              {panel.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    );
+                  }
+
+                  if (item.value === "knowledge") {
+                    return (
+                      <DropdownMenu key={item.value} open={knowledgeMenuOpen} onOpenChange={setKnowledgeMenuOpen} modal={false}>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            title={item.label}
+                            onClick={() => {
+                              setActiveSection("knowledge");
+                              openKnowledgeMenu();
+                            }}
+                            onMouseEnter={openKnowledgeMenu}
+                            onMouseLeave={scheduleKnowledgeMenuClose}
+                            onFocus={openKnowledgeMenu}
+                            className={cn(
+                              "inline-flex h-auto flex-none shrink-0 items-center gap-1 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900",
+                              activeSection === "knowledge" && "border-blue-600 font-semibold text-blue-600"
+                            )}
+                          >
+                            <span>{item.label}</span>
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="start"
+                          side="bottom"
+                          sideOffset={0}
+                          onMouseEnter={openKnowledgeMenu}
+                          onMouseLeave={scheduleKnowledgeMenuClose}
+                          className="min-w-[168px] rounded-none border-slate-200 bg-white p-0 shadow-[0_12px_28px_rgba(15,23,42,0.12)]"
+                        >
+                          {KNOWLEDGE_PANEL_ITEMS.map((panel) => (
+                            <DropdownMenuItem
+                              key={panel.key}
+                              onClick={() => handleSelectKnowledgePanel(panel.key)}
+                              className={cn(
+                                "cursor-pointer rounded-none border-b border-slate-200 px-3 py-2.5 text-sm text-slate-600 last:border-b-0 focus:bg-blue-50 focus:text-blue-700",
+                                activeSection === "knowledge" &&
+                                  activeKnowledgePanel === panel.key &&
                                   "bg-blue-50 font-medium text-blue-700"
                               )}
                             >
@@ -1102,26 +1582,138 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
             </SectionCard>
           </TabsContent>
 
-          <TabsContent value="tools" className="mt-0">
-            <ClawCapabilitySection
-              panel="tools"
-              capabilityConfig={capabilityConfig}
-              toolScope={toolScope}
-              onToolScopeChange={setToolScope}
-              skillScope={skillScope}
-              onSkillScopeChange={setSkillScope}
-              knowledgeScope={knowledgeScope}
-              onKnowledgeScopeChange={setKnowledgeScope}
-              onOpenToolConfigDialog={handleOpenToolConfigDialog}
-              onOpenSkillConfigDialog={handleOpenSkillConfigDialog}
-              onOpenKnowledgeConfigDialog={handleOpenKnowledgeConfigDialog}
-              onToggleTool={handleToggleTool}
-              onDeleteTool={handleDeleteTool}
-              onToggleSkill={handleToggleSkill}
-              onDeleteSkill={handleDeleteSkill}
-              onToggleKnowledge={handleToggleKnowledge}
-              onDeleteKnowledge={handleDeleteKnowledge}
-            />
+          <TabsContent value="model" className="mt-0">
+            <SectionCard
+              title="模型配置"
+              description="Fallback 按列表顺序依次尝试。"
+            >
+              <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+                <div className="grid gap-0 md:grid-cols-2 md:divide-x md:divide-slate-200">
+                  <div className="space-y-3 p-5">
+                    <Label className="text-sm font-medium text-slate-800">
+                      <span className="text-rose-500" aria-hidden>
+                        *
+                      </span>
+                      主力模型
+                    </Label>
+                    <ModelSelector
+                      selectedModel={clawPrimaryModel}
+                      modelParams={clawPrimaryModelParams}
+                      onModelChange={setClawPrimaryModel}
+                      onParamsChange={setClawPrimaryModelParams}
+                      presetOnly
+                      hiddenParamKeys={CLAW_MODEL_SELECTOR_HIDDEN_KEYS}
+                      triggerClassName="w-full min-w-0 justify-between rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5 hover:bg-slate-50"
+                    />
+                  </div>
+                  <div className="space-y-3 border-t border-slate-200 p-5 md:border-t-0">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <Label className="text-sm font-medium text-slate-800">Fallback 模型</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 rounded-md border-slate-200 bg-white shadow-none"
+                        onClick={addClawFallbackModel}
+                      >
+                        <Plus className="h-4 w-4" />
+                        添加
+                      </Button>
+                    </div>
+
+                    {clawFallbackModels.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-8 text-center text-sm text-slate-800">
+                        暂无 Fallback，请点击「添加」加入降级模型。
+                      </div>
+                    ) : (
+                      <ul className="space-y-3">
+                        {clawFallbackModels.map((row, index) => {
+                          const duplicate = isClawFallbackModelDuplicate(
+                            clawPrimaryModel,
+                            clawFallbackModels,
+                            index
+                          );
+                          return (
+                            <li
+                              key={row.id}
+                              onDragOver={(event) => {
+                                event.preventDefault();
+                                event.dataTransfer.dropEffect = "move";
+                              }}
+                              onDrop={(event) => {
+                                event.preventDefault();
+                                const raw = event.dataTransfer.getData("application/x-claw-fallback-index");
+                                const fromIndex = Number.parseInt(raw, 10);
+                                if (!Number.isFinite(fromIndex)) {
+                                  return;
+                                }
+                                reorderClawFallbackModels(fromIndex, index);
+                              }}
+                              className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50/30 p-3 sm:flex-row sm:items-start sm:gap-2"
+                            >
+                              <div
+                                draggable
+                                title="拖动排序"
+                                aria-label={`拖动排序，当前第 ${index + 1} 条`}
+                                className="flex h-9 w-9 shrink-0 cursor-grab items-center justify-center rounded-md border border-transparent text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+                                onDragStart={(event) => {
+                                  event.dataTransfer.setData("application/x-claw-fallback-index", String(index));
+                                  event.dataTransfer.effectAllowed = "move";
+                                }}
+                              >
+                                <GripVertical className="h-4 w-4" aria-hidden />
+                              </div>
+                              <span className="shrink-0 text-xs font-medium text-slate-500 sm:w-6 sm:pt-1">
+                                {index + 1}.
+                              </span>
+                              <div className="min-w-0 flex-1 space-y-1.5">
+                                <ModelSelector
+                                  selectedModel={row.model}
+                                  modelParams={row.params}
+                                  onModelChange={(model) =>
+                                    setClawFallbackModels((rows) =>
+                                      rows.map((r) => (r.id === row.id ? { ...r, model } : r))
+                                    )
+                                  }
+                                  onParamsChange={(params) =>
+                                    setClawFallbackModels((rows) =>
+                                      rows.map((r) => (r.id === row.id ? { ...r, params } : r))
+                                    )
+                                  }
+                                  presetOnly
+                                  hiddenParamKeys={CLAW_MODEL_SELECTOR_HIDDEN_KEYS}
+                                  triggerClassName={cn(
+                                    "w-full min-w-0 justify-between rounded-lg bg-white px-3 py-2.5",
+                                    duplicate
+                                      ? "border-2 border-red-500 hover:bg-red-50/40"
+                                      : "border border-slate-200 hover:bg-slate-50"
+                                  )}
+                                />
+                                {duplicate ? (
+                                  <p className="text-xs leading-5 text-red-600" role="status">
+                                    与已选模型重复，建议选择不同模型作为fallback模型
+                                  </p>
+                                ) : null}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="mt-0 shrink-0 self-start text-slate-500 hover:text-red-600 sm:mt-1.5"
+                                onClick={() => removeClawFallbackModel(row.id)}
+                                aria-label={`移除第 ${index + 1} 条 Fallback 模型`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
           </TabsContent>
 
           <TabsContent value="skills" className="mt-0">
@@ -1132,39 +1724,50 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onToolScopeChange={setToolScope}
               skillScope={skillScope}
               onSkillScopeChange={setSkillScope}
-              knowledgeScope={knowledgeScope}
-              onKnowledgeScopeChange={setKnowledgeScope}
               onOpenToolConfigDialog={handleOpenToolConfigDialog}
               onOpenSkillConfigDialog={handleOpenSkillConfigDialog}
-              onOpenKnowledgeConfigDialog={handleOpenKnowledgeConfigDialog}
+              onSetAllSkillsEnabled={handleSetAllSkillsEnabled}
               onToggleTool={handleToggleTool}
               onDeleteTool={handleDeleteTool}
               onToggleSkill={handleToggleSkill}
               onDeleteSkill={handleDeleteSkill}
-              onToggleKnowledge={handleToggleKnowledge}
-              onDeleteKnowledge={handleDeleteKnowledge}
             />
           </TabsContent>
 
-          <TabsContent value="knowledge" className="mt-0">
+          <TabsContent value="tools" className="mt-0">
             <ClawCapabilitySection
-              panel="knowledge"
+              panel="tools"
               capabilityConfig={capabilityConfig}
               toolScope={toolScope}
               onToolScopeChange={setToolScope}
               skillScope={skillScope}
               onSkillScopeChange={setSkillScope}
-              knowledgeScope={knowledgeScope}
-              onKnowledgeScopeChange={setKnowledgeScope}
               onOpenToolConfigDialog={handleOpenToolConfigDialog}
               onOpenSkillConfigDialog={handleOpenSkillConfigDialog}
-              onOpenKnowledgeConfigDialog={handleOpenKnowledgeConfigDialog}
+              onSetAllToolsEnabled={handleSetAllToolsEnabled}
               onToggleTool={handleToggleTool}
               onDeleteTool={handleDeleteTool}
               onToggleSkill={handleToggleSkill}
               onDeleteSkill={handleDeleteSkill}
-              onToggleKnowledge={handleToggleKnowledge}
-              onDeleteKnowledge={handleDeleteKnowledge}
+            />
+          </TabsContent>
+
+          <TabsContent value="knowledge" className="mt-0">
+            <ClawKnowledgeAssetsSection
+              activePanel={activeKnowledgePanel}
+              assets={knowledgeAssets}
+              onToggleKnowledgeBase={handleToggleKnowledgeBase}
+              onDeleteKnowledgeBase={handleDeleteKnowledgeBase}
+              onToggleDatabase={handleToggleDatabase}
+              onDeleteDatabase={handleDeleteDatabase}
+              onToggleOntology={handleToggleOntologyObject}
+              onDeleteOntology={handleDeleteOntologyObject}
+              onToggleTermBank={handleToggleTermBank}
+              onDeleteTermBank={handleDeleteTermBank}
+              onOpenKnowledgeBaseConfig={() => setKnowledgeConfigDialogOpen(true)}
+              onOpenDatabaseConfig={() => toast.info("配置数据库入口即将接入。")}
+              onOpenOntologyConfig={() => toast.info("配置本体对象入口即将接入。")}
+              onOpenTermBankConfig={() => toast.info("配置术语库入口即将接入。")}
             />
           </TabsContent>
 
@@ -1302,6 +1905,378 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
             </SectionCard>
           </TabsContent>
 
+          <TabsContent value="automated-tasks" className="mt-0">
+            <SectionCard>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="inline-flex w-fit rounded-md border border-slate-200 bg-slate-50 p-1">
+                    {AUTOMATED_TASK_PANEL_ITEMS.map((panel) => (
+                      <button
+                        key={panel.key}
+                        type="button"
+                        onClick={() => setActiveAutomatedTaskPanel(panel.key)}
+                        className={cn(
+                          "rounded-sm px-4 py-1.5 text-sm font-medium transition-colors",
+                          activeAutomatedTaskPanel === panel.key
+                            ? "bg-white text-blue-600 shadow-sm"
+                            : "text-slate-600 hover:text-slate-900"
+                        )}
+                      >
+                        {panel.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="max-w-2xl text-sm leading-6 text-slate-500">
+                    {AUTOMATED_TASK_PANEL_ITEMS.find((panel) => panel.key === activeAutomatedTaskPanel)?.description}
+                  </div>
+                </div>
+
+                {activeAutomatedTaskPanel === "task-list" ? (
+                  <>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="relative min-w-0 flex-1 sm:max-w-md">
+                        <Search
+                          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                          aria-hidden
+                        />
+                        <Input
+                          value={automatedTaskQuery}
+                          onChange={(event) => setAutomatedTaskQuery(event.target.value)}
+                          placeholder="按任务名称搜索"
+                          className="h-9 border-slate-200 bg-white pl-9 shadow-none"
+                          aria-label="按任务名称搜索"
+                        />
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 border-slate-200 bg-white shadow-none"
+                          aria-label="刷新列表"
+                          onClick={() => toast.success("任务列表已刷新。")}
+                        >
+                          <RefreshCw className="h-4 w-4 text-slate-600" />
+                        </Button>
+                        <Button
+                          type="button"
+                          className="h-9 gap-1 rounded-md bg-blue-600 px-4 text-white shadow-none hover:bg-blue-700"
+                          onClick={() => openCreateAutomatedTask("scheduled")}
+                        >
+                          <Plus className="h-4 w-4" />
+                          新建任务
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto border border-slate-200 bg-white">
+                      <Table className="min-w-[1320px] table-fixed border-collapse">
+                        <TableHeader className="bg-slate-50">
+                          <TableRow className="border-slate-200 hover:bg-slate-50">
+                            <TableHead className="h-11 w-[15%] min-w-[168px] px-4 text-sm font-medium text-slate-700">
+                              名称
+                            </TableHead>
+                            <TableHead className="h-11 w-[26%] min-w-[220px] px-4 text-sm font-medium text-slate-700">
+                              描述
+                            </TableHead>
+                            <TableHead className="h-11 w-[18%] min-w-[180px] px-4 text-sm font-medium text-slate-700">
+                              触发方式和时间
+                            </TableHead>
+                            <TableHead className="h-11 w-[12%] min-w-[136px] px-4 text-sm font-medium text-slate-700">
+                              上次执行时间
+                            </TableHead>
+                            <TableHead className="h-11 w-[9%] min-w-[88px] px-4 text-sm font-medium text-slate-700">
+                              最近结果
+                            </TableHead>
+                            <TableHead className="h-11 w-[11%] min-w-[108px] px-4 text-sm font-medium text-slate-700">
+                              交付位置（渠道）
+                            </TableHead>
+                            <TableHead className="h-11 w-[17%] min-w-[180px] px-4 text-sm font-medium text-slate-700">
+                              操作项
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAutomatedTasks.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={7} className="px-4 py-16 text-center text-sm text-slate-500">
+                                {automatedTasks.length === 0 ? "暂无自动化任务。" : "没有匹配名称的任务。"}
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredAutomatedTasks.map((task) => (
+                              <TableRow key={task.id} className="border-slate-200 hover:bg-slate-50/60">
+                                <TableCell className="w-[15%] min-w-[168px] max-w-0 px-4 py-4 align-top">
+                                  <div className="flex min-w-0 gap-3">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50">
+                                      <CalendarClock className="h-5 w-5 text-blue-600" aria-hidden />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="break-words text-[15px] font-semibold text-slate-950">{task.name}</div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="w-[26%] min-w-[220px] max-w-0 px-4 py-4 align-top text-sm leading-6 text-slate-600">
+                                  <p className="break-words [overflow-wrap:anywhere]">{task.description}</p>
+                                </TableCell>
+                                <TableCell className="w-[18%] min-w-[180px] max-w-0 px-4 py-4 align-top">
+                                  <div className="min-w-0 space-y-2">
+                                    <div className="break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
+                                      {task.triggerSummary}
+                                    </div>
+                                    <span className="inline-flex max-w-full items-center rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                                      {task.triggerKind}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="w-[12%] min-w-[136px] max-w-0 whitespace-nowrap px-4 py-4 align-middle text-sm text-slate-700">
+                                  {task.lastExecutedAt ?? "—"}
+                                </TableCell>
+                                <TableCell className="w-[9%] min-w-[88px] max-w-0 px-4 py-4 align-middle">
+                                  <AutomatedTaskResultCell result={task.recentResult} />
+                                </TableCell>
+                                <TableCell className="w-[11%] min-w-[108px] max-w-0 px-4 py-4 align-middle">
+                                  <span className="inline-flex max-w-full rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-800 [overflow-wrap:anywhere]">
+                                    {task.deliveryChannel}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="w-[17%] min-w-[180px] max-w-0 px-4 py-4 align-middle">
+                                  <div className="flex flex-wrap items-center gap-3">
+                                    <Switch
+                                      checked={task.enabled}
+                                      onCheckedChange={(checked) => handleToggleAutomatedTask(task.id, checked)}
+                                      aria-label={`${task.name} 启停`}
+                                      className="data-[state=checked]:bg-blue-600 dark:data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-200 dark:data-[state=unchecked]:bg-slate-200"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                                      onClick={() => handleEditAutomatedTask(task)}
+                                    >
+                                      编辑
+                                    </button>
+                                    <span className="text-slate-300" aria-hidden>
+                                      |
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="text-sm font-medium text-rose-600 hover:text-rose-700"
+                                      onClick={() => handleDeleteAutomatedTask(task.id)}
+                                    >
+                                      删除
+                                    </button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-950">自动化任务执行历史</h3>
+                        <p className="mt-1 text-sm leading-6 text-slate-500">
+                          用于查看当前 Claw 的自动化任务历史执行记录，一条记录对应一次任务触发与执行。
+                        </p>
+                      </div>
+                      <div className="text-xs font-medium text-slate-400">排序：最新优先</div>
+                    </div>
+
+                    <div className="border border-slate-200 bg-slate-50/70 p-4">
+                      <div className="grid gap-3 lg:grid-cols-[150px_minmax(180px,1fr)_minmax(220px,1.2fr)_140px_140px]">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-slate-500">任务范围</Label>
+                          <Select
+                            value={automatedExecutionScope}
+                            onValueChange={(value) => {
+                              const nextScope = value as AutomatedTaskExecutionScope;
+                              setAutomatedExecutionScope(nextScope);
+                              if (nextScope === "all") {
+                                setAutomatedExecutionTaskId("all");
+                              }
+                            }}
+                            options={AUTOMATED_EXECUTION_SCOPE_OPTIONS}
+                            placeholder="全部任务"
+                            className="border-slate-200 bg-white shadow-none focus:ring-0"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-slate-500">指定任务</Label>
+                          {automatedExecutionScope === "specified" ? (
+                            <Select
+                              value={automatedExecutionTaskId}
+                              onValueChange={setAutomatedExecutionTaskId}
+                              options={automatedExecutionTaskOptions}
+                              placeholder="请选择任务"
+                              className="border-slate-200 bg-white shadow-none focus:ring-0"
+                            />
+                          ) : (
+                            <div className="flex h-9 items-center rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-400">
+                              不限定具体任务
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-slate-500">搜索</Label>
+                          <div className="relative">
+                            <Search
+                              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                              aria-hidden
+                            />
+                            <Input
+                              value={automatedExecutionQuery}
+                              onChange={(event) => setAutomatedExecutionQuery(event.target.value)}
+                              placeholder="按任务名称或执行输出筛选"
+                              className="h-9 border-slate-200 bg-white pl-9 shadow-none"
+                              aria-label="按任务名称或执行输出筛选执行历史"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-slate-500">执行结果</Label>
+                          <Select
+                            value={automatedExecutionStatus}
+                            onValueChange={(value) =>
+                              setAutomatedExecutionStatus(value as AutomatedTaskExecutionStatusFilter)
+                            }
+                            options={AUTOMATED_EXECUTION_STATUS_OPTIONS}
+                            placeholder="全部"
+                            className="border-slate-200 bg-white shadow-none focus:ring-0"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-medium text-slate-500">交付渠道</Label>
+                          <Select
+                            value={automatedExecutionChannel}
+                            onValueChange={(value) =>
+                              setAutomatedExecutionChannel(value as AutomatedTaskExecutionChannelFilter)
+                            }
+                            options={automatedExecutionChannelOptions}
+                            placeholder="全部"
+                            className="border-slate-200 bg-white shadow-none focus:ring-0"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto border border-slate-200 bg-white">
+                      <Table className="min-w-[1280px] table-fixed border-collapse">
+                        <TableHeader className="bg-slate-50">
+                          <TableRow className="border-slate-200 hover:bg-slate-50">
+                            <TableHead className="h-11 w-[16%] px-4 text-sm font-medium text-slate-700">
+                              任务名称
+                            </TableHead>
+                            <TableHead className="h-11 w-[35%] px-4 text-sm font-medium text-slate-700">
+                              执行输出
+                            </TableHead>
+                            <TableHead className="h-11 w-[9%] min-w-[88px] px-4 text-sm font-medium text-slate-700">
+                              执行结果
+                            </TableHead>
+                            <TableHead className="h-11 w-[14%] px-4 text-sm font-medium text-slate-700">
+                              执行时间
+                            </TableHead>
+                            <TableHead className="h-11 w-[18%] px-4 text-sm font-medium text-slate-700">
+                              任务交付位置/对象
+                            </TableHead>
+                            <TableHead className="h-11 w-[8%] min-w-[72px] px-4 text-right text-sm font-medium text-slate-700">
+                              操作
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {filteredAutomatedTaskExecutions.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={6} className="px-4 py-16 text-center text-sm text-slate-500">
+                                暂无匹配的执行记录。
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            filteredAutomatedTaskExecutions.map((execution) => (
+                              <TableRow key={execution.id} className="border-slate-200 hover:bg-slate-50/60">
+                                <TableCell className="max-w-0 px-4 py-4 align-top">
+                                  <button
+                                    type="button"
+                                    className="break-words text-left text-sm font-semibold text-slate-950 transition-colors hover:text-blue-600"
+                                    onClick={() => handleViewAutomatedTaskExecutionDetail(execution)}
+                                  >
+                                    {execution.taskName}
+                                  </button>
+                                  <div className="mt-1 font-mono text-[11px] text-slate-400">{execution.traceId}</div>
+                                </TableCell>
+                                <TableCell className="max-w-0 px-4 py-4 align-top">
+                                  <div className="truncate text-sm text-slate-700" title={execution.finalOutput}>
+                                    {execution.finalOutput}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="w-[9%] min-w-[88px] max-w-0 px-4 py-4 align-middle">
+                                  <div className="flex w-fit min-w-0 items-center justify-start">
+                                    <AutomatedTaskExecutionStatusBadge
+                                      status={normalizeAutomatedTaskExecutionStatus(execution.status)}
+                                    />
+                                  </div>
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap px-4 py-4 align-top text-sm text-slate-700">
+                                  {execution.executedAt}
+                                </TableCell>
+                                <TableCell className="max-w-0 px-4 py-4 align-top">
+                                  <span className="inline-flex rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700">
+                                    {execution.deliveryChannel}
+                                  </span>
+                                  <div className="mt-2 break-words text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">
+                                    {execution.deliveryTarget}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="px-4 py-4 text-right align-top">
+                                  <button
+                                    type="button"
+                                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                                    onClick={() => handleViewAutomatedTaskExecutionDetail(execution)}
+                                  >
+                                    查看详情
+                                  </button>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </SectionCard>
+          </TabsContent>
+
+          <TabsContent value="memory" className="mt-0">
+            <SectionCard title="记忆">
+              <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+                <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+                  <Label htmlFor="claw-memory-switch" className="text-sm font-medium text-slate-800">
+                    启用记忆
+                  </Label>
+                  <Switch
+                    id="claw-memory-switch"
+                    checked={clawMemoryEnabled}
+                    onCheckedChange={setClawMemoryEnabled}
+                    aria-label="启用记忆"
+                    className="data-[state=checked]:bg-blue-600 dark:data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-200 dark:data-[state=unchecked]:bg-slate-200"
+                  />
+                </div>
+              </div>
+              <div className="min-h-[min(40vh,320px)] pt-8">
+                <p className="text-xs font-medium tracking-wide text-slate-400">待规划</p>
+              </div>
+            </SectionCard>
+          </TabsContent>
+
           <TabsContent value="logs" className="mt-0 h-full min-h-0 overflow-hidden">
             {activeLogPanel === "conversation" ? (
               selectedLogSession && selectedLogSessionSummary ? (
@@ -1338,7 +2313,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                         <div>
                           <div className="text-sm font-semibold text-slate-950">消息与事件</div>
-                          <div className="mt-1 text-xs text-slate-500">按时间顺序展示 User、Agent、Skill 与工具事件</div>
+                          <div className="mt-1 text-xs text-slate-500">按时间顺序展示 User、Agent、技能与插件事件</div>
                         </div>
                         <div className="text-xs text-slate-400">{selectedLogSessionEvents.length} 项</div>
                       </div>
@@ -1811,6 +2786,12 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
         open={knowledgeConfigDialogOpen}
         onOpenChange={setKnowledgeConfigDialogOpen}
         onConfirm={handleConfirmKnowledgeConfig}
+      />
+      <CreateAutomatedTaskDialog
+        open={createAutomatedTaskOpen}
+        onOpenChange={setCreateAutomatedTaskOpen}
+        initialExecutionMode={createAutomatedTaskInitialMode}
+        onCreated={({ item }) => setAutomatedTasks((rows) => [item, ...rows])}
       />
     </div>
   );

@@ -32,11 +32,11 @@ type ToolRuleFormState = typeof TOOL_RULE_FORM_DEFAULT;
 /** 仅用于选中项文字着色（低饱和绿 / 橙 / 红）；选择框边框与底色保持中性灰、白 */
 function autonomyLevelTextClass(level: string) {
   switch (level) {
-    case "L1 直接执行":
+    case "L1：直接放行":
       return "text-teal-800";
-    case "L2 通知":
+    case "L2：需用户审批":
       return "text-amber-800/90";
-    case "L3 审批":
+    case "L3：禁止":
       return "text-rose-800";
     default:
       return "text-slate-700";
