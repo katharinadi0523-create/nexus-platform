@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
 import { ClawKnowledgeAssetsSection } from "@/components/claw-hub-next/detail/claw-knowledge-assets-section";
 import { ClawInteractiveChatPanel } from "@/components/claw-hub-next/interactive-chat-panel";
+import { ClawWorkspaceSection } from "@/components/claw-hub-next/detail/workspace-section";
 import {
   DETAIL_SECTION_ITEMS,
   KNOWLEDGE_PANEL_ITEMS,
@@ -110,6 +111,10 @@ type AutomatedTaskPanelKey = "task-list" | "execution-history";
 type AutomatedTaskExecutionScope = "all" | "specified";
 type AutomatedTaskExecutionStatusFilter = "all" | ClawAutomatedTaskExecutionStatus;
 type AutomatedTaskExecutionChannelFilter = "all" | AutomatedTaskDeliveryChannel;
+
+function buildInitialWorkspacePath() {
+  return [];
+}
 
 const AUTOMATED_TASK_PANEL_ITEMS: Array<{ key: AutomatedTaskPanelKey; label: string; description: string }> = [
   { key: "task-list", label: "任务列表", description: "管理当前 Claw 已配置的自动化任务。" },
@@ -450,6 +455,12 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     useState<AutomatedTaskExecutionStatusFilter>("all");
   const [automatedExecutionChannel, setAutomatedExecutionChannel] =
     useState<AutomatedTaskExecutionChannelFilter>("all");
+  const [workspaceStorageConfig, setWorkspaceStorageConfig] = useState(detail.workspaceStorageConfig);
+  const [selectedWorkspacePath, setSelectedWorkspacePath] = useState<string[]>(() => buildInitialWorkspacePath());
+  const [workspaceStorageDialogOpen, setWorkspaceStorageDialogOpen] = useState(false);
+  const [workspaceQuotaDraft, setWorkspaceQuotaDraft] = useState(
+    detail.workspaceStorageConfig.workspaceQuotaGb === null ? "" : String(detail.workspaceStorageConfig.workspaceQuotaGb)
+  );
   const [clawMemoryEnabled, setClawMemoryEnabled] = useState(false);
   const [logsMenuOpen, setLogsMenuOpen] = useState(false);
   const [securityMenuOpen, setSecurityMenuOpen] = useState(false);
@@ -900,12 +911,43 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     setToolConfigDialogOpen(true);
   }
 
-  function handleOpenSkillConfigDialog() {
-    setSkillConfigDialogOpen(true);
+  function handleOpenWorkspaceStorageDialog() {
+    setWorkspaceQuotaDraft(
+      workspaceStorageConfig.workspaceQuotaGb === null ? "" : String(workspaceStorageConfig.workspaceQuotaGb)
+    );
+    setWorkspaceStorageDialogOpen(true);
   }
 
-  function handleOpenKnowledgeConfigDialog() {
-    setKnowledgeConfigDialogOpen(true);
+  function handleSaveWorkspaceStorageConfig() {
+    const trimmed = workspaceQuotaDraft.trim();
+    let nextQuota: number | null = null;
+
+    if (trimmed) {
+      const parsedQuota = Number.parseInt(trimmed, 10);
+
+      if (!Number.isFinite(parsedQuota) || parsedQuota <= 0) {
+        toast.error("请输入大于 0 的配额，或留空表示不限制。");
+        return;
+      }
+
+      nextQuota = parsedQuota;
+    }
+
+    if (nextQuota !== null && nextQuota > workspaceStorageConfig.volumeTotalGb) {
+      toast.error("工作空间配额不能超过存储卷总容量。");
+      return;
+    }
+
+    setWorkspaceStorageConfig((current) => ({
+      ...current,
+      workspaceQuotaGb: nextQuota,
+    }));
+    setWorkspaceStorageDialogOpen(false);
+    toast.success("工作空间存储配置已保存。");
+  }
+
+  function handleOpenSkillConfigDialog() {
+    setSkillConfigDialogOpen(true);
   }
 
   function handleConfirmToolConfig(selections: ToolConfigSelection[]) {
@@ -2255,6 +2297,16 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
             </SectionCard>
           </TabsContent>
 
+          <TabsContent value="workspace" className="mt-0">
+            <ClawWorkspaceSection
+              workspaceRoot={detail.workspaceRoot}
+              storageConfig={workspaceStorageConfig}
+              selectedPath={selectedWorkspacePath}
+              onSelectPath={setSelectedWorkspacePath}
+              onOpenStorageConfig={handleOpenWorkspaceStorageDialog}
+            />
+          </TabsContent>
+
           <TabsContent value="memory" className="mt-0">
             <SectionCard title="记忆">
               <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
@@ -2271,8 +2323,21 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                   />
                 </div>
               </div>
-              <div className="min-h-[min(40vh,320px)] pt-8">
-                <p className="text-xs font-medium tracking-wide text-slate-400">待规划</p>
+              <div className="grid gap-4 pt-8 xl:grid-cols-2">
+                <div className="rounded-[22px] border border-slate-200 bg-white p-5">
+                  <div className="text-sm font-semibold text-slate-950">记忆能力配置</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-500">
+                    这里负责控制记忆是否启用、写入策略和命中策略；具体记忆文件已经沉淀在工作空间的
+                    <span className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">memory/</span>
+                    目录中。
+                  </div>
+                </div>
+                <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50/70 p-5">
+                  <div className="text-sm font-semibold text-slate-900">后续规划</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-500">
+                    后续可继续补组织记忆、项目记忆、个人记忆的召回权重、摘要压缩和保留周期配置。
+                  </div>
+                </div>
               </div>
             </SectionCard>
           </TabsContent>
@@ -2698,6 +2763,80 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
 
         </div>
       </Tabs>
+      <Dialog open={workspaceStorageDialogOpen} onOpenChange={setWorkspaceStorageDialogOpen}>
+        <DialogContent className="sm:max-w-[640px]">
+          <DialogHeader>
+            <DialogTitle>存储配置</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid gap-5 py-2">
+            <div className="border border-slate-200 bg-slate-50/50 px-5 py-4">
+              <div className="grid gap-x-10 gap-y-4 sm:grid-cols-2">
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">存储卷名称:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.volumeDisplayName}</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">存储卷描述:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.volumeDescription || "--"}</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">存储源:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.volumeName}</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">子目录:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.subdirectory}</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">分配容量:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.volumeTotalGb.toFixed(2)}GB</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">所属组织:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.organizationName}</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">绑定项目:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.projectName ?? "--"}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="workspace-quota" className="text-sm font-medium text-slate-800">
+                当前Claw工作空间配额
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="workspace-quota"
+                  type="number"
+                  min={1}
+                  value={workspaceQuotaDraft}
+                  onChange={(event) => setWorkspaceQuotaDraft(event.target.value)}
+                  placeholder="留空表示不限制"
+                  className="h-10 border-slate-200 bg-white shadow-none"
+                />
+                <div className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
+                  GB
+                </div>
+              </div>
+              <div className="text-xs leading-6 text-slate-500">
+                不设置时，工作空间上限默认继承整个存储卷；如设置，则不能超过存储卷总容量。
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setWorkspaceStorageDialogOpen(false)}>
+              取消
+            </Button>
+            <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" onClick={handleSaveWorkspaceStorageConfig}>
+              保存配置
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={agentRelationDraft !== null}
         onOpenChange={(open) => {

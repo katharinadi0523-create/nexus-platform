@@ -5,6 +5,7 @@ import {
   Cpu,
   FileStack,
   FileText,
+  FolderOpen,
   RadioTower,
   ShieldCheck,
   Sparkles,
@@ -31,6 +32,7 @@ export type DetailSectionKey =
   | "knowledge"
   | "channels"
   | "automated-tasks"
+  | "workspace"
   | "memory"
   | "logs"
   | "security"
@@ -102,6 +104,7 @@ export const DETAIL_SECTION_ITEMS: Array<{
   { value: "knowledge", label: "知识", icon: FileStack },
   { value: "channels", label: "渠道", icon: RadioTower },
   { value: "automated-tasks", label: "自动化任务", icon: CalendarClock },
+  { value: "workspace", label: "工作空间", icon: FolderOpen },
   { value: "memory", label: "记忆", icon: Brain },
   { value: "logs", label: "日志与审计", icon: FileStack },
   { value: "security", label: "安全防护", icon: ShieldCheck },

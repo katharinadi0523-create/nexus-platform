@@ -6,6 +6,7 @@ import type {
   ConversationRunItem,
   KnowledgeScope,
   ResourceConfig,
+  WorkspaceEntryItem,
   WorkspaceFolderItem,
 } from "@/lib/mock/claw-hub-next";
 
@@ -52,7 +53,9 @@ export function getWorkspaceTrail(root: WorkspaceFolderItem, path: string[]) {
   let current = root;
 
   for (const folderId of path) {
-    const next = current.children.find((item) => item.id === folderId);
+    const next = current.children.find(
+      (item): item is WorkspaceFolderItem => item.kind === "folder" && item.id === folderId
+    );
     if (!next) {
       break;
     }
@@ -62,6 +65,26 @@ export function getWorkspaceTrail(root: WorkspaceFolderItem, path: string[]) {
   }
 
   return trail;
+}
+
+export function countWorkspaceItems(entries: WorkspaceEntryItem[]): { files: number; folders: number } {
+  return entries.reduce(
+    (accumulator, entry) => {
+      if (entry.kind === "folder") {
+        const childCounts = countWorkspaceItems(entry.children);
+        return {
+          files: accumulator.files + childCounts.files,
+          folders: accumulator.folders + 1 + childCounts.folders,
+        };
+      }
+
+      return {
+        files: accumulator.files + 1,
+        folders: accumulator.folders,
+      };
+    },
+    { files: 0, folders: 0 }
+  );
 }
 
 export type ConversationMessageWithAudit = ChatMessageItem & {

@@ -22,6 +22,7 @@ import {
   Shrimp,
   Building2,
   FileCode,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalHeader } from "@/components/layout/global-header";
@@ -84,8 +85,14 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    title: "插件",
+    title: "工具",
     items: [
+      {
+        key: "SkillsManagement",
+        label: "技能管理",
+        icon: Sparkles,
+        href: "/skills-management",
+      },
       {
         key: "MCPManagement",
         label: "MCP管理",
@@ -133,6 +140,12 @@ const menuGroups: MenuGroup[] = [
     title: "业务管理",
     dividerTop: true,
     items: [
+      {
+        key: "ServiceMonitoring",
+        label: "服务监控",
+        icon: Activity,
+        disabled: true,
+      },
       {
         key: "SpaceOperations",
         label: "空间运营",
