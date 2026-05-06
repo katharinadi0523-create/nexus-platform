@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Bot,
   CalendarClock,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -15,6 +16,7 @@ import {
   GripVertical,
   Loader2,
   MessageSquareText,
+  Pin,
   Plus,
   RefreshCw,
   Search,
@@ -400,6 +402,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [activeLogPanel, setActiveLogPanel] = useState<LogPanelKey>("conversation");
   const [chatSessions, setChatSessions] = useState(detail.chatSessions);
   const [chatSidebarCollapsed, setChatSidebarCollapsed] = useState(false);
+  const [chatSessionQuery, setChatSessionQuery] = useState("");
   const [conversationRuns, setConversationRuns] = useState(detail.conversationRuns);
   const [securityManagement, setSecurityManagement] = useState(() =>
     mergeSecurityManagementWithCanonicalAutonomy(detail.securityManagement)
@@ -455,12 +458,9 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     useState<AutomatedTaskExecutionStatusFilter>("all");
   const [automatedExecutionChannel, setAutomatedExecutionChannel] =
     useState<AutomatedTaskExecutionChannelFilter>("all");
-  const [workspaceStorageConfig, setWorkspaceStorageConfig] = useState(detail.workspaceStorageConfig);
+  const [workspaceStorageConfig] = useState(detail.workspaceStorageConfig);
   const [selectedWorkspacePath, setSelectedWorkspacePath] = useState<string[]>(() => buildInitialWorkspacePath());
   const [workspaceStorageDialogOpen, setWorkspaceStorageDialogOpen] = useState(false);
-  const [workspaceQuotaDraft, setWorkspaceQuotaDraft] = useState(
-    detail.workspaceStorageConfig.workspaceQuotaGb === null ? "" : String(detail.workspaceStorageConfig.workspaceQuotaGb)
-  );
   const [clawMemoryEnabled, setClawMemoryEnabled] = useState(false);
   const [logsMenuOpen, setLogsMenuOpen] = useState(false);
   const [securityMenuOpen, setSecurityMenuOpen] = useState(false);
@@ -566,6 +566,21 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     });
   }
 
+  const filteredChatSessions = useMemo(() => {
+    const query = chatSessionQuery.trim().toLowerCase();
+
+    if (!query) {
+      return chatSessions;
+    }
+
+    return chatSessions.filter((session) =>
+      [session.title, session.source, session.preview, session.updatedAt]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(query))
+    );
+  }, [chatSessionQuery, chatSessions]);
+  const pinnedChatSessions = filteredChatSessions.slice(0, 1);
+  const recentChatSessions = filteredChatSessions.slice(1);
   const currentSession = chatSessions.find((session) => session.id === selectedChatId) ?? chatSessions[0];
   const matchedConversationRun = conversationRuns.find((session) => session.id === selectedChatId);
   const conversationSessionSummaries = buildConversationSessionSummaries(chatSessions, conversationRuns);
@@ -912,38 +927,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   }
 
   function handleOpenWorkspaceStorageDialog() {
-    setWorkspaceQuotaDraft(
-      workspaceStorageConfig.workspaceQuotaGb === null ? "" : String(workspaceStorageConfig.workspaceQuotaGb)
-    );
     setWorkspaceStorageDialogOpen(true);
-  }
-
-  function handleSaveWorkspaceStorageConfig() {
-    const trimmed = workspaceQuotaDraft.trim();
-    let nextQuota: number | null = null;
-
-    if (trimmed) {
-      const parsedQuota = Number.parseInt(trimmed, 10);
-
-      if (!Number.isFinite(parsedQuota) || parsedQuota <= 0) {
-        toast.error("请输入大于 0 的配额，或留空表示不限制。");
-        return;
-      }
-
-      nextQuota = parsedQuota;
-    }
-
-    if (nextQuota !== null && nextQuota > workspaceStorageConfig.volumeTotalGb) {
-      toast.error("工作空间配额不能超过存储卷总容量。");
-      return;
-    }
-
-    setWorkspaceStorageConfig((current) => ({
-      ...current,
-      workspaceQuotaGb: nextQuota,
-    }));
-    setWorkspaceStorageDialogOpen(false);
-    toast.success("工作空间存储配置已保存。");
   }
 
   function handleOpenSkillConfigDialog() {
@@ -1426,95 +1410,156 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-3 sm:px-6 sm:pt-4">
-          <TabsContent value="chat" className="mt-0 h-full min-h-0 overflow-hidden">
+        <div
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto",
+            activeSection === "chat" ? "px-0 pb-0 pt-0" : "px-4 pb-6 pt-3 sm:px-6 sm:pt-4"
+          )}
+        >
+          <TabsContent value="chat" className="m-0 h-full min-h-0 overflow-hidden">
             <div
               className={cn(
-                "grid h-full min-h-0 overflow-hidden border border-blue-100 bg-white",
-                chatSidebarCollapsed ? "xl:grid-cols-[72px_minmax(0,1fr)]" : "xl:grid-cols-[302px_minmax(0,1fr)]"
+                "grid h-full min-h-0 overflow-hidden bg-white",
+                chatSidebarCollapsed ? "xl:grid-cols-[64px_minmax(0,1fr)]" : "xl:grid-cols-[272px_minmax(0,1fr)]"
               )}
             >
               {chatSidebarCollapsed ? (
-                <div className="flex min-h-0 flex-col border-b border-blue-100 bg-[linear-gradient(180deg,rgba(245,249,255,0.98),rgba(238,245,255,0.98))] xl:border-b-0 xl:border-r">
-                  <div className="flex justify-center px-3 py-5">
+                <div className="flex min-h-0 flex-col border-b border-slate-200 bg-white xl:border-b-0 xl:border-r">
+                  <div className="flex justify-center px-2 py-3">
                     <button
                       type="button"
                       onClick={() => setChatSidebarCollapsed(false)}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-blue-100 bg-white text-slate-400 transition hover:border-blue-200 hover:text-slate-700"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                       aria-label="展开会话列表"
                       title="展开会话列表"
                     >
-                      <ChevronRight className="h-5 w-5" />
+                      <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
 
-                  <div className="flex flex-1 flex-col items-center gap-3 px-3 py-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-white text-blue-600">
+                  <div className="flex flex-1 flex-col items-center gap-3 px-2 py-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-md border border-blue-100 bg-blue-50 text-blue-600">
                       <MessageSquareText className="h-4 w-4" />
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="flex min-h-0 flex-col border-b border-blue-100 bg-[linear-gradient(180deg,rgba(249,251,255,0.98),rgba(243,248,255,0.98))] xl:border-b-0 xl:border-r">
-                  <div className="border-b border-blue-100 px-5 py-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-950">会话列表</h2>
+                <div className="flex min-h-0 flex-col border-b border-slate-200 bg-white xl:border-b-0 xl:border-r">
+                  <div className="border-b border-slate-100 px-3 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="relative min-w-0 flex-1">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          value={chatSessionQuery}
+                          onChange={(event) => setChatSessionQuery(event.target.value)}
+                          className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white"
+                          placeholder="搜索会话"
+                        />
                       </div>
-
                       <button
                         type="button"
                         onClick={() => setChatSidebarCollapsed(true)}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-blue-100 bg-white text-slate-400 transition hover:border-blue-200 hover:text-slate-700"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                         aria-label="收起会话列表"
                         title="收起会话列表"
                       >
-                        <ChevronLeft className="h-5 w-5" />
+                        <ChevronLeft className="h-4 w-4" />
                       </button>
                     </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="mt-5 h-11 w-full justify-center rounded-lg border-blue-200 bg-white text-[15px] font-medium text-slate-700 shadow-none transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-                      onClick={() => toast.info("新建会话入口待接入。")}
-                    >
-                      <Plus className="h-4 w-4" />
-                      新建会话
-                    </Button>
                   </div>
 
-                  <div className="min-h-0 flex-1 overflow-y-auto py-2">
-                    <div className="space-y-0.5">
-                      {chatSessions.map((session) => {
-                        const isActive = session.id === currentSession?.id;
-                        const itemCount = session.messages.length;
+                  <div className="min-h-0 flex-1 overflow-y-auto py-3">
+                    {filteredChatSessions.length > 0 ? (
+                      <div className="space-y-5">
+                        {pinnedChatSessions.length > 0 ? (
+                          <section>
+                            <div className="mb-2 flex items-center gap-1.5 px-4 text-xs font-medium text-slate-400">
+                              <Pin className="h-3.5 w-3.5" />
+                              <span>Pinned</span>
+                            </div>
+                            <div className="space-y-1 px-2">
+                              {pinnedChatSessions.map((session) => {
+                                const isActive = session.id === currentSession?.id;
+                                const itemCount = session.unreadCount > 0 ? session.unreadCount : session.messages.length;
 
-                        return (
-                          <button
-                            key={session.id}
-                            type="button"
-                            onClick={() => handleSelectChatSession(session.id)}
-                            className={cn(
-                              "relative w-full border-l-[3px] px-5 py-4 text-left transition-colors",
-                              isActive
-                                ? "border-l-blue-600 bg-[linear-gradient(90deg,rgba(239,246,255,0.96),rgba(255,255,255,0.98))]"
-                                : "border-l-transparent bg-transparent hover:bg-blue-50/70"
-                            )}
-                          >
-                            <div className="truncate text-[15px] font-semibold leading-7 text-slate-900">
-                              {session.preview || session.title}
+                                return (
+                                  <button
+                                    key={session.id}
+                                    type="button"
+                                    onClick={() => handleSelectChatSession(session.id)}
+                                    className={cn(
+                                      "group relative w-full rounded-md border px-3 py-2.5 text-left transition-colors",
+                                      isActive
+                                        ? "border-blue-200 bg-blue-50/70 shadow-[inset_3px_0_0_#2563eb]"
+                                        : "border-transparent bg-white hover:bg-slate-50"
+                                    )}
+                                  >
+                                    <div className="flex min-w-0 items-center gap-2.5">
+                                      <Check
+                                        className={cn(
+                                          "h-3.5 w-3.5 shrink-0",
+                                          isActive ? "text-blue-600" : "text-slate-400"
+                                        )}
+                                      />
+                                      <div className="min-w-0 flex-1 truncate text-sm font-semibold leading-6 text-slate-950">
+                                        {session.preview || session.title}
+                                      </div>
+                                      <span className="shrink-0 text-xs text-slate-400">{itemCount}</span>
+                                    </div>
+                                    <div className="mt-1 pl-6 text-xs text-slate-500">{session.updatedAt}</div>
+                                  </button>
+                                );
+                              })}
                             </div>
-                            <div className="mt-2 flex items-center justify-between gap-3 text-[12px] text-slate-500">
-                              <span>{session.updatedAt}</span>
-                              <span className="shrink-0 text-slate-400">
-                                {session.unreadCount > 0 ? session.unreadCount : itemCount}
-                              </span>
+                          </section>
+                        ) : null}
+
+                        {recentChatSessions.length > 0 ? (
+                          <section>
+                            <div className="mb-2 flex items-center justify-between px-4 text-xs font-medium text-slate-400">
+                              <span>Recents</span>
+                              <span>{recentChatSessions.length}</span>
                             </div>
-                          </button>
-                        );
-                      })}
-                    </div>
+                            <div className="space-y-1 px-2">
+                              {recentChatSessions.map((session) => {
+                                const isActive = session.id === currentSession?.id;
+                                const itemCount = session.unreadCount > 0 ? session.unreadCount : session.messages.length;
+
+                                return (
+                                  <button
+                                    key={session.id}
+                                    type="button"
+                                    onClick={() => handleSelectChatSession(session.id)}
+                                    className={cn(
+                                      "group relative w-full rounded-md border px-3 py-2.5 text-left transition-colors",
+                                      isActive
+                                        ? "border-blue-200 bg-blue-50/70 shadow-[inset_3px_0_0_#2563eb]"
+                                        : "border-transparent bg-white hover:bg-slate-50"
+                                    )}
+                                  >
+                                    <div className="flex min-w-0 items-center gap-2.5">
+                                      <span
+                                        className={cn(
+                                          "h-2.5 w-2.5 shrink-0 rounded-full border",
+                                          isActive ? "border-blue-600 bg-blue-600" : "border-slate-300 bg-white"
+                                        )}
+                                      />
+                                      <div className="min-w-0 flex-1 truncate text-sm font-medium leading-6 text-slate-900">
+                                        {session.preview || session.title}
+                                      </div>
+                                      <span className="shrink-0 text-xs text-slate-400">{itemCount}</span>
+                                    </div>
+                                    <div className="mt-1 pl-5 text-xs text-slate-500">{session.updatedAt}</div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="px-4 py-8 text-center text-sm text-slate-400">没有匹配的会话</div>
+                    )}
                   </div>
                 </div>
               )}
@@ -2764,7 +2809,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
         </div>
       </Tabs>
       <Dialog open={workspaceStorageDialogOpen} onOpenChange={setWorkspaceStorageDialogOpen}>
-        <DialogContent className="sm:max-w-[640px]">
+        <DialogContent className="sm:max-w-[920px]">
           <DialogHeader>
             <DialogTitle>存储配置</DialogTitle>
           </DialogHeader>
@@ -2804,25 +2849,9 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="workspace-quota" className="text-sm font-medium text-slate-800">
-                当前Claw工作空间配额
-              </Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="workspace-quota"
-                  type="number"
-                  min={1}
-                  value={workspaceQuotaDraft}
-                  onChange={(event) => setWorkspaceQuotaDraft(event.target.value)}
-                  placeholder="留空表示不限制"
-                  className="h-10 border-slate-200 bg-white shadow-none"
-                />
-                <div className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
-                  GB
-                </div>
-              </div>
-              <div className="text-xs leading-6 text-slate-500">
-                不设置时，工作空间上限默认继承整个存储卷；如设置，则不能超过存储卷总容量。
+              <Label className="text-sm font-medium text-slate-800">已使用/总空间</Label>
+              <div className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+                {workspaceStorageConfig.workspaceUsedGb}GB / {workspaceStorageConfig.volumeTotalGb}GB
               </div>
             </div>
           </div>
@@ -2831,8 +2860,8 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
             <Button type="button" variant="outline" onClick={() => setWorkspaceStorageDialogOpen(false)}>
               取消
             </Button>
-            <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" onClick={handleSaveWorkspaceStorageConfig}>
-              保存配置
+            <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" onClick={() => setWorkspaceStorageDialogOpen(false)}>
+              确定
             </Button>
           </DialogFooter>
         </DialogContent>

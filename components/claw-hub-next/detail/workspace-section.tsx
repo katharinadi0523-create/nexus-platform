@@ -8,13 +8,6 @@ import { type WorkspaceEntryItem, type WorkspaceFolderItem, type WorkspaceStorag
 import { cn } from "@/lib/utils";
 import { countWorkspaceItems, getWorkspaceTrail } from "./utils";
 
-function formatQuota(storageConfig: WorkspaceStorageConfig) {
-  if (storageConfig.workspaceQuotaGb === null) {
-    return "未设置";
-  }
-  return `${storageConfig.workspaceQuotaGb}GB`;
-}
-
 function findCurrentFolder(root: WorkspaceFolderItem, path: string[]) {
   let current = root;
 
@@ -29,18 +22,6 @@ function findCurrentFolder(root: WorkspaceFolderItem, path: string[]) {
   }
 
   return current;
-}
-
-function flattenStorageSummary(storageConfig: WorkspaceStorageConfig) {
-  return [
-    { label: "存储卷名称", value: storageConfig.volumeDisplayName },
-    { label: "存储源", value: storageConfig.volumeName },
-    { label: "分配容量", value: `${storageConfig.volumeTotalGb.toFixed(2)}GB` },
-    { label: "绑定项目", value: storageConfig.projectName ?? "--" },
-    { label: "存储卷描述", value: storageConfig.volumeDescription || "--" },
-    { label: "子目录", value: storageConfig.subdirectory },
-    { label: "所属组织", value: storageConfig.organizationName },
-  ];
 }
 
 function EntryIcon({ entry }: { entry: WorkspaceEntryItem }) {
@@ -75,7 +56,6 @@ export function ClawWorkspaceSection({
   );
   const allSelected = currentFolder.children.length > 0 && visibleSelectedEntryIds.length === currentFolder.children.length;
   const hasSelection = visibleSelectedEntryIds.length > 0;
-  const storageSummary = useMemo(() => flattenStorageSummary(storageConfig), [storageConfig]);
 
   function toggleEntry(entryId: string) {
     setSelectedEntryIds((current) =>
@@ -264,21 +244,6 @@ export function ClawWorkspaceSection({
               )}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      <div className="border border-slate-200 bg-white">
-        <div className="grid gap-x-10 gap-y-4 px-6 py-5 md:grid-cols-2">
-          {storageSummary.map((item) => (
-            <div key={item.label} className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
-              <div className="text-slate-500">{item.label}：</div>
-              <div className="text-slate-900">{item.value}</div>
-            </div>
-          ))}
-          <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
-            <div className="text-slate-500">当前配额：</div>
-            <div className="text-slate-900">{formatQuota(storageConfig)}</div>
-          </div>
         </div>
       </div>
     </div>

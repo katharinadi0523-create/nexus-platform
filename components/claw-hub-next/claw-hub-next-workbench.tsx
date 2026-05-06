@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { Bot, Plus, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -15,9 +18,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { clawHubList, type ClawHubListItem } from "@/lib/mock/claw-hub-next";
+import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 
 const CURRENT_OPERATOR = "RowanDI";
+const STORAGE_VOLUME_OPTIONS = [
+  { value: "s3://juicefs-vol-001", label: "GF专用存储卷" },
+  { value: "s3://juicefs-vol-002", label: "办公共享存储卷" },
+  { value: "s3://juicefs-vol-003", label: "研发测试存储卷" },
+];
+
+type CreateClawDraft = {
+  name: string;
+  description: string;
+  identityContent: string;
+  soulContent: string;
+  primaryModel: string;
+  storageVolume: string;
+};
 
 function PublishStatusBadge({ status }: { status: ClawHubListItem["publishStatus"] }) {
   const isPublished = status === "已发布";
@@ -49,6 +67,15 @@ export function ClawHubNextWorkbench() {
   const router = useRouter();
   const [keyword, setKeyword] = useState("");
   const [claws, setClaws] = useState<ClawHubListItem[]>(clawHubList);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createDraft, setCreateDraft] = useState<CreateClawDraft>({
+    name: "",
+    description: "",
+    identityContent: "",
+    soulContent: "",
+    primaryModel: PRESET_MODEL_IDS[0] ?? "Qwen3-32B",
+    storageVolume: "",
+  });
   const deferredKeyword = useDeferredValue(keyword);
 
   const filteredClaws = useMemo(() => {
@@ -108,6 +135,69 @@ export function ClawHubNextWorkbench() {
     toast.success(`已删除：${item.name}`);
   }
 
+  function handleOpenCreateDialog() {
+    setCreateDraft({
+      name: "",
+      description: "",
+      identityContent: "",
+      soulContent: "",
+      primaryModel: PRESET_MODEL_IDS[0] ?? "Qwen3-32B",
+      storageVolume: "",
+    });
+    setCreateDialogOpen(true);
+  }
+
+  function handleCreateDraftChange(field: keyof CreateClawDraft, value: string) {
+    setCreateDraft((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function handleCreateClaw() {
+    const name = createDraft.name.trim();
+    const description = createDraft.description.trim();
+
+    if (!name) {
+      toast.error("请填写 Claw 名称。");
+      return;
+    }
+
+    if (!description) {
+      toast.error("请填写 Claw 描述。");
+      return;
+    }
+
+    if (!createDraft.primaryModel) {
+      toast.error("请选择主模型。");
+      return;
+    }
+
+    if (!createDraft.storageVolume) {
+      toast.error("请选择存储卷。");
+      return;
+    }
+
+    const nextClaw: ClawHubListItem = {
+      id: `claw-${Date.now()}`,
+      name,
+      creator: CURRENT_OPERATOR,
+      type: "办公型",
+      scene: "通用办公",
+      owner: "默认项目组",
+      status: "设计中",
+      publishStatus: "未发布",
+      model: createDraft.primaryModel,
+      updatedAt: formatNow(),
+      updatedBy: CURRENT_OPERATOR,
+      summary: description || "新建 Claw，待补充描述。",
+    };
+
+    setClaws((current) => [nextClaw, ...current]);
+    setCreateDialogOpen(false);
+    toast.success(`已创建：${name}`);
+  }
+
   return (
     <div className="space-y-4 pb-10">
       <div className="space-y-1">
@@ -138,7 +228,7 @@ export function ClawHubNextWorkbench() {
 
                 <Button
                   className="h-10 rounded-[6px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700"
-                  onClick={() => toast.success("已预留创建 Claw 的入口。")}
+                  onClick={handleOpenCreateDialog}
                 >
                   <Plus className="h-4 w-4" />
                   创建Claw
@@ -242,6 +332,115 @@ export function ClawHubNextWorkbench() {
               </Table>
             </section>
       </div>
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="sm:max-w-[880px]">
+          <DialogHeader>
+            <DialogTitle>新建Claw</DialogTitle>
+          </DialogHeader>
+
+          <div className="py-2">
+            <section className="space-y-4">
+              <div className="text-base font-semibold text-slate-950">基本信息</div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="create-claw-name">
+                    <span className="text-rose-500">*</span>名称
+                  </Label>
+                  <Input
+                    id="create-claw-name"
+                    value={createDraft.name}
+                    onChange={(event) => handleCreateDraftChange("name", event.target.value)}
+                    placeholder="例如：办公审批虾、运维巡检虾"
+                    className="h-10 border-slate-200 bg-white shadow-none"
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="create-claw-description">
+                    <span className="text-rose-500">*</span>描述
+                  </Label>
+                  <textarea
+                    id="create-claw-description"
+                    value={createDraft.description}
+                    onChange={(event) => handleCreateDraftChange("description", event.target.value)}
+                    placeholder="简要说明这个 Claw 负责什么场景、解决什么问题。"
+                    className="min-h-[92px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-none outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <div className="my-6 border-t border-slate-200" />
+
+            <section className="space-y-4">
+              <div className="text-base font-semibold text-slate-950">人格设定</div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="create-claw-identity">IDENTITY.md</Label>
+                  <textarea
+                    id="create-claw-identity"
+                    value={createDraft.identityContent}
+                    onChange={(event) => handleCreateDraftChange("identityContent", event.target.value)}
+                    placeholder="选填，例如：定义 Claw 的角色、职责边界和服务对象。"
+                    className="min-h-[180px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-none outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="create-claw-soul">SOUL.md</Label>
+                  <textarea
+                    id="create-claw-soul"
+                    value={createDraft.soulContent}
+                    onChange={(event) => handleCreateDraftChange("soulContent", event.target.value)}
+                    placeholder="选填，例如：定义 Claw 的语气、风格和处理偏好。"
+                    className="min-h-[180px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-none outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <div className="my-6 border-t border-slate-200" />
+
+            <section className="space-y-4">
+              <div className="text-base font-semibold text-slate-950">运行配置</div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>
+                    <span className="text-rose-500">*</span>主模型
+                  </Label>
+                  <Select
+                    value={createDraft.primaryModel}
+                    onValueChange={(value) => handleCreateDraftChange("primaryModel", value)}
+                    options={PRESET_MODEL_IDS.map((modelId) => ({ value: modelId, label: modelId }))}
+                    placeholder="选择该 Claw 默认使用的主模型"
+                    className="h-10 border-slate-200 bg-white shadow-none focus:ring-0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>
+                    <span className="text-rose-500">*</span>存储卷
+                  </Label>
+                  <Select
+                    value={createDraft.storageVolume}
+                    onValueChange={(value) => handleCreateDraftChange("storageVolume", value)}
+                    options={STORAGE_VOLUME_OPTIONS}
+                    placeholder="选择该 Claw 工作空间绑定的存储卷"
+                    className="h-10 border-slate-200 bg-white shadow-none focus:ring-0"
+                  />
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
+              取消
+            </Button>
+            <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" onClick={handleCreateClaw}>
+              创建Claw
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

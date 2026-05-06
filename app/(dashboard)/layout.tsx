@@ -54,16 +54,16 @@ const menuGroups: MenuGroup[] = [
         href: "/app-marketplace",
       },
       {
-        key: "ToolMarketplace",
-        label: "插件广场",
-        icon: Puzzle,
-        href: "/tool-marketplace",
-      },
-      {
         key: "SkillsPlaza",
         label: "技能广场",
         icon: Sparkles,
         href: "/skills-hub",
+      },
+      {
+        key: "ToolMarketplace",
+        label: "插件广场",
+        icon: Puzzle,
+        href: "/tool-marketplace",
       },
     ],
   },
@@ -144,7 +144,7 @@ const menuGroups: MenuGroup[] = [
         key: "ServiceMonitoring",
         label: "服务监控",
         icon: Activity,
-        disabled: true,
+        href: "/service-monitoring",
       },
       {
         key: "SpaceOperations",
@@ -303,7 +303,8 @@ export default function DashboardLayout({
           {/* 页面内容滚动区：广场页用渐变；skills 管理用白底 */}
           <div
             className={cn(
-              "flex-1 p-6",
+              "flex-1",
+              isClawDetailPage ? "px-6 pt-6 pb-0" : "p-6",
               isSkillsPlazaPage &&
                 "bg-[linear-gradient(180deg,#f2f7fd_0%,#e8f0fb_38%,#e4edf8_100%)]",
               (isSkillsManagementPage || isSpaceOperationsPage) && "bg-white",

@@ -44,6 +44,7 @@ export function GlobalHeader() {
       pathname.startsWith("/skills-management") ||
       pathname.startsWith("/mcp-management") ||
       pathname.startsWith("/openapi-management") ||
+      pathname.startsWith("/service-monitoring") ||
       pathname.startsWith("/tool-marketplace") ||
       pathname.startsWith("/workflow") ||
       pathname.startsWith("/knowledge-base") ||
