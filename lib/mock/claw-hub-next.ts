@@ -87,10 +87,12 @@ export interface ClawCapabilityConfig {
 }
 
 export type DatabaseEngineType = "MySQL" | "Neo4j";
+export type KnowledgeBaseLevel = "基础" | "高级";
 
 export interface KnowledgeBaseRow {
   id: string;
   name: string;
+  type: KnowledgeBaseLevel;
   description: string;
   creator: string;
   updatedAt: string;
@@ -111,6 +113,7 @@ export interface OntologyObjectRow {
   id: string;
   name: string;
   scene: string;
+  description: string;
   creator: string;
   updatedAt: string;
   enabled: boolean;
@@ -141,6 +144,7 @@ export function buildKnowledgeAssetsFromLegacy(
     ...knowledge.tenant.map((item) => ({
       id: item.id,
       name: item.name,
+      type: "基础" as const,
       description: item.description,
       creator: tenantCreator,
       updatedAt: item.updatedAt,
@@ -149,6 +153,7 @@ export function buildKnowledgeAssetsFromLegacy(
     ...knowledge.claw.map((item) => ({
       id: item.id,
       name: item.name,
+      type: "高级" as const,
       description: item.description,
       creator: defaultCreator,
       updatedAt: item.updatedAt,
@@ -183,6 +188,7 @@ export function buildKnowledgeAssetsFromLegacy(
         id: "onto-demo-1",
         name: "客户本体",
         scene: "销售协同",
+        description: "客户、商机与合同对象的核心属性和关系定义。",
         creator: defaultCreator,
         updatedAt: "2026-04-02 11:20",
         enabled: true,
@@ -497,6 +503,8 @@ export interface ClawAutomatedTaskItem {
   id: string;
   name: string;
   description: string;
+  /** 创建该自动化任务的平台用户展示名 */
+  createdBy: string;
   /** 触发方式与时间，如「每天 09:00」「每 6 小时」 */
   triggerSummary: string;
   triggerKind: "定时执行" | "间隔执行" | "单次执行";
@@ -534,6 +542,7 @@ export const CLAW_AUTOMATED_TASKS_SAMPLE: ClawAutomatedTaskItem[] = [
     id: "auto-task-daily-sales",
     name: "每日销售简报",
     description: "汇总 CRM 新增线索、跟进状态与本周重点客户动态。",
+    createdBy: "林越",
     triggerSummary: "每天 09:00",
     triggerKind: "定时执行",
     deliveryChannel: "飞书",
@@ -547,6 +556,7 @@ export const CLAW_AUTOMATED_TASKS_SAMPLE: ClawAutomatedTaskItem[] = [
     id: "auto-task-weekly-archive",
     name: "周报归档",
     description: "将本周会话与产出摘要写入知识库归档目录。",
+    createdBy: "周琪",
     triggerSummary: "每周一 10:00",
     triggerKind: "定时执行",
     deliveryChannel: "蓝信",
@@ -560,6 +570,7 @@ export const CLAW_AUTOMATED_TASKS_SAMPLE: ClawAutomatedTaskItem[] = [
     id: "auto-task-interval-sync",
     name: "线索同步巡检",
     description: "周期性拉取外部系统变更并比对本地缓存。",
+    createdBy: "林越",
     triggerSummary: "每 6 小时",
     triggerKind: "间隔执行",
     deliveryChannel: "钉钉",
@@ -573,6 +584,7 @@ export const CLAW_AUTOMATED_TASKS_SAMPLE: ClawAutomatedTaskItem[] = [
     id: "auto-task-once-migration",
     name: "一次性数据迁移校验",
     description: "在指定时间触发全量校验并生成差异报告。",
+    createdBy: "何帆",
     triggerSummary: "单次: 2026-04-20 14:00",
     triggerKind: "单次执行",
     deliveryChannel: "企微",
@@ -586,6 +598,7 @@ export const CLAW_AUTOMATED_TASKS_SAMPLE: ClawAutomatedTaskItem[] = [
     id: "auto-task-never",
     name: "客户回访提醒（草稿）",
     description: "按客户分层生成待回访清单（尚未启用执行）。",
+    createdBy: "周琪",
     triggerSummary: "每天 18:00",
     triggerKind: "定时执行",
     deliveryChannel: "QQ",
@@ -757,10 +770,27 @@ export interface ConversationRunTurnItem {
   auditRecords: ConversationAuditItem[];
 }
 
+/** 会话日志中的使用渠道（预览调试 / Agent 广场 / API） */
+export type ConversationUsageChannel = "预览与调试" | "Agent广场" | "API调用";
+
+export const CONVERSATION_USAGE_CHANNELS: ConversationUsageChannel[] = [
+  "预览与调试",
+  "Agent广场",
+  "API调用",
+];
+
+export function getConversationUsageChannelForSeed(seed: string): ConversationUsageChannel {
+  let hash = 0;
+  for (const char of seed) {
+    hash = (hash + char.charCodeAt(0)) % CONVERSATION_USAGE_CHANNELS.length;
+  }
+  return CONVERSATION_USAGE_CHANNELS[hash]!;
+}
+
 export interface ConversationRunItem {
   id: string;
   title: string;
-  channel: string;
+  channel: ConversationUsageChannel;
   userIdentity: string;
   sessionId: string;
   traceId: string;
@@ -1660,7 +1690,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "ops-alert-briefing",
         title: "API 网关错误率排查",
-        channel: "飞书群聊",
+        channel: "API调用",
         userIdentity: "值班工程师 王超",
         sessionId: "sess-ops-20260329-1018",
         traceId: "trace-ops-gateway-001",
@@ -1735,7 +1765,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "ops-report-sync",
         title: "夜间巡检摘要同步",
-        channel: "企业微信",
+        channel: "Agent广场",
         userIdentity: "SRE 负责人 李涛",
         sessionId: "sess-ops-20260329-0815",
         traceId: "trace-ops-report-014",
@@ -1785,7 +1815,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "ops-ticket-followup",
         title: "高优工单催办",
-        channel: "钉钉",
+        channel: "预览与调试",
         userIdentity: "工单系统机器人",
         sessionId: "sess-ops-20260328-2040",
         traceId: "trace-ops-ticket-092",
@@ -2135,6 +2165,32 @@ const detailMap: Record<string, ClawDetailData> = {
             time: "09:08",
             content: "可以，我会按补件状态分组后生成提醒文案，并只向相关员工单独发送。",
             auditTurnId: "office-shrimp-turn-reminder-1",
+          },
+        ],
+      },
+      {
+        id: "office-shrimp-debug",
+        title: "报销流程调试",
+        source: "预览与调试",
+        preview: "在调试面板试跑验票工作流，检查字段映射是否正确。",
+        updatedAt: "昨天 16:42",
+        unreadCount: 0,
+        messages: [
+          {
+            id: "office-shrimp-debug-1",
+            role: "user",
+            sender: "调试用户",
+            time: "16:40",
+            content: "用样例发票试跑验票工作流，检查 OCR 字段映射和合规规则是否命中。",
+          },
+          {
+            id: "office-shrimp-debug-2",
+            role: "assistant",
+            sender: "办公虾",
+            time: "16:42",
+            content:
+              "调试运行已完成：3 张样例票据全部通过结构化与合规校验，字段映射结果与预期一致，可继续联调 ERP 草稿写入节点。",
+            auditTurnId: "office-shrimp-turn-debug-1",
           },
         ],
       },
@@ -2806,7 +2862,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "office-shrimp-expense",
         title: "差旅报销处理",
-        channel: "统一入口 / 企业虾",
+        channel: "Agent广场",
         userIdentity: "员工 李然",
         sessionId: "office-shrimp-session-001",
         traceId: "trace-office-shrimp-001",
@@ -2981,7 +3037,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "office-shrimp-reminder",
         title: "报销补件提醒",
-        channel: "行政服务群",
+        channel: "API调用",
         userIdentity: "行政同学 周宁",
         sessionId: "office-shrimp-session-002",
         traceId: "trace-office-shrimp-101",
@@ -3008,6 +3064,54 @@ const detailMap: Record<string, ClawDetailData> = {
                 durationMs: 260,
                 status: "成功",
                 traceId: "trace-office-shrimp-101",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "office-shrimp-debug",
+        title: "报销流程调试",
+        channel: "预览与调试",
+        userIdentity: "调试用户",
+        sessionId: "office-shrimp-session-003",
+        traceId: "trace-office-shrimp-debug-001",
+        startedAt: "2026-04-05 16:40:18",
+        updatedAt: "2026-04-05 16:42:05",
+        turns: [
+          {
+            id: "office-shrimp-turn-debug-1",
+            turnNumber: 1,
+            occurredAt: "16:40",
+            userInput: "用样例发票试跑验票工作流，检查 OCR 字段映射和合规规则是否命中。",
+            assistantOutput:
+              "调试运行已完成：3 张样例票据全部通过结构化与合规校验，字段映射结果与预期一致，可继续联调 ERP 草稿写入节点。",
+            traceId: "trace-office-shrimp-debug-001",
+            auditRecords: [
+              {
+                id: "office-audit-debug-1",
+                turnId: "office-shrimp-turn-debug-1",
+                type: "工作流节点",
+                targetName: "验票工作流 / OCR 识别发票（调试）",
+                inputSummary:
+                  '{\n  "node": "ocr.ingest",\n  "mode": "debug",\n  "assets": ["sample-flight.pdf", "sample-hotel.jpg"],\n  "dryRun": true\n}',
+                outputSummary:
+                  '{\n  "documents": 2,\n  "fieldsExtracted": ["amount", "tax", "sellerName"],\n  "avgConfidence": 0.93\n}',
+                durationMs: 410,
+                status: "成功",
+                traceId: "trace-office-shrimp-debug-001",
+              },
+              {
+                id: "office-audit-debug-2",
+                turnId: "office-shrimp-turn-debug-1",
+                type: "工作流节点",
+                targetName: "验票工作流 / 合规规则校验（调试）",
+                inputSummary:
+                  '{\n  "node": "policy.evaluate",\n  "policyPack": "travel-2026-Q2",\n  "mode": "debug"\n}',
+                outputSummary: '{\n  "violations": [],\n  "mappingCheck": "passed",\n  "evaluatedAt": "2026-04-05T08:41:52Z"\n}',
+                durationMs: 180,
+                status: "成功",
+                traceId: "trace-office-shrimp-debug-001",
               },
             ],
           },
@@ -3683,7 +3787,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "intel-shrimp-weekly-brief",
         title: "情报周报生成",
-        channel: "统一入口 / 企业虾",
+        channel: "Agent广场",
         userIdentity: "战略分析师 周衡",
         sessionId: "intel-shrimp-session-001",
         traceId: "trace-intel-shrimp-001",
@@ -3882,7 +3986,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "intel-shrimp-daily-watch",
         title: "高优动态同步",
-        channel: "市场情报群",
+        channel: "API调用",
         userIdentity: "市场情报运营",
         sessionId: "intel-shrimp-session-002",
         traceId: "trace-intel-shrimp-101",
@@ -4470,7 +4574,7 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
       {
         id: `${listItem.id}-chat-main`,
         title: `${listItem.name} 默认会话`,
-        channel: listItem.scene,
+        channel: getConversationUsageChannelForSeed(listItem.id),
         userIdentity: "默认交互对象",
         sessionId: `${listItem.id}-session-001`,
         traceId: `${listItem.id}-trace-001`,
@@ -4604,13 +4708,33 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
   };
 }
 
-export function getClawDetail(clawId: string) {
+export function createFallbackClawListItem(
+  clawId: string,
+  input: Partial<Pick<ClawHubListItem, "name" | "creator" | "model" | "summary" | "updatedAt" | "updatedBy">> = {}
+): ClawHubListItem {
+  return {
+    id: clawId,
+    name: input.name?.trim() || "新建 Claw",
+    creator: input.creator?.trim() || "RowanDI",
+    type: "办公型",
+    scene: "通用办公",
+    owner: "默认项目组",
+    status: "设计中",
+    publishStatus: "未发布",
+    model: input.model?.trim() || "Qwen3-32B",
+    updatedAt: input.updatedAt?.trim() || "刚刚",
+    updatedBy: input.updatedBy?.trim() || input.creator?.trim() || "RowanDI",
+    summary: input.summary?.trim() || "新建 Claw，待补充描述。",
+  };
+}
+
+export function getClawDetail(clawId: string, fallbackListItem?: ClawHubListItem) {
   const fromMap = detailMap[clawId];
   if (fromMap) {
     return attachKnowledgeAssetsIfMissing(fromMap);
   }
 
-  const listItem = clawHubList.find((item) => item.id === clawId);
+  const listItem = clawHubList.find((item) => item.id === clawId) ?? fallbackListItem;
   if (!listItem) {
     return null;
   }

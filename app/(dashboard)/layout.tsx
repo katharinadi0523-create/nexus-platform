@@ -275,6 +275,15 @@ export default function DashboardLayout({
     pathname.startsWith("/skills-hub") || pathname === "/skills";
   const isSkillsManagementPage = pathname.startsWith("/skills-management");
 
+  if (isClawDetailPage) {
+    return (
+      <>
+        <main className="h-screen min-h-0 overflow-hidden bg-slate-50">{children}</main>
+        <Toaster position="top-right" />
+      </>
+    );
+  }
+
   return (
     <>
       <GlobalHeader />

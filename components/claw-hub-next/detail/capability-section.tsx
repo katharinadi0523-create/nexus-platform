@@ -17,7 +17,6 @@ import type {
 } from "@/lib/mock/claw-hub-next";
 import { cn } from "@/lib/utils";
 import {
-  PLUGIN_VIEW_SCOPE_LABELS,
   SKILL_VIEW_SCOPE_LABELS,
   type CapabilityPanelKey,
   type ToolSkillViewScope,
@@ -42,11 +41,34 @@ type CapabilitySectionProps = {
   onDeleteSkill: (scope: CapabilityScope, id: string) => void;
 };
 
+type ToolListRow = {
+  item: CapabilityToolItem;
+  scope: CapabilityScope;
+};
+
+type ToolKindTabKey = CapabilityToolKind;
+type ToolKindTab = {
+  key: ToolKindTabKey;
+  label: string;
+  count: number;
+};
+type ToolOriginFilter = "all" | "builtin" | "claw";
+
+const TOOL_KIND_ORDER: CapabilityToolKind[] = ["plugin", "mcp", "ontology_action", "workflow"];
+const TOOL_KIND_META: Record<CapabilityToolKind, { Icon: typeof Network; label: string }> = {
+  mcp: { Icon: Network, label: "MCP" },
+  plugin: { Icon: Puzzle, label: "OpenAPI" },
+  workflow: { Icon: Workflow, label: "工作流" },
+  ontology_action: { Icon: Layers, label: "本体动作" },
+};
+
+function getToolOrigin(scope: CapabilityScope): Exclude<ToolOriginFilter, "all"> {
+  return scope === "claw" ? "claw" : "builtin";
+}
+
 export function ClawCapabilitySection({
   panel,
   capabilityConfig,
-  toolScope,
-  onToolScopeChange,
   skillScope,
   onSkillScopeChange,
   onOpenToolConfigDialog,
@@ -60,30 +82,52 @@ export function ClawCapabilitySection({
 }: CapabilitySectionProps) {
   const toolTotalCount = Object.values(capabilityConfig.tools).reduce((total, items) => total + items.length, 0);
   const skillTotalCount = Object.values(capabilityConfig.skills).reduce((total, items) => total + items.length, 0);
-  const toolPresetCount =
-    capabilityConfig.tools.platform.length + capabilityConfig.tools.tenant.length;
   const skillPresetCount =
     capabilityConfig.skills.platform.length + capabilityConfig.skills.tenant.length;
 
   const [toolSearchQuery, setToolSearchQuery] = useState("");
-  const filteredTools = useMemo(() => {
+  const [activeToolKind, setActiveToolKind] = useState<ToolKindTabKey>("plugin");
+  const [toolOriginFilter, setToolOriginFilter] = useState<ToolOriginFilter>("all");
+  const toolRows = useMemo<ToolListRow[]>(
+    () => [
+      ...capabilityConfig.tools.platform.map((item) => ({ item, scope: "platform" as const })),
+      ...capabilityConfig.tools.tenant.map((item) => ({ item, scope: "tenant" as const })),
+      ...capabilityConfig.tools.claw.map((item) => ({ item, scope: "claw" as const })),
+    ],
+    [capabilityConfig.tools]
+  );
+  const toolKindTabs = useMemo<ToolKindTab[]>(() => {
+    const counts = new Map<CapabilityToolKind, number>();
+    toolRows.forEach(({ item }) => {
+      const kind = resolveCapabilityToolKind(item);
+      counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    });
+
+    return TOOL_KIND_ORDER.map((kind) => ({
+      key: kind,
+      label: TOOL_KIND_META[kind].label,
+      count: counts.get(kind) ?? 0,
+    }));
+  }, [toolRows]);
+  const filteredToolRows = useMemo(() => {
     const q = toolSearchQuery.trim().toLowerCase();
-    const match = (item: CapabilityToolItem) => {
+    return toolRows.filter(({ item, scope }) => {
+      if (resolveCapabilityToolKind(item) !== activeToolKind) {
+        return false;
+      }
+      if (toolOriginFilter !== "all" && getToolOrigin(scope) !== toolOriginFilter) {
+        return false;
+      }
       if (!q) {
         return true;
       }
-      return item.name.toLowerCase().includes(q);
-    };
-    return {
-      platform: capabilityConfig.tools.platform.filter(match),
-      tenant: capabilityConfig.tools.tenant.filter(match),
-      claw: capabilityConfig.tools.claw.filter(match),
-    };
-  }, [capabilityConfig.tools, toolSearchQuery]);
+      return item.name.toLowerCase().includes(q) || item.description.toLowerCase().includes(q);
+    });
+  }, [activeToolKind, toolOriginFilter, toolRows, toolSearchQuery]);
 
-  const toolSearchMatchTotal =
-    filteredTools.platform.length + filteredTools.tenant.length + filteredTools.claw.length;
-  const filteredPresetToolCount = filteredTools.platform.length + filteredTools.tenant.length;
+  const toolSearchMatchTotal = filteredToolRows.length;
+  const hasActiveToolFilter =
+    Boolean(toolSearchQuery.trim()) || toolOriginFilter !== "all";
 
   const [skillSearchQuery, setSkillSearchQuery] = useState("");
   const filteredSkills = useMemo(() => {
@@ -112,7 +156,7 @@ export function ClawCapabilitySection({
           title="插件"
           totalCount={toolTotalCount}
           countLabel={
-            toolSearchQuery.trim()
+            hasActiveToolFilter
               ? `匹配 ${toolSearchMatchTotal} / ${toolTotalCount} 项`
               : undefined
           }
@@ -126,10 +170,22 @@ export function ClawCapabilitySection({
                 <Input
                   value={toolSearchQuery}
                   onChange={(event) => setToolSearchQuery(event.target.value)}
-                  placeholder="输入插件名称检索"
+                  placeholder="输入插件名称或描述检索"
                   className="h-9 w-full border-slate-200 bg-white pl-9 shadow-none"
                   aria-label="按名称检索插件"
                 />
+              </div>
+              <div className="w-full sm:w-[176px]">
+                <select
+                  value={toolOriginFilter}
+                  onChange={(event) => setToolOriginFilter(event.target.value as ToolOriginFilter)}
+                  className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-300"
+                  aria-label="按是否内置筛选插件"
+                >
+                  <option value="all">全部来源</option>
+                  <option value="builtin">内置</option>
+                  <option value="claw">Claw配置</option>
+                </select>
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
                 {onSetAllToolsEnabled ? (
@@ -157,86 +213,35 @@ export function ClawCapabilitySection({
             </div>
           }
         >
-          <PresetClawViewTabs
-            scope={toolScope}
-            presetCount={toolPresetCount}
-            clawCount={capabilityConfig.tools.claw.length}
-            onChange={onToolScopeChange}
-            prefix="tools"
-            labels={PLUGIN_VIEW_SCOPE_LABELS}
-          />
+          <ToolKindTabs tabs={toolKindTabs} activeKind={activeToolKind} onChange={setActiveToolKind} />
 
-          {toolScope === "preset" ? (
-            toolPresetCount > 0 ? (
-              filteredPresetToolCount > 0 ? (
-                <CapabilityTable>
-                  <Table className="min-w-[960px]">
-                    <TableHeader className="bg-slate-50">
-                      <TableRow className="border-slate-200 hover:bg-slate-50">
-                        <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">名称</TableHead>
-                        <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">类型</TableHead>
-                        <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">描述</TableHead>
-                        <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">操作</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredTools.platform.map((item) => (
-                        <ToolRow
-                          key={`platform-${item.id}`}
-                          item={item}
-                          scope="platform"
-                          onToggle={onToggleTool}
-                          onDelete={onDeleteTool}
-                        />
-                      ))}
-                      {filteredTools.tenant.map((item) => (
-                        <ToolRow
-                          key={`tenant-${item.id}`}
-                          item={item}
-                          scope="tenant"
-                          onToggle={onToggleTool}
-                          onDelete={onDeleteTool}
-                        />
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CapabilityTable>
-              ) : (
-                <EmptyState label="没有匹配名称的插件。" />
-              )
-            ) : (
-              <EmptyState label="当前分类下还没有插件。" />
-            )
-          ) : capabilityConfig.tools.claw.length ? (
-            filteredTools.claw.length > 0 ? (
-              <CapabilityTable>
-                <Table className="min-w-[960px]">
-                  <TableHeader className="bg-slate-50">
-                    <TableRow className="border-slate-200 hover:bg-slate-50">
-                      <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">名称</TableHead>
-                      <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">类型</TableHead>
-                      <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">描述</TableHead>
-                      <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">操作</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTools.claw.map((item) => (
-                      <ToolRow
-                        key={item.id}
-                        item={item}
-                        scope="claw"
-                        onToggle={onToggleTool}
-                        onDelete={onDeleteTool}
-                      />
-                    ))}
-                  </TableBody>
-                </Table>
-              </CapabilityTable>
-            ) : (
-              <EmptyState label="没有匹配名称的插件。" />
-            )
+          {filteredToolRows.length > 0 ? (
+            <CapabilityTable>
+              <Table className="min-w-[1040px]">
+                <TableHeader className="bg-slate-50">
+                  <TableRow className="border-slate-200 hover:bg-slate-50">
+                    <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">名称</TableHead>
+                    <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">类型</TableHead>
+                    <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">来源</TableHead>
+                    <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">描述</TableHead>
+                    <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">操作</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredToolRows.map(({ item, scope }) => (
+                    <ToolRow
+                      key={`${scope}-${item.id}`}
+                      item={item}
+                      scope={scope}
+                      onToggle={onToggleTool}
+                      onDelete={onDeleteTool}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </CapabilityTable>
           ) : (
-            <EmptyState label="当前分类下还没有插件。" />
+            <EmptyState label={toolTotalCount === 0 ? "当前还没有插件。" : "没有匹配条件的插件。"} />
           )}
         </CapabilityPanelShell>
       ) : null}
@@ -485,6 +490,37 @@ function PresetClawViewTabs({
   );
 }
 
+function ToolKindTabs({
+  tabs,
+  activeKind,
+  onChange,
+}: {
+  tabs: ToolKindTab[];
+  activeKind: ToolKindTabKey;
+  onChange: (next: ToolKindTabKey) => void;
+}) {
+  return (
+    <div className="overflow-x-auto border-b border-slate-200">
+      <div className="flex min-w-max items-center gap-5">
+        {tabs.map((tab) => (
+          <button
+            key={`tools-kind-${tab.key}`}
+            type="button"
+            onClick={() => onChange(tab.key)}
+            className={cn(
+              "border-b-2 border-transparent px-1 py-3 text-sm font-medium whitespace-nowrap transition-colors",
+              activeKind === tab.key ? "border-blue-600 text-blue-600" : "text-slate-500 hover:text-slate-900"
+            )}
+          >
+            {tab.label}
+            <span className="ml-2 text-xs text-slate-400">{tab.count}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({ label }: { label: string }) {
   return (
     <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-400">
@@ -522,18 +558,27 @@ function resolveCapabilityToolKind(item: CapabilityToolItem): CapabilityToolKind
 }
 
 function CapabilityToolKindCell({ kind }: { kind: CapabilityToolKind }) {
-  const config = {
-    mcp: { Icon: Network, label: "MCP" },
-    plugin: { Icon: Puzzle, label: "插件" },
-    workflow: { Icon: Workflow, label: "工作流" },
-    ontology_action: { Icon: Layers, label: "本体动作" },
-  }[kind];
+  const config = TOOL_KIND_META[kind];
   const { Icon, label } = config;
   return (
     <div className="flex items-center gap-2">
       <Icon className="h-4 w-4 shrink-0 text-slate-700" aria-hidden />
       <span className="text-sm text-slate-800">{label}</span>
     </div>
+  );
+}
+
+function ToolOriginBadge({ scope }: { scope: CapabilityScope }) {
+  const isBuiltin = getToolOrigin(scope) === "builtin";
+  return (
+    <Badge
+      className={cn(
+        "border px-2 py-0.5 text-xs font-medium",
+        isBuiltin ? "border-slate-200 bg-slate-50 text-slate-600" : "border-blue-100 bg-blue-50 text-blue-700"
+      )}
+    >
+      {isBuiltin ? "内置" : "Claw配置"}
+    </Badge>
   );
 }
 
@@ -557,6 +602,9 @@ function ToolRow({
       </TableCell>
       <TableCell className="px-4 py-3 align-middle">
         <CapabilityToolKindCell kind={kind} />
+      </TableCell>
+      <TableCell className="px-4 py-3 align-middle">
+        <ToolOriginBadge scope={scope} />
       </TableCell>
       <TableCell className="max-w-[480px] whitespace-normal px-4 py-3 align-middle text-sm leading-6 text-slate-600">
         {item.description}

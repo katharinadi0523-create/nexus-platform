@@ -6,6 +6,21 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.watchOptions = {
+        ...config.watchOptions,
+        ignored: [
+          "**/.git/**",
+          "**/.next/**",
+          "**/.vercel/**",
+          "**/node_modules/**",
+        ],
+      };
+    }
+
+    return config;
+  },
 };
 
 export default nextConfig;

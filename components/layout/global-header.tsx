@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HelpCircle, AlertCircle, User } from "lucide-react";
+import { HelpCircle, AlertCircle } from "lucide-react";
+import { GlobalHeaderUserMenu } from "@/components/layout/global-header-user-menu";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -138,9 +139,7 @@ export function GlobalHeader() {
           <button className="p-2 text-gray-600 hover:text-gray-900 transition-colors" title="帮助手册">
             <HelpCircle className="h-5 w-5" />
           </button>
-          <button className="flex items-center justify-center h-8 w-8 rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors" title="用户">
-            <User className="h-4 w-4" />
-          </button>
+          <GlobalHeaderUserMenu />
         </div>
       </div>
     </header>

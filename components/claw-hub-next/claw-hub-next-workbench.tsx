@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Plus, RefreshCw, Search } from "lucide-react";
+import { ArrowUpRight, Bot, Plus, RefreshCw, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,6 +22,8 @@ import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 
 const CURRENT_OPERATOR = "RowanDI";
+const PERSONAL_CLAW_URL = "https://claw-dialogue.vercel.app/";
+const STATIC_CLAW_IDS = new Set(clawHubList.map((item) => item.id));
 const STORAGE_VOLUME_OPTIONS = [
   { value: "s3://juicefs-vol-001", label: "GF专用存储卷" },
   { value: "s3://juicefs-vol-002", label: "办公共享存储卷" },
@@ -63,6 +65,25 @@ function formatNow(date = new Date()) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function buildClawDetailUrl(item: ClawHubListItem) {
+  const pathname = `/claw-hub-next/claws/${item.id}`;
+
+  if (STATIC_CLAW_IDS.has(item.id)) {
+    return pathname;
+  }
+
+  const params = new URLSearchParams({
+    name: item.name,
+    creator: item.creator,
+    model: item.model,
+    summary: item.summary,
+    updatedAt: item.updatedAt,
+    updatedBy: item.updatedBy,
+  });
+
+  return `${pathname}?${params.toString()}`;
+}
+
 export function ClawHubNextWorkbench() {
   const router = useRouter();
   const [keyword, setKeyword] = useState("");
@@ -95,12 +116,12 @@ export function ClawHubNextWorkbench() {
 
   useEffect(() => {
     filteredClaws.forEach((item) => {
-      router.prefetch(`/claw-hub-next/claws/${item.id}`);
+      router.prefetch(buildClawDetailUrl(item));
     });
   }, [filteredClaws, router]);
 
   function handleOpenConfig(item: ClawHubListItem) {
-    router.push(`/claw-hub-next/claws/${item.id}`);
+    router.push(buildClawDetailUrl(item));
   }
 
   function handleRefresh() {
@@ -200,8 +221,18 @@ export function ClawHubNextWorkbench() {
 
   return (
     <div className="space-y-4 pb-10">
-      <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-[30px] font-semibold leading-none text-slate-950">Claw管理</h1>
+        <a
+          href={PERSONAL_CLAW_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-9 items-center gap-2 rounded-full border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 text-sm font-medium text-blue-700 shadow-[0_4px_14px_-8px_rgba(37,99,235,0.45)] transition-colors hover:border-blue-300 hover:from-blue-100 hover:to-indigo-100 hover:text-blue-800"
+        >
+          <Sparkles className="h-4 w-4 shrink-0 text-blue-600" />
+          查看我的claw
+          <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+        </a>
       </div>
 
       <div className="space-y-4">

@@ -44,7 +44,7 @@ function autonomyLevelTextClass(level: string) {
 }
 
 type SecuritySectionProps = {
-  activePanel: SecurityPanelKey;
+  activePanel: SecurityPanelKey | "all";
   securityManagement: SecurityManagementConfig;
   onAutonomyBoundaryLevelChange: (
     boundaryId: string,
@@ -59,6 +59,42 @@ type SecuritySectionProps = {
   onRemoveProhibitedTool: (name: string) => void;
   onResolveApproval: (approvalId: string, resolution: "approved" | "rejected") => void;
 };
+
+function SecurityModule({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <section className="border border-slate-200 bg-white">
+      <button
+        type="button"
+        className={cn(
+          "flex w-full items-start justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-slate-50",
+          expanded && "border-b border-slate-200"
+        )}
+        onClick={() => setExpanded((current) => !current)}
+        aria-expanded={expanded}
+      >
+        <span className="min-w-0">
+          <span className="block text-base font-semibold text-slate-950">{title}</span>
+          {description ? <span className="mt-1 block text-sm leading-6 text-slate-500">{description}</span> : null}
+        </span>
+        <ChevronDown
+          className={cn("mt-0.5 h-4 w-4 shrink-0 text-slate-400 transition-transform", expanded && "rotate-180")}
+          aria-hidden
+        />
+      </button>
+      {expanded ? <div className="p-5">{children}</div> : null}
+    </section>
+  );
+}
 
 function InfoHint({ label }: { label: string }) {
   return (
@@ -129,25 +165,51 @@ function ToolChipList({
   );
 }
 
-export function ClawSecuritySection({
-  activePanel,
-  securityManagement,
-  onAutonomyBoundaryLevelChange,
-  onToolProtectionEnabledChange,
-  onToolProtectionRuleToggle,
-  onAddToolProtectionRule,
-  onAddProtectedTool,
-  onRemoveProtectedTool,
-  onAddProhibitedTool,
-  onRemoveProhibitedTool,
-  onResolveApproval,
-}: SecuritySectionProps) {
+export function ClawSecuritySection(props: SecuritySectionProps) {
+  const {
+    activePanel,
+    securityManagement,
+    onAutonomyBoundaryLevelChange,
+    onToolProtectionEnabledChange,
+    onToolProtectionRuleToggle,
+    onAddToolProtectionRule,
+    onAddProtectedTool,
+    onRemoveProtectedTool,
+    onAddProhibitedTool,
+    onRemoveProhibitedTool,
+    onResolveApproval,
+  } = props;
   const [protectedDraft, setProtectedDraft] = useState("");
   const [prohibitedDraft, setProhibitedDraft] = useState("");
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [ruleForm, setRuleForm] = useState<ToolRuleFormState>(() => ({ ...TOOL_RULE_FORM_DEFAULT }));
 
   const { autonomyBoundaries, toolProtection, securityApprovals } = securityManagement;
+
+  if (activePanel === "all") {
+    return (
+      <div className="w-full min-w-0 space-y-5">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-950">安全</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            统一管理当前 Claw 的自主性边界、工具调用防护和高风险动作审批。
+          </p>
+        </div>
+
+        <SecurityModule title="自主性边界配置" description="配置 Claw 执行各项操作时的自主性级别。">
+          <ClawSecuritySection {...props} activePanel="autonomy-boundaries" />
+        </SecurityModule>
+
+        <SecurityModule title="工具安全防护" description="配置工具调用扫描、受保护工具、禁止工具和检测规则。">
+          <ClawSecuritySection {...props} activePanel="tool-protection" />
+        </SecurityModule>
+
+        <SecurityModule title="安全审批" description="处理命中高风险规则后进入等待确认的动作。">
+          <ClawSecuritySection {...props} activePanel="security-approval" />
+        </SecurityModule>
+      </div>
+    );
+  }
 
   function submitCustomToolRule() {
     const id = ruleForm.ruleId.trim();
@@ -185,11 +247,6 @@ export function ClawSecuritySection({
   if (activePanel === "autonomy-boundaries") {
     return (
       <div className="w-full min-w-0 space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">自主性动作边界配置</h2>
-          <p className="mt-1 text-sm text-slate-500">配置赋予工具执行各项操作时的自主性级别</p>
-        </div>
-
         <div className="w-full min-w-0 space-y-0 border border-slate-200/90 bg-white">
           {autonomyBoundaries.map((item) => (
             <div
@@ -382,21 +439,17 @@ export function ClawSecuritySection({
         </Dialog>
 
         <div className="w-full min-w-0 space-y-5">
-          <div>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-6">
-              <span className="text-slate-600">
-                配置工具调用的安全扫描。危险操作将在执行前需要你的明确批准。
-              </span>
-              <a
-                href="/docs/tool-protection.html"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex shrink-0 items-center gap-1 rounded-sm px-0.5 text-sm font-medium text-sky-600 no-underline outline-none transition-colors hover:bg-sky-50 hover:text-sky-800 focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1"
-              >
-                <BookOpen className="h-4 w-4 shrink-0 text-current" aria-hidden />
-                工具防护说明
-              </a>
-            </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-6">
+            <span className="text-slate-600">危险操作将在执行前需要你的明确批准。</span>
+            <a
+              href="/docs/tool-protection.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center gap-1 rounded-sm px-0.5 text-sm font-medium text-sky-600 no-underline outline-none transition-colors hover:bg-sky-50 hover:text-sky-800 focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-1"
+            >
+              <BookOpen className="h-4 w-4 shrink-0 text-current" aria-hidden />
+              工具防护说明
+            </a>
           </div>
 
           <div className="border border-slate-200/90 bg-white p-4">
