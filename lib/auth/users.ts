@@ -15,6 +15,12 @@ export const AUTH_USERS: AuthUser[] = [
     displayName: "管理员",
     role: "admin",
   },
+  {
+    username: "agentfoundry",
+    password: "agentfoundry2026",
+    displayName: "Agent Foundry",
+    role: "user",
+  },
 ];
 
 export function findAuthUser(
