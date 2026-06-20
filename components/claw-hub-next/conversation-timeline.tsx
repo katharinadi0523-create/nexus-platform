@@ -3,6 +3,9 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  BrainCircuit,
   CheckCircle2,
   ChevronDown,
   Circle,
@@ -38,6 +41,46 @@ function getActionStatusText(status: ConversationTimelineActionStatus) {
   }
 
   return "执行失败";
+}
+
+export function MemoryEventCard({
+  kind,
+  store,
+  title,
+  summary,
+}: {
+  kind: "retrieval" | "write";
+  store: string;
+  title: string;
+  summary: string;
+}) {
+  const EventIcon = kind === "retrieval" ? ArrowDownToLine : ArrowUpFromLine;
+
+  return (
+    <article className="overflow-hidden rounded-[8px] border border-blue-100 bg-white">
+      <div className="flex items-center justify-between gap-4 border-b border-blue-100 bg-blue-50/60 px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] bg-white text-blue-600">
+            <BrainCircuit className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-slate-800">
+              {kind === "retrieval" ? "记忆检索" : "记忆写入"}
+            </div>
+            <div className="truncate text-xs text-slate-500">{store}</div>
+          </div>
+        </div>
+        <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-blue-700">
+          <EventIcon className="h-3.5 w-3.5" />
+          {kind === "retrieval" ? "已召回" : "待异步提取"}
+        </span>
+      </div>
+      <div className="px-4 py-3">
+        <div className="text-sm font-medium text-slate-800">{title}</div>
+        <p className="mt-1 text-sm leading-6 text-slate-600">{summary}</p>
+      </div>
+    </article>
+  );
 }
 
 export function ClawUserMessage({ item }: { item: Extract<ConversationTimelineItem, { type: "user" }> }) {

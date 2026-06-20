@@ -12,6 +12,7 @@ import {
   Paperclip,
   Plug,
   SendHorizontal,
+  ShieldCheck,
   Sparkles,
   Wrench,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import {
   ClawAgentOutput,
   ClawAgentThinking,
   ClawConversationTimeline,
+  MemoryEventCard,
 } from "@/components/claw-hub-next/conversation-timeline";
 import type {
   ConversationTimelineActionKind,
@@ -473,6 +475,7 @@ export function ClawInteractiveChatPanel({
     visibleEventCount: template.sequence.length,
   });
   const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>(initialExpandedSteps);
+  const [sandboxPromoted, setSandboxPromoted] = useState(false);
   const [panelWidth, setPanelWidth] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -694,11 +697,54 @@ export function ClawInteractiveChatPanel({
       style={{ gridTemplateColumns: showInspector ? "minmax(0, 1fr) 320px" : "minmax(0, 1fr)" }}
     >
       <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
+        <div
+          className={cn(
+            "flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 text-sm lg:px-8",
+            sandboxPromoted
+              ? "border-emerald-100 bg-emerald-50/80 text-emerald-800"
+              : "border-blue-100 bg-blue-50/80 text-slate-700"
+          )}
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            <span>
+              {sandboxPromoted
+                ? "记忆暂存已转正：会话结束后将由异步提取写入正式记忆。"
+                : "记忆沙箱：读取真实记忆，写入由异步提取暂存，关闭会话后自动丢弃。"}
+            </span>
+          </div>
+          {!sandboxPromoted ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSandboxPromoted(true);
+                toast.success("本次调试会话的记忆已转正，等待异步提取写入。");
+              }}
+              className="shrink-0 font-medium text-blue-600 hover:text-blue-700"
+            >
+              转正
+            </button>
+          ) : null}
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-4xl">
             {runtime.stage === "history" ? (
               template.historyItems.length > 0 ? (
-                <ClawConversationTimeline items={template.historyItems} />
+                <div className="space-y-4">
+                  <ClawConversationTimeline items={template.historyItems} />
+                  <MemoryEventCard
+                    kind="retrieval"
+                    store="store_客户某局"
+                    title="召回 3 条客户项目记忆"
+                    summary="命中决策链、POC 时间承诺和沟通注意事项，用于补齐方案背景。"
+                  />
+                  <MemoryEventCard
+                    kind="write"
+                    store="本体 Claw · C 经验异步提取 + store_客户某局 · 更新材料"
+                    title="异步提取客户安全要求"
+                    summary="主 agent 不内联写；会话结束后异步 pass 将“客户要求补充等保三级适配说明”写入 C Store，并标为 store_客户某局 的更新材料。"
+                  />
+                </div>
               ) : (
                 <div className="flex min-h-[240px] items-center justify-center px-6 text-center text-sm leading-6 text-slate-400">
                   输入任务内容，开始新的调试会话
@@ -726,6 +772,14 @@ export function ClawInteractiveChatPanel({
                 </div>
 
                 <div className="space-y-4">
+                  {runtime.visibleEventCount > 0 ? (
+                    <MemoryEventCard
+                      kind="retrieval"
+                      store="本体 Claw · 经验记忆 + store_售前打法"
+                      title="召回任务经验与组织打法"
+                      summary="命中政企方案编写流程、预算章节检查清单和引用检查规则。"
+                    />
+                  ) : null}
                   {visibleSequenceItems.map((item) => {
                     if (item.type === "thinking") {
                       return (
@@ -841,6 +895,14 @@ export function ClawInteractiveChatPanel({
                       />
                     );
                   })}
+                  {runtime.stage === "complete" ? (
+                    <MemoryEventCard
+                      kind="write"
+                      store="本体 Claw · 经验记忆"
+                      title="异步提取执行经验信号"
+                      summary="会话结束后异步 pass 将“生成政企方案前先建立客户事实证据表”写入 C Store，并剥离用户特定信息；共享 Store 退出热路径。"
+                    />
+                  ) : null}
                 </div>
               </div>
             )}

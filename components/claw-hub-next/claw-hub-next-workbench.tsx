@@ -4,6 +4,9 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, Bot, Plus, RefreshCw, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { AgentBomBadge } from "@/components/claw-hub-next/agent-bom-badge";
+import { buildAgentBomTreeFromListItem } from "@/components/claw-hub-next/agent-bom-tree";
+import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -89,6 +92,8 @@ export function ClawHubNextWorkbench() {
   const [keyword, setKeyword] = useState("");
   const [claws, setClaws] = useState<ClawHubListItem[]>(clawHubList);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [publishValidationOpen, setPublishValidationOpen] = useState(false);
+  const [publishTarget, setPublishTarget] = useState<ClawHubListItem | null>(null);
   const [createDraft, setCreateDraft] = useState<CreateClawDraft>({
     name: "",
     description: "",
@@ -135,9 +140,18 @@ export function ClawHubNextWorkbench() {
       return;
     }
 
+    setPublishTarget(item);
+    setPublishValidationOpen(true);
+  }
+
+  function handlePublishValidationPassed() {
+    if (!publishTarget) {
+      return;
+    }
+
     setClaws((current) =>
       current.map((claw) =>
-        claw.id === item.id
+        claw.id === publishTarget.id
           ? {
               ...claw,
               status: "运行中",
@@ -148,7 +162,8 @@ export function ClawHubNextWorkbench() {
           : claw
       )
     );
-    toast.success(`已发布：${item.name}`);
+    toast.success(`已发布：${publishTarget.name}`);
+    setPublishTarget(null);
   }
 
   function handleDelete(item: ClawHubListItem) {
@@ -302,13 +317,18 @@ export function ClawHubNextWorkbench() {
                             <div className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-[linear-gradient(135deg,#4f46e5,#2563eb)] text-white">
                               <Bot className="h-4 w-4" />
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenConfig(item)}
-                              className="text-left text-[15px] font-medium text-slate-900 transition-colors hover:text-blue-600"
-                            >
-                              {item.name}
-                            </button>
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenConfig(item)}
+                                className="text-left text-[15px] font-medium text-slate-900 transition-colors hover:text-blue-600"
+                              >
+                                {item.name}
+                              </button>
+                              {item.publishStatus === "已发布" ? (
+                                <AgentBomBadge tree={buildAgentBomTreeFromListItem(item)} />
+                              ) : null}
+                            </div>
                           </div>
                         </TableCell>
 
@@ -472,6 +492,18 @@ export function ClawHubNextWorkbench() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ClawPublishValidationDialog
+        open={publishValidationOpen}
+        onOpenChange={(open) => {
+          setPublishValidationOpen(open);
+          if (!open) {
+            setPublishTarget(null);
+          }
+        }}
+        agentName={publishTarget?.name ?? ""}
+        onValidationPassed={handlePublishValidationPassed}
+      />
     </div>
   );
 }

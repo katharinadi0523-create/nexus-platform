@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   ArrowLeft,
+  Brain,
   Bot,
   CalendarClock,
   ChevronDown,
@@ -34,10 +35,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
+import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
+import { AgentBomBadge } from "@/components/claw-hub-next/agent-bom-badge";
+import { buildAgentBomTreeFromDetail } from "@/components/claw-hub-next/agent-bom-tree";
 import { ClawKnowledgeAssetsSection } from "@/components/claw-hub-next/detail/claw-knowledge-assets-section";
 import { ClawCoreConfigSection } from "@/components/claw-hub-next/detail/core-config-section";
 import { ClawInteractiveChatPanel } from "@/components/claw-hub-next/interactive-chat-panel";
 import { ClawWorkspaceSection } from "@/components/claw-hub-next/detail/workspace-section";
+import { ClawMemorySection } from "@/components/claw-hub-next/detail/claw-memory-section";
 import {
   type DetailSectionKey,
   type KnowledgePanelKey,
@@ -165,6 +170,7 @@ const CLAW_DETAIL_NAV_GROUPS: Array<{
       { value: "skills", label: "技能", icon: Sparkles },
       { value: "tools", label: "插件", icon: Wrench },
       { value: "knowledge", label: "知识", icon: FileStack },
+      { value: "memory", label: "记忆", icon: Brain },
     ],
   },
   {
@@ -501,6 +507,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [activeLogPanel] = useState<LogPanelKey>("conversation");
   const [publishStatus, setPublishStatus] = useState(detail.overview.publishStatus);
   const [publishPanelOpen, setPublishPanelOpen] = useState(false);
+  const [publishValidationOpen, setPublishValidationOpen] = useState(false);
   const [apiPublishEffective, setApiPublishEffective] = useState(detail.overview.publishStatus === "已发布");
   const [plazaStatus, setPlazaStatus] = useState<ClawPlazaStatus>("未上架");
   const [shelfDialogOpen, setShelfDialogOpen] = useState(false);
@@ -564,7 +571,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [workspaceStorageConfig] = useState(detail.workspaceStorageConfig);
   const [selectedWorkspacePath, setSelectedWorkspacePath] = useState<string[]>(() => buildInitialWorkspacePath());
   const [workspaceStorageDialogOpen, setWorkspaceStorageDialogOpen] = useState(false);
-  const [clawMemoryEnabled, setClawMemoryEnabled] = useState(false);
   const [selectedLogSessionId, setSelectedLogSessionId] = useState<string | null>(null);
   const [selectedLogEventId, setSelectedLogEventId] = useState<string | null>(null);
   const [agentRelations, setAgentRelations] = useState<AgentRelationItem[]>(() => [...detail.agentRelations]);
@@ -712,6 +718,17 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     selectedLogSessionEvents.find((event) => event.id === selectedLogEventId) ?? selectedLogSessionEvents[0] ?? null;
   const selectedCoreFile = detail.coreFiles.find((file) => file.key === selectedCoreFileKey) ?? null;
   const isPublished = publishStatus === "已发布";
+  const agentBomTree = useMemo(
+    () =>
+      buildAgentBomTreeFromDetail({
+        ...detail,
+        capabilityConfig,
+        knowledgeAssets,
+        securityManagement,
+        resourceConfig: detail.resourceConfig,
+      }),
+    [detail, capabilityConfig, knowledgeAssets, securityManagement]
+  );
   const isApiEffective = isPublished && apiPublishEffective;
   const canConfirmShelf = shelfAgentTypes.length > 0;
 
@@ -1192,14 +1209,20 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   }
 
   function handlePublish() {
-    if (publishStatus === "已发布") {
-      setApiPublishEffective(true);
-      toast.success("API 调用已生效。");
-      return;
-    }
+    setPublishPanelOpen(false);
+    window.setTimeout(() => {
+      setPublishValidationOpen(true);
+    }, 120);
+  }
 
+  function handlePublishValidationPassed() {
+    const wasPublished = publishStatus === "已发布";
     setPublishStatus("已发布");
     setApiPublishEffective(true);
+    if (wasPublished) {
+      toast.success(`校验通过：${detail.overview.name}，API 调用已生效。`);
+      return;
+    }
     toast.success(`已发布：${detail.overview.name}，API 调用已生效。`);
   }
 
@@ -1279,6 +1302,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               {detail.overview.name}
             </h1>
             {isPublished ? <ClawPublishedBadge /> : null}
+            {isPublished ? <AgentBomBadge tree={agentBomTree} versionLabel={detail.overview.version} /> : null}
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <Button
@@ -1313,9 +1337,13 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                   <Button
                     type="button"
                     className="h-9 w-full rounded-[4px] bg-blue-600 text-sm font-medium text-white shadow-none hover:bg-blue-700"
-                    onClick={handlePublish}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handlePublish();
+                    }}
                   >
-                    发布
+                    {isPublished ? "校验并发布" : "发布"}
                   </Button>
                 </div>
 
@@ -2198,38 +2226,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="memory" className="mt-0">
-            <SectionCard title="记忆">
-              <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
-                <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
-                  <Label htmlFor="claw-memory-switch" className="text-sm font-medium text-slate-800">
-                    启用记忆
-                  </Label>
-                  <Switch
-                    id="claw-memory-switch"
-                    checked={clawMemoryEnabled}
-                    onCheckedChange={setClawMemoryEnabled}
-                    aria-label="启用记忆"
-                    className="data-[state=checked]:bg-blue-600 dark:data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-200 dark:data-[state=unchecked]:bg-slate-200"
-                  />
-                </div>
-              </div>
-              <div className="grid gap-4 pt-8 xl:grid-cols-2">
-                <div className="rounded-[22px] border border-slate-200 bg-white p-5">
-                  <div className="text-sm font-semibold text-slate-950">记忆能力配置</div>
-                  <div className="mt-2 text-sm leading-6 text-slate-500">
-                    这里负责控制记忆是否启用、写入策略和命中策略；具体记忆文件已经沉淀在工作空间的
-                    <span className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">memory/</span>
-                    目录中。
-                  </div>
-                </div>
-                <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50/70 p-5">
-                  <div className="text-sm font-semibold text-slate-900">后续规划</div>
-                  <div className="mt-2 text-sm leading-6 text-slate-500">
-                    后续可继续补组织记忆、项目记忆、个人记忆的召回权重、摘要压缩和保留周期配置。
-                  </div>
-                </div>
-              </div>
-            </SectionCard>
+            <ClawMemorySection clawName={detail.overview.name} />
           </TabsContent>
 
           <TabsContent value="logs" className="mt-0 h-full min-h-0 overflow-hidden">
@@ -2989,6 +2986,13 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
         initialExecutionMode={createAutomatedTaskInitialMode}
         defaultCreatedBy={detail.overview.creator}
         onCreated={({ item }) => setAutomatedTasks((rows) => [item, ...rows])}
+      />
+      <ClawPublishValidationDialog
+        open={publishValidationOpen}
+        onOpenChange={setPublishValidationOpen}
+        agentName={detail.overview.name}
+        confirmLabel={isPublished ? "确认生效" : "确认发布"}
+        onValidationPassed={handlePublishValidationPassed}
       />
     </div>
   );
