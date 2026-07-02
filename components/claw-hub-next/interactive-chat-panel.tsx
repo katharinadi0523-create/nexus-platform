@@ -12,7 +12,6 @@ import {
   Paperclip,
   Plug,
   SendHorizontal,
-  ShieldCheck,
   Sparkles,
   Wrench,
 } from "lucide-react";
@@ -22,13 +21,18 @@ import {
   ClawAgentOutput,
   ClawAgentThinking,
   ClawConversationTimeline,
-  MemoryEventCard,
 } from "@/components/claw-hub-next/conversation-timeline";
 import type {
   ConversationTimelineActionKind,
   ConversationTimelineItem,
 } from "@/components/claw-hub-next/detail/utils";
 import { buildConversationTimeline } from "@/components/claw-hub-next/detail/utils";
+import {
+  detectSkillSlashCommand,
+  filterConfiguredSkills,
+  SkillSlashPicker,
+  type ConfiguredSkillOption,
+} from "@/components/claw-hub-next/skill-slash-picker";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   ChatSessionItem,
@@ -444,17 +448,19 @@ export function ClawInteractiveChatPanel({
       }),
     [detail, run, session]
   );
-  const skillOptions = useMemo(() => {
-    const allSkills = [
-      ...detail.capabilityConfig.skills.platform,
-      ...detail.capabilityConfig.skills.tenant,
-      ...detail.capabilityConfig.skills.claw,
-    ]
-      .filter((item) => item.enabled)
-      .map((item) => item.name);
+  const configuredSkills = useMemo<ConfiguredSkillOption[]>(() => {
+    const scopes = ["platform", "tenant", "claw"] as const;
 
-    return Array.from(new Set(allSkills));
+    return scopes.flatMap((scope) =>
+      detail.capabilityConfig.skills[scope]
+        .filter((item) => item.enabled)
+        .map((item) => ({ ...item, scope }))
+    );
   }, [detail.capabilityConfig.skills.claw, detail.capabilityConfig.skills.platform, detail.capabilityConfig.skills.tenant]);
+  const skillOptions = useMemo(
+    () => Array.from(new Set(configuredSkills.map((item) => item.name))),
+    [configuredSkills]
+  );
   const initialExpandedSteps = useMemo(
     () =>
       template.steps.reduce<Record<number, boolean>>((accumulator, step, index) => {
@@ -475,10 +481,16 @@ export function ClawInteractiveChatPanel({
     visibleEventCount: template.sequence.length,
   });
   const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>(initialExpandedSteps);
-  const [sandboxPromoted, setSandboxPromoted] = useState(false);
   const [panelWidth, setPanelWidth] = useState(0);
+  const [skillPicker, setSkillPicker] = useState<{ query: string; startIndex: number } | null>(null);
+  const [skillPickerActiveIndex, setSkillPickerActiveIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const filteredPickerSkills = useMemo(
+    () => (skillPicker ? filterConfiguredSkills(configuredSkills, skillPicker.query) : []),
+    [configuredSkills, skillPicker]
+  );
 
   useEffect(() => {
     const element = panelRef.current;
@@ -620,6 +632,120 @@ export function ClawInteractiveChatPanel({
 
   const isLocked = runtime.stage !== "history" && runtime.stage !== "complete";
 
+  function syncSkillPicker(text: string, cursor: number) {
+    if (isLocked) {
+      setSkillPicker(null);
+      return;
+    }
+
+    const slashCommand = detectSkillSlashCommand(text, cursor);
+    setSkillPicker(slashCommand);
+    setSkillPickerActiveIndex(0);
+  }
+
+  function handleSelectSkillFromPicker(skill: ConfiguredSkillOption) {
+    const pickerState = skillPicker;
+    setSelectedSkill(skill.name);
+    setSkillPicker(null);
+
+    if (pickerState) {
+      const textarea = textareaRef.current;
+      const cursor = textarea?.selectionStart ?? draftMessage.length;
+      const nextMessage = `${draftMessage.slice(0, pickerState.startIndex)}${draftMessage.slice(cursor)}`;
+      setDraftMessage(nextMessage);
+
+      window.requestAnimationFrame(() => {
+        if (!textareaRef.current) {
+          return;
+        }
+
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(pickerState.startIndex, pickerState.startIndex);
+      });
+    }
+
+    toast.success(`已选择技能 · ${skill.name}`);
+  }
+
+  function handleDraftChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
+    const nextValue = event.target.value;
+    setDraftMessage(nextValue);
+    syncSkillPicker(nextValue, event.target.selectionStart ?? nextValue.length);
+  }
+
+  function handleDraftKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!skillPicker || filteredPickerSkills.length === 0) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSkillPickerActiveIndex((current) =>
+        Math.min(current + 1, filteredPickerSkills.length - 1)
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSkillPickerActiveIndex((current) => Math.max(current - 1, 0));
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      handleSelectSkillFromPicker(filteredPickerSkills[skillPickerActiveIndex]!);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSkillPicker(null);
+    }
+  }
+
+  useEffect(() => {
+    if (isLocked) {
+      setSkillPicker(null);
+    }
+  }, [isLocked]);
+
+  useEffect(() => {
+    if (!skillPicker) {
+      return;
+    }
+
+    setSkillPickerActiveIndex((current) =>
+      filteredPickerSkills.length === 0 ? 0 : Math.min(current, filteredPickerSkills.length - 1)
+    );
+  }, [filteredPickerSkills.length, skillPicker]);
+
+  useEffect(() => {
+    if (!skillPicker) {
+      return undefined;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (textareaRef.current?.contains(target)) {
+        return;
+      }
+
+      if (target instanceof Element && target.closest("[data-skill-slash-picker]")) {
+        return;
+      }
+
+      setSkillPicker(null);
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [skillPicker]);
+
   function handleAttachFiles(event: React.ChangeEvent<HTMLInputElement>) {
     const fileNames = Array.from(event.target.files ?? []).map((file) => file.name);
     if (!fileNames.length) {
@@ -659,6 +785,7 @@ export function ClawInteractiveChatPanel({
     });
     setDraftMessage("");
     setQueuedFiles([]);
+    setSkillPicker(null);
   }
 
   function handleBackToEdit() {
@@ -673,6 +800,7 @@ export function ClawInteractiveChatPanel({
       visibleEventCount: template.sequence.length,
     });
     setExpandedSteps(initialExpandedSteps);
+    setSkillPicker(null);
   }
 
   function handleConfirmStep() {
@@ -697,53 +825,12 @@ export function ClawInteractiveChatPanel({
       style={{ gridTemplateColumns: showInspector ? "minmax(0, 1fr) 320px" : "minmax(0, 1fr)" }}
     >
       <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
-        <div
-          className={cn(
-            "flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 text-sm lg:px-8",
-            sandboxPromoted
-              ? "border-emerald-100 bg-emerald-50/80 text-emerald-800"
-              : "border-blue-100 bg-blue-50/80 text-slate-700"
-          )}
-        >
-          <div className="flex min-w-0 items-center gap-2">
-            <ShieldCheck className="h-4 w-4 shrink-0" />
-            <span>
-              {sandboxPromoted
-                ? "记忆暂存已转正：会话结束后将由异步提取写入正式记忆。"
-                : "记忆沙箱：读取真实记忆，写入由异步提取暂存，关闭会话后自动丢弃。"}
-            </span>
-          </div>
-          {!sandboxPromoted ? (
-            <button
-              type="button"
-              onClick={() => {
-                setSandboxPromoted(true);
-                toast.success("本次调试会话的记忆已转正，等待异步提取写入。");
-              }}
-              className="shrink-0 font-medium text-blue-600 hover:text-blue-700"
-            >
-              转正
-            </button>
-          ) : null}
-        </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-4xl">
             {runtime.stage === "history" ? (
               template.historyItems.length > 0 ? (
                 <div className="space-y-4">
                   <ClawConversationTimeline items={template.historyItems} />
-                  <MemoryEventCard
-                    kind="retrieval"
-                    store="store_客户某局"
-                    title="召回 3 条客户项目记忆"
-                    summary="命中决策链、POC 时间承诺和沟通注意事项，用于补齐方案背景。"
-                  />
-                  <MemoryEventCard
-                    kind="write"
-                    store="本体 Claw · C 经验异步提取 + store_客户某局 · 更新材料"
-                    title="异步提取客户安全要求"
-                    summary="主 agent 不内联写；会话结束后异步 pass 将“客户要求补充等保三级适配说明”写入 C Store，并标为 store_客户某局 的更新材料。"
-                  />
                 </div>
               ) : (
                 <div className="flex min-h-[240px] items-center justify-center px-6 text-center text-sm leading-6 text-slate-400">
@@ -772,14 +859,6 @@ export function ClawInteractiveChatPanel({
                 </div>
 
                 <div className="space-y-4">
-                  {runtime.visibleEventCount > 0 ? (
-                    <MemoryEventCard
-                      kind="retrieval"
-                      store="本体 Claw · 经验记忆 + store_售前打法"
-                      title="召回任务经验与组织打法"
-                      summary="命中政企方案编写流程、预算章节检查清单和引用检查规则。"
-                    />
-                  ) : null}
                   {visibleSequenceItems.map((item) => {
                     if (item.type === "thinking") {
                       return (
@@ -895,14 +974,6 @@ export function ClawInteractiveChatPanel({
                       />
                     );
                   })}
-                  {runtime.stage === "complete" ? (
-                    <MemoryEventCard
-                      kind="write"
-                      store="本体 Claw · 经验记忆"
-                      title="异步提取执行经验信号"
-                      summary="会话结束后异步 pass 将“生成政企方案前先建立客户事实证据表”写入 C Store，并剥离用户特定信息；共享 Store 退出热路径。"
-                    />
-                  ) : null}
                 </div>
               </div>
             )}
@@ -930,13 +1001,38 @@ export function ClawInteractiveChatPanel({
                 </div>
               ) : null}
 
-              <Textarea
-                value={draftMessage}
-                onChange={(event) => setDraftMessage(event.target.value)}
-                disabled={isLocked}
-                className="min-h-[56px] resize-none border-0 bg-transparent px-0 py-0 text-[15px] leading-7 text-slate-700 shadow-none placeholder:text-slate-400 focus-visible:ring-0 disabled:cursor-not-allowed disabled:text-slate-500"
-                placeholder="请输入任务，或继续补充上下文"
-              />
+              <div className="relative">
+                {skillPicker ? (
+                  <div
+                    data-skill-slash-picker
+                    className="absolute bottom-full left-0 right-0 z-20 mb-2"
+                  >
+                    <SkillSlashPicker
+                      skills={configuredSkills}
+                      query={skillPicker.query}
+                      activeIndex={skillPickerActiveIndex}
+                      onActiveIndexChange={setSkillPickerActiveIndex}
+                      onSelect={handleSelectSkillFromPicker}
+                    />
+                  </div>
+                ) : null}
+
+                <Textarea
+                  ref={textareaRef}
+                  value={draftMessage}
+                  onChange={handleDraftChange}
+                  onKeyDown={handleDraftKeyDown}
+                  onClick={(event) =>
+                    syncSkillPicker(
+                      event.currentTarget.value,
+                      event.currentTarget.selectionStart ?? event.currentTarget.value.length
+                    )
+                  }
+                  disabled={isLocked}
+                  className="min-h-[56px] resize-none border-0 bg-transparent px-0 py-0 text-[15px] leading-7 text-slate-700 shadow-none placeholder:text-slate-400 focus-visible:ring-0 disabled:cursor-not-allowed disabled:text-slate-500"
+                  placeholder="请输入任务，输入 / 可快速选择技能"
+                />
+              </div>
 
               <div className="mt-2.5 flex flex-wrap items-center gap-2.5 sm:flex-nowrap">
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5 sm:flex-nowrap">

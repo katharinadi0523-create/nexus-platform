@@ -18,29 +18,39 @@ import {
   ManagementTextAction,
 } from "@/components/management/management-list";
 import {
-  dreamingDistilledMaterials,
+  dreamingJobs,
   getMemoryStore,
+  type DreamingJob,
+  type DreamingInputRef,
   type MemoryStore,
-  type UpdateJob,
-  updateJobs,
 } from "@/lib/mock/memory-management";
-import { UpdateJobStatusBadge, formatCompactNumber } from "@/components/memory-management/memory-shared";
 import {
-  CreateUpdateJobDialog,
-  type CreateUpdateJobValue,
+  DreamingJobStatusBadge,
+  dreamingInputRefLabels,
+  formatCompactNumber,
+} from "@/components/memory-management/memory-shared";
+import {
+  CreateDreamingJobDialog,
+  type CreateDreamingJobValue,
 } from "@/components/memory-management/create-dreaming-dialog";
 
-export function UpdateJobList({
+function describeInput(inputRefs: DreamingInputRef[]) {
+  return inputRefs.map((ref) => dreamingInputRefLabels[ref]).join(" + ") || "—";
+}
+
+export function DreamingJobList({
   stores,
   createRequested,
   initialStoreId,
+  onCreateRequestHandled,
 }: {
   stores: MemoryStore[];
   createRequested: boolean;
   initialStoreId?: string;
+  onCreateRequestHandled?: () => void;
 }) {
   const router = useRouter();
-  const [jobs, setJobs] = useState<UpdateJob[]>(updateJobs);
+  const [jobs, setJobs] = useState<DreamingJob[]>(dreamingJobs);
   const [createOpen, setCreateOpen] = useState(false);
   const dialogOpen = createOpen || createRequested;
 
@@ -50,37 +60,40 @@ export function UpdateJobList({
   );
 
   function handleRefresh() {
-    setJobs(updateJobs);
+    setJobs(dreamingJobs);
     toast.success("记忆沉淀任务已刷新。");
   }
 
   function handleCreateOpenChange(open: boolean) {
     setCreateOpen(open);
     if (!open && createRequested) {
+      onCreateRequestHandled?.();
       router.replace("/memory-management?tab=dreaming");
     }
   }
 
-  function handleCreate(value: CreateUpdateJobValue) {
+  function handleCreate(value: CreateDreamingJobValue) {
     const store = stores.find((item) => item.id === value.storeId);
     if (!store) {
-      toast.error("未找到原始记忆库。");
+      toast.error("未找到目标记忆库。");
       return;
     }
-    const selectedDistilledMaterials = dreamingDistilledMaterials.filter((material) =>
-      value.distilledMaterialIds.includes(material.id)
-    );
-    const inputMaterialCount = (value.session ? 1 : 0) + selectedDistilledMaterials.length;
-    const materialSummary = value.session?.sessionTitle ?? selectedDistilledMaterials[0]?.nodePath ?? "C Node 蒸馏材料";
+    const inputSummary = value.inputRefs
+      .map((ref) =>
+        ref === "session" && value.session
+          ? `原始会话「${value.session.sessionTitle}」`
+          : dreamingInputRefLabels[ref]
+      )
+      .join(" + ");
     const id = `job-${Date.now()}`;
-    const job: UpdateJob = {
+    const job: DreamingJob = {
       id,
-      name: `${store.name} · ${materialSummary}`,
+      name: `${store.name} · ${inputSummary}`,
       storeId: store.id,
-      materialScope: "manual",
-      inputMaterialCount,
+      inputRefs: value.inputRefs,
+      inputSummary,
       prompt: value.prompt || undefined,
-      modelTier: "standard",
+      modelTier: value.modelTier,
       status: "pending_review",
       tokenUsage: 22420,
       duration: "2 分 46 秒",
@@ -89,20 +102,19 @@ export function UpdateJobList({
       modifiedNodeCount: 5,
       createdBy: "当前用户",
       createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-      diffFiles: updateJobs[0].diffFiles,
+      diffFiles: dreamingJobs[0].diffFiles,
     };
     setJobs((current) => [job, ...current]);
     setCreateOpen(false);
-    toast.success("记忆沉淀已生成 vNext Draft，等待审核。");
+    onCreateRequestHandled?.();
+    toast.success("记忆沉淀已生成 vNext 草稿，等待审核。");
     const params = new URLSearchParams({
       name: job.name,
       storeId: job.storeId,
-      inputMaterialCount: String(job.inputMaterialCount),
+      inputRefs: job.inputRefs.join(","),
+      inputSummary: job.inputSummary,
       prompt: job.prompt ?? "",
       modelTier: job.modelTier,
-      agentId: value.session?.agentId ?? "",
-      sessionId: value.session?.sessionId ?? "",
-      distilledMaterialIds: value.distilledMaterialIds.join(","),
     });
     router.push(`/memory-management/dreaming/${id}?${params.toString()}`);
   }
@@ -111,7 +123,7 @@ export function UpdateJobList({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">
-          基于会话、C 记忆与更新材料池生产 vNext Draft，发布前不会改变当前 Store。
+          记忆沉淀基于「库当前内容 / 原始会话 + 旧版本」重新合成 vNext 草稿，发布前不会改变当前记忆库。
         </p>
         <div className="flex items-center gap-2">
           <ManagementIconButton onClick={handleRefresh} aria-label="刷新记忆沉淀">
@@ -125,11 +137,11 @@ export function UpdateJobList({
       </div>
 
       <ManagementTableFrame>
-        <ManagementTable className="min-w-[1080px] table-fixed">
+        <ManagementTable className="min-w-[1120px] table-fixed">
           <ManagementTableHeader>
-            <ManagementTableHead className="w-[230px]">任务名</ManagementTableHead>
-            <ManagementTableHead className="w-[210px]">目标 Store</ManagementTableHead>
-            <ManagementTableHead className="w-[110px]">输入材料数</ManagementTableHead>
+            <ManagementTableHead className="w-[240px]">任务名</ManagementTableHead>
+            <ManagementTableHead className="w-[200px]">目标记忆库</ManagementTableHead>
+            <ManagementTableHead className="w-[170px]">输入</ManagementTableHead>
             <ManagementTableHead className="w-[110px]">状态</ManagementTableHead>
             <ManagementTableHead className="w-[110px]">Token 消耗</ManagementTableHead>
             <ManagementTableHead className="w-[100px]">创建人</ManagementTableHead>
@@ -143,9 +155,9 @@ export function UpdateJobList({
                 <ManagementCell>
                   {storeNameById.get(job.storeId) ?? getMemoryStore(job.storeId)?.name ?? job.storeId}
                 </ManagementCell>
-                <ManagementCell>{job.inputMaterialCount}</ManagementCell>
+                <ManagementCell className="text-slate-600">{describeInput(job.inputRefs)}</ManagementCell>
                 <ManagementCell>
-                  <UpdateJobStatusBadge status={job.status} />
+                  <DreamingJobStatusBadge status={job.status} />
                 </ManagementCell>
                 <ManagementCell>{formatCompactNumber(job.tokenUsage)}</ManagementCell>
                 <ManagementCell>{job.createdBy}</ManagementCell>
@@ -170,7 +182,7 @@ export function UpdateJobList({
         <span>第 1 / 1 页</span>
       </div>
 
-      <CreateUpdateJobDialog
+      <CreateDreamingJobDialog
         open={dialogOpen}
         onOpenChange={handleCreateOpenChange}
         stores={stores}

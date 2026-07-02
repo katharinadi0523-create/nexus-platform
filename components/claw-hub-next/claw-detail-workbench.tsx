@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   ArrowLeft,
-  Brain,
   Bot,
   CalendarClock,
   ChevronDown,
@@ -42,7 +41,6 @@ import { ClawKnowledgeAssetsSection } from "@/components/claw-hub-next/detail/cl
 import { ClawCoreConfigSection } from "@/components/claw-hub-next/detail/core-config-section";
 import { ClawInteractiveChatPanel } from "@/components/claw-hub-next/interactive-chat-panel";
 import { ClawWorkspaceSection } from "@/components/claw-hub-next/detail/workspace-section";
-import { ClawMemorySection } from "@/components/claw-hub-next/detail/claw-memory-section";
 import {
   type DetailSectionKey,
   type KnowledgePanelKey,
@@ -106,7 +104,6 @@ import {
   type ClawAutomatedTaskExecutionStatus,
   type ClawAutomatedTaskItem,
   type ClawAutomatedTaskRecentResult,
-  type ClawCoreFileKey,
   type ClawDetailData,
   type ClawCapabilityConfig,
   type ConversationAuditItem,
@@ -170,7 +167,6 @@ const CLAW_DETAIL_NAV_GROUPS: Array<{
       { value: "skills", label: "技能", icon: Sparkles },
       { value: "tools", label: "插件", icon: Wrench },
       { value: "knowledge", label: "知识", icon: FileStack },
-      { value: "memory", label: "记忆", icon: Brain },
     ],
   },
   {
@@ -519,12 +515,8 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     mergeSecurityManagementWithCanonicalAutonomy(detail.securityManagement)
   );
   const [selectedChatId, setSelectedChatId] = useState(detail.chatSessions[0]?.id ?? "");
-  const [selectedCoreFileKey, setSelectedCoreFileKey] = useState<ClawCoreFileKey | null>(null);
-  const [coreFileDrafts, setCoreFileDrafts] = useState<Record<ClawCoreFileKey, string>>(() =>
-    detail.coreFiles.reduce(
-      (accumulator, file) => ({ ...accumulator, [file.key]: file.content }),
-      {} as Record<ClawCoreFileKey, string>
-    )
+  const [agentMdDraft, setAgentMdDraft] = useState(
+    () => detail.coreFiles.find((file) => file.key === "agent")?.content ?? ""
   );
   const [capabilityConfig, setCapabilityConfig] = useState(detail.capabilityConfig);
   const [clawPrimaryModel, setClawPrimaryModel] = useState("Qwen3-32B");
@@ -716,7 +708,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   );
   const activeLogEvent =
     selectedLogSessionEvents.find((event) => event.id === selectedLogEventId) ?? selectedLogSessionEvents[0] ?? null;
-  const selectedCoreFile = detail.coreFiles.find((file) => file.key === selectedCoreFileKey) ?? null;
   const isPublished = publishStatus === "已发布";
   const agentBomTree = useMemo(
     () =>
@@ -978,11 +969,8 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     toast.success(resolution === "approved" ? "已批准该请求。" : "已拒绝该请求。");
   }
 
-  function handleSaveCoreFile() {
-    if (!selectedCoreFile) {
-      return;
-    }
-    toast.success(`${selectedCoreFile.title} 已保存。`);
+  function handleSaveAgentMd() {
+    toast.success("Agent.md 已保存。");
   }
 
   function handleToggleTool(scope: CapabilityScope, id: string, checked: boolean) {
@@ -1496,21 +1484,13 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
 
           <TabsContent value="core" className="mt-0">
             <ClawCoreConfigSection
-              coreFiles={detail.coreFiles}
-              selectedCoreFileKey={selectedCoreFileKey}
-              coreFileDrafts={coreFileDrafts}
+              agentMdContent={agentMdDraft}
               primaryModel={clawPrimaryModel}
               primaryModelParams={clawPrimaryModelParams}
               fallbackModels={clawFallbackModels}
               hiddenModelParamKeys={CLAW_MODEL_SELECTOR_HIDDEN_KEYS}
-              onSelectedCoreFileKeyChange={setSelectedCoreFileKey}
-              onCoreFileDraftChange={(key, value) =>
-                setCoreFileDrafts((current) => ({
-                  ...current,
-                  [key]: value,
-                }))
-              }
-              onSaveCoreFile={handleSaveCoreFile}
+              onAgentMdContentChange={setAgentMdDraft}
+              onSaveAgentMd={handleSaveAgentMd}
               onPrimaryModelChange={setClawPrimaryModel}
               onPrimaryModelParamsChange={setClawPrimaryModelParams}
               onAddFallbackModel={addClawFallbackModel}
@@ -2223,10 +2203,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onSelectPath={setSelectedWorkspacePath}
               onOpenStorageConfig={handleOpenWorkspaceStorageDialog}
             />
-          </TabsContent>
-
-          <TabsContent value="memory" className="mt-0">
-            <ClawMemorySection clawName={detail.overview.name} />
           </TabsContent>
 
           <TabsContent value="logs" className="mt-0 h-full min-h-0 overflow-hidden">

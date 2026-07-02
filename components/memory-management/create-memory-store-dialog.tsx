@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { MemoryStore } from "@/lib/mock/memory-management";
+import { formatMemoryVersionLabel, type MemoryStore } from "@/lib/mock/memory-management";
 import { cn } from "@/lib/utils";
 
 export type StoreInitialization = "blank" | "template" | "fork" | "import";
@@ -115,9 +115,9 @@ export function CreateMemoryStoreDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[88vh] overflow-y-auto rounded-[8px] sm:max-w-[680px]">
         <DialogHeader>
-          <DialogTitle>创建 Memory Store</DialogTitle>
+          <DialogTitle>创建记忆库</DialogTitle>
           <DialogDescription>
-            创建独立的组织记忆资源。后续可挂载给多个 Claw，并通过记忆沉淀持续整理。
+            创建独立的组织共享记忆库（S）。后续可挂载给多个 Claw，并通过记忆沉淀持续整理。
           </DialogDescription>
         </DialogHeader>
 
@@ -202,10 +202,10 @@ export function CreateMemoryStoreDialog({
                 value={forkSourceStoreId}
                 onValueChange={setForkSourceStoreId}
                 options={stores
-                  .filter((store) => store.type !== "builtin_c")
+                  .filter((store) => store.kind !== "builtin")
                   .map((store) => ({
                     value: store.id,
-                    label: `${store.name} · v${store.currentVersion}`,
+                    label: `${store.name} · ${formatMemoryVersionLabel(store.currentVersion)}`,
                   }))}
                 className="rounded-[4px] bg-white shadow-none"
               />

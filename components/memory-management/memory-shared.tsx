@@ -1,23 +1,37 @@
 import { BrainCircuit, CircleDot } from "lucide-react";
 import type {
-  MemoryStoreType,
+  DreamingInputRef,
+  DreamingJobStatus,
+  MemoryNodeType,
+  MemoryStoreKind,
   MountAccess,
-  UpdateJobStatus,
 } from "@/lib/mock/memory-management";
 import { cn } from "@/lib/utils";
 
-export const memoryStoreTypeLabels: Record<MemoryStoreType, string> = {
-  shared: "共享",
+export const memoryStoreKindLabels: Record<MemoryStoreKind, string> = {
+  builtin: "自带 · C",
+  shared: "共享 · S",
   fork: "fork",
-  builtin_c: "自带-C",
 };
 
+// 本期挂载库统一为「全量读写」。
 export const mountAccessLabels: Record<MountAccess, string> = {
-  read_only: "只读",
-  propose_only: "仅提议",
+  read_write: "全量读写",
 };
 
-export const updateJobStatusLabels: Record<UpdateJobStatus, string> = {
+export const dreamingInputRefLabels: Record<DreamingInputRef, string> = {
+  store_content: "库当前内容",
+  session: "原始会话",
+};
+
+export const memoryNodeTypeLabels: Record<MemoryNodeType, string> = {
+  user: "用户画像",
+  feedback: "行为反馈",
+  project: "项目语境",
+  reference: "信息入口",
+};
+
+export const dreamingJobStatusLabels: Record<DreamingJobStatus, string> = {
   queued: "排队中",
   running: "运行中",
   pending_review: "待审核",
@@ -26,7 +40,7 @@ export const updateJobStatusLabels: Record<UpdateJobStatus, string> = {
   failed: "失败",
 };
 
-const updateJobStatusClasses: Record<UpdateJobStatus, string> = {
+const dreamingJobStatusClasses: Record<DreamingJobStatus, string> = {
   queued: "border-slate-200 bg-slate-50 text-slate-600",
   running: "border-blue-200 bg-blue-50 text-blue-700",
   pending_review: "border-amber-200 bg-amber-50 text-amber-700",
@@ -35,10 +49,10 @@ const updateJobStatusClasses: Record<UpdateJobStatus, string> = {
   failed: "border-rose-200 bg-rose-50 text-rose-700",
 };
 
-const storeTypeClasses: Record<MemoryStoreType, string> = {
+const storeKindClasses: Record<MemoryStoreKind, string> = {
   shared: "border-blue-200 bg-blue-50 text-blue-700",
   fork: "border-violet-200 bg-violet-50 text-violet-700",
-  builtin_c: "border-slate-200 bg-slate-100 text-slate-700",
+  builtin: "border-slate-200 bg-slate-100 text-slate-700",
 };
 
 export function formatCompactNumber(value: number) {
@@ -49,19 +63,19 @@ export function formatCompactNumber(value: number) {
 }
 
 export function MemoryStoreIcon({
-  type,
+  kind,
   className,
 }: {
-  type: MemoryStoreType;
+  kind: MemoryStoreKind;
   className?: string;
 }) {
   return (
     <span
       className={cn(
         "flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px]",
-        type === "builtin_c"
+        kind === "builtin"
           ? "bg-slate-700 text-white"
-          : type === "fork"
+          : kind === "fork"
             ? "bg-violet-500 text-white"
             : "bg-blue-600 text-white",
         className
@@ -72,43 +86,36 @@ export function MemoryStoreIcon({
   );
 }
 
-export function StoreTypeBadge({ type }: { type: MemoryStoreType }) {
+export function StoreKindBadge({ kind }: { kind: MemoryStoreKind }) {
   return (
     <span
       className={cn(
         "inline-flex h-6 items-center rounded-[3px] border px-2 text-xs font-medium",
-        storeTypeClasses[type]
+        storeKindClasses[kind]
       )}
     >
-      {memoryStoreTypeLabels[type]}
+      {memoryStoreKindLabels[kind]}
     </span>
   );
 }
 
-export function UpdateJobStatusBadge({ status }: { status: UpdateJobStatus }) {
+export function DreamingJobStatusBadge({ status }: { status: DreamingJobStatus }) {
   return (
     <span
       className={cn(
         "inline-flex h-6 items-center gap-1.5 rounded-[3px] border px-2 text-xs font-medium",
-        updateJobStatusClasses[status]
+        dreamingJobStatusClasses[status]
       )}
     >
       <CircleDot className={cn("h-3 w-3", status === "running" && "animate-pulse")} />
-      {updateJobStatusLabels[status]}
+      {dreamingJobStatusLabels[status]}
     </span>
   );
 }
 
 export function AccessBadge({ access }: { access: MountAccess }) {
   return (
-    <span
-      className={cn(
-        "inline-flex h-6 items-center rounded-[3px] border px-2 text-xs font-medium",
-        access === "propose_only"
-          ? "border-blue-200 bg-blue-50 text-blue-700"
-          : "border-slate-200 bg-slate-50 text-slate-600"
-      )}
-    >
+    <span className="inline-flex h-6 items-center rounded-[3px] border border-blue-200 bg-blue-50 px-2 text-xs font-medium text-blue-700">
       {mountAccessLabels[access]}
     </span>
   );

@@ -2,17 +2,23 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, GitCompareArrows, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, GitCompareArrows, GitFork, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type {
+  DreamingJob,
+  DreamingJobStatus,
   MemoryDiffLine,
-  UpdateJob,
-  UpdateJobStatus,
 } from "@/lib/mock/memory-management";
-import { getMemoryStore } from "@/lib/mock/memory-management";
 import {
-  UpdateJobStatusBadge,
+  createInitialMemoryVersionId,
+  formatMemoryVersionLabel,
+  getMemoryStore,
+  getNextMemoryVersionId,
+} from "@/lib/mock/memory-management";
+import {
+  DreamingJobStatusBadge,
+  dreamingInputRefLabels,
   formatCompactNumber,
 } from "@/components/memory-management/memory-shared";
 import { cn } from "@/lib/utils";
@@ -34,11 +40,13 @@ function DiffLine({ line }: { line: MemoryDiffLine }) {
   );
 }
 
-export function UpdateJobDetailWorkbench({ job }: { job: UpdateJob }) {
+export function DreamingJobDetailWorkbench({ job }: { job: DreamingJob }) {
   const router = useRouter();
-  const [status, setStatus] = useState<UpdateJobStatus>(job.status);
+  const [status, setStatus] = useState<DreamingJobStatus>(job.status);
   const store = getMemoryStore(job.storeId);
   const reviewable = status === "pending_review";
+  const currentVersionId = store?.currentVersion ?? createInitialMemoryVersionId();
+  const nextVersionId = getNextMemoryVersionId(currentVersionId);
 
   function applyVersion() {
     setStatus("published");
@@ -47,7 +55,11 @@ export function UpdateJobDetailWorkbench({ job }: { job: UpdateJob }) {
 
   function dismissVersion() {
     setStatus("dismissed");
-    toast.success("已驳回本次记忆沉淀结果。");
+    toast.success("已驳回本次记忆沉淀结果，沿用当前版本。");
+  }
+
+  function forkAsNewStore() {
+    toast.success("已将 vNext 草稿 fork 为新记忆库（记忆移植）。");
   }
 
   return (
@@ -66,14 +78,23 @@ export function UpdateJobDetailWorkbench({ job }: { job: UpdateJob }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="truncate text-xl font-semibold text-slate-950">{job.name}</h1>
-              <UpdateJobStatusBadge status={status} />
+              <DreamingJobStatusBadge status={status} />
             </div>
             <p className="mt-1 text-sm text-slate-500">
-              目标 Store：{store?.name ?? job.storeId} · {job.inputMaterialCount} 份输入材料
+              目标记忆库：{store?.name ?? job.storeId} · 输入：{job.inputSummary}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            disabled={!reviewable}
+            onClick={forkAsNewStore}
+            className="h-8 rounded-[4px] border-slate-300 px-4 text-sm shadow-none"
+          >
+            <GitFork className="h-4 w-4" />
+            fork 为新记忆库
+          </Button>
           <Button
             variant="outline"
             disabled={!reviewable}
@@ -97,12 +118,12 @@ export function UpdateJobDetailWorkbench({ job }: { job: UpdateJob }) {
       <main className="space-y-6 p-6">
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           {[
+            { label: "输入", value: job.inputRefs.map((ref) => dreamingInputRefLabels[ref]).join(" + ") || "—" },
             { label: "耗时", value: job.duration },
             { label: "Token", value: formatCompactNumber(job.tokenUsage) },
-            { label: "新增 Node", value: `${job.addedNodeCount} 个`, tone: "text-emerald-700" },
-            { label: "删除 Node", value: `${job.removedNodeCount} 个`, tone: "text-rose-700" },
-            { label: "修改 Node", value: `${job.modifiedNodeCount} 个`, tone: "text-blue-700" },
-            { label: "模型档位", value: job.modelTier === "advanced" ? "增强档" : "标准档" },
+            { label: "新增主题文件", value: `${job.addedNodeCount} 个`, tone: "text-emerald-700" },
+            { label: "删除主题文件", value: `${job.removedNodeCount} 个`, tone: "text-rose-700" },
+            { label: "修改主题文件", value: `${job.modifiedNodeCount} 个`, tone: "text-blue-700" },
           ].map((item) => (
             <div key={item.label} className="rounded-[6px] border border-slate-200 bg-slate-50 px-4 py-3">
               <div className="text-xs text-slate-500">{item.label}</div>
@@ -123,9 +144,10 @@ export function UpdateJobDetailWorkbench({ job }: { job: UpdateJob }) {
         <section>
           <div className="mb-4 flex items-center gap-2">
             <GitCompareArrows className="h-5 w-5 text-slate-600" />
-            <h2 className="text-lg font-semibold text-slate-950">版本 Diff</h2>
+            <h2 className="text-lg font-semibold text-slate-950">版本 Diff（逐主题文件）</h2>
             <span className="text-sm text-slate-500">
-              v{store?.currentVersion ?? 1} → v{(store?.currentVersion ?? 1) + 1}
+              {formatMemoryVersionLabel(currentVersionId)} →{" "}
+              {formatMemoryVersionLabel(nextVersionId)}
             </span>
           </div>
 
@@ -149,7 +171,7 @@ export function UpdateJobDetailWorkbench({ job }: { job: UpdateJob }) {
                     </div>
                     <div>
                       <div className="border-b border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-500">
-                        vNext Draft
+                        vNext 草稿
                       </div>
                       <div className="py-2">
                         {file.after.map((line, index) => (
@@ -164,7 +186,7 @@ export function UpdateJobDetailWorkbench({ job }: { job: UpdateJob }) {
           ) : (
             <div className="rounded-[6px] border border-dashed border-slate-300 bg-slate-50 px-6 py-16 text-center">
               <p className="text-sm font-medium text-slate-700">当前任务还没有可审核的 Diff</p>
-              <p className="mt-2 text-sm text-slate-500">任务完成后将在这里展示文件级变化。</p>
+              <p className="mt-2 text-sm text-slate-500">任务完成后将在这里展示逐主题文件的变化。</p>
             </div>
           )}
         </section>

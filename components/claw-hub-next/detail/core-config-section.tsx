@@ -1,12 +1,12 @@
 "use client";
 
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { ModelSelector, type ModelParams } from "@/components/agent-editor/ModelSelector";
+import { AgentMdEditor } from "@/components/claw-hub-next/detail/agent-md-editor";
 import { SectionCard } from "@/components/claw-hub-next/detail/section-card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import type { ClawCoreFileKey, ClawDetailData } from "@/lib/mock/claw-hub-next";
+import { CLAW_AGENT_MD_PLACEHOLDER } from "@/lib/mock/claw-hub-next";
 import type { ModelParamKey } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 
@@ -17,16 +17,13 @@ type FallbackModelRow = {
 };
 
 export type ClawCoreConfigSectionProps = {
-  coreFiles: ClawDetailData["coreFiles"];
-  selectedCoreFileKey: ClawCoreFileKey | null;
-  coreFileDrafts: Record<ClawCoreFileKey, string>;
+  agentMdContent: string;
   primaryModel: string;
   primaryModelParams: ModelParams;
   fallbackModels: FallbackModelRow[];
   hiddenModelParamKeys: readonly ModelParamKey[];
-  onSelectedCoreFileKeyChange: (key: ClawCoreFileKey | null) => void;
-  onCoreFileDraftChange: (key: ClawCoreFileKey, value: string) => void;
-  onSaveCoreFile: () => void;
+  onAgentMdContentChange: (value: string) => void;
+  onSaveAgentMd: () => void;
   onPrimaryModelChange: (model: string) => void;
   onPrimaryModelParamsChange: (params: ModelParams) => void;
   onAddFallbackModel: () => void;
@@ -37,16 +34,13 @@ export type ClawCoreConfigSectionProps = {
 };
 
 export function ClawCoreConfigSection({
-  coreFiles,
-  selectedCoreFileKey,
-  coreFileDrafts,
+  agentMdContent,
   primaryModel,
   primaryModelParams,
   fallbackModels,
   hiddenModelParamKeys,
-  onSelectedCoreFileKeyChange,
-  onCoreFileDraftChange,
-  onSaveCoreFile,
+  onAgentMdContentChange,
+  onSaveAgentMd,
   onPrimaryModelChange,
   onPrimaryModelParamsChange,
   onAddFallbackModel,
@@ -55,8 +49,6 @@ export function ClawCoreConfigSection({
   onFallbackModelParamsChange,
   isFallbackModelDuplicate,
 }: ClawCoreConfigSectionProps) {
-  const selectedCoreFile = coreFiles.find((file) => file.key === selectedCoreFileKey) ?? null;
-
   return (
     <div className="space-y-6">
       <SectionCard title="模型配置" description="配置 Claw 的主力模型和 Fallback 顺序。">
@@ -151,52 +143,20 @@ export function ClawCoreConfigSection({
         </div>
       </SectionCard>
 
-      <SectionCard title="核心文件">
-        {selectedCoreFile ? (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex min-w-0 flex-wrap items-center gap-3">
-                <Button type="button" variant="outline" size="sm" onClick={() => onSelectedCoreFileKeyChange(null)}>
-                  <ArrowLeft className="h-4 w-4" />
-                  返回
-                </Button>
-                <div className="min-w-0">
-                  <div className="truncate text-base font-semibold text-slate-950">{selectedCoreFile.title}</div>
-                  <div className="text-sm text-slate-500">{selectedCoreFile.note}</div>
-                </div>
-              </div>
-              <Button type="button" size="sm" onClick={onSaveCoreFile}>
-                保存
-              </Button>
-            </div>
-
-            <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3">
-              <div className="mb-2 flex items-center justify-between px-1 text-xs text-slate-500">
-                <span>Markdown 编辑器</span>
-                <span>{coreFileDrafts[selectedCoreFile.key].split("\n").length} 行</span>
-              </div>
-              <Textarea
-                value={coreFileDrafts[selectedCoreFile.key]}
-                onChange={(event) => onCoreFileDraftChange(selectedCoreFile.key, event.target.value)}
-                className="min-h-[520px] resize-none rounded-md border-slate-200 bg-white px-4 py-3 font-mono text-[13px] leading-7 text-slate-700 shadow-none focus-visible:ring-0"
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
-            {coreFiles.map((item) => (
-              <div key={item.key} className="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5">
-                <div className="min-w-0 flex flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
-                  <span className="shrink-0 font-medium text-slate-950">{item.title}</span>
-                  <span className="text-sm text-slate-500">{item.note}</span>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => onSelectedCoreFileKeyChange(item.key)}>
-                  编辑
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
+      <SectionCard
+        title="Agent.md"
+        description="定义 Claw 的身份、目标与行为边界"
+        action={
+          <Button type="button" size="sm" onClick={onSaveAgentMd}>
+            保存
+          </Button>
+        }
+      >
+        <AgentMdEditor
+          value={agentMdContent}
+          onChange={onAgentMdContentChange}
+          placeholder={CLAW_AGENT_MD_PLACEHOLDER}
+        />
       </SectionCard>
     </div>
   );

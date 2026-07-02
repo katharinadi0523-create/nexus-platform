@@ -1,21 +1,28 @@
-export type MemoryStoreType = "shared" | "fork" | "builtin_c";
+// 记忆库（Memory Store）数据模型 —— 对齐《Claw 跨会话长期记忆系统》PRD v1.0
+//
+// 归属（scope）：user(U) / agent(C) / org(S)。管控端只呈现 C 与 S，U 永远归用户、不在管控端出现。
+// 形态（kind）：builtin(内置自动创建) / shared(人工创建的组织共享库) / fork(从已有库复制)。
+// 本期挂载库统一为「全量读写」(read_write)；细粒度 RO/RW 待平台数据权限就绪后再做（见 PRD §7）。
+
+export type MemoryScope = "user" | "agent" | "org";
+export type MemoryStoreKind = "builtin" | "shared" | "fork";
 export type MemoryNodeStatus = "active" | "outdated" | "contested";
-export type MemoryNodeType =
-  | "user"
-  | "feedback"
-  | "project"
-  | "reference";
-export type UpdateJobStatus =
+export type MemoryNodeType = "user" | "feedback" | "project" | "reference";
+
+export type DreamingJobStatus =
   | "queued"
   | "running"
   | "pending_review"
   | "published"
   | "dismissed"
   | "failed";
-export type UpdateJobMaterialScope = "since_last" | "time_range" | "manual";
-export type UpdateJobModelTier = "standard" | "advanced";
-export type MountAccess = "read_only" | "propose_only";
-export type UpdateMaterialStatus = "pending" | "included" | "ignored";
+
+// Dreaming 输入两选：库当前内容（已写入的主题文件）或 原始会话。
+export type DreamingInputRef = "store_content" | "session";
+export type DreamingModelTier = "standard" | "advanced";
+
+// 本期全量读写：细粒度 RO/RW 待数据权限就绪。
+export type MountAccess = "read_write";
 
 export interface MemoryFile {
   id: string;
@@ -24,23 +31,13 @@ export interface MemoryFile {
 }
 
 export interface MemoryVersion {
-  version: number;
+  /** YYYYMMDDXX — XX is the Nth version published on that calendar day (01–99). */
+  version: string;
   source: "人工" | "记忆沉淀" | "导入" | "fork";
   author: string;
   createdAt: string;
   summary: string;
   files: MemoryFile[];
-}
-
-export interface StoreUpdateMaterial {
-  id: string;
-  content: string;
-  sourceClaw: string;
-  sourceSession: string;
-  confidence: number;
-  relation: "new" | "duplicate" | "conflict";
-  status: UpdateMaterialStatus;
-  createdAt: string;
 }
 
 export interface StoreMountRelation {
@@ -55,18 +52,17 @@ export interface MemoryStore {
   id: string;
   name: string;
   description: string;
-  type: MemoryStoreType;
+  scope: MemoryScope;
+  kind: MemoryStoreKind;
   nodeCount: number;
   tokenCount: number;
-  currentVersion: number;
+  currentVersion: string;
   mountCount: number;
-  updateMaterialCount: number;
-  lastUpdateJobAt?: string;
+  lastDreamingAt?: string;
   updatedBy: string;
   updatedAt: string;
   files: MemoryFile[];
   versions: MemoryVersion[];
-  updateMaterials: StoreUpdateMaterial[];
   mountRelations: StoreMountRelation[];
 }
 
@@ -81,15 +77,24 @@ export interface MemoryFileDiff {
   after: MemoryDiffLine[];
 }
 
-export interface UpdateJob {
+// 外溢提示：合成时发现更适合写入其他记忆库的片段；可一键写入，不静默跨库搬运。
+export interface DreamingSpilloverHint {
+  id: string;
+  targetStoreId: string;
+  targetStoreName: string;
+  snippet: string;
+}
+
+export interface DreamingJob {
   id: string;
   name: string;
   storeId: string;
-  materialScope: UpdateJobMaterialScope;
-  inputMaterialCount: number;
+  // 输入两选：库当前内容 / 原始会话（可单选或组合）。
+  inputRefs: DreamingInputRef[];
+  inputSummary: string;
   prompt?: string;
-  modelTier: UpdateJobModelTier;
-  status: UpdateJobStatus;
+  modelTier: DreamingModelTier;
+  status: DreamingJobStatus;
   tokenUsage: number;
   duration: string;
   addedNodeCount: number;
@@ -98,6 +103,7 @@ export interface UpdateJob {
   createdBy: string;
   createdAt: string;
   diffFiles: MemoryFileDiff[];
+  spilloverHints?: DreamingSpilloverHint[];
 }
 
 export interface ClawMemoryMount {
@@ -107,14 +113,52 @@ export interface ClawMemoryMount {
   usagePrompt: string;
 }
 
+/** Format date as YYYYMMDD for version ids. */
+export function formatMemoryVersionDay(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}
+
+/** Build YYYYMMDDXX where XX is the Nth version on that day (01 = first, 20 = twentieth). */
+export function createMemoryVersionId(date: Date, dailySequence: number): string {
+  const sequence = String(Math.min(Math.max(dailySequence, 1), 99)).padStart(2, "0");
+  return `${formatMemoryVersionDay(date)}${sequence}`;
+}
+
+/** First version id for a given day (or today). */
+export function createInitialMemoryVersionId(date: Date = new Date()): string {
+  return createMemoryVersionId(date, 1);
+}
+
+/** Next version id when publishing on the same day; resets to XX=01 on a new day. */
+export function getNextMemoryVersionId(
+  currentVersion: string,
+  date: Date = new Date()
+): string {
+  const day = formatMemoryVersionDay(date);
+  if (currentVersion.length === 10 && currentVersion.startsWith(day)) {
+    const sequence = Number.parseInt(currentVersion.slice(8), 10);
+    if (!Number.isNaN(sequence)) {
+      return createMemoryVersionId(date, sequence + 1);
+    }
+  }
+  return createMemoryVersionId(date, 1);
+}
+
+export function formatMemoryVersionLabel(version: string): string {
+  return `v${version}`;
+}
+
 const customerIndexV2 = `# store_客户某局
 
 ## 记忆索引
 
-- [[entities/决策链]]：王主任主导业务决策，李工负责技术把关。
-- [[entities/项目状态]]：POC 计划与当前交付状态。
-- [[decisions/2026-06-POC时间承诺]]：POC 最晚于 2026 年 7 月中旬完成。
-- [[lessons/沟通注意事项]]：强调私有化、等保三级与可回滚交付。
+- [决策链](entities/决策链.md) — 王主任主导业务决策，李工负责技术把关。
+- [项目状态](entities/项目状态.md) — POC 计划与当前交付状态。
+- [POC 时间承诺](decisions/2026-06-POC时间承诺.md) — POC 最晚于 2026 年 7 月中旬完成。
+- [沟通注意事项](lessons/沟通注意事项.md) — 强调私有化、等保三级与可回滚交付。
 `;
 
 const customerFilesV2: MemoryFile[] = [
@@ -127,76 +171,58 @@ const customerFilesV2: MemoryFile[] = [
     id: "customer-chain",
     path: "entities/决策链.md",
     content: `---
-slug: decision-chain
+topic: 客户决策链
 type: project
-description: 客户决策链与关键角色
-status: active
 sources: [sess_visit_0610]
-updated: 2026-06-11
+updated_at: 2026-06-11
 ---
 
-## 结论
-
-王主任主导业务决策，李工负责技术路线和 POC 验收。
-
-## 原因与背景
-
-首次拜访和第二轮方案评审均由王主任确认推进节奏，李工负责技术问题收口。
+- 王主任主导业务决策，李工负责技术路线和 POC 验收。
+- 首次拜访与第二轮方案评审均由王主任确认推进节奏。
+- 李工负责技术问题收口与安全合规把关。
 `,
   },
   {
     id: "customer-status",
     path: "entities/项目状态.md",
     content: `---
-slug: project-status
+topic: 某局项目状态
 type: project
-description: 某局项目当前状态
-status: active
 sources: [sess_visit_0610, sess_plan_0611]
-updated: 2026-06-11
+updated_at: 2026-06-11
 ---
 
-## 结论
-
-项目处于 POC 准备阶段，客户要求补充等保三级说明和本地模型部署清单。
+- 项目处于 POC 准备阶段。
+- 客户要求补充等保三级说明与本地模型部署清单。
 `,
   },
   {
     id: "customer-poc",
     path: "decisions/2026-06-POC时间承诺.md",
     content: `---
-slug: poc-commitment-202606
+topic: POC 时间承诺
 type: project
-description: POC 时间承诺
-status: active
 sources: [sess_plan_0611]
-updated: 2026-06-11
+updated_at: 2026-06-11
 ---
 
-## 结论
-
-POC 最晚于 2026 年 7 月中旬完成，首轮环境检查在 6 月底前完成。
-
-## 原因与背景
-
-客户机房变更窗口集中在 7 月，交付计划必须预留安全测评时间。
+- POC 最晚于 2026 年 7 月中旬完成（原 6 月底，已更新）。
+- 首轮环境检查在 6 月底前完成。
+- 客户机房变更窗口集中在 7 月，需预留安全测评时间。
 `,
   },
   {
     id: "customer-lesson",
     path: "lessons/沟通注意事项.md",
     content: `---
-slug: communication-notes
+topic: 客户沟通注意事项
 type: project
-description: 客户沟通注意事项
-status: active
 sources: [sess_visit_0610]
-updated: 2026-06-11
+updated_at: 2026-06-11
 ---
 
-## 结论
-
-方案沟通优先强调私有化部署、等保三级适配和升级可回滚，不使用公网模型案例作为主证据。
+- 方案沟通优先强调私有化部署、等保三级适配与升级可回滚。
+- 不使用公网模型案例作为主证据。
 `,
   },
 ];
@@ -229,32 +255,36 @@ const salesPlaybookFiles: MemoryFile[] = [
     path: "INDEX.md",
     content: `# store_售前打法
 
-- [[procedures/政企方案五要素]]：政企方案的标准信息结构。
-- [[lessons/预算章节检查清单]]：预算章节提交前检查项。
-- [[lessons/竞品异议处理]]：常见竞品异议应对。
+## 记忆索引
+
+- [政企方案五要素](procedures/政企方案五要素.md) — 政企方案的标准信息结构。
+- [预算章节检查清单](lessons/预算章节检查清单.md) — 预算章节提交前检查项。
+- [竞品异议处理](lessons/竞品异议处理.md) — 常见竞品异议应对。
 `,
   },
   {
     id: "sales-five",
     path: "procedures/政企方案五要素.md",
     content: `---
-slug: government-solution-five-elements
+topic: 政企方案五要素
 type: reference
-description: 政企技术方案的五个关键部分
-status: active
 sources: [job_202605]
-updated: 2026-05-28
+updated_at: 2026-05-28
 ---
 
-## 结论
-
-方案必须明确现状、建设目标、总体架构、实施路径和安全合规，并在每部分给出客户证据。
+- 方案需明确现状、建设目标、总体架构、实施路径与安全合规。
+- 每一部分都要给出客户证据。
 `,
   },
   {
     id: "sales-budget",
     path: "lessons/预算章节检查清单.md",
-    content: `# 预算章节检查清单
+    content: `---
+topic: 预算章节检查清单
+type: feedback
+sources: [sess_review_0611]
+updated_at: 2026-06-11
+---
 
 1. 先核对财政口径与采购边界。
 2. 软件、服务和资源费用分别列示。
@@ -267,27 +297,26 @@ const builtInFiles: MemoryFile[] = [
   {
     id: "builtin-index",
     path: "INDEX.md",
-    content: `# 本体 Claw · 经验记忆
+    content: `# 我的Claw记忆库
 
-- [[procedures/政企方案编写流程]]：先核对客户事实，再生成章节。
-- [[lessons/引用检查]]：最终输出前核对来源和时效。
+## 记忆索引
+
+- [政企方案编写流程](procedures/政企方案编写流程.md) — 先核对客户事实，再生成章节。
+- [引用检查](lessons/引用检查.md) — 最终输出前核对来源和时效。
 `,
   },
   {
     id: "builtin-procedure",
     path: "procedures/政企方案编写流程.md",
     content: `---
-slug: solution-writing-flow
+topic: 政企方案写作流程
 type: reference
-description: 政企方案写作流程
-status: active
 sources: [call_310, call_322, call_338]
-updated: 2026-06-12
+updated_at: 2026-06-12
 ---
 
-## 结论
-
-先检索客户 Store 和行业规范，再建立章节证据表，最后生成可交付文档。
+- 先检索客户库与行业规范，再建立章节证据表。
+- 最后生成可交付文档并核对引用。
 `,
   },
 ];
@@ -296,82 +325,26 @@ function cloneFiles(files: MemoryFile[]) {
   return files.map((file) => ({ ...file }));
 }
 
-const customerUpdateMaterials: StoreUpdateMaterial[] = [
-  {
-    id: "mat-customer-security",
-    content: "客户要求补充等保三级适配说明，并确认模型推理不得出公网。",
-    sourceClaw: "本体 Claw",
-    sourceSession: "sess_visit_0618",
-    confidence: 0.92,
-    relation: "new",
-    status: "pending",
-    createdAt: "2026-06-18 16:20",
-  },
-  {
-    id: "mat-customer-poc",
-    content: "POC 首轮环境检查时间从 6 月底调整为 7 月第一周。",
-    sourceClaw: "方案写作 Claw",
-    sourceSession: "sess_plan_0618",
-    confidence: 0.86,
-    relation: "conflict",
-    status: "pending",
-    createdAt: "2026-06-18 18:42",
-  },
-  {
-    id: "mat-customer-contact",
-    content: "李工新增数据侧接口人周工，负责样例数据脱敏。",
-    sourceClaw: "实施顾问 Claw",
-    sourceSession: "sess_impl_0617",
-    confidence: 0.78,
-    relation: "new",
-    status: "included",
-    createdAt: "2026-06-17 11:05",
-  },
-];
-
-const salesUpdateMaterials: StoreUpdateMaterial[] = [
-  {
-    id: "mat-sales-budget",
-    content: "预算章节先拆软件、服务、算力，再说明扩容项不进入首期总价。",
-    sourceClaw: "复盘专家 Claw",
-    sourceSession: "sess_review_0611",
-    confidence: 0.9,
-    relation: "duplicate",
-    status: "pending",
-    createdAt: "2026-06-11 17:20",
-  },
-  {
-    id: "mat-sales-objection",
-    content: "客户提竞品价格时，先确认服务边界，再给出等价能力对比。",
-    sourceClaw: "售前 Claw",
-    sourceSession: "sess_bid_0610",
-    confidence: 0.84,
-    relation: "new",
-    status: "pending",
-    createdAt: "2026-06-10 20:12",
-  },
-];
-
 const customerMountRelations: StoreMountRelation[] = [
   {
     id: "rel-customer-native",
     clawName: "本体 Claw",
-    access: "read_only",
-    usagePrompt: "处理某局项目、方案与交付问题时检索；新事实标为更新材料。",
+    access: "read_write",
+    usagePrompt: "处理某局项目、方案与交付问题时检索；发现新的客观事实时直接写入。",
     updatedAt: "2026-06-12 10:20",
   },
   {
     id: "rel-customer-plan",
     clawName: "方案写作 Claw",
-    access: "propose_only",
-    usagePrompt: "生成方案时读取客户事实，发现冲突或新增事实时标为更新材料。",
+    access: "read_write",
+    usagePrompt: "生成方案时读取客户事实，发现冲突或新增事实时直接写入。",
     updatedAt: "2026-06-13 09:40",
   },
   {
     id: "rel-customer-impl",
     clawName: "实施顾问 Claw",
-    access: "read_only",
-    usagePrompt: "仅在交付计划和安全方案问答中检索。",
+    access: "read_write",
+    usagePrompt: "在交付计划和安全方案问答中检索与写入。",
     updatedAt: "2026-06-15 14:12",
   },
 ];
@@ -381,27 +354,27 @@ export const memoryStores: MemoryStore[] = [
     id: "store-customer-bureau",
     name: "store_客户某局",
     description: "沉淀某局项目决策链、项目状态、关键承诺与沟通注意事项。",
-    type: "shared",
+    scope: "org",
+    kind: "shared",
     nodeCount: 4,
     tokenCount: 18420,
-    currentVersion: 2,
+    currentVersion: "2026061201",
     mountCount: 3,
-    updateMaterialCount: 5,
-    lastUpdateJobAt: "2026-06-12 09:36",
+    lastDreamingAt: "2026-06-12 09:36",
     updatedBy: "张敏",
     updatedAt: "2026-06-12 10:18",
     files: cloneFiles(customerFilesV2),
     versions: [
       {
-        version: 2,
+        version: "2026061201",
         source: "记忆沉淀",
         author: "张敏",
         createdAt: "2026-06-12 09:36",
-        summary: "将会话材料与 C 记忆合成为 4 个主题节点，并更新 INDEX。",
+        summary: "将会话与库内容合成为 4 个主题文件，并重排 INDEX。",
         files: cloneFiles(customerFilesV2),
       },
       {
-        version: 1,
+        version: "2026061001",
         source: "人工",
         author: "张敏",
         createdAt: "2026-06-10 16:20",
@@ -409,26 +382,25 @@ export const memoryStores: MemoryStore[] = [
         files: cloneFiles(customerFilesV1),
       },
     ],
-    updateMaterials: customerUpdateMaterials,
     mountRelations: customerMountRelations,
   },
   {
     id: "store-sales-playbook",
     name: "store_售前打法",
     description: "面向政企售前团队的通用方案方法、异议处理与复盘经验。",
-    type: "shared",
+    scope: "org",
+    kind: "shared",
     nodeCount: 48,
     tokenCount: 76350,
-    currentVersion: 5,
+    currentVersion: "2026060801",
     mountCount: 8,
-    updateMaterialCount: 2,
-    lastUpdateJobAt: "2026-06-08 18:12",
+    lastDreamingAt: "2026-06-08 18:12",
     updatedBy: "复盘专家 Claw",
     updatedAt: "2026-06-11 17:42",
     files: cloneFiles(salesPlaybookFiles),
     versions: [
       {
-        version: 5,
+        version: "2026060801",
         source: "记忆沉淀",
         author: "复盘专家 Claw",
         createdAt: "2026-06-08 18:12",
@@ -436,7 +408,7 @@ export const memoryStores: MemoryStore[] = [
         files: cloneFiles(salesPlaybookFiles),
       },
       {
-        version: 4,
+        version: "2026052801",
         source: "人工",
         author: "李华",
         createdAt: "2026-05-28 11:04",
@@ -444,13 +416,12 @@ export const memoryStores: MemoryStore[] = [
         files: cloneFiles(salesPlaybookFiles),
       },
     ],
-    updateMaterials: salesUpdateMaterials,
     mountRelations: [
       {
         id: "rel-sales-native",
         clawName: "本体 Claw",
-        access: "propose_only",
-        usagePrompt: "编写政企方案和复盘售前任务时检索；复用方法标为更新材料。",
+        access: "read_write",
+        usagePrompt: "编写政企方案和复盘售前任务时检索；可复用的方法直接写入。",
         updatedAt: "2026-06-11 17:42",
       },
     ],
@@ -458,54 +429,53 @@ export const memoryStores: MemoryStore[] = [
   {
     id: "store-bid-special",
     name: "store_某局_投标专项",
-    description: "从客户记忆拆出的投标专项 Store，用于新投标 Claw 冷启动。",
-    type: "fork",
+    description: "从客户记忆库 fork 出的投标专项库，用于新投标 Claw 冷启动。",
+    scope: "org",
+    kind: "fork",
     nodeCount: 9,
     tokenCount: 12680,
-    currentVersion: 1,
+    currentVersion: "2026060901",
     mountCount: 1,
-    updateMaterialCount: 0,
     updatedBy: "王宇",
     updatedAt: "2026-06-09 14:30",
     files: cloneFiles(customerFilesV2.slice(0, 4)),
     versions: [
       {
-        version: 1,
+        version: "2026060901",
         source: "fork",
         author: "王宇",
         createdAt: "2026-06-09 14:30",
-        summary: "从 store_客户某局 v1 初始化投标专项记忆。",
+        summary: "从 store_客户某局 v2026061001 fork 出投标专项记忆。",
         files: cloneFiles(customerFilesV2.slice(0, 4)),
       },
     ],
-    updateMaterials: [],
     mountRelations: [
       {
         id: "rel-bid-special",
         clawName: "投标 Claw",
-        access: "read_only",
-        usagePrompt: "投标专项资料生成时只读检索。",
+        access: "read_write",
+        usagePrompt: "投标专项资料生成时检索与写入。",
         updatedAt: "2026-06-09 14:35",
       },
     ],
   },
   {
     id: "store-claw-native",
-    name: "本体 Claw · 经验记忆",
-    description: "本体 Claw 在跨用户任务中积累的脱敏执行经验。",
-    type: "builtin_c",
+    name: "我的Claw记忆库",
+    description: "本体 Claw 在跨用户任务中积累的脱敏执行经验（自带 C 库）。",
+    scope: "agent",
+    kind: "builtin",
     nodeCount: 26,
     tokenCount: 43820,
-    currentVersion: 3,
+    currentVersion: "2026061001",
     mountCount: 1,
-    updateMaterialCount: 0,
-    lastUpdateJobAt: "2026-06-10 02:00",
+    lastDreamingAt: "2026-06-10 02:00",
     updatedBy: "系统",
     updatedAt: "2026-06-12 10:02",
     files: cloneFiles(builtInFiles),
     versions: [
       {
-        version: 3,
+        version: "2026061001",
         source: "记忆沉淀",
         author: "系统",
         createdAt: "2026-06-10 02:00",
@@ -513,7 +483,7 @@ export const memoryStores: MemoryStore[] = [
         files: cloneFiles(builtInFiles),
       },
       {
-        version: 2,
+        version: "2026053001",
         source: "人工",
         author: "陈晨",
         createdAt: "2026-05-30 15:16",
@@ -521,13 +491,12 @@ export const memoryStores: MemoryStore[] = [
         files: cloneFiles(builtInFiles),
       },
     ],
-    updateMaterials: [],
     mountRelations: [
       {
         id: "rel-native-self",
         clawName: "本体 Claw",
-        access: "read_only",
-        usagePrompt: "系统自动挂载，不可卸载。",
+        access: "read_write",
+        usagePrompt: "系统自带，不可卸载。",
         updatedAt: "2026-06-12 10:02",
       },
     ],
@@ -546,9 +515,9 @@ const customerDiff: MemoryFileDiff[] = [
     after: [
       { type: "same", content: "# store_客户某局" },
       { type: "added", content: "## 记忆索引" },
-      { type: "added", content: "- [[entities/决策链]]：王主任主导，李工负责技术把关。" },
-      { type: "added", content: "- [[decisions/2026-06-POC时间承诺]]：7 月中旬完成 POC。" },
-      { type: "added", content: "- [[lessons/沟通注意事项]]：强调私有化与等保三级。" },
+      { type: "added", content: "- [决策链](entities/决策链.md) — 王主任主导，李工技术把关。" },
+      { type: "added", content: "- [POC 时间承诺](decisions/2026-06-POC时间承诺.md) — 7 月中旬完成。" },
+      { type: "added", content: "- [沟通注意事项](lessons/沟通注意事项.md) — 强调私有化与等保三级。" },
     ],
   },
   {
@@ -565,13 +534,13 @@ const customerDiff: MemoryFileDiff[] = [
   },
 ];
 
-export const updateJobs: UpdateJob[] = [
+export const dreamingJobs: DreamingJob[] = [
   {
     id: "job-customer-v2",
     name: "某局客户记忆沉淀",
     storeId: "store-customer-bureau",
-    materialScope: "since_last",
-    inputMaterialCount: 20,
+    inputRefs: ["store_content", "session"],
+    inputSummary: "库当前内容 + 安全方案补充会话",
     prompt: "重点整理决策与原因，合并重复的客户偏好，检查 POC 时间承诺。",
     modelTier: "advanced",
     status: "pending_review",
@@ -583,13 +552,27 @@ export const updateJobs: UpdateJob[] = [
     createdBy: "张敏",
     createdAt: "2026-06-12 09:32",
     diffFiles: customerDiff,
+    spilloverHints: [
+      {
+        id: "spill-customer-1",
+        targetStoreId: "store-sales-playbook",
+        targetStoreName: "store_售前打法",
+        snippet: "「政企客户先确认部署方式，再谈方案细节」是可泛化打法，更适合写入售前打法库。",
+      },
+      {
+        id: "spill-customer-2",
+        targetStoreId: "store-sales-playbook",
+        targetStoreName: "store_售前打法",
+        snippet: "「等保三级适配清单」可抽象为政企方案的通用安全合规章节。",
+      },
+    ],
   },
   {
     id: "job-sales-v5",
     name: "售前打法季度记忆沉淀",
     storeId: "store-sales-playbook",
-    materialScope: "time_range",
-    inputMaterialCount: 36,
+    inputRefs: ["store_content"],
+    inputSummary: "库当前内容",
     prompt: "只保留可复用方法，删除过时竞品信息。",
     modelTier: "advanced",
     status: "published",
@@ -606,8 +589,8 @@ export const updateJobs: UpdateJob[] = [
     id: "job-claw-running",
     name: "本体 Claw 跨调用经验记忆沉淀",
     storeId: "store-claw-native",
-    materialScope: "since_last",
-    inputMaterialCount: 30,
+    inputRefs: ["session"],
+    inputSummary: "30 次调用会话",
     modelTier: "standard",
     status: "running",
     tokenUsage: 17420,
@@ -623,8 +606,8 @@ export const updateJobs: UpdateJob[] = [
     id: "job-bid-failed",
     name: "投标专项记忆沉淀",
     storeId: "store-bid-special",
-    materialScope: "manual",
-    inputMaterialCount: 4,
+    inputRefs: ["store_content"],
+    inputSummary: "库当前内容",
     modelTier: "standard",
     status: "failed",
     tokenUsage: 6180,
@@ -642,14 +625,14 @@ export const defaultClawMemoryMounts: ClawMemoryMount[] = [
   {
     id: "mount-customer",
     storeId: "store-customer-bureau",
-    access: "read_only",
-    usagePrompt: "处理某局项目、方案与交付问题时检索；发现新的客户事实时标为更新材料。",
+    access: "read_write",
+    usagePrompt: "处理某局项目、方案与交付问题时检索；发现新的客户事实时直接写入。",
   },
   {
     id: "mount-sales",
     storeId: "store-sales-playbook",
-    access: "propose_only",
-    usagePrompt: "编写政企方案和复盘售前任务时检索；可复用的方法标为更新材料。",
+    access: "read_write",
+    usagePrompt: "编写政企方案和复盘售前任务时检索；可复用的方法直接写入。",
   },
 ];
 
@@ -663,14 +646,6 @@ export interface DreamingAgentSessionGroup {
   agentId: string;
   agentName: string;
   sessions: DreamingSessionOption[];
-}
-
-export interface DreamingDistilledMaterial {
-  id: string;
-  agentName: string;
-  nodePath: string;
-  summary: string;
-  updatedAt: string;
 }
 
 export const dreamingAgentSessionGroups: DreamingAgentSessionGroup[] = [
@@ -713,36 +688,12 @@ export const dreamingAgentSessionGroups: DreamingAgentSessionGroup[] = [
   },
 ];
 
-export const dreamingDistilledMaterials: DreamingDistilledMaterial[] = [
-  {
-    id: "cnode-native-solution-flow",
-    agentName: "本体 Claw",
-    nodePath: "procedures/政企方案编写流程.md",
-    summary: "生成方案前先建立客户事实证据表。",
-    updatedAt: "2026-06-12 10:02",
-  },
-  {
-    id: "cnode-plan-poc",
-    agentName: "方案写作 Claw",
-    nodePath: "projects/POC 交付节奏.md",
-    summary: "客户 POC 需预留安全测评与环境检查窗口。",
-    updatedAt: "2026-06-18 18:42",
-  },
-  {
-    id: "cnode-sales-budget",
-    agentName: "售前 Claw",
-    nodePath: "feedback/预算章节检查.md",
-    summary: "先拆软件、服务、算力，再确认首期总价边界。",
-    updatedAt: "2026-06-11 17:20",
-  },
-];
-
 export function getMemoryStore(storeId: string) {
   return memoryStores.find((store) => store.id === storeId);
 }
 
-export function getUpdateJob(jobId: string) {
-  return updateJobs.find((job) => job.id === jobId);
+export function getDreamingJob(jobId: string) {
+  return dreamingJobs.find((job) => job.id === jobId);
 }
 
 export function createMemoryStoreId(name: string) {
@@ -764,7 +715,7 @@ export function createBlankMemoryFiles(storeName: string): MemoryFile[] {
     {
       id: `file-${Date.now()}-index`,
       path: "INDEX.md",
-      content: `# ${storeName}\n\n## 记忆索引\n\n当前还没有主题节点。\n`,
+      content: `# ${storeName}\n\n## 记忆索引\n\n当前还没有主题文件。\n`,
     },
   ];
 }
@@ -774,22 +725,22 @@ export function createTemplateMemoryFiles(storeName: string): MemoryFile[] {
     {
       id: `file-${Date.now()}-index`,
       path: "INDEX.md",
-      content: `# ${storeName}\n\n## 记忆索引\n\n- [[entities/关键角色]]\n- [[decisions/关键决策]]\n- [[lessons/经验教训]]\n`,
+      content: `# ${storeName}\n\n## 记忆索引\n\n- [关键角色](entities/关键角色.md) — 关键角色与关系。\n- [关键决策](decisions/关键决策.md) — 决策、原因与决策人。\n- [经验教训](lessons/经验教训.md) — 可复用经验。\n`,
     },
     {
       id: `file-${Date.now()}-entity`,
       path: "entities/关键角色.md",
-      content: `---\ntype: project\nstatus: active\nsources: []\n---\n\n## 结论\n\n请补充关键角色与关系。\n`,
+      content: `---\ntopic: 关键角色\ntype: project\nsources: []\n---\n\n请补充关键角色与关系。\n`,
     },
     {
       id: `file-${Date.now()}-decision`,
       path: "decisions/关键决策.md",
-      content: `---\ntype: project\nstatus: active\nsources: []\n---\n\n## 结论\n\n请补充决策、原因与决策人。\n`,
+      content: `---\ntopic: 关键决策\ntype: project\nsources: []\n---\n\n请补充决策、原因与决策人。\n`,
     },
     {
       id: `file-${Date.now()}-lesson`,
       path: "lessons/经验教训.md",
-      content: `---\ntype: feedback\nstatus: active\nsources: []\n---\n\n## 结论\n\n请补充可复用经验。\n`,
+      content: `---\ntopic: 经验教训\ntype: feedback\nsources: []\n---\n\n请补充可复用经验。\n`,
     },
   ];
 }

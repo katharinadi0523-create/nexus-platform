@@ -74,9 +74,8 @@ export function buildAgentBomTreeFromDetail(detail: ClawDetailData): AgentBomTre
       children: [
         {
           id: "core-files",
-          label: "核心文件",
+          label: "Agent.md",
           count: coreFileCount,
-          detail: "agents / soul / identity",
         },
         {
           id: "model",
@@ -150,7 +149,7 @@ export function buildAgentBomTreeFromListItem(item: ClawHubListItem): AgentBomTr
       id: "agent-config",
       label: "智能体配置",
       children: [
-        { id: "core-files", label: "核心文件", count: 3, detail: "agents / soul / identity" },
+        { id: "core-files", label: "Agent.md", count: 1 },
         { id: "model", label: "模型配置", detail: item.model },
         { id: "version", label: "发布版本", detail: isPublished ? "已签名快照" : "草稿" },
       ],

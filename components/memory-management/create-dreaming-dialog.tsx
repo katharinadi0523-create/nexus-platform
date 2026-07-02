@@ -17,20 +17,19 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   DreamingAgentSessionGroup,
-  DreamingDistilledMaterial,
+  DreamingInputRef,
+  DreamingModelTier,
   MemoryStore,
 } from "@/lib/mock/memory-management";
-import {
-  dreamingAgentSessionGroups,
-  dreamingDistilledMaterials,
-} from "@/lib/mock/memory-management";
+import { dreamingAgentSessionGroups } from "@/lib/mock/memory-management";
 import { cn } from "@/lib/utils";
 
-export interface CreateUpdateJobValue {
+export interface CreateDreamingJobValue {
   storeId: string;
+  inputRefs: DreamingInputRef[];
   session?: AgentSessionSelection;
-  distilledMaterialIds: string[];
   prompt: string;
+  modelTier: DreamingModelTier;
 }
 
 export interface AgentSessionSelection {
@@ -38,63 +37,6 @@ export interface AgentSessionSelection {
   agentName: string;
   sessionId: string;
   sessionTitle: string;
-}
-
-function DistilledMaterialPicker({
-  materials,
-  selectedIds,
-  onChange,
-}: {
-  materials: DreamingDistilledMaterial[];
-  selectedIds: string[];
-  onChange: (nextIds: string[]) => void;
-}) {
-  function toggleMaterial(materialId: string) {
-    onChange(
-      selectedIds.includes(materialId)
-        ? selectedIds.filter((id) => id !== materialId)
-        : [...selectedIds, materialId]
-    );
-  }
-
-  return (
-    <div className="overflow-hidden rounded-[4px] border border-slate-200 bg-white">
-      {materials.map((material) => {
-        const selected = selectedIds.includes(material.id);
-        return (
-          <button
-            key={material.id}
-            type="button"
-            aria-pressed={selected}
-            onClick={() => toggleMaterial(material.id)}
-            className={cn(
-              "flex w-full items-start gap-3 border-b border-slate-100 px-3 py-2.5 text-left last:border-b-0",
-              selected ? "bg-blue-50" : "hover:bg-slate-50"
-            )}
-          >
-            <span
-              className={cn(
-                "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border text-[10px]",
-                selected
-                  ? "border-blue-600 bg-blue-600 text-white"
-                  : "border-slate-300 bg-white text-transparent"
-              )}
-            >
-              ✓
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-medium text-slate-800">
-                {material.agentName} · {material.nodePath}
-              </span>
-              <span className="mt-0.5 block line-clamp-1 text-xs text-slate-500">
-                {material.summary} · {material.updatedAt}
-              </span>
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 function AgentSessionCascader({
@@ -193,7 +135,7 @@ function AgentSessionCascader({
   );
 }
 
-export function CreateUpdateJobDialog({
+export function CreateDreamingJobDialog({
   open,
   onOpenChange,
   stores,
@@ -204,28 +146,28 @@ export function CreateUpdateJobDialog({
   onOpenChange: (open: boolean) => void;
   stores: MemoryStore[];
   initialStoreId?: string;
-  onSubmit: (value: CreateUpdateJobValue) => void;
+  onSubmit: (value: CreateDreamingJobValue) => void;
 }) {
   const [storeId, setStoreId] = useState(initialStoreId ?? stores[0]?.id ?? "");
-  const [useSessionInput, setUseSessionInput] = useState(true);
-  const [useDistilledMaterials, setUseDistilledMaterials] = useState(false);
+  const [useStoreContent, setUseStoreContent] = useState(true);
+  const [useSessionInput, setUseSessionInput] = useState(false);
   const [sessionSelection, setSessionSelection] = useState<AgentSessionSelection | null>(null);
-  const [distilledMaterialIds, setDistilledMaterialIds] = useState<string[]>([]);
   const [prompt, setPrompt] = useState("");
+  const [modelTier, setModelTier] = useState<DreamingModelTier>("standard");
   const [storeError, setStoreError] = useState("");
+  const [inputError, setInputError] = useState("");
   const [sessionError, setSessionError] = useState("");
-  const [materialError, setMaterialError] = useState("");
 
   function resetForm() {
     setStoreId(initialStoreId ?? stores[0]?.id ?? "");
-    setUseSessionInput(true);
-    setUseDistilledMaterials(false);
+    setUseStoreContent(true);
+    setUseSessionInput(false);
     setSessionSelection(null);
-    setDistilledMaterialIds([]);
     setPrompt("");
+    setModelTier("standard");
     setStoreError("");
+    setInputError("");
     setSessionError("");
-    setMaterialError("");
   }
 
   function handleOpenChange(nextOpen: boolean) {
@@ -238,29 +180,29 @@ export function CreateUpdateJobDialog({
   function handleSubmit() {
     let hasError = false;
     if (!storeId) {
-      setStoreError("请选择原始记忆库。");
+      setStoreError("请选择目标记忆库。");
+      hasError = true;
+    }
+    if (!useStoreContent && !useSessionInput) {
+      setInputError("请至少选择一种输入：库当前内容或原始会话。");
       hasError = true;
     }
     if (useSessionInput && !sessionSelection) {
       setSessionError("请选择会话输入。");
       hasError = true;
     }
-    if (useDistilledMaterials && distilledMaterialIds.length === 0) {
-      setMaterialError("请至少选择一条 C Node 蒸馏材料。");
-      hasError = true;
-    }
-    if (!useSessionInput && !useDistilledMaterials) {
-      setMaterialError("请至少选择一种输入材料。");
-      hasError = true;
-    }
     if (hasError) {
       return;
     }
+    const inputRefs: DreamingInputRef[] = [];
+    if (useStoreContent) inputRefs.push("store_content");
+    if (useSessionInput) inputRefs.push("session");
     onSubmit({
       storeId,
+      inputRefs,
       session: useSessionInput ? sessionSelection ?? undefined : undefined,
-      distilledMaterialIds: useDistilledMaterials ? distilledMaterialIds : [],
       prompt: prompt.trim(),
+      modelTier,
     });
     resetForm();
   }
@@ -271,13 +213,13 @@ export function CreateUpdateJobDialog({
         <DialogHeader>
           <DialogTitle>新建记忆沉淀</DialogTitle>
           <DialogDescription>
-            记忆沉淀会读取所选原始会话和/或 C Node 的当前内容，结合旧版本生成 vNext Draft。
+            记忆沉淀（Dreaming）读取所选输入与旧版本，重新合成 vNext 草稿；发布前不会改变当前记忆库。
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 py-2">
           <div className="space-y-2">
-            <Label>输入记忆库</Label>
+            <Label>目标记忆库</Label>
             <Select
               value={storeId}
               onValueChange={(value) => {
@@ -289,19 +231,36 @@ export function CreateUpdateJobDialog({
               className="rounded-[4px] border-slate-300 bg-white shadow-none"
             />
             {storeError ? <p className="text-xs text-rose-600">{storeError}</p> : null}
-            <p className="text-xs text-slate-500">作为本次记忆沉淀 vNext Draft 的目标 Store。</p>
+            <p className="text-xs text-slate-500">本次记忆沉淀 vNext 草稿写入该记忆库的新版本，旧版本保留可回滚。</p>
           </div>
 
           <div className="space-y-2">
-            <Label>输入材料</Label>
+            <Label>输入材料（两选其一或组合）</Label>
             <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                aria-pressed={useStoreContent}
+                onClick={() => {
+                  setUseStoreContent((current) => !current);
+                  setInputError("");
+                }}
+                className={cn(
+                  "rounded-[4px] border px-3 py-2.5 text-left text-sm transition-colors",
+                  useStoreContent
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                <span className="font-medium">库当前内容</span>
+                <span className="mt-1 block text-xs text-slate-500">读取已写入的主题文件，质量高、更轻。</span>
+              </button>
               <button
                 type="button"
                 aria-pressed={useSessionInput}
                 onClick={() => {
                   setUseSessionInput((current) => !current);
+                  setInputError("");
                   setSessionError("");
-                  setMaterialError("");
                 }}
                 className={cn(
                   "rounded-[4px] border px-3 py-2.5 text-left text-sm transition-colors",
@@ -311,27 +270,11 @@ export function CreateUpdateJobDialog({
                 )}
               >
                 <span className="font-medium">原始会话</span>
-                <span className="mt-1 block text-xs text-slate-500">按智能体与会话选择原始上下文。</span>
-              </button>
-              <button
-                type="button"
-                aria-pressed={useDistilledMaterials}
-                onClick={() => {
-                  setUseDistilledMaterials((current) => !current);
-                  setMaterialError("");
-                }}
-                className={cn(
-                  "rounded-[4px] border px-3 py-2.5 text-left text-sm transition-colors",
-                  useDistilledMaterials
-                    ? "border-blue-500 bg-blue-50 text-blue-700"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                )}
-              >
-                <span className="font-medium">蒸馏材料（C Node）</span>
-                <span className="mt-1 block text-xs text-slate-500">选择已提取的 Claw 经验节点。</span>
+                <span className="mt-1 block text-xs text-slate-500">信息更全，适合复杂资产全量重整。</span>
               </button>
             </div>
-            <p className="text-xs text-slate-500">可单选或组合使用；系统读取材料当前内容，不搬运历史 Diff。</p>
+            {inputError ? <p className="text-xs text-rose-600">{inputError}</p> : null}
+            <p className="text-xs text-slate-500">机制是「重合成」，读取输入与旧版本重新合成主题文件，不搬运历史 Diff。</p>
           </div>
 
           {useSessionInput ? (
@@ -350,31 +293,27 @@ export function CreateUpdateJobDialog({
             </div>
           ) : null}
 
-          {useDistilledMaterials ? (
-            <div className="space-y-2">
-              <Label>蒸馏材料</Label>
-              <DistilledMaterialPicker
-                materials={dreamingDistilledMaterials}
-                selectedIds={distilledMaterialIds}
-                onChange={(value) => {
-                  setDistilledMaterialIds(value);
-                  setMaterialError("");
-                }}
-              />
-              {materialError ? <p className="text-xs text-rose-600">{materialError}</p> : null}
-            </div>
-          ) : materialError ? (
-            <p className="text-xs text-rose-600">{materialError}</p>
-          ) : null}
-
           <div className="space-y-2">
-            <Label htmlFor="dreaming-prompt">用户提示词</Label>
+            <Label htmlFor="dreaming-prompt">用户提示词（usage_prompt / policy）</Label>
             <Textarea
               id="dreaming-prompt"
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder="选填。在内置提示词基础上，本次记忆沉淀的重点或特殊之处，例如：重点整理决策与原因，合并冲突与重复的客户偏好信息"
+              placeholder="选填。在内置提示词基础上，本次记忆沉淀的重点或特殊之处，例如：重点整理决策与原因，合并冲突与重复的客户偏好信息。"
               className="min-h-24 resize-none rounded-[4px] shadow-none"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>模型档位</Label>
+            <Select
+              value={modelTier}
+              onValueChange={(value) => setModelTier(value as DreamingModelTier)}
+              options={[
+                { value: "standard", label: "标准档 · 更快更省，适合轻量整理" },
+                { value: "advanced", label: "增强档 · 更强重整，适合复杂资产" },
+              ]}
+              className="rounded-[4px] border-slate-300 bg-white shadow-none"
             />
           </div>
         </div>

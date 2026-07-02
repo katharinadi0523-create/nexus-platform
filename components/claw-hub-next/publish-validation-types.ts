@@ -39,7 +39,7 @@ export const INTEGRITY_VALIDATION_ITEMS: PublishValidationItem[] = [
   {
     id: "agent-config",
     label: "Agent 配置",
-    description: "校验核心文件、模型参数与运行时资源配置摘要",
+    description: "校验 Agent.md、模型参数与运行时资源配置摘要",
   },
 ];
 

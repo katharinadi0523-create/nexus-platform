@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Filter, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -23,11 +23,13 @@ import {
 import { Select } from "@/components/ui/select";
 import {
   createBlankMemoryFiles,
+  createInitialMemoryVersionId,
   createMemoryStoreId,
   createTemplateMemoryFiles,
+  formatMemoryVersionLabel,
   memoryStores,
   type MemoryStore,
-  type MemoryStoreType,
+  type MemoryStoreKind,
 } from "@/lib/mock/memory-management";
 import {
   CreateMemoryStoreDialog,
@@ -36,9 +38,9 @@ import {
 import {
   formatCompactNumber,
   MemoryStoreIcon,
-  StoreTypeBadge,
+  StoreKindBadge,
 } from "@/components/memory-management/memory-shared";
-import { UpdateJobList } from "@/components/memory-management/dreaming-list";
+import { DreamingJobList } from "@/components/memory-management/dreaming-list";
 import { cn } from "@/lib/utils";
 
 type MainTab = "stores" | "dreaming";
@@ -47,14 +49,20 @@ function getStoreDetailHref(store: MemoryStore) {
   return `/memory-management/stores/${store.id}`;
 }
 
-export function MemoryManagementWorkbench() {
+export function MemoryManagementWorkbench({
+  initialTab = "stores",
+  initialCreateRequested = false,
+  initialStoreId,
+}: {
+  initialTab?: MainTab;
+  initialCreateRequested?: boolean;
+  initialStoreId?: string;
+}) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const requestedTab = searchParams.get("tab");
-  const activeTab: MainTab = requestedTab === "dreaming" ? "dreaming" : "stores";
+  const [activeTab, setActiveTab] = useState<MainTab>(initialTab);
+  const [createDreamingRequested, setCreateDreamingRequested] = useState(initialCreateRequested);
   const [keyword, setKeyword] = useState("");
-  const [typeFilter, setTypeFilter] = useState<MemoryStoreType | "all">("all");
-  const [materialFilter, setMaterialFilter] = useState<"all" | "pending">("all");
+  const [kindFilter, setKindFilter] = useState<MemoryStoreKind | "all">("all");
   const [stores, setStores] = useState<MemoryStore[]>(memoryStores);
   const [createOpen, setCreateOpen] = useState(false);
   const deferredKeyword = useDeferredValue(keyword);
@@ -72,14 +80,14 @@ export function MemoryManagementWorkbench() {
           .join(" ")
           .toLowerCase()
           .includes(normalizedKeyword);
-      const matchesType = typeFilter === "all" || store.type === typeFilter;
-      const matchesMaterial =
-        materialFilter === "all" || store.updateMaterialCount > 0;
-      return matchesKeyword && matchesType && matchesMaterial;
+      const matchesKind = kindFilter === "all" || store.kind === kindFilter;
+      return matchesKeyword && matchesKind;
     });
-  }, [deferredKeyword, materialFilter, stores, typeFilter]);
+  }, [deferredKeyword, kindFilter, stores]);
 
   function switchTab(tab: MainTab) {
+    setActiveTab(tab);
+    setCreateDreamingRequested(false);
     router.replace(tab === "stores" ? "/memory-management" : "/memory-management?tab=dreaming");
   }
 
@@ -89,15 +97,59 @@ export function MemoryManagementWorkbench() {
   }
 
   function handleDelete(store: MemoryStore) {
-    if (store.type === "builtin_c") {
-      toast.info("自带 C Store 跟随 Claw 生命周期，不支持删除。");
+    if (store.kind === "builtin") {
+      toast.info("自带 C 库跟随 Claw 生命周期，不支持删除。");
       return;
     }
-    if (!window.confirm(`确认删除“${store.name}”吗？此操作仅影响当前 Demo 状态。`)) {
+    if (store.mountCount > 0) {
+      if (!window.confirm(`“${store.name}”仍被 ${store.mountCount} 个 Claw 挂载，确认删除吗？`)) {
+        return;
+      }
+    } else if (!window.confirm(`确认删除“${store.name}”吗？此操作仅影响当前 Demo 状态。`)) {
       return;
     }
     setStores((current) => current.filter((item) => item.id !== store.id));
     toast.success(`已删除：${store.name}`);
+  }
+
+  function handleFork(store: MemoryStore) {
+    const baseName = store.name.replace(/^store[_-]?/i, "");
+    const name = `store_${baseName}_副本`;
+    const id = createMemoryStoreId(`${name}-${Date.now()}`);
+    const files = store.files.map((file) => ({
+      ...file,
+      id: `file-${Date.now()}-${file.id}`,
+    }));
+    const createdAt = new Date().toLocaleString("zh-CN", { hour12: false });
+    const versionId = createInitialMemoryVersionId(new Date());
+    const forked: MemoryStore = {
+      id,
+      name,
+      description: `从 ${store.name} ${formatMemoryVersionLabel(store.currentVersion)} fork。`,
+      scope: "org",
+      kind: "fork",
+      nodeCount: Math.max(files.length - 1, 0),
+      tokenCount: files.reduce((total, file) => total + file.content.length, 0),
+      currentVersion: versionId,
+      mountCount: 0,
+      updatedBy: "当前用户",
+      updatedAt: createdAt,
+      files,
+      versions: [
+        {
+          version: versionId,
+          source: "fork",
+          author: "当前用户",
+          createdAt,
+          summary: `从 ${store.name} ${formatMemoryVersionLabel(store.currentVersion)} fork。`,
+          files,
+        },
+      ],
+      mountRelations: [],
+    };
+    setStores((current) => [forked, ...current]);
+    toast.success(`已 fork：${forked.name}`);
+    router.push(getStoreDetailHref(forked));
   }
 
   function handleCreate(value: CreateMemoryStoreValue) {
@@ -113,6 +165,7 @@ export function MemoryManagementWorkbench() {
           ? createTemplateMemoryFiles(value.name)
           : createBlankMemoryFiles(value.name);
     const createdAt = new Date().toLocaleString("zh-CN", { hour12: false });
+    const versionId = createInitialMemoryVersionId(new Date());
     const store: MemoryStore = {
       id,
       name: value.name,
@@ -121,20 +174,20 @@ export function MemoryManagementWorkbench() {
         (value.initialization === "import"
           ? `由 ${value.importedFileName ?? "Markdown 文件"} 导入。`
           : value.initialization === "fork" && sourceStore
-            ? `从 ${sourceStore.name} v${sourceStore.currentVersion} fork。`
-          : "新创建的共享 Memory Store。"),
-      type: value.initialization === "fork" ? "fork" : "shared",
+            ? `从 ${sourceStore.name} ${formatMemoryVersionLabel(sourceStore.currentVersion)} fork。`
+            : "新创建的组织共享记忆库。"),
+      scope: "org",
+      kind: value.initialization === "fork" ? "fork" : "shared",
       nodeCount: Math.max(files.length - 1, 0),
       tokenCount: files.reduce((total, file) => total + file.content.length, 0),
-      currentVersion: 1,
+      currentVersion: versionId,
       mountCount: 0,
-      updateMaterialCount: 0,
       updatedBy: "当前用户",
       updatedAt: createdAt,
       files,
       versions: [
         {
-          version: 1,
+          version: versionId,
           source:
             value.initialization === "fork"
               ? "fork"
@@ -147,14 +200,13 @@ export function MemoryManagementWorkbench() {
             value.initialization === "template"
               ? "从客户/项目记忆模板初始化。"
               : value.initialization === "fork" && sourceStore
-                ? `从 ${sourceStore.name} v${sourceStore.currentVersion} fork。`
-              : value.initialization === "import"
-                ? `从 ${value.importedFileName ?? "Markdown 文件"} 导入。`
-                : "创建空白 Store。",
+                ? `从 ${sourceStore.name} ${formatMemoryVersionLabel(sourceStore.currentVersion)} fork。`
+                : value.initialization === "import"
+                  ? `从 ${value.importedFileName ?? "Markdown 文件"} 导入。`
+                  : "创建空白记忆库。",
           files,
         },
       ],
-      updateMaterials: [],
       mountRelations: [],
     };
 
@@ -171,14 +223,14 @@ export function MemoryManagementWorkbench() {
 
   return (
     <div className="space-y-5 pb-10">
-      <ManagementPageTitle>记忆</ManagementPageTitle>
+      <ManagementPageTitle>记忆管理</ManagementPageTitle>
 
       <div className="border-b border-slate-200">
         <div className="flex gap-7">
-            {[
-              { value: "stores" as const, label: "记忆库" },
-              { value: "dreaming" as const, label: "记忆沉淀" },
-            ].map((tab) => (
+          {[
+            { value: "stores" as const, label: "记忆库" },
+            { value: "dreaming" as const, label: "记忆沉淀" },
+          ].map((tab) => (
             <button
               key={tab.value}
               type="button"
@@ -197,73 +249,64 @@ export function MemoryManagementWorkbench() {
       </div>
 
       {activeTab === "dreaming" ? (
-        <UpdateJobList
+        <DreamingJobList
           stores={stores}
-          createRequested={searchParams.get("create") === "1"}
-          initialStoreId={searchParams.get("storeId") ?? undefined}
+          createRequested={createDreamingRequested}
+          initialStoreId={initialStoreId}
+          onCreateRequestHandled={() => setCreateDreamingRequested(false)}
         />
       ) : (
         <>
           <ManagementToolbar
             searchValue={keyword}
             onSearchChange={setKeyword}
-            searchPlaceholder="搜索 Store 名称或描述"
+            searchPlaceholder="搜索记忆库名称或描述"
             actions={
               <>
                 <Select
-                  value={typeFilter}
-                  onValueChange={(value) => setTypeFilter(value as MemoryStoreType | "all")}
+                  value={kindFilter}
+                  onValueChange={(value) => setKindFilter(value as MemoryStoreKind | "all")}
                   options={[
                     { value: "all", label: "全部类型" },
-                    { value: "shared", label: "共享" },
+                    { value: "shared", label: "共享 · S" },
                     { value: "fork", label: "fork" },
-                    { value: "builtin_c", label: "自带-C" },
+                    { value: "builtin", label: "自带 · C" },
                   ]}
-                  className="h-8 w-[116px] rounded-[4px] border-slate-300 bg-white shadow-none"
-                />
-                <Select
-                  value={materialFilter}
-                  onValueChange={(value) => setMaterialFilter(value as "all" | "pending")}
-                  options={[
-                    { value: "all", label: "全部材料" },
-                    { value: "pending", label: "有更新材料" },
-                  ]}
-                  className="h-8 w-[130px] rounded-[4px] border-slate-300 bg-white shadow-none"
+                  className="h-8 w-[124px] rounded-[4px] border-slate-300 bg-white shadow-none"
                 />
                 <ManagementIconButton onClick={handleRefresh} aria-label="刷新记忆库列表">
                   <RefreshCw className="h-4 w-4" />
                 </ManagementIconButton>
                 <ManagementPrimaryButton onClick={() => setCreateOpen(true)}>
                   <Plus className="h-4 w-4" />
-                  创建 Memory Store
+                  创建记忆库
                 </ManagementPrimaryButton>
               </>
             }
           />
 
           <ManagementTableFrame>
-            <ManagementTable className="min-w-[1480px] table-fixed">
+            <ManagementTable className="min-w-[1440px] table-fixed">
               <ManagementTableHeader>
                 <ManagementTableHead className="w-[240px]">名称</ManagementTableHead>
-                <ManagementTableHead className="w-[250px]">描述</ManagementTableHead>
-                <ManagementTableHead className="w-[90px]">
+                <ManagementTableHead className="w-[280px]">描述</ManagementTableHead>
+                <ManagementTableHead className="w-[110px]">
                   <span className="inline-flex items-center gap-2">
                     类型 <Filter className="h-3.5 w-3.5" />
                   </span>
                 </ManagementTableHead>
-                <ManagementTableHead className="w-[125px]">规模</ManagementTableHead>
+                <ManagementTableHead className="w-[130px]">规模</ManagementTableHead>
                 <ManagementTableHead className="w-[90px]">当前版本</ManagementTableHead>
                 <ManagementTableHead className="w-[80px]">挂载数</ManagementTableHead>
-                <ManagementTableHead className="w-[110px]">更新材料池</ManagementTableHead>
-                <ManagementTableHead className="w-[150px]">最近记忆沉淀</ManagementTableHead>
+                <ManagementTableHead className="w-[160px]">最近整理</ManagementTableHead>
                 <ManagementTableHead className="w-[100px]">更新人</ManagementTableHead>
                 <ManagementTableHead className="w-[160px]">更新时间</ManagementTableHead>
-                <ManagementTableHead className="w-[160px]">操作</ManagementTableHead>
+                <ManagementTableHead className="w-[200px]">操作</ManagementTableHead>
               </ManagementTableHeader>
               <ManagementTableBody>
                 {filteredStores.length === 0 ? (
                   <ManagementEmptyRow
-                    colSpan={11}
+                    colSpan={10}
                     description="请调整搜索关键词或筛选条件。"
                   />
                 ) : (
@@ -271,7 +314,7 @@ export function MemoryManagementWorkbench() {
                     <ManagementRow key={store.id}>
                       <ManagementCell>
                         <div className="flex items-center gap-3">
-                          <MemoryStoreIcon type={store.type} />
+                          <MemoryStoreIcon kind={store.kind} />
                           <button
                             type="button"
                             className="min-w-0 truncate text-left font-semibold text-slate-900 hover:text-blue-600"
@@ -285,36 +328,28 @@ export function MemoryManagementWorkbench() {
                         <p className="truncate text-slate-600">{store.description}</p>
                       </ManagementCell>
                       <ManagementCell>
-                        <StoreTypeBadge type={store.type} />
+                        <StoreKindBadge kind={store.kind} />
                       </ManagementCell>
                       <ManagementCell>
-                        <div className="text-slate-800">{store.nodeCount} 个节点</div>
+                        <div className="text-slate-800">{store.nodeCount} 个主题文件</div>
                         <div className="mt-0.5 text-xs text-slate-500">
                           {formatCompactNumber(store.tokenCount)} tokens
                         </div>
                       </ManagementCell>
-                      <ManagementCell className="font-medium">v{store.currentVersion}</ManagementCell>
+                      <ManagementCell className="font-medium">
+                        {formatMemoryVersionLabel(store.currentVersion)}
+                      </ManagementCell>
                       <ManagementCell>
                         <button
                           type="button"
                           className="font-medium text-blue-600 hover:text-blue-700"
-                          onClick={() => toast.info(`当前有 ${store.mountCount} 个 Claw 挂载。`)}
+                          onClick={() => router.push(`${getStoreDetailHref(store)}?tab=mounts`)}
                         >
                           {store.mountCount}
                         </button>
                       </ManagementCell>
-                      <ManagementCell>
-                        {store.updateMaterialCount > 0 ? (
-                          <span className="inline-flex items-center gap-1.5 font-medium text-rose-600">
-                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                            {store.updateMaterialCount} 待处理
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">0</span>
-                        )}
-                      </ManagementCell>
                       <ManagementCell className="text-slate-600">
-                        {store.lastUpdateJobAt ?? "从未"}
+                        {store.lastDreamingAt ?? "从未"}
                       </ManagementCell>
                       <ManagementCell>{store.updatedBy}</ManagementCell>
                       <ManagementCell>{store.updatedAt}</ManagementCell>
@@ -335,7 +370,13 @@ export function MemoryManagementWorkbench() {
                             记忆沉淀
                           </ManagementTextAction>
                           <ManagementTextAction
-                            disabled={store.type === "builtin_c"}
+                            disabled={store.kind === "builtin"}
+                            onClick={() => handleFork(store)}
+                          >
+                            fork
+                          </ManagementTextAction>
+                          <ManagementTextAction
+                            disabled={store.kind === "builtin"}
                             onClick={() => handleDelete(store)}
                           >
                             删除
@@ -350,7 +391,7 @@ export function MemoryManagementWorkbench() {
           </ManagementTableFrame>
 
           <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>共 {filteredStores.length} 个 Memory Store</span>
+            <span>共 {filteredStores.length} 个记忆库</span>
             <span>第 1 / 1 页</span>
           </div>
         </>

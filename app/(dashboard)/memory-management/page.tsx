@@ -1,16 +1,24 @@
-import { Suspense } from "react";
 import { MemoryManagementWorkbench } from "@/components/memory-management/memory-management-workbench";
 
-export default function MemoryManagementPage() {
+type MemoryManagementSearchParams = Record<string, string | string[] | undefined>;
+
+function readParam(searchParams: MemoryManagementSearchParams, key: string) {
+  const value = searchParams[key];
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function MemoryManagementPage({
+  searchParams,
+}: {
+  searchParams: Promise<MemoryManagementSearchParams>;
+}) {
+  const resolvedSearchParams = await searchParams;
+
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-[320px] items-center justify-center text-sm text-slate-500">
-          正在加载记忆管理...
-        </div>
-      }
-    >
-      <MemoryManagementWorkbench />
-    </Suspense>
+    <MemoryManagementWorkbench
+      initialTab={readParam(resolvedSearchParams, "tab") === "dreaming" ? "dreaming" : "stores"}
+      initialCreateRequested={readParam(resolvedSearchParams, "create") === "1"}
+      initialStoreId={readParam(resolvedSearchParams, "storeId")}
+    />
   );
 }

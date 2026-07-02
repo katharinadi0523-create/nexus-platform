@@ -1,49 +1,56 @@
 import { notFound } from "next/navigation";
-import { UpdateJobDetailWorkbench } from "@/components/memory-management/dreaming-detail-workbench";
+import { DreamingJobDetailWorkbench } from "@/components/memory-management/dreaming-detail-workbench";
 import {
-  getUpdateJob,
-  updateJobs,
-  type UpdateJob,
+  dreamingJobs,
+  getDreamingJob,
+  type DreamingInputRef,
+  type DreamingJob,
 } from "@/lib/mock/memory-management";
 
-type UpdateJobSearchParams = Record<string, string | string[] | undefined>;
+type DreamingJobSearchParams = Record<string, string | string[] | undefined>;
 
-function readParam(searchParams: UpdateJobSearchParams, key: string) {
+function readParam(searchParams: DreamingJobSearchParams, key: string) {
   const value = searchParams[key];
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function UpdateJobDetailPage({
+export default async function DreamingJobDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ jobId: string }>;
-  searchParams: Promise<UpdateJobSearchParams>;
+  searchParams: Promise<DreamingJobSearchParams>;
 }) {
   const { jobId } = await params;
   const resolvedSearchParams = await searchParams;
-  const existingJob = getUpdateJob(jobId);
+  const existingJob = getDreamingJob(jobId);
   const fallbackName = readParam(resolvedSearchParams, "name");
 
   let job = existingJob;
   if (!job && fallbackName) {
+    const rawInputRefs = readParam(resolvedSearchParams, "inputRefs");
+    const inputRefs = (rawInputRefs?.split(",").filter(Boolean) ?? [
+      "store_content",
+    ]) as DreamingInputRef[];
     job = {
-      ...updateJobs[0],
+      ...dreamingJobs[0],
       id: jobId,
       name: fallbackName,
-      storeId: readParam(resolvedSearchParams, "storeId") ?? updateJobs[0].storeId,
-      inputMaterialCount: Number(readParam(resolvedSearchParams, "inputMaterialCount") ?? 20),
-      prompt: readParam(resolvedSearchParams, "prompt"),
+      storeId: readParam(resolvedSearchParams, "storeId") ?? dreamingJobs[0].storeId,
+      inputRefs,
+      inputSummary:
+        readParam(resolvedSearchParams, "inputSummary") ?? dreamingJobs[0].inputSummary,
+      prompt: readParam(resolvedSearchParams, "prompt") || undefined,
       modelTier:
         readParam(resolvedSearchParams, "modelTier") === "advanced" ? "advanced" : "standard",
       createdBy: "当前用户",
       createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-    } satisfies UpdateJob;
+    } satisfies DreamingJob;
   }
 
   if (!job) {
     notFound();
   }
 
-  return <UpdateJobDetailWorkbench job={job} />;
+  return <DreamingJobDetailWorkbench job={job} />;
 }

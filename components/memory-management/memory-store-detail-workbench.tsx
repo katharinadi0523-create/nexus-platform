@@ -17,15 +17,16 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type {
-  MemoryFile,
-  MemoryStore,
-  StoreUpdateMaterial,
+import {
+  formatMemoryVersionLabel,
+  type MemoryFile,
+  type MemoryStore,
 } from "@/lib/mock/memory-management";
 import {
+  AccessBadge,
   formatCompactNumber,
   MemoryStoreIcon,
-  StoreTypeBadge,
+  StoreKindBadge,
 } from "@/components/memory-management/memory-shared";
 import { cn } from "@/lib/utils";
 
@@ -41,38 +42,30 @@ function groupFiles(files: MemoryFile[]) {
   return { rootFiles, groups: Array.from(groups.entries()) };
 }
 
-type StoreDetailTab = "nodes" | "materials" | "versions" | "mounts";
+export type StoreDetailTab = "nodes" | "versions" | "mounts";
 
 const detailTabs: Array<{ value: StoreDetailTab; label: string }> = [
-  { value: "nodes", label: "主题节点" },
-  { value: "materials", label: "更新材料池" },
+  { value: "nodes", label: "主题文件" },
   { value: "versions", label: "版本" },
   { value: "mounts", label: "挂载关系" },
 ];
 
-const materialRelationLabels: Record<StoreUpdateMaterial["relation"], string> = {
-  new: "新增",
-  duplicate: "重复",
-  conflict: "冲突",
-};
-
-const materialStatusLabels: Record<StoreUpdateMaterial["status"], string> = {
-  pending: "待处理",
-  included: "已纳入",
-  ignored: "已忽略",
-};
-
-export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
+export function MemoryStoreDetailWorkbench({
+  store,
+  initialTab = "nodes",
+  embedded = false,
+}: {
+  store: MemoryStore;
+  initialTab?: StoreDetailTab;
+  embedded?: boolean;
+}) {
   const router = useRouter();
   const [files, setFiles] = useState<MemoryFile[]>(store.files.map((file) => ({ ...file })));
-  const [materials, setMaterials] = useState<StoreUpdateMaterial[]>(
-    store.updateMaterials.map((material) => ({ ...material }))
-  );
   const [selectedFileId, setSelectedFileId] = useState(store.files[0]?.id ?? "");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(store.files[0]?.content ?? "");
   const [currentVersion, setCurrentVersion] = useState(store.currentVersion);
-  const [activeTab, setActiveTab] = useState<StoreDetailTab>("nodes");
+  const [activeTab, setActiveTab] = useState<StoreDetailTab>(initialTab);
   const groupedFiles = useMemo(() => groupFiles(files), [files]);
   const selectedFile = files.find((file) => file.id === selectedFileId) ?? files[0];
 
@@ -96,7 +89,7 @@ export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
   }
 
   function handleAddFile() {
-    const path = window.prompt("请输入新的 Markdown 路径，例如 lessons/新经验.md");
+    const path = window.prompt("请输入新的主题文件路径，例如 lessons/新经验.md");
     const normalizedPath = path?.trim();
     if (!normalizedPath) {
       return;
@@ -111,7 +104,7 @@ export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
     const nextFile: MemoryFile = {
       id: `memory-file-${Date.now()}`,
       path: markdownPath,
-      content: `# ${markdownPath.split("/").pop()?.replace(/\.md$/, "") ?? "新记忆"}\n\n## 结论\n\n请补充内容。\n`,
+      content: `---\ntopic: ${markdownPath.split("/").pop()?.replace(/\.md$/, "") ?? "新主题"}\ntype: project\nsources: []\n---\n\n请补充内容。\n`,
     };
     setFiles((current) => [...current, nextFile]);
     setSelectedFileId(nextFile.id);
@@ -121,7 +114,7 @@ export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
 
   function handleDeleteFile() {
     if (!selectedFile || selectedFile.path === "INDEX.md") {
-      toast.info("INDEX.md 是 Store 索引，不支持删除。");
+      toast.info("INDEX.md 是库索引，不支持删除。");
       return;
     }
     if (!window.confirm(`确认删除“${selectedFile.path}”吗？`)) {
@@ -146,37 +139,42 @@ export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
     setSelectedFileId(nextFiles[0]?.id ?? "");
     setDraft(nextFiles[0]?.content ?? "");
     setEditing(false);
-    toast.success(`已回滚到 v${version.version}。`);
-  }
-
-  function updateMaterialStatus(materialId: string, status: StoreUpdateMaterial["status"]) {
-    setMaterials((current) =>
-      current.map((material) =>
-        material.id === materialId ? { ...material, status } : material
-      )
-    );
-    toast.success(status === "included" ? "已纳入下次记忆沉淀。" : "已忽略该更新材料。");
+    toast.success(`已回滚到 ${formatMemoryVersionLabel(version.version)}。`);
   }
 
   return (
-    <div className="-m-6 flex min-h-[calc(100vh-60px)] flex-col bg-white">
-      <header className="flex min-h-[72px] flex-wrap items-center justify-between gap-4 border-b border-slate-200 px-6 py-3">
+    <div
+      className={cn(
+        "flex flex-col bg-white",
+        embedded ? "h-full" : "-m-6 min-h-[calc(100vh-60px)]"
+      )}
+    >
+      <header
+        className={cn(
+          "flex min-h-[72px] flex-wrap items-center justify-between gap-4 border-b border-slate-200 px-6 py-3",
+          embedded && "pr-14"
+        )}
+      >
         <div className="flex min-w-0 items-center gap-3">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => router.push("/memory-management")}
-            className="h-9 w-9 rounded-[4px] border-slate-300 shadow-none"
-            aria-label="返回记忆库"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <MemoryStoreIcon type={store.type} />
+          {embedded ? null : (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => router.push("/memory-management")}
+              className="h-9 w-9 rounded-[4px] border-slate-300 shadow-none"
+              aria-label="返回记忆库"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <MemoryStoreIcon kind={store.kind} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-xl font-semibold text-slate-950">{store.name}</h1>
-              <StoreTypeBadge type={store.type} />
-              <span className="text-sm font-medium text-slate-500">v{currentVersion}</span>
+              <StoreKindBadge kind={store.kind} />
+              <span className="text-sm font-medium text-slate-500">
+                {formatMemoryVersionLabel(currentVersion)}
+              </span>
             </div>
             <p className="mt-1 max-w-3xl truncate text-sm text-slate-500">{store.description}</p>
           </div>
@@ -195,10 +193,10 @@ export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
 
       <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4 sm:grid-cols-4">
         {[
-          { label: "主题节点", value: `${store.nodeCount} 个` },
+          { label: "主题文件", value: `${store.nodeCount} 个` },
           { label: "Token 规模", value: formatCompactNumber(store.tokenCount) },
           { label: "挂载 Claw", value: `${store.mountCount} 个` },
-          { label: "更新材料", value: `${store.updateMaterialCount} 份` },
+          { label: "最近整理", value: store.lastDreamingAt ?? "从未" },
         ].map((item) => (
           <div key={item.label}>
             <div className="text-xs text-slate-500">{item.label}</div>
@@ -221,9 +219,6 @@ export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
             )}
           >
             {tab.label}
-            {tab.value === "materials" && store.updateMaterialCount > 0 ? (
-              <span className="ml-1 text-rose-600">({store.updateMaterialCount})</span>
-            ) : null}
           </button>
         ))}
       </div>
@@ -232,18 +227,18 @@ export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
         <main className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)] overflow-hidden">
           <aside className="min-h-0 overflow-y-auto border-r border-slate-200 bg-slate-50/60 p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-900">主题节点</h2>
+              <h2 className="text-sm font-semibold text-slate-900">主题文件</h2>
               <button
                 type="button"
                 onClick={handleAddFile}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-[4px] text-slate-500 hover:bg-slate-200 hover:text-slate-900"
-                aria-label="新增主题节点"
+                aria-label="新增主题文件"
               >
                 <FilePlus2 className="h-4 w-4" />
               </button>
             </div>
             <p className="mb-3 text-xs leading-5 text-slate-500">
-              Store 由 INDEX 和多个主题 Node 组成；节点内可以包含多条 claim，变更按 Diff 审核。
+              记忆库由 INDEX 与多个主题文件（Node）组成；一个文件一个 Type，变更以文件 + 版本 Diff 衡量。
             </p>
             <div className="space-y-1">
               {groupedFiles.rootFiles.map((file) => (
@@ -333,68 +328,10 @@ export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
               </>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-slate-400">
-                暂无主题节点
+                暂无主题文件
               </div>
             )}
           </section>
-        </main>
-      ) : null}
-
-      {activeTab === "materials" ? (
-        <main className="min-h-0 flex-1 overflow-auto bg-slate-50/40 p-6">
-          <div className="overflow-hidden rounded-[6px] border border-slate-200 bg-white">
-            <div className="grid grid-cols-[minmax(240px,1fr)_130px_90px_90px_120px_170px] border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700">
-              <span>更新材料</span>
-              <span>来源 Claw</span>
-              <span>关系</span>
-              <span>置信度</span>
-              <span>状态</span>
-              <span>操作</span>
-            </div>
-            {materials.length > 0 ? (
-              materials.map((material) => (
-                <div
-                  key={material.id}
-                  className="grid grid-cols-[minmax(240px,1fr)_130px_90px_90px_120px_170px] items-center border-b border-slate-100 px-4 py-3 text-sm last:border-b-0"
-                >
-                  <div className="min-w-0 pr-4">
-                    <p className="line-clamp-2 leading-6 text-slate-700">{material.content}</p>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {material.sourceSession} · {material.createdAt}
-                    </p>
-                  </div>
-                  <span className="truncate text-slate-600">{material.sourceClaw}</span>
-                  <span className="text-slate-600">{materialRelationLabels[material.relation]}</span>
-                  <span className="text-slate-600">{Math.round(material.confidence * 100)}%</span>
-                  <span className="font-medium text-slate-700">
-                    {materialStatusLabels[material.status]}
-                  </span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      disabled={material.status === "included"}
-                      onClick={() => updateMaterialStatus(material.id, "included")}
-                      className="text-blue-600 hover:text-blue-700 disabled:text-slate-300"
-                    >
-                      纳入下次记忆沉淀
-                    </button>
-                    <button
-                      type="button"
-                      disabled={material.status === "ignored"}
-                      onClick={() => updateMaterialStatus(material.id, "ignored")}
-                      className="text-slate-500 hover:text-slate-700 disabled:text-slate-300"
-                    >
-                      忽略
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="px-6 py-16 text-center text-sm text-slate-400">
-                暂无更新材料
-              </div>
-            )}
-          </div>
         </main>
       ) : null}
 
@@ -414,7 +351,7 @@ export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 font-semibold text-slate-900">
                       <History className="h-4 w-4 text-slate-500" />
-                      v{version.version}
+                      {formatMemoryVersionLabel(version.version)}
                     </div>
                     <span className="text-xs text-slate-500">{version.source}</span>
                   </div>
@@ -452,11 +389,14 @@ export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
 
       {activeTab === "mounts" ? (
         <main className="min-h-0 flex-1 overflow-auto bg-slate-50/40 p-6">
+          <div className="mb-3 rounded-[6px] border border-blue-100 bg-blue-50/70 px-4 py-2.5 text-xs leading-5 text-slate-600">
+            本期挂载库统一为<span className="font-medium text-slate-800">「全量读写」</span>，写入即对其他挂载方可见；细粒度 RO/RW 待平台数据权限就绪后再做。
+          </div>
           <div className="overflow-hidden rounded-[6px] border border-slate-200 bg-white">
             <div className="grid grid-cols-[180px_120px_minmax(260px,1fr)_170px] border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700">
               <span>Claw</span>
               <span>权限</span>
-              <span>usage_prompt</span>
+              <span>使用指引</span>
               <span>更新时间</span>
             </div>
             {store.mountRelations.length > 0 ? (
@@ -466,8 +406,8 @@ export function MemoryStoreDetailWorkbench({ store }: { store: MemoryStore }) {
                   className="grid grid-cols-[180px_120px_minmax(260px,1fr)_170px] items-center border-b border-slate-100 px-4 py-3 text-sm last:border-b-0"
                 >
                   <span className="font-medium text-slate-900">{relation.clawName}</span>
-                  <span className="text-slate-600">
-                    {relation.access === "propose_only" ? "仅提议" : "只读"}
+                  <span>
+                    <AccessBadge access={relation.access} />
                   </span>
                   <p className="line-clamp-2 pr-6 leading-6 text-slate-600">
                     {relation.usagePrompt}

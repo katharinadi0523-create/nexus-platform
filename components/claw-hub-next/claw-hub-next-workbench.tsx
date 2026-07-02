@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowUpRight, Bot, Plus, RefreshCw, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { AgentBomBadge } from "@/components/claw-hub-next/agent-bom-badge";
+import { AgentMdEditor } from "@/components/claw-hub-next/detail/agent-md-editor";
 import { buildAgentBomTreeFromListItem } from "@/components/claw-hub-next/agent-bom-tree";
 import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { clawHubList, type ClawHubListItem } from "@/lib/mock/claw-hub-next";
+import { clawHubList, CLAW_AGENT_MD_PLACEHOLDER, type ClawHubListItem } from "@/lib/mock/claw-hub-next";
 import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 
@@ -36,8 +37,7 @@ const STORAGE_VOLUME_OPTIONS = [
 type CreateClawDraft = {
   name: string;
   description: string;
-  identityContent: string;
-  soulContent: string;
+  agentContent: string;
   primaryModel: string;
   storageVolume: string;
 };
@@ -97,8 +97,7 @@ export function ClawHubNextWorkbench() {
   const [createDraft, setCreateDraft] = useState<CreateClawDraft>({
     name: "",
     description: "",
-    identityContent: "",
-    soulContent: "",
+    agentContent: "",
     primaryModel: PRESET_MODEL_IDS[0] ?? "Qwen3-32B",
     storageVolume: "",
   });
@@ -175,8 +174,7 @@ export function ClawHubNextWorkbench() {
     setCreateDraft({
       name: "",
       description: "",
-      identityContent: "",
-      soulContent: "",
+      agentContent: "",
       primaryModel: PRESET_MODEL_IDS[0] ?? "Qwen3-32B",
       storageVolume: "",
     });
@@ -424,29 +422,13 @@ export function ClawHubNextWorkbench() {
             <div className="my-6 border-t border-slate-200" />
 
             <section className="space-y-4">
-              <div className="text-base font-semibold text-slate-950">人格设定</div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="create-claw-identity">IDENTITY.md</Label>
-                  <textarea
-                    id="create-claw-identity"
-                    value={createDraft.identityContent}
-                    onChange={(event) => handleCreateDraftChange("identityContent", event.target.value)}
-                    placeholder="选填，例如：定义 Claw 的角色、职责边界和服务对象。"
-                    className="min-h-[180px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-none outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="create-claw-soul">SOUL.md</Label>
-                  <textarea
-                    id="create-claw-soul"
-                    value={createDraft.soulContent}
-                    onChange={(event) => handleCreateDraftChange("soulContent", event.target.value)}
-                    placeholder="选填，例如：定义 Claw 的语气、风格和处理偏好。"
-                    className="min-h-[180px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-none outline-none focus:border-blue-500"
-                  />
-                </div>
-              </div>
+              <div className="text-base font-semibold text-slate-950">Agent 设定</div>
+              <AgentMdEditor
+                value={createDraft.agentContent}
+                onChange={(value) => handleCreateDraftChange("agentContent", value)}
+                placeholder={CLAW_AGENT_MD_PLACEHOLDER}
+                minHeightClassName="min-h-[220px]"
+              />
             </section>
 
             <div className="my-6 border-t border-slate-200" />

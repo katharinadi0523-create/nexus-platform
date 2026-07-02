@@ -23,7 +23,6 @@ import {
   Building2,
   FileCode,
   Activity,
-  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalHeader } from "@/components/layout/global-header";
@@ -134,12 +133,6 @@ const menuGroups: MenuGroup[] = [
         label: "术语库",
         icon: BookA,
         href: "/term-bank",
-      },
-      {
-        key: "MemoryManagement",
-        label: "记忆",
-        icon: Brain,
-        href: "/memory-management",
       },
     ],
   },
@@ -282,8 +275,6 @@ export default function DashboardLayout({
     pathname.startsWith("/skills-hub") || pathname === "/skills";
   const isSkillsManagementPage = pathname.startsWith("/skills-management");
   const isOpenApiManagementPage = pathname.startsWith("/openapi-management");
-  const isMemoryManagementPage = pathname.startsWith("/memory-management");
-
   if (isClawDetailPage) {
     return (
       <>
@@ -301,7 +292,7 @@ export default function DashboardLayout({
           "flex h-screen overflow-hidden pt-[60px]",
           isSkillsPlazaPage
             ? "bg-[#e8f0fb]"
-            : isSkillsManagementPage || isOpenApiManagementPage || isMemoryManagementPage || isSpaceOperationsPage
+            : isSkillsManagementPage || isOpenApiManagementPage || isSpaceOperationsPage
               ? "bg-white"
               : "bg-slate-50"
         )}
@@ -315,7 +306,7 @@ export default function DashboardLayout({
           className={cn(
             "relative flex h-[calc(100vh-60px)] min-h-0 flex-1 flex-col overflow-hidden",
             isSkillsPlazaPage && "bg-[#e8f0fb]",
-            (isSkillsManagementPage || isOpenApiManagementPage || isMemoryManagementPage || isSpaceOperationsPage) && "bg-white"
+            (isSkillsManagementPage || isOpenApiManagementPage || isSpaceOperationsPage) && "bg-white"
           )}
         >
           {/* 页面内容滚动区：广场页用渐变；skills 管理用白底 */}
@@ -325,7 +316,7 @@ export default function DashboardLayout({
               isClawDetailPage ? "px-6 pt-6 pb-0" : "p-6",
               isSkillsPlazaPage &&
                 "bg-[linear-gradient(180deg,#f2f7fd_0%,#e8f0fb_38%,#e4edf8_100%)]",
-              (isSkillsManagementPage || isOpenApiManagementPage || isMemoryManagementPage || isSpaceOperationsPage) && "bg-white",
+              (isSkillsManagementPage || isOpenApiManagementPage || isSpaceOperationsPage) && "bg-white",
               isClawDetailPage || isSpaceOperationsPage ? "min-h-0 overflow-hidden" : "overflow-y-auto"
             )}
           >
