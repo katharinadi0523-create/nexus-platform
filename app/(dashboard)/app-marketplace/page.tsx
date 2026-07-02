@@ -28,6 +28,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Crosshair,
+  Bot,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -71,6 +72,23 @@ interface App {
 
 // Featured apps data
 const featuredApps: FeaturedApp[] = [
+  {
+    id: "claw-personal",
+    title: "我的Claw",
+    author: "@AppForge",
+    description:
+      "你的专属 AI 助手 Claw，支持自然对话、任务执行与个性化配置，随时开启智能协作体验。",
+    tags: ["效率工具", "智能体开发"],
+    icon: Bot,
+    stats: {
+      downloads: "2.1k",
+      favorites: "156",
+    },
+    badge: "NEW",
+    cardStyle: "tech",
+    externalLink: "https://claw-dialogue.vercel.app/",
+    specialTags: [{ label: "MVP版，升级迭代ing", style: "mvp" }],
+  },
   {
     id: "1",
     title: "新星智能写作",

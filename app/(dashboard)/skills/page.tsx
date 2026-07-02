@@ -3005,7 +3005,7 @@ source_url: "${parsedUrl.toString()}"
             onClick={closeMySkillDetail}
           >
             <ArrowLeft className="h-4 w-4" />
-            返回 SKILLS管理
+            返回 技能管理
           </Button>
 
           <div className="space-y-5">
@@ -3167,7 +3167,7 @@ source_url: "${parsedUrl.toString()}"
               className="h-12 min-w-[156px] justify-center gap-2 rounded-[16px] px-4 py-2 text-sm font-semibold data-[state=active]:border-slate-200 data-[state=active]:bg-slate-50 data-[state=active]:text-slate-950 data-[state=active]:shadow-sm"
             >
               <PanelLeft className="h-4 w-4" />
-              <span>SKILLS管理</span>
+              <span>技能管理</span>
             </TabsTrigger>
             <TabsTrigger
               value="foundry"
@@ -3377,7 +3377,7 @@ source_url: "${parsedUrl.toString()}"
             </div>
 
           {filteredMarketplaceSkills.length > 0 ? (
-            <div className="mt-6 grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-6 grid auto-rows-fr grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredMarketplaceSkills.map((skill, index) => {
                 const audienceMeta = AUDIENCE_VISUAL_META[skill.audienceCategory];
                 const SkillIcon = getMarketplaceSkillIcon(skill);
@@ -3395,12 +3395,12 @@ source_url: "${parsedUrl.toString()}"
                       }
                     }}
                     className={cn(
-                      "skills-marketplace-card skills-stagger group relative min-h-0 w-full cursor-pointer overflow-hidden p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/30",
+                      "skills-marketplace-card skills-stagger group relative flex h-full min-h-[212px] w-full cursor-pointer flex-col overflow-hidden p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/30",
                       SKILLS_PLAZA_CARD_CLASS
                     )}
                     style={{ animationDelay: `${index * 55}ms` }}
                   >
-                    <div className="relative flex flex-col">
+                    <div className="relative flex h-full flex-col">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-1 gap-3">
                           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#2773ff] text-white shadow-none">
@@ -3471,7 +3471,7 @@ source_url: "${parsedUrl.toString()}"
                         {skill.description}
                       </p>
 
-                      <div className="mt-4 border-t border-[#e2e8f0] pt-3">
+                      <div className="mt-auto border-t border-[#e2e8f0] pt-3">
                         <div className="flex items-center gap-2 text-[12px] text-[#6e7b8d]">
                           <div className="inline-flex shrink-0 items-center gap-1 rounded border border-transparent bg-[#f1f5f9] px-2 py-1 text-[12px] text-[#475569]">
                             <span className="font-semibold tabular-nums text-[#1e293b]">
@@ -4367,7 +4367,7 @@ source_url: "${parsedUrl.toString()}"
                 {/* list-page: 主标题 */}
                 <div className="mb-5 flex flex-shrink-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                   <h2 className="text-[20px] font-medium leading-8 tracking-normal text-[#0f172a]">
-                    SKILLS管理
+                    技能管理
                   </h2>
                   {/** list-page §4：强视觉主按钮（Arco primary default），不用 shadcn Button 以免 h-9 / rounded-md 覆盖 */}
                   <button
@@ -4405,7 +4405,7 @@ source_url: "${parsedUrl.toString()}"
                     <Input
                       value={mySkillSearch}
                       onChange={(event) => setMySkillSearch(event.target.value)}
-                      placeholder="搜索 SKILLS管理"
+                      placeholder="搜索 技能管理"
                       className="h-8 rounded border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-none focus-visible:border-[#2773ff]/40 focus-visible:ring-[#dbe7f4]"
                     />
                   </div>
@@ -5073,7 +5073,7 @@ source_url: "${parsedUrl.toString()}"
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                   <div className="space-y-2">
                     <CardTitle className="skills-display text-[1.85rem] text-slate-950">
-                      SKILLS管理
+                      技能管理
                     </CardTitle>
                     <CardDescription className="max-w-2xl leading-6 text-slate-500">
                       支持导入本地压缩包或 URL 链接，继续编辑文件内容、保存修改，并发布到 技能广场。

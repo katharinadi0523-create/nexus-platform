@@ -17,7 +17,21 @@ export interface ClawHubListItem {
   summary: string;
 }
 
-export type ClawCoreFileKey = "agents" | "soul" | "identity" | "user" | "heartbeat" | "memory";
+export type ClawCoreFileKey = "agent";
+
+export const CLAW_AGENT_MD_PLACEHOLDER =
+  "定义它的身份、目标、服务对象、工作方式和行为边界。\n支持使用 Markdown 语法组织内容，例如标题、列表、加粗、表格等，让提示词结构化、可维护。";
+
+export function createClawAgentMdFile(content: string): ClawDetailFileItem {
+  return {
+    key: "agent",
+    title: "Agent.md",
+    description: "定义 Claw 的身份、目标、服务对象、工作方式和行为边界。",
+    note: "Agent",
+    sizeLabel: `${Math.max(0.1, content.length / 1024).toFixed(1)} KB`,
+    content,
+  };
+}
 
 export interface ClawDetailFileItem {
   key: ClawCoreFileKey;
@@ -87,10 +101,12 @@ export interface ClawCapabilityConfig {
 }
 
 export type DatabaseEngineType = "MySQL" | "Neo4j";
+export type KnowledgeBaseLevel = "基础" | "高级";
 
 export interface KnowledgeBaseRow {
   id: string;
   name: string;
+  type: KnowledgeBaseLevel;
   description: string;
   creator: string;
   updatedAt: string;
@@ -111,6 +127,7 @@ export interface OntologyObjectRow {
   id: string;
   name: string;
   scene: string;
+  description: string;
   creator: string;
   updatedAt: string;
   enabled: boolean;
@@ -141,6 +158,7 @@ export function buildKnowledgeAssetsFromLegacy(
     ...knowledge.tenant.map((item) => ({
       id: item.id,
       name: item.name,
+      type: "基础" as const,
       description: item.description,
       creator: tenantCreator,
       updatedAt: item.updatedAt,
@@ -149,6 +167,7 @@ export function buildKnowledgeAssetsFromLegacy(
     ...knowledge.claw.map((item) => ({
       id: item.id,
       name: item.name,
+      type: "高级" as const,
       description: item.description,
       creator: defaultCreator,
       updatedAt: item.updatedAt,
@@ -183,6 +202,7 @@ export function buildKnowledgeAssetsFromLegacy(
         id: "onto-demo-1",
         name: "客户本体",
         scene: "销售协同",
+        description: "客户、商机与合同对象的核心属性和关系定义。",
         creator: defaultCreator,
         updatedAt: "2026-04-02 11:20",
         enabled: true,
@@ -497,6 +517,8 @@ export interface ClawAutomatedTaskItem {
   id: string;
   name: string;
   description: string;
+  /** 创建该自动化任务的平台用户展示名 */
+  createdBy: string;
   /** 触发方式与时间，如「每天 09:00」「每 6 小时」 */
   triggerSummary: string;
   triggerKind: "定时执行" | "间隔执行" | "单次执行";
@@ -534,6 +556,7 @@ export const CLAW_AUTOMATED_TASKS_SAMPLE: ClawAutomatedTaskItem[] = [
     id: "auto-task-daily-sales",
     name: "每日销售简报",
     description: "汇总 CRM 新增线索、跟进状态与本周重点客户动态。",
+    createdBy: "林越",
     triggerSummary: "每天 09:00",
     triggerKind: "定时执行",
     deliveryChannel: "飞书",
@@ -547,6 +570,7 @@ export const CLAW_AUTOMATED_TASKS_SAMPLE: ClawAutomatedTaskItem[] = [
     id: "auto-task-weekly-archive",
     name: "周报归档",
     description: "将本周会话与产出摘要写入知识库归档目录。",
+    createdBy: "周琪",
     triggerSummary: "每周一 10:00",
     triggerKind: "定时执行",
     deliveryChannel: "蓝信",
@@ -560,6 +584,7 @@ export const CLAW_AUTOMATED_TASKS_SAMPLE: ClawAutomatedTaskItem[] = [
     id: "auto-task-interval-sync",
     name: "线索同步巡检",
     description: "周期性拉取外部系统变更并比对本地缓存。",
+    createdBy: "林越",
     triggerSummary: "每 6 小时",
     triggerKind: "间隔执行",
     deliveryChannel: "钉钉",
@@ -573,6 +598,7 @@ export const CLAW_AUTOMATED_TASKS_SAMPLE: ClawAutomatedTaskItem[] = [
     id: "auto-task-once-migration",
     name: "一次性数据迁移校验",
     description: "在指定时间触发全量校验并生成差异报告。",
+    createdBy: "何帆",
     triggerSummary: "单次: 2026-04-20 14:00",
     triggerKind: "单次执行",
     deliveryChannel: "企微",
@@ -586,6 +612,7 @@ export const CLAW_AUTOMATED_TASKS_SAMPLE: ClawAutomatedTaskItem[] = [
     id: "auto-task-never",
     name: "客户回访提醒（草稿）",
     description: "按客户分层生成待回访清单（尚未启用执行）。",
+    createdBy: "周琪",
     triggerSummary: "每天 18:00",
     triggerKind: "定时执行",
     deliveryChannel: "QQ",
@@ -686,10 +713,37 @@ export interface DistributionChannelItem {
   secretIdMasked: string;
 }
 
+export interface WorkspaceFileItem {
+  id: string;
+  name: string;
+  kind: "file";
+  sizeLabel: string;
+  updatedAt: string;
+  updatedBy: string;
+  description?: string;
+}
+
 export interface WorkspaceFolderItem {
   id: string;
   name: string;
-  children: WorkspaceFolderItem[];
+  kind: "folder";
+  description?: string;
+  children: WorkspaceEntryItem[];
+}
+
+export type WorkspaceEntryItem = WorkspaceFolderItem | WorkspaceFileItem;
+
+export interface WorkspaceStorageConfig {
+  volumeDisplayName: string;
+  volumeDescription?: string;
+  volumeName: string;
+  subdirectory: string;
+  organizationName: string;
+  projectName?: string;
+  volumeTotalGb: number;
+  volumeAvailableGb: number;
+  workspaceUsedGb: number;
+  workspaceQuotaGb: number | null;
 }
 
 export interface MessageLogItem {
@@ -730,10 +784,27 @@ export interface ConversationRunTurnItem {
   auditRecords: ConversationAuditItem[];
 }
 
+/** 会话日志中的使用渠道（预览调试 / Agent 广场 / API） */
+export type ConversationUsageChannel = "预览与调试" | "Agent广场" | "API调用";
+
+export const CONVERSATION_USAGE_CHANNELS: ConversationUsageChannel[] = [
+  "预览与调试",
+  "Agent广场",
+  "API调用",
+];
+
+export function getConversationUsageChannelForSeed(seed: string): ConversationUsageChannel {
+  let hash = 0;
+  for (const char of seed) {
+    hash = (hash + char.charCodeAt(0)) % CONVERSATION_USAGE_CHANNELS.length;
+  }
+  return CONVERSATION_USAGE_CHANNELS[hash]!;
+}
+
 export interface ConversationRunItem {
   id: string;
   title: string;
-  channel: string;
+  channel: ConversationUsageChannel;
   userIdentity: string;
   sessionId: string;
   traceId: string;
@@ -965,6 +1036,7 @@ export interface ClawDetailData {
   taskGroups: ClawTaskGroup[];
   automatedTasks: ClawAutomatedTaskItem[];
   automatedTaskExecutions: ClawAutomatedTaskExecutionItem[];
+  workspaceStorageConfig: WorkspaceStorageConfig;
   workspaceRoot: WorkspaceFolderItem;
   messageLogs: MessageLogItem[];
   taskLogs: TaskLogItem[];
@@ -1229,127 +1301,27 @@ const detailMap: Record<string, ClawDetailData> = {
       },
     ],
     coreFiles: [
-      {
-        key: "agents",
-        title: "AGENTS.md",
-        description: "声明与本 Claw 协同的子 Agent、能力边界与委派策略。",
-        note: "AGENTS",
-        sizeLabel: "0.9 KB",
-        content: `# AGENTS — 运维值守 Claw
+      createClawAgentMdFile(`# 运维值守 Claw
 
-## 子 Agent
-- 告警摘要子 Agent：只读告警流，输出事件摘要与关联工单号
-- 工单补录子 Agent：按模板补全字段，不直接变更工单状态
+## 身份
+- 运维协同值守 Agent，由平台运维组创建
 
-## 委派规则
-- P0/P1 事故由本 Claw 主控，子 Agent 仅提供草案与证据链
-- 任何写库、改配置、重启实例类操作须人工确认后方可执行`,
-      },
-      {
-        key: "soul",
-        title: "SOUL.md",
-        description: "定义人格、风格和行为偏好，保证 Claw 在长期协作中稳定一致。",
-        note: "SOUL",
-        sizeLabel: "1.4 KB",
-        content: `# SOUL — 运维值守 Claw
-
-## Identity
-- 名称：运维值守 Claw
-- 角色：运维协同值守 Agent
-- 创建者：平台运维组
-- 创建时间：2026-01-12
-
-## Personality
-- 冷静、可靠、偏审慎
-- 输出简洁，不制造额外焦虑
-- 面对突发事件时先给结论，再给排查路径
-
-## Boundaries
-- 高风险操作前必须说明影响和回滚方案
-- 对不确定结论要明确标注假设和待确认项
-- 不越权代替人工审批或最终决策`,
-      },
-      {
-        key: "identity",
-        title: "IDENTITY.md",
-        description: "定义当前 Claw 的角色、职责和边界，作为所有行为的第一约束。",
-        note: "IDENTITY",
-        sizeLabel: "1.2 KB",
-        content: `# IDENTITY — 运维值守 Claw
-
-## 名称
-- 运维值守 Claw
-
-## 角色
-- 运维协同值守 Agent
-
-## 核心职责
+## 目标
 - 负责告警分发、工单补录、值守问答和巡检结果汇总
-- 面向值班工程师输出稳定、简洁、可执行的判断
 - 在突发事件处理中优先保障服务连续性和信息同步效率
 
-## 边界
-- 不直接执行高风险变更
-- 涉及生产写操作时必须由人工确认
-- 对外输出需要说明依据、影响面和建议动作`,
-      },
-      {
-        key: "user",
-        title: "USER.md",
-        description: "记录主要协作对象、值班习惯与沟通偏好，便于对齐人机协作方式。",
-        note: "USER",
-        sizeLabel: "0.7 KB",
-        content: `# USER — 运维值守 Claw
+## 服务对象
+- 值班工程师、SRE 负责人、运维协同群
 
-## 主要协作对象
-- 值班负责人：偏好先结论后细节，关注影响面与 ETA
-- 一线工程师：需要可复制命令与检查路径
+## 工作方式
+- 冷静、可靠、偏审慎；输出简洁，先给结论再给排查路径
+- P0/P1 事故主控，子 Agent 仅提供草案与证据链
+- 对不确定结论明确标注假设和待确认项
 
-## 沟通偏好
-- 告警群 @ 仅在有客户影响或 SLA 风险时使用
-- 非紧急事项使用工单链接而非长截图`,
-      },
-      {
-        key: "heartbeat",
-        title: "HEARTBEAT.md",
-        description: "定义周期性自检、交接与健康汇报的节奏与检查项。",
-        note: "HEARTBEAT",
-        sizeLabel: "0.6 KB",
-        content: `# HEARTBEAT — 运维值守 Claw
-
-## 周期任务
-- 每整点汇总未关闭 P1+ 告警与超时工单
-- 每日 09:00 生成前 24h 值守摘要
-
-## 健康检查
-- 巡检 Agent 心跳与告警拉取延迟
-- 若连续 2 个周期无新数据则提示值班复核接入`,
-      },
-      {
-        key: "memory",
-        title: "MEMORY.md",
-        description: "记录长期记忆和每日记忆，帮助当前 Claw 保持连续上下文和经验沉淀。",
-        note: "MEMORY",
-        sizeLabel: "1.6 KB",
-        tags: ["长期记忆", "每日记忆"],
-        content: `# MEMORY — 运维值守 Claw
-
-## 长期记忆
-- 平台高峰时段集中在工作日 09:30 - 11:30 / 14:00 - 18:00
-- 认证服务抖动时容易放大网关重试，优先检查 auth-service 和数据库连接池
-- 值班负责人最关注影响面、恢复时间和是否需要客户同步
-
-## 每日记忆
-### 2026-03-29
-- API 网关错误率在 09:42 - 09:57 期间出现明显峰值
-- 已提醒王超优先检查认证服务线程池和数据库连接数
-- 晨会摘要已同步给李涛，待补充恢复时间线
-
-### 2026-03-28
-- 高优工单 INC-22031 超时 30 分钟，已完成催办
-- 夜间巡检结果已归档到工作空间 /巡检报告
-- 值守交接中新增 2 个待跟进事项`,
-      },
+## 行为边界
+- 不直接执行高风险变更；写库、改配置、重启实例须人工确认
+- 对外输出需说明依据、影响面和建议动作
+- 不越权代替人工审批或最终决策`),
     ],
     capabilityConfig: {
       tools: {
@@ -1565,25 +1537,61 @@ const detailMap: Record<string, ClawDetailData> = {
     ],
     automatedTasks: CLAW_AUTOMATED_TASKS_SAMPLE,
     automatedTaskExecutions: CLAW_AUTOMATED_TASK_EXECUTIONS_SAMPLE,
+    workspaceStorageConfig: {
+      volumeDisplayName: "运维专用存储卷",
+      volumeDescription: "运维值守 Claw 共享的巡检存储卷。",
+      volumeName: "s3://juicefs-vol-001",
+      subdirectory: "claw-ops-watch",
+      organizationName: "平台运维组",
+      projectName: "运维协同",
+      volumeTotalGb: 8000,
+      volumeAvailableGb: 4440,
+      workspaceUsedGb: 126,
+      workspaceQuotaGb: 300,
+    },
     workspaceRoot: {
       id: "workspace",
       name: "workspace",
+      kind: "folder",
+      description: "运维值守 Claw 的企业工作空间",
       children: [
         {
           id: "output",
           name: "output",
+          kind: "folder",
           children: [
             {
               id: "daily-report",
               name: "daily-report",
+              kind: "folder",
               children: [
-                { id: "2026-03-29", name: "2026-03-29", children: [] },
-                { id: "2026-03-28", name: "2026-03-28", children: [] },
+                {
+                  id: "2026-03-29",
+                  name: "2026-03-29",
+                  kind: "folder",
+                  children: [
+                    {
+                      id: "ops-report-20260329",
+                      name: "summary.md",
+                      kind: "file",
+                      sizeLabel: "92 KB",
+                      updatedAt: "2026-03-29 06:34",
+                      updatedBy: "系统任务",
+                    },
+                  ],
+                },
+                {
+                  id: "2026-03-28",
+                  name: "2026-03-28",
+                  kind: "folder",
+                  children: [],
+                },
               ],
             },
             {
               id: "inspection-summary",
               name: "inspection-summary",
+              kind: "folder",
               children: [],
             },
           ],
@@ -1591,13 +1599,15 @@ const detailMap: Record<string, ClawDetailData> = {
         {
           id: "archived",
           name: "archived",
+          kind: "folder",
           children: [
             {
               id: "incident-2026-q1",
               name: "incident-2026-q1",
+              kind: "folder",
               children: [
-                { id: "gateway-spike", name: "gateway-spike", children: [] },
-                { id: "db-failover", name: "db-failover", children: [] },
+                { id: "gateway-spike", name: "gateway-spike", kind: "folder", children: [] },
+                { id: "db-failover", name: "db-failover", kind: "folder", children: [] },
               ],
             },
           ],
@@ -1605,9 +1615,10 @@ const detailMap: Record<string, ClawDetailData> = {
         {
           id: "handoff",
           name: "handoff",
+          kind: "folder",
           children: [
-            { id: "morning-shift", name: "morning-shift", children: [] },
-            { id: "night-shift", name: "night-shift", children: [] },
+            { id: "morning-shift", name: "morning-shift", kind: "folder", children: [] },
+            { id: "night-shift", name: "night-shift", kind: "folder", children: [] },
           ],
         },
       ],
@@ -1650,7 +1661,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "ops-alert-briefing",
         title: "API 网关错误率排查",
-        channel: "飞书群聊",
+        channel: "API调用",
         userIdentity: "值班工程师 王超",
         sessionId: "sess-ops-20260329-1018",
         traceId: "trace-ops-gateway-001",
@@ -1725,7 +1736,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "ops-report-sync",
         title: "夜间巡检摘要同步",
-        channel: "企业微信",
+        channel: "Agent广场",
         userIdentity: "SRE 负责人 李涛",
         sessionId: "sess-ops-20260329-0815",
         traceId: "trace-ops-report-014",
@@ -1775,7 +1786,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "ops-ticket-followup",
         title: "高优工单催办",
-        channel: "钉钉",
+        channel: "预览与调试",
         userIdentity: "工单系统机器人",
         sessionId: "sess-ops-20260328-2040",
         traceId: "trace-ops-ticket-092",
@@ -2128,113 +2139,55 @@ const detailMap: Record<string, ClawDetailData> = {
           },
         ],
       },
+      {
+        id: "office-shrimp-debug",
+        title: "报销流程调试",
+        source: "预览与调试",
+        preview: "在调试面板试跑验票工作流，检查字段映射是否正确。",
+        updatedAt: "昨天 16:42",
+        unreadCount: 0,
+        messages: [
+          {
+            id: "office-shrimp-debug-1",
+            role: "user",
+            sender: "调试用户",
+            time: "16:40",
+            content: "用样例发票试跑验票工作流，检查 OCR 字段映射和合规规则是否命中。",
+          },
+          {
+            id: "office-shrimp-debug-2",
+            role: "assistant",
+            sender: "办公虾",
+            time: "16:42",
+            content:
+              "调试运行已完成：3 张样例票据全部通过结构化与合规校验，字段映射结果与预期一致，可继续联调 ERP 草稿写入节点。",
+            auditTurnId: "office-shrimp-turn-debug-1",
+          },
+        ],
+      },
     ],
     coreFiles: [
-      {
-        key: "agents",
-        title: "AGENTS.md",
-        description: "声明与本 Claw 协同的子 Agent（如验票、填单）及委派边界。",
-        note: "AGENTS",
-        sizeLabel: "0.8 KB",
-        content: `# AGENTS — 办公虾
+      createClawAgentMdFile(`# 办公虾
 
-## 子 Agent
-- 验票子 Agent：票据 OCR 结果复核，不发起 ERP 写入
-- 填单子 Agent：按模板生成报销草稿，等待 HitL 后提交
+## 身份
+- 企业办公协同 Agent，服务于智能办公场景
 
-## 委派规则
-- 制度解读与科目映射由本 Claw 主控
-- 子 Agent 不得跳过 HitL 节点`,
-      },
-      {
-        key: "soul",
-        title: "SOUL.md",
-        description: "定义办公虾的交互风格和办公流程中的默认行为。",
-        note: "SOUL",
-        sizeLabel: "1.2 KB",
-        content: `# SOUL — 办公虾
-
-## Personality
-- 轻快、清晰、强执行感
-- 优先给员工“下一步怎么做”
-- 对流程节点和异常项解释简洁，不堆砌术语
-
-## Working Style
-- 优先调用差旅报销等标准技能
-- 固定走标准工作流，不临时重规划执行路径
-- 对需要人工确认的节点显式提示 HitL`,
-      },
-      {
-        key: "identity",
-        title: "IDENTITY.md",
-        description: "定义办公虾在智能办公场景中的职责边界与标准化执行范围。",
-        note: "IDENTITY",
-        sizeLabel: "1.3 KB",
-        content: `# IDENTITY — 办公虾
-
-## 名称
-- 办公虾
-
-## 角色
-- 企业办公协同 Agent
-
-## 核心职责
+## 目标
 - 负责差旅报销、表单填写、审批发起和办公事项提醒
 - 优先调用标准化技能和工作流完成稳定执行
-- 在执行前明确给出当前步骤、处理结果和待确认项
 
-## 边界
-- 涉及 ERP 正式写入和审批提交时必须经过 HitL 确认
+## 服务对象
+- 企业员工、行政与财务协同人员
+
+## 工作方式
+- 轻快、清晰、强执行感；优先给出「下一步怎么做」
+- 固定走标准工作流，对 HitL 节点显式提示
+- 制度解读与科目映射由本 Claw 主控
+
+## 行为边界
+- ERP 正式写入和审批提交须经过 HitL 确认
 - 不修改企业制度，不绕过财务和审批链
-- 输出结果需保留可追溯的票据与表单依据`,
-      },
-      {
-        key: "user",
-        title: "USER.md",
-        description: "记录员工与审批人习惯、通知渠道偏好。",
-        note: "USER",
-        sizeLabel: "0.6 KB",
-        content: `# USER — 办公虾
-
-## 协作习惯
-- 补件提醒单独私信，不群发全员
-- 审批人偏好附「差异摘要」链接
-
-## 渠道
-- 企业微信为主；邮件仅作归档抄送`,
-      },
-      {
-        key: "heartbeat",
-        title: "HEARTBEAT.md",
-        description: "周期性检查待补件、超时审批与队列堆积。",
-        note: "HEARTBEAT",
-        sizeLabel: "0.5 KB",
-        content: `# HEARTBEAT — 办公虾
-
-## 周期
-- 每日 10:00 / 15:00 扫描待补件与即将超时的审批
-- 每周一汇总上周报销 SLA`,
-      },
-      {
-        key: "memory",
-        title: "MEMORY.md",
-        description: "记录办公虾围绕差旅报销和办公流程的长期记忆与近期上下文。",
-        note: "MEMORY",
-        sizeLabel: "1.5 KB",
-        tags: ["长期记忆", "每日记忆"],
-        content: `# MEMORY — 办公虾
-
-## 长期记忆
-- 差旅报销优先执行“验票工作流”和“差旅表单填写与提交工作流”
-- ERP 写入前要做费用科目映射与制度校验
-- 审批提交前必须做 HitL 确认
-
-## 每日记忆
-### 2026-04-06
-- 已完成 7 笔差旅报销处理，其中 6 笔自动完成验票与填单
-- 今日展示重点是标准化技能调用、工作流执行和 HitL 确认链路
-- 报销单 BX-20260406-018 已发起审批并回写 ERP`,
-      },
+- 子 Agent 不得跳过 HitL 节点`),
     ],
     capabilityConfig: {
       tools: {
@@ -2461,6 +2414,360 @@ const detailMap: Record<string, ClawDetailData> = {
     ],
     automatedTasks: CLAW_AUTOMATED_TASKS_SAMPLE,
     automatedTaskExecutions: CLAW_AUTOMATED_TASK_EXECUTIONS_SAMPLE,
+    workspaceStorageConfig: {
+      volumeDisplayName: "GF专用存储卷",
+      volumeDescription: "办公虾工作空间默认绑定的项目存储卷。",
+      volumeName: "s3://juicefs-vol-001",
+      subdirectory: "claw-office-shrimp",
+      organizationName: "综合办公中心",
+      projectName: "企业办公入口",
+      volumeTotalGb: 8000,
+      volumeAvailableGb: 4440,
+      workspaceUsedGb: 182.4,
+      workspaceQuotaGb: null,
+    },
+    workspaceRoot: {
+      id: "workspace",
+      name: "workspace",
+      kind: "folder",
+      description: "办公虾主目录，承载组织共享、用户资料、记忆与执行产物。",
+      children: [
+        {
+          id: "core",
+          name: "core",
+          kind: "folder",
+          description: "Claw 核心身份和行为文件。",
+          children: [
+            {
+              id: "core-identity-md",
+              name: "identity.md",
+              kind: "file",
+              sizeLabel: "1.3 KB",
+              updatedAt: "2026-04-06 08:20",
+              updatedBy: "产品运营 陈昭",
+              description: "Claw 身份定义。",
+            },
+            {
+              id: "core-bootstrap-md",
+              name: "bootstrap.md",
+              kind: "file",
+              sizeLabel: "0.9 KB",
+              updatedAt: "2026-04-06 08:20",
+              updatedBy: "产品运营 陈昭",
+              description: "启动说明与初始化指令。",
+            },
+            {
+              id: "core-rules-md",
+              name: "rules.md",
+              kind: "file",
+              sizeLabel: "1.1 KB",
+              updatedAt: "2026-04-06 08:20",
+              updatedBy: "产品运营 陈昭",
+              description: "行为边界与执行规则。",
+            },
+            {
+              id: "core-manifest-json",
+              name: "manifest.json",
+              kind: "file",
+              sizeLabel: "3 KB",
+              updatedAt: "2026-04-06 08:20",
+              updatedBy: "系统",
+              description: "工作空间元信息，不建议直接编辑。",
+            },
+          ],
+        },
+        {
+          id: "users",
+          name: "users",
+          kind: "folder",
+          description: "企业办公用户目录，每个用户单独沉淀资料与偏好。",
+          children: [
+            {
+              id: "users-liran",
+              name: "li-ran",
+              kind: "folder",
+              children: [
+                {
+                  id: "users-liran-profile",
+                  name: "profile.md",
+                  kind: "file",
+                  sizeLabel: "12 KB",
+                  updatedAt: "2026-04-06 09:58",
+                  updatedBy: "办公虾",
+                  description: "李然的常用报销偏好、默认成本中心和审批路径。",
+                },
+                {
+                  id: "users-liran-preferences",
+                  name: "preferences.md",
+                  kind: "file",
+                  sizeLabel: "4 KB",
+                  updatedAt: "2026-04-06 09:58",
+                  updatedBy: "办公虾",
+                },
+                {
+                  id: "users-liran-context",
+                  name: "context.md",
+                  kind: "file",
+                  sizeLabel: "6 KB",
+                  updatedAt: "2026-04-06 09:58",
+                  updatedBy: "办公虾",
+                },
+              ],
+            },
+            {
+              id: "users-zhouning",
+              name: "zhou-ning",
+              kind: "folder",
+              children: [
+                {
+                  id: "users-zhouning-profile",
+                  name: "profile.md",
+                  kind: "file",
+                  sizeLabel: "10 KB",
+                  updatedAt: "2026-04-06 09:08",
+                  updatedBy: "办公虾",
+                },
+                {
+                  id: "users-zhouning-preferences",
+                  name: "preferences.md",
+                  kind: "file",
+                  sizeLabel: "3 KB",
+                  updatedAt: "2026-04-06 09:08",
+                  updatedBy: "办公虾",
+                },
+                {
+                  id: "users-zhouning-context",
+                  name: "context.md",
+                  kind: "file",
+                  sizeLabel: "4 KB",
+                  updatedAt: "2026-04-06 09:08",
+                  updatedBy: "办公虾",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "memory",
+          name: "memory",
+          kind: "folder",
+          description: "组织级、项目级和个人级记忆分层存储。",
+          children: [
+            {
+              id: "memory-org",
+              name: "org",
+              kind: "folder",
+              children: [
+                {
+                  id: "memory-org-memory",
+                  name: "memory.md",
+                  kind: "file",
+                  sizeLabel: "96 KB",
+                  updatedAt: "2026-04-05 18:10",
+                  updatedBy: "财务共享中心",
+                  description: "组织统一差旅制度与费用标准。",
+                },
+              ],
+            },
+            {
+              id: "memory-claw",
+              name: "claw",
+              kind: "folder",
+              children: [
+                {
+                  id: "memory-claw-memory",
+                  name: "memory.md",
+                  kind: "file",
+                  sizeLabel: "18 KB",
+                  updatedAt: "2026-04-06 10:14",
+                  updatedBy: "办公虾",
+                  description: "当前 Claw 的专属长期记忆。",
+                },
+              ],
+            },
+            {
+              id: "memory-users",
+              name: "users",
+              kind: "folder",
+              children: [
+                {
+                  id: "memory-users-liran",
+                  name: "li-ran",
+                  kind: "folder",
+                  children: [
+                    {
+                      id: "memory-users-liran-memory",
+                      name: "memory.md",
+                      kind: "file",
+                      sizeLabel: "18 KB",
+                      updatedAt: "2026-04-06 10:14",
+                      updatedBy: "办公虾",
+                      description: "本次差旅报销过程中的偏好与确认记录。",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              id: "memory-sessions",
+              name: "sessions",
+              kind: "folder",
+              children: [
+                {
+                  id: "memory-session-office-shrimp-expense",
+                  name: "office-shrimp-expense",
+                  kind: "folder",
+                  children: [
+                    {
+                      id: "memory-session-office-shrimp-expense-memory",
+                      name: "memory.md",
+                      kind: "file",
+                      sizeLabel: "9 KB",
+                      updatedAt: "2026-04-06 10:14",
+                      updatedBy: "办公虾",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "shared",
+          name: "shared",
+          kind: "folder",
+          description: "项目和组织共享文件。",
+          children: [
+            {
+              id: "shared-templates",
+              name: "templates",
+              kind: "folder",
+              children: [
+                {
+                  id: "shared-template-expense",
+                  name: "expense-form-template.xlsx",
+                  kind: "file",
+                  sizeLabel: "248 KB",
+                  updatedAt: "2026-04-01 14:22",
+                  updatedBy: "财务共享中心",
+                },
+              ],
+            },
+            {
+              id: "shared-documents",
+              name: "documents",
+              kind: "folder",
+              children: [],
+            },
+            {
+              id: "shared-examples",
+              name: "examples",
+              kind: "folder",
+              children: [],
+            },
+          ],
+        },
+        {
+          id: "sessions",
+          name: "sessions",
+          kind: "folder",
+          description: "会话上传、过程文件与最终结果。",
+          children: [
+            {
+              id: "sessions-office-shrimp-expense",
+              name: "office-shrimp-expense",
+              kind: "folder",
+              children: [
+                {
+                  id: "sessions-office-shrimp-expense-attachments",
+                  name: "attachments",
+                  kind: "folder",
+                  children: [],
+                },
+                {
+                  id: "sessions-office-shrimp-expense-intermediate",
+                  name: "intermediate",
+                  kind: "folder",
+                  children: [],
+                },
+                {
+                  id: "sessions-office-shrimp-expense-final",
+                  name: "final",
+                  kind: "folder",
+                  children: [],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "output",
+          name: "output",
+          kind: "folder",
+          description: "自动化任务和会话执行产物。",
+          children: [
+            {
+              id: "output-tasks",
+              name: "tasks",
+              kind: "folder",
+              children: [],
+            },
+            {
+              id: "output-automations",
+              name: "automations",
+              kind: "folder",
+              children: [
+                {
+                  id: "output-automation-run-20260406-1800",
+                  name: "automation-run-20260406-1800",
+                  kind: "folder",
+                  children: [
+                    {
+                      id: "output-reminder-20260406",
+                      name: "pending-materials-2026-04-06.md",
+                      kind: "file",
+                      sizeLabel: "28 KB",
+                      updatedAt: "2026-04-06 09:08",
+                      updatedBy: "办公虾",
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              id: "output-exports",
+              name: "exports",
+              kind: "folder",
+              children: [
+                {
+                  id: "output-approval-bx",
+                  name: "BX-20260406-018.json",
+                  kind: "file",
+                  sizeLabel: "9 KB",
+                  updatedAt: "2026-04-06 10:14",
+                  updatedBy: "办公虾",
+                  description: "差旅报销审批发起结果回执。",
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: "tmp",
+          name: "tmp",
+          kind: "folder",
+          description: "解析、转换、工具执行产生的临时文件。",
+          children: [
+            {
+              id: "tmp-runtime-office-20260406",
+              name: "runtime-office-20260406",
+              kind: "folder",
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
     messageLogs: [
       {
         time: "2026-04-06 10:14",
@@ -2489,7 +2796,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "office-shrimp-expense",
         title: "差旅报销处理",
-        channel: "统一入口 / 企业虾",
+        channel: "Agent广场",
         userIdentity: "员工 李然",
         sessionId: "office-shrimp-session-001",
         traceId: "trace-office-shrimp-001",
@@ -2664,7 +2971,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "office-shrimp-reminder",
         title: "报销补件提醒",
-        channel: "行政服务群",
+        channel: "API调用",
         userIdentity: "行政同学 周宁",
         sessionId: "office-shrimp-session-002",
         traceId: "trace-office-shrimp-101",
@@ -2691,6 +2998,54 @@ const detailMap: Record<string, ClawDetailData> = {
                 durationMs: 260,
                 status: "成功",
                 traceId: "trace-office-shrimp-101",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "office-shrimp-debug",
+        title: "报销流程调试",
+        channel: "预览与调试",
+        userIdentity: "调试用户",
+        sessionId: "office-shrimp-session-003",
+        traceId: "trace-office-shrimp-debug-001",
+        startedAt: "2026-04-05 16:40:18",
+        updatedAt: "2026-04-05 16:42:05",
+        turns: [
+          {
+            id: "office-shrimp-turn-debug-1",
+            turnNumber: 1,
+            occurredAt: "16:40",
+            userInput: "用样例发票试跑验票工作流，检查 OCR 字段映射和合规规则是否命中。",
+            assistantOutput:
+              "调试运行已完成：3 张样例票据全部通过结构化与合规校验，字段映射结果与预期一致，可继续联调 ERP 草稿写入节点。",
+            traceId: "trace-office-shrimp-debug-001",
+            auditRecords: [
+              {
+                id: "office-audit-debug-1",
+                turnId: "office-shrimp-turn-debug-1",
+                type: "工作流节点",
+                targetName: "验票工作流 / OCR 识别发票（调试）",
+                inputSummary:
+                  '{\n  "node": "ocr.ingest",\n  "mode": "debug",\n  "assets": ["sample-flight.pdf", "sample-hotel.jpg"],\n  "dryRun": true\n}',
+                outputSummary:
+                  '{\n  "documents": 2,\n  "fieldsExtracted": ["amount", "tax", "sellerName"],\n  "avgConfidence": 0.93\n}',
+                durationMs: 410,
+                status: "成功",
+                traceId: "trace-office-shrimp-debug-001",
+              },
+              {
+                id: "office-audit-debug-2",
+                turnId: "office-shrimp-turn-debug-1",
+                type: "工作流节点",
+                targetName: "验票工作流 / 合规规则校验（调试）",
+                inputSummary:
+                  '{\n  "node": "policy.evaluate",\n  "policyPack": "travel-2026-Q2",\n  "mode": "debug"\n}',
+                outputSummary: '{\n  "violations": [],\n  "mappingCheck": "passed",\n  "evaluatedAt": "2026-04-05T08:41:52Z"\n}',
+                durationMs: 180,
+                status: "成功",
+                traceId: "trace-office-shrimp-debug-001",
               },
             ],
           },
@@ -3036,111 +3391,27 @@ const detailMap: Record<string, ClawDetailData> = {
       },
     ],
     coreFiles: [
-      {
-        key: "agents",
-        title: "AGENTS.md",
-        description: "声明采集、校验、图谱等子 Agent 的职责切分与数据权限。",
-        note: "AGENTS",
-        sizeLabel: "0.9 KB",
-        content: `# AGENTS — 情报虾
+      createClawAgentMdFile(`# 情报虾
 
-## 子 Agent
-- 采集子 Agent：多源拉取，只写暂存区
-- 校验子 Agent：交叉验证来源，不打标签为「已确认」前禁止外发
-- 图谱子 Agent：只读图谱扩展，回写需本 Claw 汇总后执行
+## 身份
+- 企业情报归集与研判 Agent，服务于情报研判场景
 
-## 委派规则
-- 高敏情报必须经安全校验 MCP 后再进入简报生成`,
-      },
-      {
-        key: "soul",
-        title: "SOUL.md",
-        description: "定义情报虾在多源情报处理中的表达风格和行动偏好。",
-        note: "SOUL",
-        sizeLabel: "1.3 KB",
-        content: `# SOUL — 情报虾
-
-## Personality
-- 冷静、严谨、可追溯
-- 先给出重点结论，再说明来源和依据
-- 对不确定信息明确标注可信度和判断依据
-
-## Working Style
-- 先采集、再校验、再研判、最后沉淀
-- 每条重点动态都尽量提供来源依据和图谱关系
-- 对本体回写和对外发布保持审慎`,
-      },
-      {
-        key: "identity",
-        title: "IDENTITY.md",
-        description: "定义情报虾在情报归集与本体沉淀场景中的职责边界。",
-        note: "IDENTITY",
-        sizeLabel: "1.4 KB",
-        content: `# IDENTITY — 情报虾
-
-## 名称
-- 情报虾
-
-## 角色
-- 企业情报归集与研判 Agent
-
-## 核心职责
+## 目标
 - 负责竞品动态、行业政策等多源情报的采集、筛选和结构化整理
-- 调用本体能力完成真伪研判、重要性回填、关联扩散和图谱溯源
 - 产出结构化情报简报，并把结果沉淀回本体
 
-## 边界
+## 服务对象
+- 情报分析人员、战略与产品决策团队
+
+## 工作方式
+- 冷静、严谨、可追溯；先给重点结论，再说明来源和依据
+- 先采集、再校验、再研判、最后沉淀
+- 高敏情报须经安全校验 MCP 后再进入简报生成
+
+## 行为边界
 - 不跳过安全校验直接外发情报内容
-- 本体回写需要保留来源依据和字段变更留痕
-- 高敏内容必须先命中安全校验再决定是否拦截或放行`,
-      },
-      {
-        key: "user",
-        title: "USER.md",
-        description: "记录情报消费方（战略、市场）的阅读偏好与分发策略。",
-        note: "USER",
-        sizeLabel: "0.6 KB",
-        content: `# USER — 情报虾
-
-## 消费方
-- 战略例会群：要一页纸结论 + 附录链接
-- 市场运营：关注竞品功能对比表
-
-## 偏好
-- 高优动态单独推送，避免淹没在日报里`,
-      },
-      {
-        key: "heartbeat",
-        title: "HEARTBEAT.md",
-        description: "定时拉取订阅源、校验队列深度与简报生成 SLA。",
-        note: "HEARTBEAT",
-        sizeLabel: "0.5 KB",
-        content: `# HEARTBEAT — 情报虾
-
-## 周期
-- 每小时增量拉取竞品与政策源
-- 每周五 17:00 锁定周报版本并触发留痕`,
-      },
-      {
-        key: "memory",
-        title: "MEMORY.md",
-        description: "记录情报虾围绕竞品和政策情报的长期记忆与近期沉淀。",
-        note: "MEMORY",
-        sizeLabel: "1.6 KB",
-        tags: ["长期记忆", "每日记忆"],
-        content: `# MEMORY — 情报虾
-
-## 长期记忆
-- 面向竞品和政策情报任务，优先串联“本体情报源接入”“情报处理链路”“扩散检索 / 图谱溯源”和“本体回写”
-- 真伪研判优先结合历史本体记录、公告来源和公开新闻交叉验证
-- 输出周报时要同时产出结构化简报和 Word 文档
-
-## 每日记忆
-### 2026-04-06
-- 已完成本周竞品动态和行业政策变化的多源归集
-- 重点案例“竞品发布算力调度新品”已完成真伪研判与重要性回填
-- market-intel-weekly-brief.docx 已生成，并完成本体回写留痕`,
-      },
+- 本体回写需保留来源依据和字段变更留痕
+- 高敏内容须先命中安全校验再决定是否拦截或放行`),
     ],
     capabilityConfig: {
       tools: {
@@ -3413,7 +3684,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "intel-shrimp-weekly-brief",
         title: "情报周报生成",
-        channel: "统一入口 / 企业虾",
+        channel: "Agent广场",
         userIdentity: "战略分析师 周衡",
         sessionId: "intel-shrimp-session-001",
         traceId: "trace-intel-shrimp-001",
@@ -3612,7 +3883,7 @@ const detailMap: Record<string, ClawDetailData> = {
       {
         id: "intel-shrimp-daily-watch",
         title: "高优动态同步",
-        channel: "市场情报群",
+        channel: "API调用",
         userIdentity: "市场情报运营",
         sessionId: "intel-shrimp-session-002",
         traceId: "trace-intel-shrimp-101",
@@ -3869,103 +4140,25 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
       },
     ],
     coreFiles: [
-      {
-        key: "agents",
-        title: "AGENTS.md",
-        description: `${listItem.name} 可委派的子 Agent 与能力切分（占位，可按场景细化）。`,
-        note: "AGENTS",
-        sizeLabel: "0.6 KB",
-        content: `# AGENTS — ${listItem.name}
+      createClawAgentMdFile(`# ${listItem.name}
 
-## 子 Agent
-- （待配置）按 ${listItem.scene} 场景拆分子任务与只读/读写权限
+## 身份
+- ${listItem.type} Agent，服务于 ${listItem.scene} 场景
 
-## 委派规则
-- 高风险步骤须人工确认后再委派`,
-      },
-      {
-        key: "soul",
-        title: "SOUL.md",
-        description: `${listItem.name} 的稳定人格和行为倾向。`,
-        note: "SOUL",
-        sizeLabel: "1.1 KB",
-        content: `# SOUL — ${listItem.name}
-
-## Personality
-- 稳定、克制、清晰
-- 优先确保信息表达准确
-- 面向协作对象给出可执行建议
-
-## Working Style
-- 先理解上下文，再输出结论
-- 对高风险事项保持审慎
-- 对未确认信息显式标注`,
-      },
-      {
-        key: "identity",
-        title: "IDENTITY.md",
-        description: `${listItem.name} 的身份定义与职责边界。`,
-        note: "IDENTITY",
-        sizeLabel: "1.0 KB",
-        content: `# IDENTITY — ${listItem.name}
-
-## 名称
-- ${listItem.name}
-
-## 场景
-- ${listItem.scene}
-
-## 角色
-- ${listItem.type} Agent
-
-## 职责
-- 服务于 ${listItem.scene} 场景下的日常协作
+## 目标
 - 按照当前角色提供稳定、可执行的支持
-- 在边界内推进任务并沉淀上下文`,
-      },
-      {
-        key: "user",
-        title: "USER.md",
-        description: `与 ${listItem.name} 协作的主要用户画像与偏好（占位）。`,
-        note: "USER",
-        sizeLabel: "0.5 KB",
-        content: `# USER — ${listItem.name}
+- 在边界内推进任务并沉淀上下文
 
-## 协作对象
-- 默认交互对象与审批链路（待补充）
+## 服务对象
+- ${listItem.scene} 场景下的协作成员
 
-## 偏好
-- 通知渠道与摘要粒度（待补充）`,
-      },
-      {
-        key: "heartbeat",
-        title: "HEARTBEAT.md",
-        description: `${listItem.name} 的周期自检与汇报节奏（占位）。`,
-        note: "HEARTBEAT",
-        sizeLabel: "0.4 KB",
-        content: `# HEARTBEAT — ${listItem.name}
+## 工作方式
+- 稳定、克制、清晰；先理解上下文，再输出结论
+- 对高风险事项保持审慎，对未确认信息显式标注
 
-## 周期任务
-- （待配置）按业务需要设置定时汇总与健康检查`,
-      },
-      {
-        key: "memory",
-        title: "MEMORY.md",
-        description: `${listItem.name} 的长期记忆与召回策略。`,
-        note: "MEMORY",
-        sizeLabel: "1.3 KB",
-        tags: ["长期记忆", "每日记忆"],
-        content: `# MEMORY — ${listItem.name}
-
-## 长期记忆
-- 记录当前 Claw 在 ${listItem.scene} 场景中的长期规律、经验和偏好
-- 沉淀高频任务模式和关键协作对象信息
-
-## 每日记忆
-### ${listItem.updatedAt}
-- 最近一次围绕 ${listItem.scene} 的任务已记录
-- 当前上下文和阶段性产出可从工作空间中继续追溯`,
-      },
+## 行为边界
+- 高风险步骤须人工确认后再执行
+- 不越权代替人工审批或最终决策`),
     ],
     capabilityConfig: {
       tools: {
@@ -4139,28 +4332,88 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
     ],
     automatedTasks: CLAW_AUTOMATED_TASKS_SAMPLE,
     automatedTaskExecutions: CLAW_AUTOMATED_TASK_EXECUTIONS_SAMPLE,
+    workspaceStorageConfig: {
+      volumeDisplayName: `${listItem.name} 专用存储卷`,
+      volumeDescription: "默认工作空间绑定的存储卷。",
+      volumeName: "s3://juicefs-vol-001",
+      subdirectory: "default",
+      organizationName: listItem.owner,
+      projectName: listItem.scene,
+      volumeTotalGb: 8000,
+      volumeAvailableGb: 4440,
+      workspaceUsedGb: 8.6,
+      workspaceQuotaGb: null,
+    },
     workspaceRoot: {
       id: "workspace",
       name: "workspace",
+      kind: "folder",
+      description: "默认工作空间主目录",
       children: [
         {
           id: "output",
           name: "output",
+          kind: "folder",
           children: [
-            { id: "drafts", name: "drafts", children: [] },
-            { id: "deliverables", name: "deliverables", children: [] },
+            {
+              id: "drafts",
+              name: "drafts",
+              kind: "folder",
+              children: [
+                {
+                  id: "output-draft-brief",
+                  name: "weekly-brief.md",
+                  kind: "file",
+                  sizeLabel: "84 KB",
+                  updatedAt: "2026-04-02 09:12",
+                  updatedBy: listItem.updatedBy,
+                  description: "最近一次执行生成的草稿。",
+                },
+              ],
+            },
+            {
+              id: "deliverables",
+              name: "deliverables",
+              kind: "folder",
+              children: [
+                {
+                  id: "deliverable-docx",
+                  name: "delivery.docx",
+                  kind: "file",
+                  sizeLabel: "1.2 MB",
+                  updatedAt: "2026-04-02 09:20",
+                  updatedBy: listItem.updatedBy,
+                },
+              ],
+            },
           ],
         },
         {
           id: "archived",
           name: "archived",
+          kind: "folder",
           children: [],
         },
         {
           id: "notes",
           name: "notes",
+          kind: "folder",
           children: [
-            { id: "daily", name: "daily", children: [] },
+            {
+              id: "daily",
+              name: "daily",
+              kind: "folder",
+              children: [
+                {
+                  id: "daily-note",
+                  name: "2026-04-02.md",
+                  kind: "file",
+                  sizeLabel: "16 KB",
+                  updatedAt: "2026-04-02 08:40",
+                  updatedBy: listItem.updatedBy,
+                },
+              ],
+            },
           ],
         },
       ],
@@ -4183,7 +4436,7 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
       {
         id: `${listItem.id}-chat-main`,
         title: `${listItem.name} 默认会话`,
-        channel: listItem.scene,
+        channel: getConversationUsageChannelForSeed(listItem.id),
         userIdentity: "默认交互对象",
         sessionId: `${listItem.id}-session-001`,
         traceId: `${listItem.id}-trace-001`,
@@ -4317,13 +4570,33 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
   };
 }
 
-export function getClawDetail(clawId: string) {
+export function createFallbackClawListItem(
+  clawId: string,
+  input: Partial<Pick<ClawHubListItem, "name" | "creator" | "model" | "summary" | "updatedAt" | "updatedBy">> = {}
+): ClawHubListItem {
+  return {
+    id: clawId,
+    name: input.name?.trim() || "新建 Claw",
+    creator: input.creator?.trim() || "RowanDI",
+    type: "办公型",
+    scene: "通用办公",
+    owner: "默认项目组",
+    status: "设计中",
+    publishStatus: "未发布",
+    model: input.model?.trim() || "Qwen3-32B",
+    updatedAt: input.updatedAt?.trim() || "刚刚",
+    updatedBy: input.updatedBy?.trim() || input.creator?.trim() || "RowanDI",
+    summary: input.summary?.trim() || "新建 Claw，待补充描述。",
+  };
+}
+
+export function getClawDetail(clawId: string, fallbackListItem?: ClawHubListItem) {
   const fromMap = detailMap[clawId];
   if (fromMap) {
     return attachKnowledgeAssetsIfMissing(fromMap);
   }
 
-  const listItem = clawHubList.find((item) => item.id === clawId);
+  const listItem = clawHubList.find((item) => item.id === clawId) ?? fallbackListItem;
   if (!listItem) {
     return null;
   }

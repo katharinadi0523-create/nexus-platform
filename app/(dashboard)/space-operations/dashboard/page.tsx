@@ -1,5 +1,5 @@
-import { SpaceOperationsEmptyPanel } from "@/components/space-operations/space-operations-empty-panel";
+import { SpaceOperationsDashboardWorkbench } from "@/components/space-operations/dashboard/space-operations-dashboard-workbench";
 
 export default function SpaceOperationsDashboardPage() {
-  return <SpaceOperationsEmptyPanel />;
+  return <SpaceOperationsDashboardWorkbench />;
 }

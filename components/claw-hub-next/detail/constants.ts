@@ -1,10 +1,10 @@
 import type { ComponentType } from "react";
 import {
-  Brain,
   CalendarClock,
   Cpu,
   FileStack,
   FileText,
+  FolderOpen,
   RadioTower,
   ShieldCheck,
   Sparkles,
@@ -31,7 +31,7 @@ export type DetailSectionKey =
   | "knowledge"
   | "channels"
   | "automated-tasks"
-  | "memory"
+  | "workspace"
   | "logs"
   | "security"
   | "relations";
@@ -95,14 +95,14 @@ export const DETAIL_SECTION_ITEMS: Array<{
   label: string;
   icon: ComponentType<{ className?: string }>;
 }> = [
-  { value: "core", label: "核心文件", icon: FileText },
+  { value: "core", label: "Agent.md", icon: FileText },
   { value: "model", label: "模型配置", icon: Cpu },
   { value: "skills", label: "技能", icon: Sparkles },
   { value: "tools", label: "插件", icon: Wrench },
   { value: "knowledge", label: "知识", icon: FileStack },
   { value: "channels", label: "渠道", icon: RadioTower },
   { value: "automated-tasks", label: "自动化任务", icon: CalendarClock },
-  { value: "memory", label: "记忆", icon: Brain },
+  { value: "workspace", label: "工作空间", icon: FolderOpen },
   { value: "logs", label: "日志与审计", icon: FileStack },
   { value: "security", label: "安全防护", icon: ShieldCheck },
   { value: "relations", label: "关系", icon: UserRound },

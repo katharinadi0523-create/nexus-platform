@@ -22,6 +22,7 @@ import {
   Shrimp,
   Building2,
   FileCode,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalHeader } from "@/components/layout/global-header";
@@ -53,16 +54,16 @@ const menuGroups: MenuGroup[] = [
         href: "/app-marketplace",
       },
       {
-        key: "ToolMarketplace",
-        label: "插件广场",
-        icon: Puzzle,
-        href: "/tool-marketplace",
-      },
-      {
         key: "SkillsPlaza",
         label: "技能广场",
         icon: Sparkles,
         href: "/skills-hub",
+      },
+      {
+        key: "ToolMarketplace",
+        label: "插件广场",
+        icon: Puzzle,
+        href: "/tool-marketplace",
       },
     ],
   },
@@ -84,8 +85,14 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
-    title: "插件",
+    title: "工具",
     items: [
+      {
+        key: "SkillsManagement",
+        label: "技能管理",
+        icon: Sparkles,
+        href: "/skills-management",
+      },
       {
         key: "MCPManagement",
         label: "MCP管理",
@@ -133,6 +140,12 @@ const menuGroups: MenuGroup[] = [
     title: "业务管理",
     dividerTop: true,
     items: [
+      {
+        key: "ServiceMonitoring",
+        label: "服务监控",
+        icon: Activity,
+        href: "/service-monitoring",
+      },
       {
         key: "SpaceOperations",
         label: "空间运营",
@@ -261,6 +274,15 @@ export default function DashboardLayout({
   const isSkillsPlazaPage =
     pathname.startsWith("/skills-hub") || pathname === "/skills";
   const isSkillsManagementPage = pathname.startsWith("/skills-management");
+  const isOpenApiManagementPage = pathname.startsWith("/openapi-management");
+  if (isClawDetailPage) {
+    return (
+      <>
+        <main className="h-screen min-h-0 overflow-hidden bg-slate-50">{children}</main>
+        <Toaster position="top-right" />
+      </>
+    );
+  }
 
   return (
     <>
@@ -270,7 +292,7 @@ export default function DashboardLayout({
           "flex h-screen overflow-hidden pt-[60px]",
           isSkillsPlazaPage
             ? "bg-[#e8f0fb]"
-            : isSkillsManagementPage || isSpaceOperationsPage
+            : isSkillsManagementPage || isOpenApiManagementPage || isSpaceOperationsPage
               ? "bg-white"
               : "bg-slate-50"
         )}
@@ -284,16 +306,17 @@ export default function DashboardLayout({
           className={cn(
             "relative flex h-[calc(100vh-60px)] min-h-0 flex-1 flex-col overflow-hidden",
             isSkillsPlazaPage && "bg-[#e8f0fb]",
-            (isSkillsManagementPage || isSpaceOperationsPage) && "bg-white"
+            (isSkillsManagementPage || isOpenApiManagementPage || isSpaceOperationsPage) && "bg-white"
           )}
         >
           {/* 页面内容滚动区：广场页用渐变；skills 管理用白底 */}
           <div
             className={cn(
-              "flex-1 p-6",
+              "flex-1",
+              isClawDetailPage ? "px-6 pt-6 pb-0" : "p-6",
               isSkillsPlazaPage &&
                 "bg-[linear-gradient(180deg,#f2f7fd_0%,#e8f0fb_38%,#e4edf8_100%)]",
-              (isSkillsManagementPage || isSpaceOperationsPage) && "bg-white",
+              (isSkillsManagementPage || isOpenApiManagementPage || isSpaceOperationsPage) && "bg-white",
               isClawDetailPage || isSpaceOperationsPage ? "min-h-0 overflow-hidden" : "overflow-y-auto"
             )}
           >

@@ -8,7 +8,6 @@ import {
   Circle,
   FileCheck2,
   FileText,
-  FolderOpen,
   Loader2,
   Paperclip,
   Plug,
@@ -28,6 +27,12 @@ import type {
   ConversationTimelineItem,
 } from "@/components/claw-hub-next/detail/utils";
 import { buildConversationTimeline } from "@/components/claw-hub-next/detail/utils";
+import {
+  detectSkillSlashCommand,
+  filterConfiguredSkills,
+  SkillSlashPicker,
+  type ConfiguredSkillOption,
+} from "@/components/claw-hub-next/skill-slash-picker";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   ChatSessionItem,
@@ -102,12 +107,13 @@ type InteractiveFlowTemplate = {
 };
 
 type RuntimeStage = "history" | "planning" | "running" | "paused" | "complete";
+const DEBUG_INSPECTOR_AUTO_MIN_WIDTH = 900;
+const DEBUG_INSPECTOR_FORCE_MIN_WIDTH = 760;
 
 type RuntimeState = {
   stage: RuntimeStage;
   sentQuery: string;
   sentAttachments: string[];
-  selectedWorkspace: string;
   selectedSkill: string;
   visibleEventCount: number;
 };
@@ -386,13 +392,11 @@ function ContextCard({ item }: { item: InteractiveFlowContextItem }) {
       ? Wrench
       : item.kind === "tool"
         ? Plug
-        : item.kind === "workspace"
-          ? FolderOpen
-          : item.kind === "channel"
-            ? Briefcase
-            : item.kind === "user"
-              ? Sparkles
-              : FileText;
+        : item.kind === "channel"
+          ? Briefcase
+          : item.kind === "user"
+            ? Sparkles
+            : FileText;
 
   return (
     <article className="flex items-start gap-2.5 rounded-lg px-1 py-1.5">
@@ -428,10 +432,12 @@ export function ClawInteractiveChatPanel({
   detail,
   session,
   run,
+  inspectorMode = "auto",
 }: {
   detail: ClawDetailData;
   session?: ChatSessionItem;
   run?: ConversationRunItem;
+  inspectorMode?: "auto" | "open" | "closed";
 }) {
   const template = useMemo(
     () =>
@@ -442,17 +448,19 @@ export function ClawInteractiveChatPanel({
       }),
     [detail, run, session]
   );
-  const skillOptions = useMemo(() => {
-    const allSkills = [
-      ...detail.capabilityConfig.skills.platform,
-      ...detail.capabilityConfig.skills.tenant,
-      ...detail.capabilityConfig.skills.claw,
-    ]
-      .filter((item) => item.enabled)
-      .map((item) => item.name);
+  const configuredSkills = useMemo<ConfiguredSkillOption[]>(() => {
+    const scopes = ["platform", "tenant", "claw"] as const;
 
-    return Array.from(new Set(allSkills));
+    return scopes.flatMap((scope) =>
+      detail.capabilityConfig.skills[scope]
+        .filter((item) => item.enabled)
+        .map((item) => ({ ...item, scope }))
+    );
   }, [detail.capabilityConfig.skills.claw, detail.capabilityConfig.skills.platform, detail.capabilityConfig.skills.tenant]);
+  const skillOptions = useMemo(
+    () => Array.from(new Set(configuredSkills.map((item) => item.name))),
+    [configuredSkills]
+  );
   const initialExpandedSteps = useMemo(
     () =>
       template.steps.reduce<Record<number, boolean>>((accumulator, step, index) => {
@@ -464,28 +472,39 @@ export function ClawInteractiveChatPanel({
 
   const [draftMessage, setDraftMessage] = useState(template.defaultQuery);
   const [queuedFiles, setQueuedFiles] = useState<string[]>(template.defaultAttachments);
-  const [selectedWorkspace, setSelectedWorkspace] = useState("");
   const [selectedSkill, setSelectedSkill] = useState(skillOptions[0] ?? "");
   const [runtime, setRuntime] = useState<RuntimeState>({
     stage: "history",
     sentQuery: "",
     sentAttachments: [],
-    selectedWorkspace: "",
     selectedSkill: skillOptions[0] ?? "",
     visibleEventCount: template.sequence.length,
   });
   const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>(initialExpandedSteps);
+  const [panelWidth, setPanelWidth] = useState(0);
+  const [skillPicker, setSkillPicker] = useState<{ query: string; startIndex: number } | null>(null);
+  const [skillPickerActiveIndex, setSkillPickerActiveIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const workspaceInputRef = useRef<HTMLInputElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const filteredPickerSkills = useMemo(
+    () => (skillPicker ? filterConfiguredSkills(configuredSkills, skillPicker.query) : []),
+    [configuredSkills, skillPicker]
+  );
 
   useEffect(() => {
-    const folderInput = workspaceInputRef.current;
-    if (!folderInput) {
-      return;
+    const element = panelRef.current;
+    if (!element) {
+      return undefined;
     }
 
-    folderInput.setAttribute("webkitdirectory", "");
-    folderInput.setAttribute("directory", "");
+    const updateWidth = () => setPanelWidth(element.getBoundingClientRect().width);
+    updateWidth();
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -591,16 +610,6 @@ export function ClawInteractiveChatPanel({
     const sessionScopedContext: InteractiveFlowContextItem[] = runtime.stage === "history"
       ? []
       : [
-          ...(runtime.selectedWorkspace
-            ? [
-                {
-                  key: `runtime-workspace-${runtime.selectedWorkspace}`,
-                  title: `工作区 · ${runtime.selectedWorkspace}`,
-                  kind: "workspace" as const,
-                  revealAtEventIndex: 0,
-                },
-              ]
-            : []),
           ...(runtime.selectedSkill
             ? [
                 {
@@ -619,9 +628,123 @@ export function ClawInteractiveChatPanel({
         : template.contextItems.filter((item) => item.revealAtEventIndex < runtime.visibleEventCount);
 
     return [...sessionScopedContext, ...revealedTemplateContext];
-  }, [runtime.selectedSkill, runtime.selectedWorkspace, runtime.stage, runtime.visibleEventCount, template.contextItems]);
+  }, [runtime.selectedSkill, runtime.stage, runtime.visibleEventCount, template.contextItems]);
 
   const isLocked = runtime.stage !== "history" && runtime.stage !== "complete";
+
+  function syncSkillPicker(text: string, cursor: number) {
+    if (isLocked) {
+      setSkillPicker(null);
+      return;
+    }
+
+    const slashCommand = detectSkillSlashCommand(text, cursor);
+    setSkillPicker(slashCommand);
+    setSkillPickerActiveIndex(0);
+  }
+
+  function handleSelectSkillFromPicker(skill: ConfiguredSkillOption) {
+    const pickerState = skillPicker;
+    setSelectedSkill(skill.name);
+    setSkillPicker(null);
+
+    if (pickerState) {
+      const textarea = textareaRef.current;
+      const cursor = textarea?.selectionStart ?? draftMessage.length;
+      const nextMessage = `${draftMessage.slice(0, pickerState.startIndex)}${draftMessage.slice(cursor)}`;
+      setDraftMessage(nextMessage);
+
+      window.requestAnimationFrame(() => {
+        if (!textareaRef.current) {
+          return;
+        }
+
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(pickerState.startIndex, pickerState.startIndex);
+      });
+    }
+
+    toast.success(`已选择技能 · ${skill.name}`);
+  }
+
+  function handleDraftChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
+    const nextValue = event.target.value;
+    setDraftMessage(nextValue);
+    syncSkillPicker(nextValue, event.target.selectionStart ?? nextValue.length);
+  }
+
+  function handleDraftKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!skillPicker || filteredPickerSkills.length === 0) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSkillPickerActiveIndex((current) =>
+        Math.min(current + 1, filteredPickerSkills.length - 1)
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSkillPickerActiveIndex((current) => Math.max(current - 1, 0));
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      handleSelectSkillFromPicker(filteredPickerSkills[skillPickerActiveIndex]!);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSkillPicker(null);
+    }
+  }
+
+  useEffect(() => {
+    if (isLocked) {
+      setSkillPicker(null);
+    }
+  }, [isLocked]);
+
+  useEffect(() => {
+    if (!skillPicker) {
+      return;
+    }
+
+    setSkillPickerActiveIndex((current) =>
+      filteredPickerSkills.length === 0 ? 0 : Math.min(current, filteredPickerSkills.length - 1)
+    );
+  }, [filteredPickerSkills.length, skillPicker]);
+
+  useEffect(() => {
+    if (!skillPicker) {
+      return undefined;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (textareaRef.current?.contains(target)) {
+        return;
+      }
+
+      if (target instanceof Element && target.closest("[data-skill-slash-picker]")) {
+        return;
+      }
+
+      setSkillPicker(null);
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [skillPicker]);
 
   function handleAttachFiles(event: React.ChangeEvent<HTMLInputElement>) {
     const fileNames = Array.from(event.target.files ?? []).map((file) => file.name);
@@ -642,47 +765,6 @@ export function ClawInteractiveChatPanel({
     setQueuedFiles((current) => current.filter((item) => item !== fileName));
   }
 
-  async function handleSelectWorkspace() {
-    if (isLocked) {
-      return;
-    }
-
-    const pickerWindow = window as typeof window & {
-      showDirectoryPicker?: () => Promise<{ name: string }>;
-    };
-
-    try {
-      if (pickerWindow.showDirectoryPicker) {
-        const handle = await pickerWindow.showDirectoryPicker();
-        setSelectedWorkspace(handle.name);
-        toast.success(`已选择工作空间：${handle.name}`);
-        return;
-      }
-
-      workspaceInputRef.current?.click();
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        return;
-      }
-
-      toast.error("当前环境暂不支持目录选择。");
-    }
-  }
-
-  function handleWorkspaceInputChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const firstFile = event.target.files?.[0] as (File & { webkitRelativePath?: string }) | undefined;
-    const folderName = firstFile?.webkitRelativePath?.split("/").filter(Boolean)[0];
-
-    if (!folderName) {
-      event.target.value = "";
-      return;
-    }
-
-    setSelectedWorkspace(folderName);
-    toast.success(`已选择工作空间：${folderName}`);
-    event.target.value = "";
-  }
-
   function handleSend() {
     const nextQuery = draftMessage.trim();
 
@@ -698,28 +780,27 @@ export function ClawInteractiveChatPanel({
       stage: startsWithPlanning ? "planning" : template.steps[0]?.kind === "user" ? "paused" : "running",
       sentQuery: nextQuery,
       sentAttachments: [...queuedFiles],
-      selectedWorkspace,
       selectedSkill,
       visibleEventCount: template.sequence.length > 0 ? 1 : 0,
     });
     setDraftMessage("");
     setQueuedFiles([]);
+    setSkillPicker(null);
   }
 
   function handleBackToEdit() {
     setDraftMessage(runtime.sentQuery || template.defaultQuery);
     setQueuedFiles(runtime.sentAttachments.length ? runtime.sentAttachments : template.defaultAttachments);
-    setSelectedWorkspace(runtime.selectedWorkspace || "");
     setSelectedSkill(runtime.selectedSkill || skillOptions[0] || "");
     setRuntime({
       stage: "history",
       sentQuery: "",
       sentAttachments: [],
-      selectedWorkspace: "",
       selectedSkill: skillOptions[0] ?? "",
       visibleEventCount: template.sequence.length,
     });
     setExpandedSteps(initialExpandedSteps);
+    setSkillPicker(null);
   }
 
   function handleConfirmStep() {
@@ -729,13 +810,33 @@ export function ClawInteractiveChatPanel({
     }));
   }
 
+  const canForceInspector = panelWidth >= DEBUG_INSPECTOR_FORCE_MIN_WIDTH;
+  const showInspector =
+    inspectorMode === "open"
+      ? canForceInspector
+      : inspectorMode === "closed"
+        ? false
+        : panelWidth >= DEBUG_INSPECTOR_AUTO_MIN_WIDTH;
+
   return (
-    <div className="grid h-full min-h-0 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <div
+      ref={panelRef}
+      className="grid h-full min-h-0"
+      style={{ gridTemplateColumns: showInspector ? "minmax(0, 1fr) 320px" : "minmax(0, 1fr)" }}
+    >
       <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-4xl">
             {runtime.stage === "history" ? (
-              <ClawConversationTimeline items={template.historyItems} />
+              template.historyItems.length > 0 ? (
+                <div className="space-y-4">
+                  <ClawConversationTimeline items={template.historyItems} />
+                </div>
+              ) : (
+                <div className="flex min-h-[240px] items-center justify-center px-6 text-center text-sm leading-6 text-slate-400">
+                  输入任务内容，开始新的调试会话
+                </div>
+              )
             ) : (
               <div className="space-y-6">
                 <div className="flex justify-end">
@@ -900,34 +1001,41 @@ export function ClawInteractiveChatPanel({
                 </div>
               ) : null}
 
-              <Textarea
-                value={draftMessage}
-                onChange={(event) => setDraftMessage(event.target.value)}
-                disabled={isLocked}
-                className="min-h-[56px] resize-none border-0 bg-transparent px-0 py-0 text-[15px] leading-7 text-slate-700 shadow-none placeholder:text-slate-400 focus-visible:ring-0 disabled:cursor-not-allowed disabled:text-slate-500"
-                placeholder="请输入任务，或继续补充上下文"
-              />
+              <div className="relative">
+                {skillPicker ? (
+                  <div
+                    data-skill-slash-picker
+                    className="absolute bottom-full left-0 right-0 z-20 mb-2"
+                  >
+                    <SkillSlashPicker
+                      skills={configuredSkills}
+                      query={skillPicker.query}
+                      activeIndex={skillPickerActiveIndex}
+                      onActiveIndexChange={setSkillPickerActiveIndex}
+                      onSelect={handleSelectSkillFromPicker}
+                    />
+                  </div>
+                ) : null}
+
+                <Textarea
+                  ref={textareaRef}
+                  value={draftMessage}
+                  onChange={handleDraftChange}
+                  onKeyDown={handleDraftKeyDown}
+                  onClick={(event) =>
+                    syncSkillPicker(
+                      event.currentTarget.value,
+                      event.currentTarget.selectionStart ?? event.currentTarget.value.length
+                    )
+                  }
+                  disabled={isLocked}
+                  className="min-h-[56px] resize-none border-0 bg-transparent px-0 py-0 text-[15px] leading-7 text-slate-700 shadow-none placeholder:text-slate-400 focus-visible:ring-0 disabled:cursor-not-allowed disabled:text-slate-500"
+                  placeholder="请输入任务，输入 / 可快速选择技能"
+                />
+              </div>
 
               <div className="mt-2.5 flex flex-wrap items-center gap-2.5 sm:flex-nowrap">
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5 sm:flex-nowrap">
-                  <button
-                    type="button"
-                    onClick={handleSelectWorkspace}
-                    disabled={isLocked}
-                    title={selectedWorkspace || "工作空间"}
-                    className="inline-flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-blue-300 disabled:cursor-not-allowed"
-                  >
-                    <FolderOpen className="h-4 w-4 shrink-0 text-slate-500" />
-                    <span className="truncate">{selectedWorkspace || "工作空间"}</span>
-                  </button>
-                  <input
-                    ref={workspaceInputRef}
-                    type="file"
-                    className="hidden"
-                    multiple
-                    onChange={handleWorkspaceInputChange}
-                  />
-
                   <div className="relative min-w-0 flex-1">
                     <Wrench className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                     <select
@@ -984,7 +1092,12 @@ export function ClawInteractiveChatPanel({
         </div>
       </div>
 
-      <aside className="hidden min-h-0 border-l border-blue-100 bg-[linear-gradient(180deg,rgba(248,251,255,0.98),rgba(241,247,255,0.98))] xl:flex xl:flex-col">
+      <aside
+        className={cn(
+          "min-h-0 border-l border-blue-100 bg-[linear-gradient(180deg,rgba(248,251,255,0.98),rgba(241,247,255,0.98))]",
+          showInspector ? "flex flex-col" : "hidden"
+        )}
+      >
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
           {runtime.stage === "planning" ? (
             <div className="rounded-xl border border-blue-100 bg-white p-5 text-sm leading-7 text-slate-500 shadow-[0_1px_2px_rgba(37,99,235,0.08)]">

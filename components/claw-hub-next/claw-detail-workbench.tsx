@@ -2,37 +2,49 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   ArrowLeft,
   Bot,
   CalendarClock,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
+  CircleHelp,
+  Cpu,
   Eye,
   EyeOff,
+  FileStack,
+  FileText,
+  FolderOpen,
   GripVertical,
   Loader2,
   MessageSquareText,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
+  RadioTower,
   RefreshCw,
+  RotateCcw,
   Search,
+  ShieldCheck,
+  Sparkles,
   Trash2,
+  Wrench,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
+import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
+import { AgentBomBadge } from "@/components/claw-hub-next/agent-bom-badge";
+import { buildAgentBomTreeFromDetail } from "@/components/claw-hub-next/agent-bom-tree";
 import { ClawKnowledgeAssetsSection } from "@/components/claw-hub-next/detail/claw-knowledge-assets-section";
+import { ClawCoreConfigSection } from "@/components/claw-hub-next/detail/core-config-section";
 import { ClawInteractiveChatPanel } from "@/components/claw-hub-next/interactive-chat-panel";
+import { ClawWorkspaceSection } from "@/components/claw-hub-next/detail/workspace-section";
 import {
-  DETAIL_SECTION_ITEMS,
-  KNOWLEDGE_PANEL_ITEMS,
-  LOG_PANEL_ITEMS,
-  SECURITY_PANEL_ITEMS,
   type DetailSectionKey,
   type KnowledgePanelKey,
   type LogPanelKey,
-  type SecurityPanelKey,
   type ToolSkillViewScope,
 } from "@/components/claw-hub-next/detail/constants";
 import { ClawSecuritySection } from "@/components/claw-hub-next/detail/security-section";
@@ -71,14 +83,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AGENT_RELATION_SELECT_OPTIONS,
@@ -91,10 +104,10 @@ import {
   type ClawAutomatedTaskExecutionStatus,
   type ClawAutomatedTaskItem,
   type ClawAutomatedTaskRecentResult,
-  type ClawCoreFileKey,
   type ClawDetailData,
   type ClawCapabilityConfig,
   type ConversationAuditItem,
+  type ConversationUsageChannel,
   type KnowledgeScope,
   type SecurityManagementConfig,
   type ToolProtectionRuleItem,
@@ -105,11 +118,71 @@ import { PRESET_MODEL_IDS, getDefaultModelParams, type ModelParamKey } from "@/l
 import { cn } from "@/lib/utils";
 
 const CLAW_MODEL_SELECTOR_HIDDEN_KEYS: readonly ModelParamKey[] = ["context_turns", "current_time"];
+const DEBUG_SPLIT_MIN_CONFIG_WIDTH = 520;
+const DEBUG_SPLIT_MIN_DEBUG_WIDTH = 560;
+const DEBUG_SPLIT_DEFAULT_DEBUG_WIDTH = 760;
+const DEBUG_SPLIT_HANDLE_WIDTH = 8;
+const DEBUG_SPLIT_COLLAPSE_WIDTH =
+  DEBUG_SPLIT_MIN_CONFIG_WIDTH + DEBUG_SPLIT_MIN_DEBUG_WIDTH + DEBUG_SPLIT_HANDLE_WIDTH;
+const DEBUG_INSPECTOR_AUTO_MIN_WIDTH = 900;
+const DEBUG_INSPECTOR_FORCE_MIN_WIDTH = 760;
 
 type AutomatedTaskPanelKey = "task-list" | "execution-history";
 type AutomatedTaskExecutionScope = "all" | "specified";
 type AutomatedTaskExecutionStatusFilter = "all" | ClawAutomatedTaskExecutionStatus;
 type AutomatedTaskExecutionChannelFilter = "all" | AutomatedTaskDeliveryChannel;
+type ClawPlazaStatus = "未上架" | "已上架";
+type ClawReleaseMode = "组织发布" | "公开发布";
+
+const CLAW_RELEASE_MODE_OPTIONS: ClawReleaseMode[] = ["组织发布", "公开发布"];
+const CLAW_AGENT_TYPE_OPTIONS = [
+  "产品设计",
+  "软件开发",
+  "项目管理",
+  "市场营销",
+  "销售",
+  "质量测试",
+  "战略分析",
+  "科研实验",
+  "媒体",
+] as const;
+
+const CLAW_DETAIL_NAV_GROUPS: Array<{
+  title: string;
+  items: Array<{
+    value: DetailSectionKey;
+    label: string;
+    icon: ComponentType<{ className?: string }>;
+  }>;
+}> = [
+  {
+    title: "配置",
+    items: [
+      { value: "core", label: "Claw配置", icon: Cpu },
+    ],
+  },
+  {
+    title: "资源",
+    items: [
+      { value: "skills", label: "技能", icon: Sparkles },
+      { value: "tools", label: "插件", icon: Wrench },
+      { value: "knowledge", label: "知识", icon: FileStack },
+    ],
+  },
+  {
+    title: "管理",
+    items: [
+      { value: "workspace", label: "文件", icon: FolderOpen },
+      { value: "channels", label: "渠道", icon: RadioTower },
+      { value: "security", label: "安全", icon: ShieldCheck },
+      { value: "logs", label: "日志", icon: FileText },
+    ],
+  },
+];
+
+function buildInitialWorkspacePath() {
+  return [];
+}
 
 const AUTOMATED_TASK_PANEL_ITEMS: Array<{ key: AutomatedTaskPanelKey; label: string; description: string }> = [
   { key: "task-list", label: "任务列表", description: "管理当前 Claw 已配置的自动化任务。" },
@@ -159,8 +232,7 @@ type LogSessionListItem = {
   id: string;
   title: string;
   sessionId: string;
-  channel: string;
-  userIdentity: string;
+  channel: ConversationUsageChannel;
   startedAt: string;
   updatedAt: string;
   messageCount: number;
@@ -222,6 +294,35 @@ function buildEditableDistributionChannels(
       secretIdMasked: existingChannel?.secretIdMasked ?? "未配置",
     };
   });
+}
+
+function ClawPublishedBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-[4px] border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+      已发布
+    </span>
+  );
+}
+
+function PublishChannelStatusBadge({
+  status,
+  tone,
+}: {
+  status: "未生效" | "已生效" | ClawPlazaStatus;
+  tone: "neutral" | "success";
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex min-w-[56px] items-center justify-center rounded-[4px] border px-2 py-0.5 text-xs font-medium",
+        tone === "success"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-slate-200 bg-slate-100 text-slate-600"
+      )}
+    >
+      {status}
+    </span>
+  );
 }
 
 function getLogEventKind(record: ConversationAuditItem): Extract<LogSessionEventKind, "skill" | "tool"> {
@@ -308,7 +409,7 @@ function buildLogSessionEvents(summary: ConversationSessionSummary, agentName: s
         id: `${turn.id}-user`,
         kind: "user",
         label: getLogEventLabel("user"),
-        title: summary.session.userIdentity,
+        title: "用户",
         time: turn.occurredAt,
         summary: turn.userInput,
         detail: turn.userInput,
@@ -392,21 +493,30 @@ function normalizeAutomatedTaskExecutionStatus(status: string): ClawAutomatedTas
 
 export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [activeSection, setActiveSection] = useState<DetailSectionKey>("core");
-  const [activeLogPanel, setActiveLogPanel] = useState<LogPanelKey>("conversation");
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [debugWidth, setDebugWidth] = useState(DEBUG_SPLIT_DEFAULT_DEBUG_WIDTH);
+  const [isResizingDebug, setIsResizingDebug] = useState(false);
+  const [splitWidth, setSplitWidth] = useState(0);
+  const [debugInspectorMode, setDebugInspectorMode] = useState<"auto" | "open" | "closed">("auto");
+  const [debugFreshSession, setDebugFreshSession] = useState(false);
+  const [debugPanelKey, setDebugPanelKey] = useState(0);
+  const [activeLogPanel] = useState<LogPanelKey>("conversation");
+  const [publishStatus, setPublishStatus] = useState(detail.overview.publishStatus);
+  const [publishPanelOpen, setPublishPanelOpen] = useState(false);
+  const [publishValidationOpen, setPublishValidationOpen] = useState(false);
+  const [apiPublishEffective, setApiPublishEffective] = useState(detail.overview.publishStatus === "已发布");
+  const [plazaStatus, setPlazaStatus] = useState<ClawPlazaStatus>("未上架");
+  const [shelfDialogOpen, setShelfDialogOpen] = useState(false);
+  const [shelfReleaseMode, setShelfReleaseMode] = useState<ClawReleaseMode>("公开发布");
+  const [shelfAgentTypes, setShelfAgentTypes] = useState<string[]>([]);
   const [chatSessions, setChatSessions] = useState(detail.chatSessions);
-  const [chatSidebarCollapsed, setChatSidebarCollapsed] = useState(false);
   const [conversationRuns, setConversationRuns] = useState(detail.conversationRuns);
   const [securityManagement, setSecurityManagement] = useState(() =>
     mergeSecurityManagementWithCanonicalAutonomy(detail.securityManagement)
   );
-  const [activeSecurityPanel, setActiveSecurityPanel] = useState<SecurityPanelKey>("autonomy-boundaries");
   const [selectedChatId, setSelectedChatId] = useState(detail.chatSessions[0]?.id ?? "");
-  const [selectedCoreFileKey, setSelectedCoreFileKey] = useState<ClawCoreFileKey | null>(null);
-  const [coreFileDrafts, setCoreFileDrafts] = useState<Record<ClawCoreFileKey, string>>(() =>
-    detail.coreFiles.reduce(
-      (accumulator, file) => ({ ...accumulator, [file.key]: file.content }),
-      {} as Record<ClawCoreFileKey, string>
-    )
+  const [agentMdDraft, setAgentMdDraft] = useState(
+    () => detail.coreFiles.find((file) => file.key === "agent")?.content ?? ""
   );
   const [capabilityConfig, setCapabilityConfig] = useState(detail.capabilityConfig);
   const [clawPrimaryModel, setClawPrimaryModel] = useState("Qwen3-32B");
@@ -422,7 +532,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [toolConfigDialogOpen, setToolConfigDialogOpen] = useState(false);
   const [skillConfigDialogOpen, setSkillConfigDialogOpen] = useState(false);
   const [knowledgeConfigDialogOpen, setKnowledgeConfigDialogOpen] = useState(false);
-  const [knowledgeMenuOpen, setKnowledgeMenuOpen] = useState(false);
   const [createAutomatedTaskOpen, setCreateAutomatedTaskOpen] = useState(false);
   const [createAutomatedTaskInitialMode, setCreateAutomatedTaskInitialMode] =
     useState<AutomatedTaskExecutionMode>("scheduled");
@@ -443,6 +552,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   ]);
   const [activeAutomatedTaskPanel, setActiveAutomatedTaskPanel] = useState<AutomatedTaskPanelKey>("task-list");
   const [automatedTaskQuery, setAutomatedTaskQuery] = useState("");
+  const [automatedTaskCreatorFilter, setAutomatedTaskCreatorFilter] = useState("all");
   const [automatedExecutionScope, setAutomatedExecutionScope] = useState<AutomatedTaskExecutionScope>("all");
   const [automatedExecutionTaskId, setAutomatedExecutionTaskId] = useState("all");
   const [automatedExecutionQuery, setAutomatedExecutionQuery] = useState("");
@@ -450,32 +560,48 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     useState<AutomatedTaskExecutionStatusFilter>("all");
   const [automatedExecutionChannel, setAutomatedExecutionChannel] =
     useState<AutomatedTaskExecutionChannelFilter>("all");
-  const [clawMemoryEnabled, setClawMemoryEnabled] = useState(false);
-  const [logsMenuOpen, setLogsMenuOpen] = useState(false);
-  const [securityMenuOpen, setSecurityMenuOpen] = useState(false);
+  const [workspaceStorageConfig] = useState(detail.workspaceStorageConfig);
+  const [selectedWorkspacePath, setSelectedWorkspacePath] = useState<string[]>(() => buildInitialWorkspacePath());
+  const [workspaceStorageDialogOpen, setWorkspaceStorageDialogOpen] = useState(false);
   const [selectedLogSessionId, setSelectedLogSessionId] = useState<string | null>(null);
   const [selectedLogEventId, setSelectedLogEventId] = useState<string | null>(null);
   const [agentRelations, setAgentRelations] = useState<AgentRelationItem[]>(() => [...detail.agentRelations]);
   const [agentRelationDraft, setAgentRelationDraft] = useState<AgentRelationItem | null>(null);
-  const logsMenuCloseTimerRef = useRef<number | null>(null);
-  const securityMenuCloseTimerRef = useRef<number | null>(null);
-  const knowledgeMenuCloseTimerRef = useRef<number | null>(null);
+  const splitContainerRef = useRef<HTMLDivElement | null>(null);
 
   const relationSelectOptions = useMemo(
     () => AGENT_RELATION_SELECT_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label })),
     []
   );
 
+  const automatedTaskCreatorFilterOptions = useMemo(() => {
+    const names = Array.from(new Set(automatedTasks.map((t) => t.createdBy).filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b, "zh-CN")
+    );
+    return [{ value: "all", label: "全部创建人" }, ...names.map((n) => ({ value: n, label: n }))];
+  }, [automatedTasks]);
+
+  const activeAutomatedTaskCreatorFilter =
+    automatedTaskCreatorFilter === "all" || automatedTasks.some((t) => t.createdBy === automatedTaskCreatorFilter)
+      ? automatedTaskCreatorFilter
+      : "all";
+
   const filteredAutomatedTasks = useMemo(() => {
     const q = automatedTaskQuery.trim().toLowerCase();
-    if (!q) {
-      return automatedTasks;
-    }
-    return automatedTasks.filter(
-      (task) =>
-        task.name.toLowerCase().includes(q) || task.description.toLowerCase().includes(q)
-    );
-  }, [automatedTaskQuery, automatedTasks]);
+    return automatedTasks.filter((task) => {
+      if (activeAutomatedTaskCreatorFilter !== "all" && task.createdBy !== activeAutomatedTaskCreatorFilter) {
+        return false;
+      }
+      if (!q) {
+        return true;
+      }
+      return (
+        task.name.toLowerCase().includes(q) ||
+        task.description.toLowerCase().includes(q) ||
+        task.createdBy.toLowerCase().includes(q)
+      );
+    });
+  }, [activeAutomatedTaskCreatorFilter, automatedTaskQuery, automatedTasks]);
 
   const automatedExecutionTaskOptions = useMemo(
     () => [
@@ -565,7 +691,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
         title: summary.session.title,
         sessionId: summary.session.sessionId,
         channel: summary.session.channel,
-        userIdentity: summary.session.userIdentity,
         startedAt: summary.session.startedAt,
         updatedAt: summary.session.updatedAt,
         messageCount: summary.messages.length,
@@ -583,40 +708,83 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   );
   const activeLogEvent =
     selectedLogSessionEvents.find((event) => event.id === selectedLogEventId) ?? selectedLogSessionEvents[0] ?? null;
-  const selectedCoreFile = detail.coreFiles.find((file) => file.key === selectedCoreFileKey) ?? null;
-  const statusBadgeClassName =
-    detail.overview.status === "运行中"
-      ? "border-[#d9e1da] bg-[#f5f7f5] text-[#5c6c5f]"
-      : detail.overview.status === "设计中"
-        ? "border-[#e6ddd2] bg-[#faf7f2] text-[#7b6854]"
-        : detail.overview.status === "待评审"
-          ? "border-[#dde2ea] bg-[#f6f8fb] text-[#61708a]"
-          : "border-slate-200 bg-slate-100 text-slate-700";
-  const publishBadgeClassName =
-    detail.overview.publishStatus === "已发布"
-      ? "border-[#d8e0ea] bg-[#f5f7fb] text-[#596b86]"
-      : "border-slate-200 bg-slate-100 text-slate-600";
+  const isPublished = publishStatus === "已发布";
+  const agentBomTree = useMemo(
+    () =>
+      buildAgentBomTreeFromDetail({
+        ...detail,
+        capabilityConfig,
+        knowledgeAssets,
+        securityManagement,
+        resourceConfig: detail.resourceConfig,
+      }),
+    [detail, capabilityConfig, knowledgeAssets, securityManagement]
+  );
+  const isApiEffective = isPublished && apiPublishEffective;
+  const canConfirmShelf = shelfAgentTypes.length > 0;
 
   useEffect(() => {
-    return () => {
-      if (logsMenuCloseTimerRef.current !== null) {
-        window.clearTimeout(logsMenuCloseTimerRef.current);
-      }
-      if (securityMenuCloseTimerRef.current !== null) {
-        window.clearTimeout(securityMenuCloseTimerRef.current);
-      }
-      if (knowledgeMenuCloseTimerRef.current !== null) {
-        window.clearTimeout(knowledgeMenuCloseTimerRef.current);
-      }
-    };
+    const element = splitContainerRef.current;
+    if (!element) {
+      return undefined;
+    }
+
+    const updateWidth = () => setSplitWidth(element.getBoundingClientRect().width);
+    updateWidth();
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+
+    return () => observer.disconnect();
   }, []);
 
-  function handleSelectChatSession(sessionId: string) {
-    setSelectedChatId(sessionId);
-    setChatSessions((current) =>
-      current.map((item) => (item.id === sessionId ? { ...item, unreadCount: 0 } : item))
-    );
-  }
+  useEffect(() => {
+    if (!isResizingDebug) {
+      return undefined;
+    }
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    function handlePointerMove(event: PointerEvent) {
+      const element = splitContainerRef.current;
+      if (!element) {
+        return;
+      }
+
+      const rect = element.getBoundingClientRect();
+      if (rect.width < DEBUG_SPLIT_COLLAPSE_WIDTH) {
+        return;
+      }
+
+      const nextDebugWidth = rect.right - event.clientX;
+      const maxDebugWidth = rect.width - DEBUG_SPLIT_MIN_CONFIG_WIDTH - DEBUG_SPLIT_HANDLE_WIDTH;
+      setDebugWidth(
+        Math.min(
+          Math.max(nextDebugWidth, DEBUG_SPLIT_MIN_DEBUG_WIDTH),
+          Math.max(maxDebugWidth, DEBUG_SPLIT_MIN_DEBUG_WIDTH)
+        )
+      );
+    }
+
+    function handlePointerUp() {
+      setIsResizingDebug(false);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+  }, [isResizingDebug]);
 
   function handleToggleChannelExpand(channelName: string) {
     setExpandedChannelNames((current) =>
@@ -664,84 +832,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     toast.success(`${channelName} 渠道配置已保存。`);
   }
 
-  function clearLogsMenuCloseTimer() {
-    if (logsMenuCloseTimerRef.current !== null) {
-      window.clearTimeout(logsMenuCloseTimerRef.current);
-      logsMenuCloseTimerRef.current = null;
-    }
-  }
-
-  function openLogsMenu() {
-    clearLogsMenuCloseTimer();
-    setLogsMenuOpen(true);
-  }
-
-  function scheduleLogsMenuClose() {
-    clearLogsMenuCloseTimer();
-    logsMenuCloseTimerRef.current = window.setTimeout(() => {
-      setLogsMenuOpen(false);
-      logsMenuCloseTimerRef.current = null;
-    }, 120);
-  }
-
-  function handleSelectLogPanel(panel: LogPanelKey) {
-    setActiveSection("logs");
-    setActiveLogPanel(panel);
-    setLogsMenuOpen(false);
-  }
-
-  function clearSecurityMenuCloseTimer() {
-    if (securityMenuCloseTimerRef.current !== null) {
-      window.clearTimeout(securityMenuCloseTimerRef.current);
-      securityMenuCloseTimerRef.current = null;
-    }
-  }
-
-  function openSecurityMenu() {
-    clearSecurityMenuCloseTimer();
-    setSecurityMenuOpen(true);
-  }
-
-  function scheduleSecurityMenuClose() {
-    clearSecurityMenuCloseTimer();
-    securityMenuCloseTimerRef.current = window.setTimeout(() => {
-      setSecurityMenuOpen(false);
-      securityMenuCloseTimerRef.current = null;
-    }, 120);
-  }
-
-  function handleSelectSecurityPanel(panel: SecurityPanelKey) {
-    setActiveSection("security");
-    setActiveSecurityPanel(panel);
-    setSecurityMenuOpen(false);
-  }
-
-  function clearKnowledgeMenuCloseTimer() {
-    if (knowledgeMenuCloseTimerRef.current !== null) {
-      window.clearTimeout(knowledgeMenuCloseTimerRef.current);
-      knowledgeMenuCloseTimerRef.current = null;
-    }
-  }
-
-  function openKnowledgeMenu() {
-    clearKnowledgeMenuCloseTimer();
-    setKnowledgeMenuOpen(true);
-  }
-
-  function scheduleKnowledgeMenuClose() {
-    clearKnowledgeMenuCloseTimer();
-    knowledgeMenuCloseTimerRef.current = window.setTimeout(() => {
-      setKnowledgeMenuOpen(false);
-      knowledgeMenuCloseTimerRef.current = null;
-    }, 120);
-  }
-
-  function handleSelectKnowledgePanel(panel: KnowledgePanelKey) {
-    setActiveSection("knowledge");
-    setActiveKnowledgePanel(panel);
-    setKnowledgeMenuOpen(false);
-  }
-
   function resolveKnowledgeItemScope(
     knowledge: ClawCapabilityConfig["knowledge"],
     id: string
@@ -758,6 +848,27 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   function handleOpenLogSession(sessionId: string) {
     setSelectedLogSessionId(sessionId);
     setSelectedLogEventId(null);
+  }
+
+  function handleClearDebugSession() {
+    setDebugFreshSession(true);
+    setDebugPanelKey((current) => current + 1);
+    toast.success("已清空当前会话，开始新会话。");
+  }
+
+  function handleCloseDebugPanel() {
+    setDebugOpen(false);
+    setDebugFreshSession(false);
+    setDebugPanelKey(0);
+  }
+
+  function handleToggleDebugPanel() {
+    if (debugOpen) {
+      handleCloseDebugPanel();
+      return;
+    }
+
+    setDebugOpen(true);
   }
 
   function handleDeleteLogSession(sessionId: string) {
@@ -858,11 +969,8 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     toast.success(resolution === "approved" ? "已批准该请求。" : "已拒绝该请求。");
   }
 
-  function handleSaveCoreFile() {
-    if (!selectedCoreFile) {
-      return;
-    }
-    toast.success(`${selectedCoreFile.title} 已保存。`);
+  function handleSaveAgentMd() {
+    toast.success("Agent.md 已保存。");
   }
 
   function handleToggleTool(scope: CapabilityScope, id: string, checked: boolean) {
@@ -900,12 +1008,12 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     setToolConfigDialogOpen(true);
   }
 
-  function handleOpenSkillConfigDialog() {
-    setSkillConfigDialogOpen(true);
+  function handleOpenWorkspaceStorageDialog() {
+    setWorkspaceStorageDialogOpen(true);
   }
 
-  function handleOpenKnowledgeConfigDialog() {
-    setKnowledgeConfigDialogOpen(true);
+  function handleOpenSkillConfigDialog() {
+    setSkillConfigDialogOpen(true);
   }
 
   function handleConfirmToolConfig(selections: ToolConfigSelection[]) {
@@ -959,6 +1067,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
         byId.set(sel.id, {
           id: sel.id,
           name: sel.name,
+          type: prev?.type ?? "高级",
           description: sel.description,
           creator: prev?.creator ?? creatorFallback,
           updatedAt: sel.updatedAt,
@@ -987,24 +1096,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     toast.success("技能已移除。");
   }
 
-  function handleToggleKnowledgeBase(id: string, enabled: boolean) {
-    setKnowledgeAssets((current) => ({
-      ...current,
-      knowledgeBases: current.knowledgeBases.map((row) => (row.id === id ? { ...row, enabled } : row)),
-    }));
-    setCapabilityConfig((current) => {
-      const scope = resolveKnowledgeItemScope(current.knowledge, id);
-      if (!scope) {
-        return current;
-      }
-      return {
-        ...current,
-        knowledge: toggleScopedEnabledCollection(current.knowledge, scope, id, enabled),
-      };
-    });
-    toast.success(enabled ? "知识库已启用。" : "知识库已停用。");
-  }
-
   function handleDeleteKnowledgeBase(id: string) {
     setKnowledgeAssets((current) => ({
       ...current,
@@ -1023,14 +1114,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     toast.success("知识库已移除。");
   }
 
-  function handleToggleDatabase(id: string, enabled: boolean) {
-    setKnowledgeAssets((current) => ({
-      ...current,
-      databases: current.databases.map((row) => (row.id === id ? { ...row, enabled } : row)),
-    }));
-    toast.success(enabled ? "数据库已启用。" : "数据库已停用。");
-  }
-
   function handleDeleteDatabase(id: string) {
     setKnowledgeAssets((current) => ({
       ...current,
@@ -1039,28 +1122,12 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     toast.success("数据库已移除。");
   }
 
-  function handleToggleOntologyObject(id: string, enabled: boolean) {
-    setKnowledgeAssets((current) => ({
-      ...current,
-      ontologyObjects: current.ontologyObjects.map((row) => (row.id === id ? { ...row, enabled } : row)),
-    }));
-    toast.success(enabled ? "本体对象已启用。" : "本体对象已停用。");
-  }
-
   function handleDeleteOntologyObject(id: string) {
     setKnowledgeAssets((current) => ({
       ...current,
       ontologyObjects: current.ontologyObjects.filter((row) => row.id !== id),
     }));
     toast.success("本体对象已移除。");
-  }
-
-  function handleToggleTermBank(id: string, enabled: boolean) {
-    setKnowledgeAssets((current) => ({
-      ...current,
-      termBanks: current.termBanks.map((row) => (row.id === id ? { ...row, enabled } : row)),
-    }));
-    toast.success(enabled ? "术语库已启用。" : "术语库已停用。");
   }
 
   function handleDeleteTermBank(id: string) {
@@ -1102,7 +1169,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     }
 
     setSelectedChatId(targetSessionId);
-    setActiveSection("chat");
+    setDebugOpen(true);
     toast.success("已切换到关联会话。");
   }
 
@@ -1130,362 +1197,253 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   }
 
   function handlePublish() {
-    if (detail.overview.publishStatus === "已发布") {
-      toast.success(`${detail.overview.name} 已发布。`);
+    setPublishPanelOpen(false);
+    window.setTimeout(() => {
+      setPublishValidationOpen(true);
+    }, 120);
+  }
+
+  function handlePublishValidationPassed() {
+    const wasPublished = publishStatus === "已发布";
+    setPublishStatus("已发布");
+    setApiPublishEffective(true);
+    if (wasPublished) {
+      toast.success(`校验通过：${detail.overview.name}，API 调用已生效。`);
+      return;
+    }
+    toast.success(`已发布：${detail.overview.name}，API 调用已生效。`);
+  }
+
+  function handleOpenShelfDialog() {
+    if (!isPublished) {
+      toast.info("请先发布 Claw，再上架到智能体广场。");
       return;
     }
 
-    toast.success(`已发布：${detail.overview.name}`);
+    setPublishPanelOpen(false);
+    setShelfDialogOpen(true);
   }
 
+  function handleToggleShelfAgentType(agentType: string) {
+    setShelfAgentTypes((current) => {
+      if (current.includes(agentType)) {
+        return current.filter((item) => item !== agentType);
+      }
+
+      if (current.length >= 2) {
+        toast.info("智能体类型最多选择 2 个。");
+        return current;
+      }
+
+      return [...current, agentType];
+    });
+  }
+
+  function handleConfirmShelf() {
+    if (!canConfirmShelf) {
+      toast.error("请选择智能体类型。");
+      return;
+    }
+
+    setPlazaStatus("已上架");
+    setShelfDialogOpen(false);
+    toast.success(`已上架到智能体广场：${shelfReleaseMode} / ${shelfAgentTypes.join("、")}`);
+  }
+
+  const configSection = activeSection === "chat" ? "core" : activeSection;
+  const compactDebugSplit = debugOpen && splitWidth > 0 && splitWidth < DEBUG_SPLIT_COLLAPSE_WIDTH;
+  const debugPaneWidth =
+    debugOpen && !compactDebugSplit && splitWidth > 0
+      ? Math.min(
+          Math.max(debugWidth, DEBUG_SPLIT_MIN_DEBUG_WIDTH),
+          Math.max(splitWidth - DEBUG_SPLIT_MIN_CONFIG_WIDTH - DEBUG_SPLIT_HANDLE_WIDTH, DEBUG_SPLIT_MIN_DEBUG_WIDTH)
+        )
+      : debugWidth;
+  const configPaneWidth =
+    debugOpen && !compactDebugSplit && splitWidth > 0
+      ? Math.max(splitWidth - debugPaneWidth - DEBUG_SPLIT_HANDLE_WIDTH, DEBUG_SPLIT_MIN_CONFIG_WIDTH)
+      : undefined;
+  const compactConfigNav = Boolean(configPaneWidth && configPaneWidth < 720);
+  const canForceDebugInspector = debugPaneWidth >= DEBUG_INSPECTOR_FORCE_MIN_WIDTH;
+  const showDebugInspector =
+    debugInspectorMode === "open"
+      ? canForceDebugInspector
+      : debugInspectorMode === "closed"
+        ? false
+        : debugPaneWidth >= DEBUG_INSPECTOR_AUTO_MIN_WIDTH;
+  const debugInspectorToggleLabel = showDebugInspector ? "收起侧栏" : "展开侧栏";
+
   return (
-    <div className="claw-detail-muted-theme flex h-full min-h-0 flex-col overflow-hidden">
-      <section className="shrink-0 pb-2">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-                <Link
-                  href="/claw-hub-next"
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-                  aria-label="返回 Claw 列表"
-                  title="返回"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </Link>
-
-                <div className="min-w-0 flex flex-wrap items-center gap-2 sm:gap-3">
-                  <h1 className="truncate text-[30px] font-semibold tracking-[-0.02em] text-slate-950 sm:text-[36px]">
-                    {detail.overview.name}
-                  </h1>
-                  <Badge className={cn("rounded-full border px-3 py-1 text-xs font-medium", statusBadgeClassName)}>
-                    {detail.overview.status}
-                  </Badge>
-                  <Badge className={cn("rounded-full border px-3 py-1 text-xs font-medium", publishBadgeClassName)}>
-                    {detail.overview.publishStatus}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="mt-4 pl-0">
-                <p className="max-w-4xl text-sm leading-7 text-slate-600 sm:text-[15px]">
-                  {detail.overview.summary}
-                </p>
-
-                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-slate-300" />
-                    {detail.overview.updatedBy} 维护
-                  </span>
-                  <span>{detail.overview.creator} 创建</span>
-                  <span>创建于 {detail.overview.createdAt}</span>
-                </div>
-              </div>
-            </div>
+    <div className="claw-detail-muted-theme flex h-full min-h-0 flex-col overflow-hidden bg-slate-50">
+      <section className="shrink-0 border-b border-slate-200 bg-white px-5 py-3">
+        <div className="flex min-h-12 items-center gap-3">
+          <Link
+            href="/claw-hub-next"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+            aria-label="返回 Claw 列表"
+            title="返回"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <h1 className="min-w-0 truncate text-xl font-semibold text-slate-950">
+              {detail.overview.name}
+            </h1>
+            {isPublished ? <ClawPublishedBadge /> : null}
+            {isPublished ? <AgentBomBadge tree={agentBomTree} versionLabel={detail.overview.version} /> : null}
           </div>
-
-          <div className="flex shrink-0 items-start xl:justify-end">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <Button
               type="button"
+              variant="outline"
               size="sm"
-              className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700"
-              onClick={handlePublish}
+              className={cn(
+                "h-8 rounded-[4px] border-slate-200 bg-white px-3 text-sm font-medium shadow-none hover:bg-slate-50",
+                debugOpen && "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50"
+              )}
+              onClick={handleToggleDebugPanel}
             >
-              发布
-              <ChevronDown className="h-4 w-4" />
+              <MessageSquareText className="h-4 w-4" />
+              对话调试
             </Button>
+            <Popover open={publishPanelOpen} onOpenChange={setPublishPanelOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700"
+                >
+                  发布
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" sideOffset={10} className="w-[320px] rounded-md border-slate-200 bg-white p-0 shadow-lg">
+                <div className="space-y-3 p-4">
+                  <div className="text-sm font-medium text-slate-700">
+                    {isPublished ? "当前版本已发布" : "当前草稿未发布"}
+                  </div>
+                  <Button
+                    type="button"
+                    className="h-9 w-full rounded-[4px] bg-blue-600 text-sm font-medium text-white shadow-none hover:bg-blue-700"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      handlePublish();
+                    }}
+                  >
+                    {isPublished ? "校验并发布" : "发布"}
+                  </Button>
+                </div>
+
+                <div className="border-t border-slate-100 px-4 py-3">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="text-sm font-medium text-slate-500">API调用</span>
+                        <PublishChannelStatusBadge
+                          status={isApiEffective ? "已生效" : "未生效"}
+                          tone={isApiEffective ? "success" : "neutral"}
+                        />
+                        <CircleHelp className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                      </div>
+                      <button
+                        type="button"
+                        className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-slate-400 transition-colors hover:text-blue-600"
+                        onClick={() => toast.info("调用说明入口即将接入。")}
+                      >
+                        调用说明
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="text-sm font-medium text-slate-500">智能体广场</span>
+                        <PublishChannelStatusBadge
+                          status={plazaStatus}
+                          tone={plazaStatus === "已上架" ? "success" : "neutral"}
+                        />
+                        <CircleHelp className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!isPublished}
+                        className="h-7 rounded-[4px] border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                        onClick={handleOpenShelfDialog}
+                      >
+                        {plazaStatus === "已上架" ? "变更" : "上架"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </section>
 
       <Tabs
-        value={activeSection}
+        value={configSection}
         onValueChange={(value) => setActiveSection(value as DetailSectionKey)}
         className="min-h-0 flex-1 gap-0 overflow-hidden"
       >
-        <div className="shrink-0 border-b border-slate-200/80 px-4 sm:px-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0 flex-1 overflow-x-auto">
-              <TabsList className="h-auto min-w-max gap-1 rounded-none bg-transparent p-0">
-                {DETAIL_SECTION_ITEMS.map((item) => {
-                  if (item.value === "logs") {
-                    return (
-                      <DropdownMenu key={item.value} open={logsMenuOpen} onOpenChange={setLogsMenuOpen} modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            title={item.label}
-                            onClick={() => {
-                              setActiveSection("logs");
-                              openLogsMenu();
-                            }}
-                            onMouseEnter={openLogsMenu}
-                            onMouseLeave={scheduleLogsMenuClose}
-                            onFocus={openLogsMenu}
-                            className={cn(
-                              "inline-flex h-auto flex-none shrink-0 items-center gap-1 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900",
-                              activeSection === "logs" && "border-blue-600 font-semibold text-blue-600"
-                            )}
-                          >
-                            <span>{item.label}</span>
-                            <ChevronDown className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          side="bottom"
-                          sideOffset={0}
-                          onMouseEnter={openLogsMenu}
-                          onMouseLeave={scheduleLogsMenuClose}
-                          className="min-w-[168px] rounded-none border-slate-200 bg-white p-0 shadow-[0_12px_28px_rgba(15,23,42,0.12)]"
+        <div ref={splitContainerRef} className="flex min-h-0 flex-1 overflow-hidden">
+          <div
+            className={cn(
+              "flex min-h-0 min-w-0 overflow-hidden",
+              compactDebugSplit ? "hidden" : "flex-1"
+            )}
+            style={configPaneWidth ? { width: configPaneWidth, flex: "0 0 auto" } : undefined}
+          >
+          <aside
+            className={cn(
+              "hidden shrink-0 border-r border-slate-200 bg-white transition-[width] md:block",
+              compactConfigNav ? "w-[56px]" : "w-[220px]"
+            )}
+          >
+            <nav className={cn("h-full overflow-y-auto py-5", compactConfigNav ? "px-2" : "px-4")}>
+              {CLAW_DETAIL_NAV_GROUPS.map((group) => (
+                <div key={group.title} className={cn(compactConfigNav ? "mb-3" : "mb-6", "last:mb-0")}>
+                  {compactConfigNav ? null : (
+                    <div className="mb-2 px-2 text-xs font-medium text-slate-400">{group.title}</div>
+                  )}
+                  <div className="space-y-1">
+                    {group.items.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = activeSection === item.value;
+                      return (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => setActiveSection(item.value)}
+                          aria-label={item.label}
+                          title={item.label}
+                          className={cn(
+                            "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm font-medium transition-colors",
+                            compactConfigNav && "justify-center px-0",
+                            isActive
+                              ? "bg-blue-50 text-blue-700"
+                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          )}
                         >
-                          {LOG_PANEL_ITEMS.map((panel) => (
-                            <DropdownMenuItem
-                              key={panel.key}
-                              onClick={() => handleSelectLogPanel(panel.key)}
-                              className={cn(
-                                "cursor-pointer rounded-none border-b border-slate-200 px-3 py-2.5 text-sm text-slate-600 last:border-b-0 focus:bg-blue-50 focus:text-blue-700",
-                                activeSection === "logs" && activeLogPanel === panel.key && "bg-blue-50 font-medium text-blue-700"
-                              )}
-                            >
-                              {panel.label}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    );
-                  }
-
-                  if (item.value === "security") {
-                    return (
-                      <DropdownMenu key={item.value} open={securityMenuOpen} onOpenChange={setSecurityMenuOpen} modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            title={item.label}
-                            onClick={() => {
-                              setActiveSection("security");
-                              openSecurityMenu();
-                            }}
-                            onMouseEnter={openSecurityMenu}
-                            onMouseLeave={scheduleSecurityMenuClose}
-                            onFocus={openSecurityMenu}
-                            className={cn(
-                              "inline-flex h-auto flex-none shrink-0 items-center gap-1 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900",
-                              activeSection === "security" && "border-blue-600 font-semibold text-blue-600"
-                            )}
-                          >
-                            <span>{item.label}</span>
-                            <ChevronDown className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          side="bottom"
-                          sideOffset={0}
-                          onMouseEnter={openSecurityMenu}
-                          onMouseLeave={scheduleSecurityMenuClose}
-                          className="min-w-[200px] rounded-none border-slate-200 bg-white p-0 shadow-[0_12px_28px_rgba(15,23,42,0.12)]"
-                        >
-                          {SECURITY_PANEL_ITEMS.map((panel) => (
-                            <DropdownMenuItem
-                              key={panel.key}
-                              onClick={() => handleSelectSecurityPanel(panel.key)}
-                              className={cn(
-                                "cursor-pointer rounded-none border-b border-slate-200 px-3 py-2.5 text-sm text-slate-600 last:border-b-0 focus:bg-blue-50 focus:text-blue-700",
-                                activeSection === "security" &&
-                                  activeSecurityPanel === panel.key &&
-                                  "bg-blue-50 font-medium text-blue-700"
-                              )}
-                            >
-                              {panel.label}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    );
-                  }
-
-                  if (item.value === "knowledge") {
-                    return (
-                      <DropdownMenu key={item.value} open={knowledgeMenuOpen} onOpenChange={setKnowledgeMenuOpen} modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            title={item.label}
-                            onClick={() => {
-                              setActiveSection("knowledge");
-                              openKnowledgeMenu();
-                            }}
-                            onMouseEnter={openKnowledgeMenu}
-                            onMouseLeave={scheduleKnowledgeMenuClose}
-                            onFocus={openKnowledgeMenu}
-                            className={cn(
-                              "inline-flex h-auto flex-none shrink-0 items-center gap-1 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900",
-                              activeSection === "knowledge" && "border-blue-600 font-semibold text-blue-600"
-                            )}
-                          >
-                            <span>{item.label}</span>
-                            <ChevronDown className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          side="bottom"
-                          sideOffset={0}
-                          onMouseEnter={openKnowledgeMenu}
-                          onMouseLeave={scheduleKnowledgeMenuClose}
-                          className="min-w-[168px] rounded-none border-slate-200 bg-white p-0 shadow-[0_12px_28px_rgba(15,23,42,0.12)]"
-                        >
-                          {KNOWLEDGE_PANEL_ITEMS.map((panel) => (
-                            <DropdownMenuItem
-                              key={panel.key}
-                              onClick={() => handleSelectKnowledgePanel(panel.key)}
-                              className={cn(
-                                "cursor-pointer rounded-none border-b border-slate-200 px-3 py-2.5 text-sm text-slate-600 last:border-b-0 focus:bg-blue-50 focus:text-blue-700",
-                                activeSection === "knowledge" &&
-                                  activeKnowledgePanel === panel.key &&
-                                  "bg-blue-50 font-medium text-blue-700"
-                              )}
-                            >
-                              {panel.label}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    );
-                  }
-
-                  return (
-                    <TabsTrigger
-                      key={item.value}
-                      value={item.value}
-                      title={item.label}
-                      className="h-auto flex-none shrink-0 whitespace-nowrap rounded-none border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 shadow-none transition-colors hover:text-slate-900 data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-blue-600 data-[state=active]:shadow-none"
-                    >
-                      {item.label}
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setActiveSection("chat")}
-              className={cn(
-                "inline-flex shrink-0 items-center gap-2 border-0 border-b-[3px] border-transparent bg-transparent px-3 py-4 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900",
-                activeSection === "chat" && "border-blue-600 font-semibold text-blue-600"
-              )}
-            >
-              <MessageSquareText className="h-4 w-4" />
-              对话调试
-            </button>
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-3 sm:px-6 sm:pt-4">
-          <TabsContent value="chat" className="mt-0 h-full min-h-0 overflow-hidden">
-            <div
-              className={cn(
-                "grid h-full min-h-0 overflow-hidden border border-blue-100 bg-white",
-                chatSidebarCollapsed ? "xl:grid-cols-[72px_minmax(0,1fr)]" : "xl:grid-cols-[302px_minmax(0,1fr)]"
-              )}
-            >
-              {chatSidebarCollapsed ? (
-                <div className="flex min-h-0 flex-col border-b border-blue-100 bg-[linear-gradient(180deg,rgba(245,249,255,0.98),rgba(238,245,255,0.98))] xl:border-b-0 xl:border-r">
-                  <div className="flex justify-center px-3 py-5">
-                    <button
-                      type="button"
-                      onClick={() => setChatSidebarCollapsed(false)}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-blue-100 bg-white text-slate-400 transition hover:border-blue-200 hover:text-slate-700"
-                      aria-label="展开会话列表"
-                      title="展开会话列表"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-1 flex-col items-center gap-3 px-3 py-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-100 bg-white text-blue-600">
-                      <MessageSquareText className="h-4 w-4" />
-                    </div>
+                          <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-blue-600" : "text-slate-400")} />
+                          {compactConfigNav ? null : <span className="min-w-0 truncate">{item.label}</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              ) : (
-                <div className="flex min-h-0 flex-col border-b border-blue-100 bg-[linear-gradient(180deg,rgba(249,251,255,0.98),rgba(243,248,255,0.98))] xl:border-b-0 xl:border-r">
-                  <div className="border-b border-blue-100 px-5 py-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-slate-950">会话列表</h2>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setChatSidebarCollapsed(true)}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-blue-100 bg-white text-slate-400 transition hover:border-blue-200 hover:text-slate-700"
-                        aria-label="收起会话列表"
-                        title="收起会话列表"
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </button>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="mt-5 h-11 w-full justify-center rounded-lg border-blue-200 bg-white text-[15px] font-medium text-slate-700 shadow-none transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-                      onClick={() => toast.info("新建会话入口待接入。")}
-                    >
-                      <Plus className="h-4 w-4" />
-                      新建会话
-                    </Button>
-                  </div>
-
-                  <div className="min-h-0 flex-1 overflow-y-auto py-2">
-                    <div className="space-y-0.5">
-                      {chatSessions.map((session) => {
-                        const isActive = session.id === currentSession?.id;
-                        const itemCount = session.messages.length;
-
-                        return (
-                          <button
-                            key={session.id}
-                            type="button"
-                            onClick={() => handleSelectChatSession(session.id)}
-                            className={cn(
-                              "relative w-full border-l-[3px] px-5 py-4 text-left transition-colors",
-                              isActive
-                                ? "border-l-blue-600 bg-[linear-gradient(90deg,rgba(239,246,255,0.96),rgba(255,255,255,0.98))]"
-                                : "border-l-transparent bg-transparent hover:bg-blue-50/70"
-                            )}
-                          >
-                            <div className="truncate text-[15px] font-semibold leading-7 text-slate-900">
-                              {session.preview || session.title}
-                            </div>
-                            <div className="mt-2 flex items-center justify-between gap-3 text-[12px] text-slate-500">
-                              <span>{session.updatedAt}</span>
-                              <span className="shrink-0 text-slate-400">
-                                {session.unreadCount > 0 ? session.unreadCount : itemCount}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <ClawInteractiveChatPanel
-                key={currentSession?.id ?? detail.overview.id}
-                detail={detail}
-                session={currentSession}
-                run={matchedConversationRun}
-              />
-            </div>
-          </TabsContent>
-
+              ))}
+            </nav>
+          </aside>
+          <div
+            className={cn(
+              "min-h-0 min-w-0 flex-1",
+              "overflow-y-auto bg-slate-50 px-5 py-5"
+            )}
+          >
           <TabsContent value="status" className="mt-0">
             <SectionCard>
               <div className="rounded-[28px] border border-sky-100 bg-[linear-gradient(135deg,rgba(240,249,255,0.95),rgba(255,255,255,0.98))] p-6 shadow-sm shadow-sky-100/50">
@@ -1525,61 +1483,28 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="core" className="mt-0">
-            <SectionCard>
-              {selectedCoreFile ? (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex min-w-0 flex-wrap items-center gap-3">
-                      <Button type="button" variant="outline" size="sm" onClick={() => setSelectedCoreFileKey(null)}>
-                        <ArrowLeft className="h-4 w-4" />
-                        返回
-                      </Button>
-                      <div className="min-w-0">
-                        <div className="truncate text-base font-semibold text-slate-950">{selectedCoreFile.title}</div>
-                        <div className="text-sm text-slate-500">{selectedCoreFile.note}</div>
-                      </div>
-                    </div>
-                    <Button type="button" size="sm" onClick={handleSaveCoreFile}>
-                      保存
-                    </Button>
-                  </div>
-
-                  <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3">
-                    <div className="mb-2 flex items-center justify-between px-1 text-xs text-slate-500">
-                      <span>Markdown 编辑器</span>
-                      <span>{coreFileDrafts[selectedCoreFile.key].split("\n").length} 行</span>
-                    </div>
-                    <Textarea
-                      value={coreFileDrafts[selectedCoreFile.key]}
-                      onChange={(event) =>
-                        setCoreFileDrafts((current) => ({
-                          ...current,
-                          [selectedCoreFile.key]: event.target.value,
-                        }))
-                      }
-                      className="min-h-[520px] resize-none rounded-md border-slate-200 bg-white px-4 py-3 font-mono text-[13px] leading-7 text-slate-700 shadow-none focus-visible:ring-0"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
-                  {detail.coreFiles.map((item) => (
-                    <div
-                      key={item.key}
-                      className="flex items-center justify-between gap-4 px-4 py-3.5 sm:px-5"
-                    >
-                      <div className="min-w-0 flex flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
-                        <span className="shrink-0 font-medium text-slate-950">{item.title}</span>
-                        <span className="text-sm text-slate-500">{item.note}</span>
-                      </div>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setSelectedCoreFileKey(item.key)}>
-                        编辑
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </SectionCard>
+            <ClawCoreConfigSection
+              agentMdContent={agentMdDraft}
+              primaryModel={clawPrimaryModel}
+              primaryModelParams={clawPrimaryModelParams}
+              fallbackModels={clawFallbackModels}
+              hiddenModelParamKeys={CLAW_MODEL_SELECTOR_HIDDEN_KEYS}
+              onAgentMdContentChange={setAgentMdDraft}
+              onSaveAgentMd={handleSaveAgentMd}
+              onPrimaryModelChange={setClawPrimaryModel}
+              onPrimaryModelParamsChange={setClawPrimaryModelParams}
+              onAddFallbackModel={addClawFallbackModel}
+              onRemoveFallbackModel={removeClawFallbackModel}
+              onFallbackModelChange={(rowId, model) =>
+                setClawFallbackModels((rows) => rows.map((r) => (r.id === rowId ? { ...r, model } : r)))
+              }
+              onFallbackModelParamsChange={(rowId, params) =>
+                setClawFallbackModels((rows) => rows.map((r) => (r.id === rowId ? { ...r, params } : r)))
+              }
+              isFallbackModelDuplicate={(index) =>
+                isClawFallbackModelDuplicate(clawPrimaryModel, clawFallbackModels, index)
+              }
+            />
           </TabsContent>
 
           <TabsContent value="model" className="mt-0">
@@ -1755,14 +1680,11 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           <TabsContent value="knowledge" className="mt-0">
             <ClawKnowledgeAssetsSection
               activePanel={activeKnowledgePanel}
+              onActivePanelChange={setActiveKnowledgePanel}
               assets={knowledgeAssets}
-              onToggleKnowledgeBase={handleToggleKnowledgeBase}
               onDeleteKnowledgeBase={handleDeleteKnowledgeBase}
-              onToggleDatabase={handleToggleDatabase}
               onDeleteDatabase={handleDeleteDatabase}
-              onToggleOntology={handleToggleOntologyObject}
               onDeleteOntology={handleDeleteOntologyObject}
-              onToggleTermBank={handleToggleTermBank}
               onDeleteTermBank={handleDeleteTermBank}
               onOpenKnowledgeBaseConfig={() => setKnowledgeConfigDialogOpen(true)}
               onOpenDatabaseConfig={() => toast.info("配置数据库入口即将接入。")}
@@ -1933,19 +1855,31 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
 
                 {activeAutomatedTaskPanel === "task-list" ? (
                   <>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="relative min-w-0 flex-1 sm:max-w-md">
-                        <Search
-                          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                          aria-hidden
-                        />
-                        <Input
-                          value={automatedTaskQuery}
-                          onChange={(event) => setAutomatedTaskQuery(event.target.value)}
-                          placeholder="按任务名称搜索"
-                          className="h-9 border-slate-200 bg-white pl-9 shadow-none"
-                          aria-label="按任务名称搜索"
-                        />
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                      <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-end">
+                        <div className="relative min-w-0 flex-1 sm:max-w-md">
+                          <Search
+                            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                            aria-hidden
+                          />
+                          <Input
+                            value={automatedTaskQuery}
+                            onChange={(event) => setAutomatedTaskQuery(event.target.value)}
+                            placeholder="按名称、描述或创建人搜索"
+                            className="h-9 border-slate-200 bg-white pl-9 shadow-none"
+                            aria-label="搜索自动化任务"
+                          />
+                        </div>
+                        <div className="w-full space-y-1.5 sm:w-[200px] sm:shrink-0">
+                          <Label className="text-xs font-medium text-slate-500">创建人</Label>
+                          <Select
+                            value={activeAutomatedTaskCreatorFilter}
+                            onValueChange={setAutomatedTaskCreatorFilter}
+                            options={automatedTaskCreatorFilterOptions}
+                            placeholder="筛选创建人"
+                            className="h-9 border-slate-200 bg-white shadow-none"
+                          />
+                        </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <Button
@@ -1969,29 +1903,32 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                       </div>
                     </div>
 
-                    <div className="overflow-x-auto border border-slate-200 bg-white">
-                      <Table className="min-w-[1320px] table-fixed border-collapse">
+                    <div className="border border-slate-200 bg-white">
+                      <Table className="min-w-[1480px] table-fixed border-collapse [&_td]:break-words">
                         <TableHeader className="bg-slate-50">
                           <TableRow className="border-slate-200 hover:bg-slate-50">
-                            <TableHead className="h-11 w-[15%] min-w-[168px] px-4 text-sm font-medium text-slate-700">
+                            <TableHead className="h-11 w-[14%] min-w-[160px] px-4 text-sm font-medium text-slate-700">
                               名称
                             </TableHead>
-                            <TableHead className="h-11 w-[26%] min-w-[220px] px-4 text-sm font-medium text-slate-700">
+                            <TableHead className="h-11 w-[22%] min-w-[220px] px-4 text-sm font-medium text-slate-700">
                               描述
                             </TableHead>
-                            <TableHead className="h-11 w-[18%] min-w-[180px] px-4 text-sm font-medium text-slate-700">
+                            <TableHead className="h-11 w-[10%] min-w-[100px] px-4 text-sm font-medium text-slate-700">
+                              创建人
+                            </TableHead>
+                            <TableHead className="h-11 w-[16%] min-w-[168px] px-4 text-sm font-medium text-slate-700">
                               触发方式和时间
                             </TableHead>
-                            <TableHead className="h-11 w-[12%] min-w-[136px] px-4 text-sm font-medium text-slate-700">
+                            <TableHead className="h-11 w-[11%] min-w-[124px] px-4 text-sm font-medium text-slate-700">
                               上次执行时间
                             </TableHead>
-                            <TableHead className="h-11 w-[9%] min-w-[88px] px-4 text-sm font-medium text-slate-700">
+                            <TableHead className="h-11 w-[8%] min-w-[80px] px-4 text-sm font-medium text-slate-700">
                               最近结果
                             </TableHead>
-                            <TableHead className="h-11 w-[11%] min-w-[108px] px-4 text-sm font-medium text-slate-700">
+                            <TableHead className="h-11 w-[10%] min-w-[100px] px-4 text-sm font-medium text-slate-700">
                               交付位置（渠道）
                             </TableHead>
-                            <TableHead className="h-11 w-[17%] min-w-[180px] px-4 text-sm font-medium text-slate-700">
+                            <TableHead className="h-11 w-[15%] min-w-[168px] px-4 text-sm font-medium text-slate-700">
                               操作项
                             </TableHead>
                           </TableRow>
@@ -1999,14 +1936,14 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                         <TableBody>
                           {filteredAutomatedTasks.length === 0 ? (
                             <TableRow>
-                              <TableCell colSpan={7} className="px-4 py-16 text-center text-sm text-slate-500">
-                                {automatedTasks.length === 0 ? "暂无自动化任务。" : "没有匹配名称的任务。"}
+                              <TableCell colSpan={8} className="px-4 py-16 text-center text-sm text-slate-500">
+                                {automatedTasks.length === 0 ? "暂无自动化任务。" : "没有匹配的任务。"}
                               </TableCell>
                             </TableRow>
                           ) : (
                             filteredAutomatedTasks.map((task) => (
                               <TableRow key={task.id} className="border-slate-200 hover:bg-slate-50/60">
-                                <TableCell className="w-[15%] min-w-[168px] max-w-0 px-4 py-4 align-top">
+                                <TableCell className="w-[14%] min-w-[160px] px-4 py-4 align-top whitespace-normal">
                                   <div className="flex min-w-0 gap-3">
                                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50">
                                       <CalendarClock className="h-5 w-5 text-blue-600" aria-hidden />
@@ -2016,10 +1953,13 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                                     </div>
                                   </div>
                                 </TableCell>
-                                <TableCell className="w-[26%] min-w-[220px] max-w-0 px-4 py-4 align-top text-sm leading-6 text-slate-600">
+                                <TableCell className="w-[22%] min-w-[220px] px-4 py-4 align-top text-sm leading-6 text-slate-600 whitespace-normal">
                                   <p className="break-words [overflow-wrap:anywhere]">{task.description}</p>
                                 </TableCell>
-                                <TableCell className="w-[18%] min-w-[180px] max-w-0 px-4 py-4 align-top">
+                                <TableCell className="w-[10%] min-w-[100px] px-4 py-4 align-top text-sm text-slate-800 whitespace-normal">
+                                  <span className="break-words [overflow-wrap:anywhere]">{task.createdBy}</span>
+                                </TableCell>
+                                <TableCell className="w-[16%] min-w-[168px] px-4 py-4 align-top whitespace-normal">
                                   <div className="min-w-0 space-y-2">
                                     <div className="break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
                                       {task.triggerSummary}
@@ -2029,18 +1969,18 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                                     </span>
                                   </div>
                                 </TableCell>
-                                <TableCell className="w-[12%] min-w-[136px] max-w-0 whitespace-nowrap px-4 py-4 align-middle text-sm text-slate-700">
+                                <TableCell className="w-[11%] min-w-[124px] whitespace-nowrap px-4 py-4 align-middle text-sm text-slate-700">
                                   {task.lastExecutedAt ?? "—"}
                                 </TableCell>
-                                <TableCell className="w-[9%] min-w-[88px] max-w-0 px-4 py-4 align-middle">
+                                <TableCell className="w-[8%] min-w-[80px] px-4 py-4 align-middle whitespace-normal">
                                   <AutomatedTaskResultCell result={task.recentResult} />
                                 </TableCell>
-                                <TableCell className="w-[11%] min-w-[108px] max-w-0 px-4 py-4 align-middle">
+                                <TableCell className="w-[10%] min-w-[100px] px-4 py-4 align-middle whitespace-normal">
                                   <span className="inline-flex max-w-full rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-800 [overflow-wrap:anywhere]">
                                     {task.deliveryChannel}
                                   </span>
                                 </TableCell>
-                                <TableCell className="w-[17%] min-w-[180px] max-w-0 px-4 py-4 align-middle">
+                                <TableCell className="w-[15%] min-w-[168px] px-4 py-4 align-middle whitespace-normal">
                                   <div className="flex flex-wrap items-center gap-3">
                                     <Switch
                                       checked={task.enabled}
@@ -2255,26 +2195,14 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
             </SectionCard>
           </TabsContent>
 
-          <TabsContent value="memory" className="mt-0">
-            <SectionCard title="记忆">
-              <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
-                <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
-                  <Label htmlFor="claw-memory-switch" className="text-sm font-medium text-slate-800">
-                    启用记忆
-                  </Label>
-                  <Switch
-                    id="claw-memory-switch"
-                    checked={clawMemoryEnabled}
-                    onCheckedChange={setClawMemoryEnabled}
-                    aria-label="启用记忆"
-                    className="data-[state=checked]:bg-blue-600 dark:data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-200 dark:data-[state=unchecked]:bg-slate-200"
-                  />
-                </div>
-              </div>
-              <div className="min-h-[min(40vh,320px)] pt-8">
-                <p className="text-xs font-medium tracking-wide text-slate-400">待规划</p>
-              </div>
-            </SectionCard>
+          <TabsContent value="workspace" className="mt-0">
+            <ClawWorkspaceSection
+              workspaceRoot={detail.workspaceRoot}
+              storageConfig={workspaceStorageConfig}
+              selectedPath={selectedWorkspacePath}
+              onSelectPath={setSelectedWorkspacePath}
+              onOpenStorageConfig={handleOpenWorkspaceStorageDialog}
+            />
           </TabsContent>
 
           <TabsContent value="logs" className="mt-0 h-full min-h-0 overflow-hidden">
@@ -2299,8 +2227,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                         <div className="text-xl font-semibold text-slate-950">{selectedLogSession.title}</div>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
                           <span>{selectedLogSession.channel}</span>
-                          <span className="text-slate-300">/</span>
-                          <span>{selectedLogSession.userIdentity}</span>
                           <span className="text-slate-300">/</span>
                           <span className="font-mono text-xs text-slate-400">{selectedLogSession.traceId}</span>
                         </div>
@@ -2455,7 +2381,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
 
                     <div className="hidden border-b border-slate-200 bg-slate-50/70 px-4 py-2 text-xs font-medium text-slate-500 lg:grid lg:grid-cols-[minmax(0,1.6fr)_200px_160px_160px_140px]">
                       <span>会话</span>
-                      <span>来源</span>
+                      <span>使用渠道</span>
                       <span>创建时间</span>
                       <span>更新时间</span>
                       <span>操作项</span>
@@ -2475,7 +2401,6 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                               </div>
                               <div className="min-w-0 text-sm text-slate-600">
                                 <div className="truncate">{session.channel}</div>
-                                <div className="mt-1 truncate text-xs text-slate-400">{session.userIdentity}</div>
                               </div>
                               <div className="text-sm text-slate-600">{session.startedAt}</div>
                               <div className="text-sm text-slate-600">{session.updatedAt}</div>
@@ -2616,7 +2541,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
 
           <TabsContent value="security" className="mt-0 w-full min-w-0">
             <ClawSecuritySection
-              activePanel={activeSecurityPanel}
+              activePanel="all"
               securityManagement={securityManagement}
               onAutonomyBoundaryLevelChange={handleAutonomyBoundaryLevelChange}
               onToolProtectionEnabledChange={handleToolProtectionEnabledChange}
@@ -2696,8 +2621,252 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
             </div>
           </TabsContent>
 
+          </div>
+          </div>
+
+          {debugOpen ? (
+            <>
+              {!compactDebugSplit ? (
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="调整配置和调试区域宽度"
+                  title="拖拽调整宽度"
+                  className={cn(
+                    "group flex w-2 shrink-0 cursor-col-resize items-stretch justify-center bg-white transition-colors hover:bg-blue-50",
+                    isResizingDebug && "bg-blue-50"
+                  )}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    setIsResizingDebug(true);
+                  }}
+                >
+                  <span
+                    className={cn(
+                      "my-0.5 w-px bg-slate-200 transition-colors group-hover:bg-blue-300",
+                      isResizingDebug && "bg-blue-400"
+                    )}
+                  />
+                </div>
+              ) : null}
+
+              <section
+                className="flex min-h-0 min-w-0 flex-col border-l border-slate-200 bg-white"
+                style={
+                  compactDebugSplit
+                    ? { flex: "1 1 auto" }
+                    : { width: debugPaneWidth, flex: "0 0 auto" }
+                }
+              >
+                <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4">
+                  <div className="min-w-0 truncate text-sm font-semibold text-slate-900">对话调试</div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleClearDebugSession}
+                      aria-label="清空当前会话"
+                      title="清空当前会话"
+                      className="inline-flex h-7 items-center gap-1.5 rounded-md border border-blue-100 bg-white px-2 text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span className="text-xs font-medium">清空</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDebugInspectorMode(showDebugInspector ? "closed" : "open")}
+                      disabled={!showDebugInspector && !canForceDebugInspector}
+                      aria-label={debugInspectorToggleLabel}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-blue-100 bg-white text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+                      title={
+                        canForceDebugInspector || showDebugInspector
+                          ? debugInspectorToggleLabel
+                          : "当前调试区域过窄，无法展开侧栏"
+                      }
+                    >
+                      {showDebugInspector ? (
+                        <PanelRightClose className="h-3.5 w-3.5" />
+                      ) : (
+                        <PanelRightOpen className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="关闭对话调试"
+                      title="关闭"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                      onClick={handleCloseDebugPanel}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <ClawInteractiveChatPanel
+                    key={`debug-${debugPanelKey}`}
+                    detail={detail}
+                    session={debugFreshSession ? undefined : currentSession}
+                    run={debugFreshSession ? undefined : matchedConversationRun}
+                    inspectorMode={debugInspectorMode}
+                  />
+                </div>
+              </section>
+            </>
+          ) : null}
         </div>
       </Tabs>
+      <Dialog open={shelfDialogOpen} onOpenChange={setShelfDialogOpen}>
+        <DialogContent className="gap-0 p-0 sm:max-w-[600px]">
+          <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <DialogTitle className="text-lg font-semibold text-slate-950">上架</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5 px-6 py-5">
+            <div className="grid items-center gap-3 sm:grid-cols-[88px_minmax(0,1fr)]">
+              <Label className="flex items-center gap-1 text-sm font-medium text-slate-700">
+                <span className="text-rose-500">*</span>
+                <span>发布方式:</span>
+              </Label>
+              <RadioGroup
+                value={shelfReleaseMode}
+                onValueChange={(value) => setShelfReleaseMode(value as ClawReleaseMode)}
+                className="flex flex-wrap items-center gap-5"
+              >
+                {CLAW_RELEASE_MODE_OPTIONS.map((mode) => (
+                  <label key={mode} className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                    <RadioGroupItem value={mode} className="border-slate-300 text-blue-600" />
+                    <span>{mode}</span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </div>
+
+            <div className="grid items-start gap-3 sm:grid-cols-[88px_minmax(0,1fr)]">
+              <Label className="flex items-center gap-1 pt-2 text-sm font-medium text-slate-700">
+                <span className="text-rose-500">*</span>
+                <span>智能体类型:</span>
+              </Label>
+              <div className="min-w-0">
+                <div className="flex min-h-10 w-full items-center rounded-[4px] border border-slate-300 bg-white px-3 py-1.5 text-sm">
+                  {shelfAgentTypes.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {shelfAgentTypes.map((agentType) => (
+                        <span
+                          key={agentType}
+                          className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
+                        >
+                          {agentType}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-slate-400">请选择</span>
+                  )}
+                  <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+                </div>
+
+                <div className="mt-2 flex flex-wrap gap-2 rounded-[4px] border border-slate-200 bg-slate-50 px-2 py-2">
+                  {CLAW_AGENT_TYPE_OPTIONS.map((agentType) => {
+                    const selected = shelfAgentTypes.includes(agentType);
+                    return (
+                      <button
+                        key={agentType}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => handleToggleShelfAgentType(agentType)}
+                        className={cn(
+                          "h-8 rounded-full border px-4 text-sm font-medium transition-colors",
+                          selected
+                            ? "border-blue-200 bg-blue-600 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:text-blue-700"
+                        )}
+                      >
+                        {agentType}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-slate-100 bg-white px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-[4px] border-slate-300 bg-white px-5 text-slate-700 shadow-none"
+              onClick={() => setShelfDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              disabled={!canConfirmShelf}
+              className="h-9 rounded-[4px] bg-blue-600 px-5 text-white shadow-none hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              onClick={handleConfirmShelf}
+            >
+              确认上架
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={workspaceStorageDialogOpen} onOpenChange={setWorkspaceStorageDialogOpen}>
+        <DialogContent className="sm:max-w-[920px]">
+          <DialogHeader>
+            <DialogTitle>存储配置</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid gap-5 py-2">
+            <div className="border border-slate-200 bg-slate-50/50 px-5 py-4">
+              <div className="grid gap-x-10 gap-y-4 sm:grid-cols-2">
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">存储卷名称:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.volumeDisplayName}</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">存储卷描述:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.volumeDescription || "--"}</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">存储源:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.volumeName}</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">子目录:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.subdirectory}</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">分配容量:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.volumeTotalGb.toFixed(2)}GB</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">所属组织:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.organizationName}</div>
+                </div>
+                <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 text-sm">
+                  <div className="text-slate-500">绑定项目:</div>
+                  <div className="text-slate-900">{workspaceStorageConfig.projectName ?? "--"}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-slate-800">已使用/总空间</Label>
+              <div className="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+                {workspaceStorageConfig.workspaceUsedGb}GB / {workspaceStorageConfig.volumeTotalGb}GB
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setWorkspaceStorageDialogOpen(false)}>
+              取消
+            </Button>
+            <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" onClick={() => setWorkspaceStorageDialogOpen(false)}>
+              确定
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={agentRelationDraft !== null}
         onOpenChange={(open) => {
@@ -2791,7 +2960,15 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
         open={createAutomatedTaskOpen}
         onOpenChange={setCreateAutomatedTaskOpen}
         initialExecutionMode={createAutomatedTaskInitialMode}
+        defaultCreatedBy={detail.overview.creator}
         onCreated={({ item }) => setAutomatedTasks((rows) => [item, ...rows])}
+      />
+      <ClawPublishValidationDialog
+        open={publishValidationOpen}
+        onOpenChange={setPublishValidationOpen}
+        agentName={detail.overview.name}
+        confirmLabel={isPublished ? "确认生效" : "确认发布"}
+        onValidationPassed={handlePublishValidationPassed}
       />
     </div>
   );

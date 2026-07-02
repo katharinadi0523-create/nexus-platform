@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { OpenApiPluginListWorkbench } from "@/components/openapi-management/openapi-plugin-list-workbench";
 
 export default function OpenAPIManagementPage() {
-  return <ComingSoon title="OpenAPI 正在集成中" message="该功能正在集成中，敬请期待" />;
+  return <OpenApiPluginListWorkbench />;
 }

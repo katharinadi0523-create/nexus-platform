@@ -85,6 +85,7 @@ function formatConversationBackfill(c: { name: string; id: string }): string {
 function buildTaskFromForm(state: {
   name: string;
   description: string;
+  createdBy: string;
   executionPrompt: string;
   deliveryChannel: AutomatedTaskDeliveryChannel;
   deliveryLocation: AutomatedTaskDeliveryLocation;
@@ -133,6 +134,7 @@ function buildTaskFromForm(state: {
     id: `auto-task-${crypto.randomUUID()}`,
     name: state.name.trim(),
     description: descriptionText,
+    createdBy: state.createdBy.trim(),
     triggerSummary,
     triggerKind,
     deliveryChannel: state.deliveryChannel,
@@ -149,6 +151,8 @@ type CreateAutomatedTaskDialogProps = {
   onOpenChange: (open: boolean) => void;
   /** 打开时的默认触发类型（与「新建任务」下拉一致） */
   initialExecutionMode?: AutomatedTaskExecutionMode;
+  /** 创建人默认值，通常取当前 Claw 详情中的维护人/创建者 */
+  defaultCreatedBy?: string;
   onCreated?: (payload: CreateAutomatedTaskPayload) => void;
 };
 
@@ -156,10 +160,12 @@ export function CreateAutomatedTaskDialog({
   open,
   onOpenChange,
   initialExecutionMode = "scheduled",
+  defaultCreatedBy = "",
   onCreated,
 }: CreateAutomatedTaskDialogProps) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [createdBy, setCreatedBy] = useState("");
   const [executionPrompt, setExecutionPrompt] = useState("");
   const [deliveryChannel, setDeliveryChannel] = useState<AutomatedTaskDeliveryChannel>(PRIMARY_DELIVERY_CHANNEL);
   const [deliveryLocation, setDeliveryLocation] = useState<AutomatedTaskDeliveryLocation>("dedicated");
@@ -201,6 +207,7 @@ export function CreateAutomatedTaskDialog({
   function resetFormForOpen() {
     setName("");
     setDescription("");
+    setCreatedBy(defaultCreatedBy.trim());
     setExecutionPrompt("");
     setDeliveryChannel(PRIMARY_DELIVERY_CHANNEL);
     setDeliveryLocation("dedicated");
@@ -232,6 +239,10 @@ export function CreateAutomatedTaskDialog({
       toast.error("请填写任务执行提示词。");
       return;
     }
+    if (!createdBy.trim()) {
+      toast.error("请填写创建人。");
+      return;
+    }
     if (executionMode === "interval") {
       const h = Number.parseInt(intervalHours, 10);
       if (!Number.isFinite(h) || h < 1) {
@@ -255,6 +266,7 @@ export function CreateAutomatedTaskDialog({
     const item = buildTaskFromForm({
       name,
       description,
+      createdBy,
       executionPrompt,
       deliveryChannel,
       deliveryLocation,
@@ -322,6 +334,20 @@ export function CreateAutomatedTaskDialog({
                       onChange={(e) => setDescription(e.target.value)}
                       placeholder="补充任务概述、任务背景、产出说明等，用于识别自动化任务"
                       className="min-h-[88px] resize-y border-slate-200 text-sm shadow-none"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="auto-task-creator" className="text-sm text-slate-800">
+                      <span className="mr-1 text-rose-500">*</span>
+                      创建人
+                    </Label>
+                    <Input
+                      id="auto-task-creator"
+                      value={createdBy}
+                      onChange={(e) => setCreatedBy(e.target.value)}
+                      placeholder="任务责任人在平台上的展示名"
+                      className="h-9 border-slate-200 shadow-none"
                     />
                   </div>
 
