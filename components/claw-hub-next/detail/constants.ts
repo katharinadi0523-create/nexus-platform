@@ -29,6 +29,7 @@ export type DetailSectionKey =
   | "tools"
   | "skills"
   | "knowledge"
+  | "agents"
   | "channels"
   | "automated-tasks"
   | "workspace"

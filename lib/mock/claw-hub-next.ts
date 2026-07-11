@@ -82,6 +82,16 @@ export interface CapabilityAgentItem {
   description: string;
   enabled: boolean;
   target: string;
+  primaryModel?: string;
+  fallbackModel?: string;
+  prompt?: string;
+  sourceType?: "created" | "referenced";
+  /** 子智能体独立挂载的资源；未配置时为空，不再隐式继承主 Claw。 */
+  resources?: {
+    skills: CapabilitySkillItem[];
+    tools: CapabilityToolItem[];
+    knowledge: CapabilityKnowledgeItem[];
+  };
 }
 
 export interface CapabilityKnowledgeItem {
@@ -1051,6 +1061,20 @@ export interface ClawDetailData {
 }
 
 export const clawHubList: ClawHubListItem[] = [
+  {
+    id: "claw-scientific-research",
+    name: "科研 Claw",
+    creator: "RowanDI",
+    type: "研发型",
+    scene: "科研协作",
+    owner: "科研创新中心",
+    status: "运行中",
+    publishStatus: "已发布",
+    model: "Qwen3-32B + 科研智能体组",
+    updatedAt: "2026-07-11 10:30",
+    updatedBy: "RowanDI",
+    summary: "面向科研全流程，协同完成假设生成、文献检索、科研绘图、论文生成与论文审核。",
+  },
   {
     id: "claw-ops-watch",
     name: "运维值守 Claw",
@@ -4106,6 +4130,92 @@ const detailMap: Record<string, ClawDetailData> = {
 };
 
 function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
+  const isScientificResearchClaw = listItem.id === "claw-scientific-research";
+  const researchAgentSkills = {
+    hypothesis: { id: "research-hypothesis-validation-skill", name: "科研假设验证 skill", description: "生成可证伪假设并定义关键变量与验证路径。", enabled: true, sizeLabel: "2.4 KB" },
+    literature: { id: "research-systematic-review-skill", name: "系统文献综述 skill", description: "建立研究脉络、争议与证据缺口矩阵。", enabled: true, sizeLabel: "3.1 KB" },
+    chart: { id: "research-chart-skill", name: "科研绘图 skill", description: "将实验数据与论证目标转换为规范科研图表。", enabled: true, sizeLabel: "2.8 KB" },
+    paper: { id: "research-academic-writing-skill", name: "学术写作 skill", description: "依据研究材料组织论文结构并区分事实、推断与待验证内容。", enabled: true, sizeLabel: "3.6 KB" },
+    review: { id: "research-peer-review-skill", name: "同行评审 skill", description: "从方法、证据、逻辑和引用规范维度审核论文。", enabled: true, sizeLabel: "2.7 KB" },
+  } satisfies Record<string, CapabilitySkillItem>;
+  const researchAgentTools = {
+    hypothesis: { id: "research-python-statistics", name: "Python 统计分析工具", description: "用于研究变量处理、统计检验与假设验证。", enabled: true, badge: "Claw配置", meta: "OpenAPI", kind: "plugin", origin: "claw_only" },
+    literature: { id: "research-literature-search", name: "学术文献检索工具", description: "检索近五年学术文献并保留来源、发表信息与证据摘要。", enabled: true, badge: "Claw配置", meta: "MCP", kind: "mcp", origin: "claw_only" },
+    chart: { id: "research-python-plotting", name: "Python 绘图环境", description: "生成可复现的研究框架图、效应对比图与置信区间图。", enabled: true, badge: "Claw配置", meta: "OpenAPI", kind: "plugin", origin: "claw_only" },
+    paper: { id: "research-citation-checker", name: "引用校验工具", description: "核对论文引用、图表编号和参考文献对应关系。", enabled: true, badge: "Claw配置", meta: "OpenAPI", kind: "plugin", origin: "claw_only" },
+    review: { id: "research-paper-compliance", name: "论文规范检查工具", description: "按同行评审口径检查方法、证据、逻辑与写作规范。", enabled: true, badge: "Claw配置", meta: "工作流", kind: "workflow", origin: "claw_only" },
+  } satisfies Record<string, CapabilityToolItem>;
+  const researchKnowledge = {
+    project: { id: "research-project-knowledge", name: "科研项目资料库", description: "沉淀研究问题、实验方案、数据说明和阶段结论。", enabled: true, documentCount: 86, updatedAt: listItem.updatedAt },
+    papers: { id: "research-public-paper-corpus", name: "公开学术论文库", description: "公开论文元数据、摘要与来源索引。", enabled: true, documentCount: 128430, updatedAt: "2026-07-10 18:20" },
+    evidence: { id: "research-evidence-library", name: "核心文献证据库", description: "保存已筛选文献、证据矩阵、引用片段与证据边界。", enabled: true, documentCount: 312, updatedAt: listItem.updatedAt },
+    standards: { id: "research-writing-standards", name: "论文写作与审核规范库", description: "提供论文结构、引用格式、图表规范与同行评审检查项。", enabled: true, documentCount: 42, updatedAt: "2026-07-09 16:40" },
+  } satisfies Record<string, CapabilityKnowledgeItem>;
+  const researchAgents: CapabilityAgentItem[] = [
+    {
+      id: "research-hypothesis-agent",
+      name: "假设生成智能体",
+      description: "结合研究问题与已有证据，生成可验证的科研假设。",
+      enabled: true,
+      target: "Claw私有智能体",
+      primaryModel: "Qwen3-32B",
+      fallbackModel: "Qwen3-8B",
+      prompt: "根据研究问题、已有证据和约束条件，提出可证伪、可验证的科研假设，并说明变量与验证路径。",
+      resources: { skills: [researchAgentSkills.hypothesis], tools: [researchAgentTools.hypothesis], knowledge: [researchKnowledge.project, researchKnowledge.evidence] },
+    },
+    {
+      id: "research-literature-agent",
+      name: "文献检索智能体",
+      description: "检索并归纳相关论文，形成带来源的研究脉络与证据摘要。",
+      enabled: true,
+      target: "Claw私有智能体",
+      primaryModel: "Qwen3-32B",
+      fallbackModel: "Qwen3-8B",
+      prompt: "围绕研究主题检索高相关文献，优先呈现原始来源、发表信息、关键结论与证据边界。",
+      resources: { skills: [researchAgentSkills.literature], tools: [researchAgentTools.literature], knowledge: [researchKnowledge.papers, researchKnowledge.evidence] },
+    },
+    {
+      id: "research-chart-agent",
+      name: "科研绘图智能体",
+      description: "将实验数据与研究结论转化为规范、可复现的科研图表。",
+      enabled: true,
+      target: "Claw私有智能体",
+      primaryModel: "Qwen3-32B",
+      fallbackModel: "Qwen3-8B",
+      prompt: "根据数据类型和论证目标选择合适图表，输出清晰、准确、可复现的科研可视化方案。",
+      resources: { skills: [researchAgentSkills.chart], tools: [researchAgentTools.chart], knowledge: [researchKnowledge.project, researchKnowledge.standards] },
+    },
+    {
+      id: "research-paper-agent",
+      name: "论文生成智能体",
+      description: "依据研究材料生成结构完整、引证清晰的论文草稿。",
+      enabled: true,
+      target: "Claw私有智能体",
+      primaryModel: "Qwen3-32B",
+      fallbackModel: "Qwen3-8B",
+      prompt: "严格依据提供的研究材料撰写论文，区分事实、推断与待验证内容，不虚构数据或引用。",
+      resources: { skills: [researchAgentSkills.paper], tools: [researchAgentTools.paper], knowledge: [researchKnowledge.project, researchKnowledge.evidence, researchKnowledge.standards] },
+    },
+    {
+      id: "research-review-agent",
+      name: "论文审核智能体",
+      description: "从方法、证据、逻辑与写作规范等维度审核论文质量。",
+      enabled: true,
+      target: "Claw私有智能体",
+      primaryModel: "Qwen3-32B",
+      fallbackModel: "Qwen3-8B",
+      prompt: "以同行评审标准检查论文的方法合理性、证据充分性、论证一致性与引用规范，并给出可执行修改建议。",
+      resources: { skills: [researchAgentSkills.review], tools: [researchAgentTools.review], knowledge: [researchKnowledge.evidence, researchKnowledge.standards] },
+    },
+  ];
+  const researchTools: CapabilityToolItem[] = [
+    { id: "research-subagent-scheduler", name: "子智能体调度器", description: "按科研任务依赖关系并行调度子智能体，并汇总阶段产出。", enabled: true, badge: "Claw配置", meta: "科研协作", kind: "workflow", origin: "claw_only" },
+    ...Object.values(researchAgentTools),
+  ];
+  const researchSkills: CapabilitySkillItem[] = [
+    { id: "research-requirement-insight-skill", name: "需求洞察 skill", description: "识别研究对象、成果形态、证据要求与时间范围。", enabled: true, sizeLabel: "1.2 KB" },
+    ...Object.values(researchAgentSkills),
+  ];
   return {
     overview: {
       ...listItem,
@@ -4173,7 +4283,7 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
             meta: "租户共享",
           },
         ],
-        claw: [
+        claw: isScientificResearchClaw ? researchTools : [
           {
             id: `${listItem.id}-tool-claw-custom`,
             name: "Claw 专属工具",
@@ -4197,7 +4307,7 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
             sizeLabel: "0.3 KB",
           },
         ],
-        claw: [
+        claw: isScientificResearchClaw ? researchSkills : [
           {
             id: `${listItem.id}-skill-claw-custom`,
             name: "claw-custom-skill",
@@ -4226,7 +4336,7 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
             target: "租户共享函数",
           },
         ],
-        claw: [
+        claw: isScientificResearchClaw ? researchAgents : [
           {
             id: `${listItem.id}-agent-claw-custom`,
             name: "Claw 专属 Agent",
@@ -4237,7 +4347,16 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
         ],
       },
       knowledge: {
-        tenant: [
+        tenant: isScientificResearchClaw ? [
+          {
+            id: "research-public-paper-corpus",
+            name: "公开学术论文库",
+            description: "租户共享的公开论文元数据、摘要与来源索引。",
+            enabled: true,
+            documentCount: 128430,
+            updatedAt: "2026-07-10 18:20",
+          },
+        ] : [
           {
             id: `${listItem.id}-knowledge-tenant`,
             name: "租户共享知识库",
@@ -4247,7 +4366,32 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
             updatedAt: listItem.updatedAt,
           },
         ],
-        claw: [
+        claw: isScientificResearchClaw ? [
+          {
+            id: "research-project-knowledge",
+            name: "科研项目资料库",
+            description: "沉淀研究问题、实验方案、数据说明和阶段结论。",
+            enabled: true,
+            documentCount: 86,
+            updatedAt: listItem.updatedAt,
+          },
+          {
+            id: "research-evidence-library",
+            name: "核心文献证据库",
+            description: "保存已筛选文献、证据矩阵、引用片段与证据边界。",
+            enabled: true,
+            documentCount: 312,
+            updatedAt: listItem.updatedAt,
+          },
+          {
+            id: "research-writing-standards",
+            name: "论文写作与审核规范库",
+            description: "提供论文结构、引用格式、图表规范与同行评审检查项。",
+            enabled: true,
+            documentCount: 42,
+            updatedAt: "2026-07-09 16:40",
+          },
+        ] : [
           {
             id: `${listItem.id}-knowledge-claw`,
             name: "Claw 专属知识库",

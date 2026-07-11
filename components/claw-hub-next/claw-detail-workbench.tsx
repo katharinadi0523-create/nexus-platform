@@ -19,6 +19,8 @@ import {
   GripVertical,
   Loader2,
   MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
   Plus,
@@ -38,8 +40,10 @@ import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-pub
 import { AgentBomBadge } from "@/components/claw-hub-next/agent-bom-badge";
 import { buildAgentBomTreeFromDetail } from "@/components/claw-hub-next/agent-bom-tree";
 import { ClawKnowledgeAssetsSection } from "@/components/claw-hub-next/detail/claw-knowledge-assets-section";
+import { ClawAgentResourceSection } from "@/components/claw-hub-next/detail/agent-resource-section";
 import { ClawCoreConfigSection } from "@/components/claw-hub-next/detail/core-config-section";
 import { ClawInteractiveChatPanel } from "@/components/claw-hub-next/interactive-chat-panel";
+import { ResearchMultiAgentDebugPanel } from "@/components/claw-hub-next/research-multi-agent-debug-panel";
 import { ClawWorkspaceSection } from "@/components/claw-hub-next/detail/workspace-section";
 import {
   type DetailSectionKey,
@@ -167,6 +171,7 @@ const CLAW_DETAIL_NAV_GROUPS: Array<{
       { value: "skills", label: "技能", icon: Sparkles },
       { value: "tools", label: "插件", icon: Wrench },
       { value: "knowledge", label: "知识", icon: FileStack },
+      { value: "agents", label: "智能体", icon: Bot },
     ],
   },
   {
@@ -494,6 +499,7 @@ function normalizeAutomatedTaskExecutionStatus(status: string): ClawAutomatedTas
 export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const [activeSection, setActiveSection] = useState<DetailSectionKey>("core");
   const [debugOpen, setDebugOpen] = useState(false);
+  const [configCollapsed, setConfigCollapsed] = useState(false);
   const [debugWidth, setDebugWidth] = useState(DEBUG_SPLIT_DEFAULT_DEBUG_WIDTH);
   const [isResizingDebug, setIsResizingDebug] = useState(false);
   const [splitWidth, setSplitWidth] = useState(0);
@@ -860,6 +866,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     setDebugOpen(false);
     setDebugFreshSession(false);
     setDebugPanelKey(0);
+    setConfigCollapsed(false);
   }
 
   function handleToggleDebugPanel() {
@@ -1393,7 +1400,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           <div
             className={cn(
               "flex min-h-0 min-w-0 overflow-hidden",
-              compactDebugSplit ? "hidden" : "flex-1"
+              compactDebugSplit || configCollapsed ? "hidden" : "flex-1"
             )}
             style={configPaneWidth ? { width: configPaneWidth, flex: "0 0 auto" } : undefined}
           >
@@ -1690,6 +1697,17 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               onOpenDatabaseConfig={() => toast.info("配置数据库入口即将接入。")}
               onOpenOntologyConfig={() => toast.info("配置本体对象入口即将接入。")}
               onOpenTermBankConfig={() => toast.info("配置术语库入口即将接入。")}
+            />
+          </TabsContent>
+
+          <TabsContent value="agents" className="mt-0">
+            <ClawAgentResourceSection
+              agents={capabilityConfig.agents.claw}
+              clawDetail={{ ...detail, capabilityConfig }}
+              onChange={(agents) => setCapabilityConfig((current) => ({
+                ...current,
+                agents: { ...current.agents, claw: agents },
+              }))}
             />
           </TabsContent>
 
@@ -2626,7 +2644,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
 
           {debugOpen ? (
             <>
-              {!compactDebugSplit ? (
+              {!compactDebugSplit && !configCollapsed ? (
                 <div
                   role="separator"
                   aria-orientation="vertical"
@@ -2653,7 +2671,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               <section
                 className="flex min-h-0 min-w-0 flex-col border-l border-slate-200 bg-white"
                 style={
-                  compactDebugSplit
+                  compactDebugSplit || configCollapsed
                     ? { flex: "1 1 auto" }
                     : { width: debugPaneWidth, flex: "0 0 auto" }
                 }
@@ -2661,6 +2679,16 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                 <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4">
                   <div className="min-w-0 truncate text-sm font-semibold text-slate-900">对话调试</div>
                   <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfigCollapsed((current) => !current)}
+                      aria-label={configCollapsed ? "展开配置页" : "收起配置页"}
+                      title={configCollapsed ? "展开配置页" : "收起配置页，让对话调试更宽"}
+                      className="inline-flex h-7 items-center gap-1.5 rounded-md border border-blue-100 bg-white px-2 text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                    >
+                      {configCollapsed ? <PanelLeftOpen className="h-3.5 w-3.5" /> : <PanelLeftClose className="h-3.5 w-3.5" />}
+                      <span className="text-xs font-medium">{configCollapsed ? "展开配置" : "收起配置"}</span>
+                    </button>
                     <button
                       type="button"
                       onClick={handleClearDebugSession}
@@ -2701,13 +2729,17 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-hidden">
-                  <ClawInteractiveChatPanel
-                    key={`debug-${debugPanelKey}`}
-                    detail={detail}
-                    session={debugFreshSession ? undefined : currentSession}
-                    run={debugFreshSession ? undefined : matchedConversationRun}
-                    inspectorMode={debugInspectorMode}
-                  />
+                  {detail.overview.id === "claw-scientific-research" ? (
+                    <ResearchMultiAgentDebugPanel key={`research-debug-${debugPanelKey}`} detail={detail} inspectorMode={debugInspectorMode} />
+                  ) : (
+                    <ClawInteractiveChatPanel
+                      key={`debug-${debugPanelKey}`}
+                      detail={detail}
+                      session={debugFreshSession ? undefined : currentSession}
+                      run={debugFreshSession ? undefined : matchedConversationRun}
+                      inspectorMode={debugInspectorMode}
+                    />
+                  )}
                 </div>
               </section>
             </>

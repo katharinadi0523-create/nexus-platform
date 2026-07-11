@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   Circle,
   Loader2,
   Paperclip,
@@ -161,6 +162,18 @@ export function ClawAgentOutput({
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+export function ClawSubAgentSummonedEvent({ agentName, running = false }: { agentName: string; running?: boolean }) {
+  return (
+    <div className={cn("subagent-event-shell max-w-2xl rounded-lg p-px", running && "is-running")}>
+      <div className="flex items-center gap-3 rounded-[7px] bg-white px-4 py-2.5">
+        <Users className="h-4 w-4 shrink-0 text-slate-500" />
+        <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{agentName}</p>
+        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+      </div>
     </div>
   );
 }

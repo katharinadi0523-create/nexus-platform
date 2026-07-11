@@ -349,7 +349,7 @@ function buildInteractiveFlowTemplate({
     finishDelayMs: 520,
     recentTaskTitle: run?.title ?? session?.title ?? detail.overview.name,
     emptyArtifactsText: "执行过程中生成的文件与结果摘要会展示在这里。",
-    emptyContextText: "规划完成后，会展示当前执行依赖的上下文。",
+    emptyContextText: "任务执行后，会展示当前会话调用的技能与工具。",
     steps,
     sequence,
     artifacts,
@@ -627,7 +627,9 @@ export function ClawInteractiveChatPanel({
         ? template.contextItems
         : template.contextItems.filter((item) => item.revealAtEventIndex < runtime.visibleEventCount);
 
-    return [...sessionScopedContext, ...revealedTemplateContext];
+    return [...sessionScopedContext, ...revealedTemplateContext].filter(
+      (item) => item.kind === "skill" || item.kind === "tool"
+    );
   }, [runtime.selectedSkill, runtime.stage, runtime.visibleEventCount, template.contextItems]);
 
   const isLocked = runtime.stage !== "history" && runtime.stage !== "complete";
@@ -1101,7 +1103,7 @@ export function ClawInteractiveChatPanel({
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
           {runtime.stage === "planning" ? (
             <div className="rounded-xl border border-blue-100 bg-white p-5 text-sm leading-7 text-slate-500 shadow-[0_1px_2px_rgba(37,99,235,0.08)]">
-              正在规划任务，任务进程、产出物与上下文将在规划完成后展示。
+              正在规划任务，任务进程、产出物与工具将在规划完成后展示。
             </div>
           ) : (
             <div className="flex min-h-full flex-col gap-5">
@@ -1111,8 +1113,7 @@ export function ClawInteractiveChatPanel({
                   <span className="text-xs text-slate-500">{template.steps.length} 个待办任务</span>
                 </header>
 
-                <div className="relative pl-4">
-                  <div className="absolute bottom-1 left-[7px] top-1 w-px bg-blue-100" />
+                <div>
                   <div className="space-y-2">
                     {template.steps.map((step, index) => {
                       const status = getStepStatus(index, activeStepIndex, runtime.stage, template.steps.length);
@@ -1151,7 +1152,7 @@ export function ClawInteractiveChatPanel({
 
               <section className="mt-auto rounded-xl border border-blue-100 bg-white p-4 shadow-[0_1px_2px_rgba(37,99,235,0.08)]">
                 <header className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800">上下文</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">工具</h3>
                   <span className="text-xs text-slate-500">
                     {visibleContextItems.length ? `${visibleContextItems.length} 个` : "未生成"}
                   </span>
