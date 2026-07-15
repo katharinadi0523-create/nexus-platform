@@ -166,14 +166,34 @@ export function ClawAgentOutput({
   );
 }
 
-export function ClawSubAgentSummonedEvent({ agentName, running = false }: { agentName: string; running?: boolean }) {
+export function ClawSubAgentSummonedEvent({
+  agentName,
+  running = false,
+  onOpen,
+}: {
+  agentName: string;
+  running?: boolean;
+  onOpen?: () => void;
+}) {
   return (
     <div className={cn("subagent-event-shell max-w-2xl rounded-lg p-px", running && "is-running")}>
-      <div className="flex items-center gap-3 rounded-[7px] bg-white px-4 py-2.5">
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen?.();
+        }}
+        disabled={!onOpen}
+        aria-label={onOpen ? `进入${agentName}子会话` : undefined}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-[7px] bg-white px-4 py-2.5 text-left",
+          onOpen && "cursor-pointer transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+        )}
+      >
         <Users className="h-4 w-4 shrink-0 text-slate-500" />
         <p className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{agentName}</p>
         <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
-      </div>
+      </button>
     </div>
   );
 }

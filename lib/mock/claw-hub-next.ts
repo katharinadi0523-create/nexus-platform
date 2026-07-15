@@ -4133,14 +4133,16 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
   const isScientificResearchClaw = listItem.id === "claw-scientific-research";
   const researchAgentSkills = {
     hypothesis: { id: "research-hypothesis-validation-skill", name: "科研假设验证 skill", description: "生成可证伪假设并定义关键变量与验证路径。", enabled: true, sizeLabel: "2.4 KB" },
-    literature: { id: "research-systematic-review-skill", name: "系统文献综述 skill", description: "建立研究脉络、争议与证据缺口矩阵。", enabled: true, sizeLabel: "3.1 KB" },
+    literature: { id: "research-systematic-review-skill", name: "文献检索 Skill", description: "检索学术文献并建立研究脉络、争议与证据缺口矩阵。", enabled: true, sizeLabel: "3.1 KB" },
     chart: { id: "research-chart-skill", name: "科研绘图 skill", description: "将实验数据与论证目标转换为规范科研图表。", enabled: true, sizeLabel: "2.8 KB" },
     paper: { id: "research-academic-writing-skill", name: "学术写作 skill", description: "依据研究材料组织论文结构并区分事实、推断与待验证内容。", enabled: true, sizeLabel: "3.6 KB" },
     review: { id: "research-peer-review-skill", name: "同行评审 skill", description: "从方法、证据、逻辑和引用规范维度审核论文。", enabled: true, sizeLabel: "2.7 KB" },
   } satisfies Record<string, CapabilitySkillItem>;
   const researchAgentTools = {
     hypothesis: { id: "research-python-statistics", name: "Python 统计分析工具", description: "用于研究变量处理、统计检验与假设验证。", enabled: true, badge: "Claw配置", meta: "OpenAPI", kind: "plugin", origin: "claw_only" },
-    literature: { id: "research-literature-search", name: "学术文献检索工具", description: "检索近五年学术文献并保留来源、发表信息与证据摘要。", enabled: true, badge: "Claw配置", meta: "MCP", kind: "mcp", origin: "claw_only" },
+    literatureArxiv: { id: "research-literature-arxiv", name: "arXiv 连接器", description: "检索学术预印本并保留来源、发布时间与主题信息。", enabled: true, badge: "Claw配置", meta: "MCP", kind: "mcp", origin: "claw_only" },
+    literatureSemanticScholar: { id: "research-literature-semantic-scholar", name: "Semantic Scholar 连接器", description: "检索高被引实证研究并提取论文元数据与引用关系。", enabled: true, badge: "Claw配置", meta: "MCP", kind: "mcp", origin: "claw_only" },
+    literatureCrossref: { id: "research-literature-crossref", name: "Crossref 连接器", description: "核对同行评审论文的 DOI、出版信息与引用关系。", enabled: true, badge: "Claw配置", meta: "MCP", kind: "mcp", origin: "claw_only" },
     chart: { id: "research-python-plotting", name: "Python 绘图环境", description: "生成可复现的研究框架图、效应对比图与置信区间图。", enabled: true, badge: "Claw配置", meta: "OpenAPI", kind: "plugin", origin: "claw_only" },
     paper: { id: "research-citation-checker", name: "引用校验工具", description: "核对论文引用、图表编号和参考文献对应关系。", enabled: true, badge: "Claw配置", meta: "OpenAPI", kind: "plugin", origin: "claw_only" },
     review: { id: "research-paper-compliance", name: "论文规范检查工具", description: "按同行评审口径检查方法、证据、逻辑与写作规范。", enabled: true, badge: "Claw配置", meta: "工作流", kind: "workflow", origin: "claw_only" },
@@ -4172,7 +4174,7 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
       primaryModel: "Qwen3-32B",
       fallbackModel: "Qwen3-8B",
       prompt: "围绕研究主题检索高相关文献，优先呈现原始来源、发表信息、关键结论与证据边界。",
-      resources: { skills: [researchAgentSkills.literature], tools: [researchAgentTools.literature], knowledge: [researchKnowledge.papers, researchKnowledge.evidence] },
+      resources: { skills: [researchAgentSkills.literature], tools: [researchAgentTools.literatureArxiv, researchAgentTools.literatureSemanticScholar, researchAgentTools.literatureCrossref], knowledge: [researchKnowledge.papers, researchKnowledge.evidence] },
     },
     {
       id: "research-chart-agent",
