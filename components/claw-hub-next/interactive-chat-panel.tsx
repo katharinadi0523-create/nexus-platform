@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
   Briefcase,
   CheckCircle2,
   ChevronDown,
@@ -13,6 +14,7 @@ import {
   Plug,
   SendHorizontal,
   Sparkles,
+  Users,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -109,6 +111,11 @@ type InteractiveFlowTemplate = {
 type RuntimeStage = "history" | "planning" | "running" | "paused" | "complete";
 const DEBUG_INSPECTOR_AUTO_MIN_WIDTH = 900;
 const DEBUG_INSPECTOR_FORCE_MIN_WIDTH = 760;
+const INSPECTOR_DEFAULT_WIDTH = 320;
+const INSPECTOR_MIN_WIDTH = 280;
+const INSPECTOR_MAX_WIDTH = 520;
+const INSPECTOR_HANDLE_WIDTH = 6;
+const MAIN_SESSION_MIN_WIDTH = 280;
 
 type RuntimeState = {
   stage: RuntimeStage;
@@ -349,7 +356,7 @@ function buildInteractiveFlowTemplate({
     finishDelayMs: 520,
     recentTaskTitle: run?.title ?? session?.title ?? detail.overview.name,
     emptyArtifactsText: "执行过程中生成的文件与结果摘要会展示在这里。",
-    emptyContextText: "规划完成后，会展示当前执行依赖的上下文。",
+    emptyContextText: "任务执行后，会展示当前会话调用的技能与工具。",
     steps,
     sequence,
     artifacts,
@@ -368,6 +375,14 @@ function ProgressStatusIcon({ status }: { status: InteractiveStepStatus }) {
   }
 
   return <Circle className="h-4 w-4 text-blue-200" />;
+}
+
+function stepStatusText(status: InteractiveStepStatus) {
+  return {
+    waiting: "未开始",
+    running: "进行中",
+    done: "已完成",
+  }[status];
 }
 
 function ArtifactCard({ artifact }: { artifact: InteractiveFlowArtifact }) {
@@ -405,6 +420,22 @@ function ContextCard({ item }: { item: InteractiveFlowContextItem }) {
       </div>
       <p className="truncate text-[13px] text-slate-700">{item.title}</p>
     </article>
+  );
+}
+
+function AgentToolLayer({ name, items }: { name: string; items: InteractiveFlowContextItem[] }) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 text-[13px] font-medium text-slate-700">
+        <Users className="h-3.5 w-3.5 text-slate-400" />
+        <span className="truncate">{name}</span>
+      </div>
+      <div className="ml-[7px] mt-1.5 space-y-1 border-l border-slate-200 pl-4">
+        {items.map((item) => (
+          <ContextCard key={item.key} item={item} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -456,7 +487,7 @@ export function ClawInteractiveChatPanel({
         .filter((item) => item.enabled)
         .map((item) => ({ ...item, scope }))
     );
-  }, [detail.capabilityConfig.skills.claw, detail.capabilityConfig.skills.platform, detail.capabilityConfig.skills.tenant]);
+  }, [detail.capabilityConfig.skills]);
   const skillOptions = useMemo(
     () => Array.from(new Set(configuredSkills.map((item) => item.name))),
     [configuredSkills]
@@ -482,6 +513,9 @@ export function ClawInteractiveChatPanel({
   });
   const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>(initialExpandedSteps);
   const [panelWidth, setPanelWidth] = useState(0);
+  const [inspectorWidth, setInspectorWidth] = useState(INSPECTOR_DEFAULT_WIDTH);
+  const [isResizingInspector, setIsResizingInspector] = useState(false);
+  const [selectedTaskIndex, setSelectedTaskIndex] = useState<number | null>(null);
   const [skillPicker, setSkillPicker] = useState<{ query: string; startIndex: number } | null>(null);
   const [skillPickerActiveIndex, setSkillPickerActiveIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -491,6 +525,9 @@ export function ClawInteractiveChatPanel({
     () => (skillPicker ? filterConfiguredSkills(configuredSkills, skillPicker.query) : []),
     [configuredSkills, skillPicker]
   );
+  const activeSkillPickerIndex = filteredPickerSkills.length === 0
+    ? 0
+    : Math.min(skillPickerActiveIndex, filteredPickerSkills.length - 1);
 
   useEffect(() => {
     const element = panelRef.current;
@@ -506,6 +543,46 @@ export function ClawInteractiveChatPanel({
 
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!isResizingInspector) {
+      return undefined;
+    }
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    function handlePointerMove(event: PointerEvent) {
+      const panel = panelRef.current;
+      if (!panel) {
+        return;
+      }
+
+      const rect = panel.getBoundingClientRect();
+      const availableWidth = rect.width - MAIN_SESSION_MIN_WIDTH - INSPECTOR_HANDLE_WIDTH;
+      const maxWidth = Math.max(INSPECTOR_MIN_WIDTH, Math.min(INSPECTOR_MAX_WIDTH, availableWidth));
+      const nextWidth = rect.right - event.clientX;
+      setInspectorWidth(Math.min(Math.max(nextWidth, INSPECTOR_MIN_WIDTH), maxWidth));
+    }
+
+    function handlePointerUp() {
+      setIsResizingInspector(false);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+  }, [isResizingInspector]);
 
   useEffect(() => {
     if (runtime.stage === "history" || runtime.stage === "paused" || runtime.stage === "complete") {
@@ -627,7 +704,9 @@ export function ClawInteractiveChatPanel({
         ? template.contextItems
         : template.contextItems.filter((item) => item.revealAtEventIndex < runtime.visibleEventCount);
 
-    return [...sessionScopedContext, ...revealedTemplateContext];
+    return [...sessionScopedContext, ...revealedTemplateContext].filter(
+      (item) => item.kind === "skill" || item.kind === "tool"
+    );
   }, [runtime.selectedSkill, runtime.stage, runtime.visibleEventCount, template.contextItems]);
 
   const isLocked = runtime.stage !== "history" && runtime.stage !== "complete";
@@ -694,7 +773,7 @@ export function ClawInteractiveChatPanel({
 
     if (event.key === "Enter" || event.key === "Tab") {
       event.preventDefault();
-      handleSelectSkillFromPicker(filteredPickerSkills[skillPickerActiveIndex]!);
+      handleSelectSkillFromPicker(filteredPickerSkills[activeSkillPickerIndex]!);
       return;
     }
 
@@ -703,22 +782,6 @@ export function ClawInteractiveChatPanel({
       setSkillPicker(null);
     }
   }
-
-  useEffect(() => {
-    if (isLocked) {
-      setSkillPicker(null);
-    }
-  }, [isLocked]);
-
-  useEffect(() => {
-    if (!skillPicker) {
-      return;
-    }
-
-    setSkillPickerActiveIndex((current) =>
-      filteredPickerSkills.length === 0 ? 0 : Math.min(current, filteredPickerSkills.length - 1)
-    );
-  }, [filteredPickerSkills.length, skillPicker]);
 
   useEffect(() => {
     if (!skillPicker) {
@@ -786,6 +849,7 @@ export function ClawInteractiveChatPanel({
     setDraftMessage("");
     setQueuedFiles([]);
     setSkillPicker(null);
+    setSelectedTaskIndex(null);
   }
 
   function handleBackToEdit() {
@@ -801,6 +865,7 @@ export function ClawInteractiveChatPanel({
     });
     setExpandedSteps(initialExpandedSteps);
     setSkillPicker(null);
+    setSelectedTaskIndex(null);
   }
 
   function handleConfirmStep() {
@@ -810,6 +875,13 @@ export function ClawInteractiveChatPanel({
     }));
   }
 
+  function resizeInspectorBy(delta: number) {
+    const currentPanelWidth = panelRef.current?.getBoundingClientRect().width ?? 0;
+    const availableWidth = currentPanelWidth - MAIN_SESSION_MIN_WIDTH - INSPECTOR_HANDLE_WIDTH;
+    const maxWidth = Math.max(INSPECTOR_MIN_WIDTH, Math.min(INSPECTOR_MAX_WIDTH, availableWidth));
+    setInspectorWidth((current) => Math.min(Math.max(current + delta, INSPECTOR_MIN_WIDTH), maxWidth));
+  }
+
   const canForceInspector = panelWidth >= DEBUG_INSPECTOR_FORCE_MIN_WIDTH;
   const showInspector =
     inspectorMode === "open"
@@ -817,12 +889,23 @@ export function ClawInteractiveChatPanel({
       : inspectorMode === "closed"
         ? false
         : panelWidth >= DEBUG_INSPECTOR_AUTO_MIN_WIDTH;
+  const selectedTask = selectedTaskIndex === null ? null : template.steps[selectedTaskIndex];
+  const selectedTaskStatus = selectedTaskIndex === null
+    ? null
+    : getStepStatus(selectedTaskIndex, activeStepIndex, runtime.stage, template.steps.length);
+  const completedTaskCount = template.steps.filter((_, index) =>
+    getStepStatus(index, activeStepIndex, runtime.stage, template.steps.length) === "done"
+  ).length;
 
   return (
     <div
       ref={panelRef}
       className="grid h-full min-h-0"
-      style={{ gridTemplateColumns: showInspector ? "minmax(0, 1fr) 320px" : "minmax(0, 1fr)" }}
+      style={{
+        gridTemplateColumns: showInspector
+          ? `minmax(0, 1fr) ${INSPECTOR_HANDLE_WIDTH}px ${inspectorWidth}px`
+          : "minmax(0, 1fr)",
+      }}
     >
       <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
@@ -1010,7 +1093,7 @@ export function ClawInteractiveChatPanel({
                     <SkillSlashPicker
                       skills={configuredSkills}
                       query={skillPicker.query}
-                      activeIndex={skillPickerActiveIndex}
+                      activeIndex={activeSkillPickerIndex}
                       onActiveIndexChange={setSkillPickerActiveIndex}
                       onSelect={handleSelectSkillFromPicker}
                     />
@@ -1092,86 +1175,179 @@ export function ClawInteractiveChatPanel({
         </div>
       </div>
 
-      <aside
-        className={cn(
-          "min-h-0 border-l border-blue-100 bg-[linear-gradient(180deg,rgba(248,251,255,0.98),rgba(241,247,255,0.98))]",
-          showInspector ? "flex flex-col" : "hidden"
-        )}
-      >
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
-          {runtime.stage === "planning" ? (
-            <div className="rounded-xl border border-blue-100 bg-white p-5 text-sm leading-7 text-slate-500 shadow-[0_1px_2px_rgba(37,99,235,0.08)]">
-              正在规划任务，任务进程、产出物与上下文将在规划完成后展示。
-            </div>
-          ) : (
-            <div className="flex min-h-full flex-col gap-5">
-              <section className="rounded-xl border border-blue-100 bg-white p-4 shadow-[0_1px_2px_rgba(37,99,235,0.08)]">
-                <header className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800">任务进程</h3>
-                  <span className="text-xs text-slate-500">{template.steps.length} 个待办任务</span>
-                </header>
+      {showInspector ? (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整主会话和侧边栏宽度"
+          aria-valuemin={INSPECTOR_MIN_WIDTH}
+          aria-valuemax={INSPECTOR_MAX_WIDTH}
+          aria-valuenow={Math.round(inspectorWidth)}
+          tabIndex={0}
+          title="拖拽调整主会话和侧边栏宽度"
+          className={cn(
+            "group flex cursor-col-resize items-stretch justify-center bg-white transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/30",
+            isResizingInspector && "bg-blue-50"
+          )}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            setIsResizingInspector(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              resizeInspectorBy(16);
+            }
+            if (event.key === "ArrowRight") {
+              event.preventDefault();
+              resizeInspectorBy(-16);
+            }
+          }}
+        >
+          <span
+            className={cn(
+              "my-0.5 w-px bg-slate-200 transition-colors group-hover:bg-blue-300",
+              isResizingInspector && "bg-blue-400"
+            )}
+          />
+        </div>
+      ) : null}
 
-                <div className="relative pl-4">
-                  <div className="absolute bottom-1 left-[7px] top-1 w-px bg-blue-100" />
-                  <div className="space-y-2">
-                    {template.steps.map((step, index) => {
-                      const status = getStepStatus(index, activeStepIndex, runtime.stage, template.steps.length);
+      <aside className={cn("min-h-0 bg-white", showInspector ? "block" : "hidden")}>
+        {selectedTask && selectedTaskStatus ? (
+          <div className="flex h-full min-h-0 flex-col">
+            <header className="flex h-12 shrink-0 items-center gap-2 border-b border-slate-200 px-4">
+              <button
+                type="button"
+                onClick={() => setSelectedTaskIndex(null)}
+                aria-label="返回任务规划"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">任务详情</span>
+              <span className="shrink-0 text-xs text-slate-400">{stepStatusText(selectedTaskStatus)}</span>
+            </header>
 
-                      return (
-                        <div key={step.key} className="relative flex items-center gap-2.5 py-1.5">
-                          <span className="relative z-10 flex h-4 w-4 items-center justify-center rounded-full bg-white">
-                            <ProgressStatusIcon status={status} />
-                          </span>
-                          <span className="truncate text-[13px] text-slate-700">{step.todoTitle}</span>
-                        </div>
-                      );
-                    })}
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <section className="border-b border-slate-200 pb-5">
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-0.5"><ProgressStatusIcon status={selectedTaskStatus} /></span>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-medium leading-6 text-slate-800">{selectedTask.todoTitle}</h3>
+                    <p className="mt-1 text-xs text-blue-600">{detail.overview.name}</p>
                   </div>
                 </div>
               </section>
 
-              <section className="rounded-xl border border-blue-100 bg-white p-4 shadow-[0_1px_2px_rgba(37,99,235,0.08)]">
-                <header className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800">产出物</h3>
-                  <span className="text-xs text-slate-500">{visibleArtifacts.length} 个</span>
-                </header>
+              <section className="border-b border-slate-200 py-5">
+                <h3 className="mb-3 text-sm font-semibold text-slate-800">任务目标</h3>
+                <p className="text-[13px] leading-6 text-slate-600">{selectedTask.title}</p>
+              </section>
 
-                {visibleArtifacts.length > 0 ? (
-                  <div className="space-y-1">
-                    {visibleArtifacts.map((artifact) => (
-                      <ArtifactCard key={artifact.key} artifact={artifact} />
+              <section className="border-b border-slate-200 py-5">
+                <h3 className="mb-3 text-sm font-semibold text-slate-800">执行记录</h3>
+                {selectedTask.logs.length > 0 ? (
+                  <ol className="space-y-2.5">
+                    {selectedTask.logs.map((log, index) => (
+                      <li key={`${selectedTask.key}-log-${index}`} className="flex gap-2.5 text-xs leading-5 text-slate-500">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300" />
+                        <span>{log}</span>
+                      </li>
                     ))}
-                  </div>
+                  </ol>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50/50 px-4 py-8 text-center text-xs leading-6 text-slate-400">
-                    {template.emptyArtifactsText}
-                  </div>
+                  <p className="text-xs text-slate-400">任务开始后展示执行记录</p>
                 )}
               </section>
 
-              <section className="mt-auto rounded-xl border border-blue-100 bg-white p-4 shadow-[0_1px_2px_rgba(37,99,235,0.08)]">
+              <section className="border-b border-slate-200 py-5">
                 <header className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800">上下文</h3>
-                  <span className="text-xs text-slate-500">
-                    {visibleContextItems.length ? `${visibleContextItems.length} 个` : "未生成"}
-                  </span>
+                  <h3 className="text-sm font-semibold text-slate-800">产出物</h3>
+                  <span className="text-xs text-slate-400">{visibleArtifacts.length} 个</span>
                 </header>
-
-                {visibleContextItems.length > 0 ? (
-                  <div className="space-y-2">
-                    {visibleContextItems.map((item) => (
-                      <ContextCard key={item.key} item={item} />
-                    ))}
-                  </div>
+                {visibleArtifacts.length > 0 ? (
+                  <div className="space-y-1">{visibleArtifacts.map((artifact) => <ArtifactCard key={artifact.key} artifact={artifact} />)}</div>
                 ) : (
-                  <div className="rounded-lg bg-blue-50/60 px-3 py-5 text-center text-xs text-slate-400">
-                    {template.emptyContextText}
-                  </div>
+                  <p className="text-xs text-slate-400">{template.emptyArtifactsText}</p>
+                )}
+              </section>
+
+              <section className="pt-5">
+                <header className="mb-4 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-800">工具</h3>
+                  <span className="text-xs text-slate-400">当前会话</span>
+                </header>
+                {visibleContextItems.length > 0 ? (
+                  <AgentToolLayer name={detail.overview.name} items={visibleContextItems} />
+                ) : (
+                  <p className="text-xs text-slate-400">{template.emptyContextText}</p>
                 )}
               </section>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="h-full overflow-y-auto p-4">
+            <section className="border-b border-slate-200 pb-5">
+              <header className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800">任务规划</h3>
+                <span className="text-xs text-slate-400">{completedTaskCount}/{template.steps.length}</span>
+              </header>
+              {runtime.stage === "planning" ? (
+                <div className="mb-2 flex items-center gap-2 px-2 text-xs text-slate-400">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                  正在生成任务规划
+                </div>
+              ) : null}
+              <div className="space-y-1">
+                {template.steps.map((step, index) => {
+                  const status = getStepStatus(index, activeStepIndex, runtime.stage, template.steps.length);
+
+                  return (
+                    <button
+                      key={step.key}
+                      type="button"
+                      onClick={() => setSelectedTaskIndex(index)}
+                      className="w-full rounded-md px-2 py-2 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <span className="mt-0.5"><ProgressStatusIcon status={status} /></span>
+                        <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                          <p className="truncate text-[13px] text-slate-700">{step.todoTitle}</p>
+                          <span className="shrink-0 text-[11px] text-slate-400">{stepStatusText(status)}</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="border-b border-slate-200 py-5">
+              <header className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800">产出物</h3>
+                <span className="text-xs text-slate-400">{visibleArtifacts.length} 个</span>
+              </header>
+              {visibleArtifacts.length > 0 ? (
+                <div className="space-y-1">{visibleArtifacts.map((artifact) => <ArtifactCard key={artifact.key} artifact={artifact} />)}</div>
+              ) : (
+                <p className="text-xs text-slate-400">{template.emptyArtifactsText}</p>
+              )}
+            </section>
+
+            <section className="pt-5">
+              <header className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800">工具</h3>
+                <span className="text-xs text-slate-400">按智能体分层</span>
+              </header>
+              {visibleContextItems.length > 0 ? (
+                <AgentToolLayer name={detail.overview.name} items={visibleContextItems} />
+              ) : (
+                <p className="text-xs text-slate-400">{template.emptyContextText}</p>
+              )}
+            </section>
+          </div>
+        )}
       </aside>
     </div>
   );
