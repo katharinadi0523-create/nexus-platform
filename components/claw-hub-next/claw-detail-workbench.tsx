@@ -1282,6 +1282,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
       ? Math.max(splitWidth - debugPaneWidth - DEBUG_SPLIT_HANDLE_WIDTH, DEBUG_SPLIT_MIN_CONFIG_WIDTH)
       : undefined;
   const compactConfigNav = Boolean(configPaneWidth && configPaneWidth < 720);
+  const compactConfigContent = Boolean(configPaneWidth && configPaneWidth < 980);
   const canForceDebugInspector = debugPaneWidth >= DEBUG_INSPECTOR_FORCE_MIN_WIDTH;
   const showDebugInspector =
     debugInspectorMode === "open"
@@ -1323,23 +1324,23 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <Button
               type="button"
-              variant="outline"
               size="sm"
               className={cn(
-                "h-8 rounded-[4px] border-slate-200 bg-white px-3 text-sm font-medium shadow-none hover:bg-slate-50",
-                debugOpen && "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-50"
+                "h-10 rounded-md border border-blue-600 bg-blue-600 px-5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(37,99,235,0.30)] transition-all hover:-translate-y-px hover:border-blue-700 hover:bg-blue-700 hover:shadow-[0_6px_18px_rgba(37,99,235,0.34)] focus-visible:ring-blue-500/30",
+                debugOpen && "border-blue-800 bg-blue-800 shadow-[0_4px_14px_rgba(30,64,175,0.28)] hover:border-blue-900 hover:bg-blue-900"
               )}
               onClick={handleToggleDebugPanel}
             >
-              <MessageSquareText className="h-4 w-4" />
+              <MessageSquareText className="size-[18px]" />
               对话调试
             </Button>
             <Popover open={publishPanelOpen} onOpenChange={setPublishPanelOpen}>
               <PopoverTrigger asChild>
                 <Button
                   type="button"
+                  variant="outline"
                   size="sm"
-                  className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700"
+                  className="h-9 rounded-md border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-600 shadow-none hover:border-slate-400 hover:bg-slate-50 hover:text-slate-800"
                 >
                   发布
                   <ChevronDown className="h-4 w-4" />
@@ -1733,6 +1734,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
             <ClawAgentResourceSection
               agents={capabilityConfig.agents.claw}
               clawDetail={{ ...detail, capabilityConfig }}
+              compact={compactConfigContent}
               onChange={(agents) => setCapabilityConfig((current) => ({
                 ...current,
                 agents: { ...current.agents, claw: agents },

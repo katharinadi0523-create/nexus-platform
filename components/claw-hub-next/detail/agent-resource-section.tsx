@@ -18,11 +18,13 @@ import { KnowledgeConfigDialog, type KnowledgeConfigSelection } from "@/componen
 import { SingleAgentDebugDialog } from "@/components/claw-hub-next/single-agent-debug-dialog";
 import type { CapabilityAgentItem, CapabilityKnowledgeItem, CapabilitySkillItem, CapabilityToolItem, ClawDetailData } from "@/lib/mock/claw-hub-next";
 import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
+import { cn } from "@/lib/utils";
 import { SectionCard } from "./section-card";
 
 type Props = {
   agents: CapabilityAgentItem[];
   clawDetail: ClawDetailData;
+  compact?: boolean;
   onChange: (agents: CapabilityAgentItem[]) => void;
 };
 
@@ -34,7 +36,7 @@ const REFERENCE_CANDIDATES: CapabilityAgentItem[] = [
   { id: "ref-academic-translation", name: "学术翻译智能体", description: "完成中英文学术内容翻译与术语一致性检查。", enabled: true, target: "组织智能体库", primaryModel: "Qwen3-32B", fallbackModel: "Qwen3-8B", prompt: "保持原文事实、术语与论证关系，输出规范学术译文。", sourceType: "referenced" },
 ];
 
-export function ClawAgentResourceSection({ agents, clawDetail, onChange }: Props) {
+export function ClawAgentResourceSection({ agents, clawDetail, compact = false, onChange }: Props) {
   const [query, setQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CapabilityAgentItem | null>(null);
@@ -118,13 +120,13 @@ export function ClawAgentResourceSection({ agents, clawDetail, onChange }: Props
   return (
     <SectionCard>
       <div className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-950">智能体</h2>
+        <div className={cn("flex gap-3", compact ? "flex-col" : "flex-col sm:flex-row sm:items-center sm:justify-between")}>
+          <div className="min-w-0">
+            <h2 className="whitespace-nowrap text-xl font-semibold text-slate-950">智能体</h2>
             <p className="mt-1 text-sm text-slate-500">管理当前 Claw 在任务执行中可调度的专业智能体。</p>
           </div>
-          <div className="flex w-full items-center gap-2 sm:w-auto">
-            <div className="relative min-w-0 flex-1 sm:w-[320px]">
+          <div className={cn("flex w-full items-center gap-2", !compact && "sm:w-auto")}>
+            <div className={cn("relative min-w-0 flex-1", !compact && "sm:w-[320px]")}>
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索智能体名称或描述" className="h-9 border-slate-200 bg-white pl-9 shadow-none" />
             </div>
@@ -138,7 +140,7 @@ export function ClawAgentResourceSection({ agents, clawDetail, onChange }: Props
           </div>
         </div>
         <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
-          <Table>
+          <Table className="min-w-[1120px]">
             <TableHeader className="bg-slate-50">
               <TableRow><TableHead className="px-4">名称</TableHead><TableHead className="w-[130px] px-4">状态</TableHead><TableHead className="px-4">描述</TableHead><TableHead className="w-[360px] px-4">资源配置</TableHead><TableHead className="w-[220px] px-4">操作</TableHead></TableRow>
             </TableHeader>
