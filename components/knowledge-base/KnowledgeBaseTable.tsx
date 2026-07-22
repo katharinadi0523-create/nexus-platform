@@ -1,21 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Search,
-  RefreshCw,
-  Plus,
-  FileText,
-  Settings,
-  Trash2,
-  Crosshair,
   ChevronDown,
-  LayoutTemplate,
-  SlidersHorizontal,
+  Copy,
+  FileText,
+  RefreshCw,
+  Search,
+  Settings2,
+  Trash2,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,234 +27,231 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { KnowledgeBaseGroup } from "./GroupTreeSidebar";
 import {
-  getKnowledgeBasesByGroup,
-  type KnowledgeBaseListItem,
-} from "@/lib/mock/knowledge-base-list";
-
-export type { KnowledgeBaseListItem as KnowledgeBase };
+  knowledgeBasesV2,
+  type KnowledgeBaseRowV2,
+} from "@/lib/mock-knowledge-base-v2";
+import { loadCreatedKnowledgeBases } from "@/lib/mock/knowledge-base-list";
+import type { KnowledgeBaseGroup } from "./GroupTreeSidebar";
 
 interface KnowledgeBaseTableProps {
   selectedGroup: KnowledgeBaseGroup | null;
 }
 
+function StatusDot({ status }: { status: KnowledgeBaseRowV2["status"] }) {
+  return (
+    <span className="inline-flex items-center gap-2 text-sm text-slate-700">
+      <span
+        className={cn(
+          "h-2 w-2 rounded-full",
+          status === "已启用" ? "bg-emerald-500" : "bg-slate-300"
+        )}
+      />
+      {status}
+    </span>
+  );
+}
+
+function loadGraphRagRows(): KnowledgeBaseRowV2[] {
+  return loadCreatedKnowledgeBases().map((item) => ({
+    id: item.id,
+    name: item.name,
+    createMode: item.createMethod,
+    status: item.status,
+    documentCount: item.documentCount,
+    updatedAt: item.updateTime,
+    createdBy: item.creator,
+    createdAt: item.createTime,
+    description: item.description ?? "",
+    groupName: item.groupName ?? "全部群组",
+  }));
+}
+
 export function KnowledgeBaseTable({ selectedGroup }: KnowledgeBaseTableProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const groupId = selectedGroup?.id || null;
-  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseListItem[]>(
-    () => getKnowledgeBasesByGroup(groupId)
-  );
+  const [graphRagRows, setGraphRagRows] = useState<KnowledgeBaseRowV2[]>([]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Graph RAG rows are persisted in browser localStorage. */
   useEffect(() => {
-    setKnowledgeBases(getKnowledgeBasesByGroup(groupId));
-  }, [groupId]);
+    setGraphRagRows(loadGraphRagRows());
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
-  const filteredKnowledgeBases = knowledgeBases.filter((kb) =>
-    kb.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const rows = useMemo(() => {
+    const graphRagIds = new Set(graphRagRows.map((item) => item.id));
+    return [
+      ...graphRagRows,
+      ...knowledgeBasesV2.filter((item) => !graphRagIds.has(item.id)),
+    ];
+  }, [graphRagRows]);
 
-  const handleRefresh = () => {
-    setKnowledgeBases(getKnowledgeBasesByGroup(groupId));
-  };
-
-  const handleOpenDetail = (kb: KnowledgeBaseListItem) => {
-    router.push(`/knowledge-base/${kb.id}`);
-  };
-
-  const handleHitTest = (id: string) => {
-    router.push(`/knowledge-base/${id}?tab=test`);
-  };
-
-  const handleToggleStatus = (id: string) => {
-    setKnowledgeBases((prev) =>
-      prev.map((kb) =>
-        kb.id === id
-          ? {
-              ...kb,
-              status: kb.status === "已启用" ? "已停用" : "已启用",
-              updateTime: new Date()
-                .toISOString()
-                .slice(0, 19)
-                .replace("T", " "),
-            }
-          : kb
-      )
-    );
-  };
-
-  const handleDelete = (id: string) => {
-    setKnowledgeBases((prev) => prev.filter((kb) => kb.id !== id));
-  };
-
-  const handleCreateTemplate = () => {
-    router.push("/knowledge-base/create");
-  };
-
-  const handleCreateCustom = () => {
-    router.push("/knowledge-base/create/custom");
-  };
+  const filteredRows = useMemo(() => {
+    const normalized = searchQuery.trim().toLowerCase();
+    return rows.filter((item) => {
+      const groupMatched =
+        !selectedGroup || selectedGroup.id === "all" || item.groupName === selectedGroup.name;
+      const searchMatched = !normalized || item.name.toLowerCase().includes(normalized);
+      return groupMatched && searchMatched;
+    });
+  }, [rows, searchQuery, selectedGroup]);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-        <h1 className="text-lg font-semibold text-slate-900">
-          {selectedGroup?.name || "请选择知识库群组"}
+    <div className="flex h-full min-w-0 flex-col bg-white">
+      <div className="flex items-center justify-between px-6 py-7">
+        <h1 className="text-lg font-semibold text-slate-950">
+          {selectedGroup?.name ?? "全部群组"}
         </h1>
-
-        <div className="flex items-center gap-3">
-          <div className="relative w-64">
+        <div className="flex items-center gap-2">
+          <div className="relative w-60">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
-              placeholder="搜索知识库名称"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="搜索知识库名称"
+              className="h-9 rounded border-slate-200 pl-9"
             />
           </div>
-
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
-            onClick={handleRefresh}
-            className="h-9 w-9 rounded-full"
+            className="h-9 w-9 rounded"
+            onClick={() => setGraphRagRows(loadGraphRagRows())}
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
-
-          <Button variant="outline">标签管理</Button>
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button className="bg-[#2773ff] text-white hover:bg-[#1f63e0]">
-                <Plus className="mr-2 h-4 w-4" />
+              <Button className="h-9 gap-2 rounded bg-blue-600 px-4 text-white hover:bg-blue-700">
                 创建知识库
-                <ChevronDown className="ml-1.5 h-4 w-4" />
+                <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuContent align="end" className="w-[300px] p-2">
               <DropdownMenuItem
-                className="cursor-pointer gap-2"
-                onClick={handleCreateTemplate}
+                className="items-start gap-3 rounded p-3"
+                onSelect={() => router.push("/knowledge-base/create?type=Template")}
               >
-                <LayoutTemplate className="h-4 w-4 text-slate-500" />
-                模板知识库
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-blue-600 text-white">
+                  <FileText className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block font-medium text-slate-950">模板创建</span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-500">
+                    使用系统预制的知识库配置，快速创建知识库
+                  </span>
+                </span>
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="cursor-pointer gap-2"
-                onClick={handleCreateCustom}
+                className="items-start gap-3 rounded p-3"
+                onSelect={() => router.push("/knowledge-base/create/custom")}
               >
-                <SlidersHorizontal className="h-4 w-4 text-slate-500" />
-                自定义知识库
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-violet-600 text-white">
+                  <Settings2 className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block font-medium text-slate-950">自定义创建</span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-500">
+                    支持配置知识库 2.0 检索引擎、Graph RAG 与混合检索策略
+                  </span>
+                </span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <Table>
+      <div className="min-h-0 flex-1 overflow-auto px-6 pb-6">
+        <Table className="table-fixed text-sm">
           <TableHeader>
-            <TableRow>
-              <TableHead>知识库名称</TableHead>
-              <TableHead>创建方式</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead>文档数量</TableHead>
-              <TableHead>更新时间</TableHead>
-              <TableHead>创建人</TableHead>
-              <TableHead>创建时间</TableHead>
-              <TableHead className="min-w-[280px]">操作</TableHead>
+            <TableRow className="border-slate-100 hover:bg-transparent">
+              <TableHead className="w-[190px] text-slate-800">知识库名称</TableHead>
+              <TableHead className="w-[104px]">创建方式</TableHead>
+              <TableHead className="w-[78px]">状态</TableHead>
+              <TableHead className="w-[70px]">文档数量</TableHead>
+              <TableHead className="w-[145px]">更新时间</TableHead>
+              <TableHead className="w-[84px]">创建人</TableHead>
+              <TableHead className="w-[145px]">创建时间</TableHead>
+              <TableHead className="sticky right-0 z-10 w-[166px] bg-white shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">
+                操作
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredKnowledgeBases.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={8}
-                  className="py-8 text-center text-slate-400"
-                >
-                  {selectedGroup
-                    ? "暂无知识库数据"
-                    : "请从左侧选择一个知识库群组"}
+            {filteredRows.map((item) => (
+              <TableRow
+                key={item.id}
+                className="h-16 cursor-pointer border-slate-100 hover:bg-blue-50/70"
+                onClick={() => router.push(`/knowledge-base/${item.id}`)}
+              >
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded bg-blue-500 text-white shadow-sm">
+                      <FileText className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 truncate font-medium text-slate-950">{item.name}</span>
+                  </div>
                 </TableCell>
-              </TableRow>
-            ) : (
-              filteredKnowledgeBases.map((kb) => (
-                <TableRow key={kb.id}>
-                  <TableCell>
+                <TableCell>
+                  <span className="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <Settings2 className="h-4 w-4 text-violet-600" />
+                    {item.createMode}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <StatusDot status={item.status} />
+                </TableCell>
+                <TableCell>{item.documentCount}</TableCell>
+                <TableCell className="truncate">{item.updatedAt}</TableCell>
+                <TableCell className="truncate">{item.createdBy}</TableCell>
+                <TableCell className="truncate">{item.createdAt}</TableCell>
+                <TableCell
+                  onClick={(event) => event.stopPropagation()}
+                  className="sticky right-0 z-10 bg-white shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]"
+                >
+                  <div className="flex items-center gap-3 text-sm">
                     <button
                       type="button"
-                      onClick={() => handleOpenDetail(kb)}
-                      className="flex items-center gap-2 text-left hover:opacity-80"
+                      onClick={() => router.push(`/knowledge-base/hit-test?id=${item.id}`)}
+                      className="text-blue-600 hover:text-blue-700"
                     >
-                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-blue-600">
-                        <FileText className="h-3 w-3 text-white" />
-                      </div>
-                      <span className="font-semibold text-[#2773ff] hover:underline">
-                        {kb.name}
-                      </span>
+                      命中测试
                     </button>
-                  </TableCell>
-                  <TableCell className="text-slate-600">
-                    {kb.createMethod}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "font-normal",
-                        kb.status === "已启用"
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-slate-200 bg-slate-50 text-slate-500"
-                      )}
-                    >
-                      {kb.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{kb.documentCount}</TableCell>
-                  <TableCell className="whitespace-nowrap text-slate-600">
-                    {kb.updateTime}
-                  </TableCell>
-                  <TableCell className="text-slate-600">{kb.creator}</TableCell>
-                  <TableCell className="whitespace-nowrap text-slate-600">
-                    {kb.createTime}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        onClick={() => handleHitTest(kb.id)}
-                        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        <Crosshair className="h-3.5 w-3.5" />
-                        命中测试
-                      </button>
-                      <button
-                        onClick={() => handleToggleStatus(kb.id)}
-                        className="text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        {kb.status === "已启用" ? "停用" : "启用"}
-                      </button>
-                      <button
-                        onClick={() => handleOpenDetail(kb)}
-                        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
-                      >
-                        <Settings className="h-3.5 w-3.5" />
-                        配置
-                      </button>
-                      <button
-                        onClick={() => handleDelete(kb.id)}
-                        className="flex items-center gap-1 text-sm text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        删除
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+                    <button type="button" className="text-blue-600 hover:text-blue-700">
+                      启用
+                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                        >
+                          更多
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-28">
+                        <DropdownMenuItem>
+                          <Copy className="mr-2 h-4 w-4" />
+                          复制
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-red-600">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          删除
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {filteredRows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={8} className="h-56 text-center text-slate-400">
+                  暂无数据
+                </TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>

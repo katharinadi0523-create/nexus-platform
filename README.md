@@ -47,6 +47,10 @@ npm run dev
 
 打开浏览器访问 [http://localhost:3000](http://localhost:3000) 即可查看效果。
 
+## 📐 开发规范
+
+开始新增功能、修改 Runtime 交互或执行发布前，请先阅读 [Nexus Platform 通用开发规范](docs/DEVELOPMENT_SPEC.md)。规范覆盖组件复用、数据与功能解耦、Runtime 建模、质量检查以及 GitHub / Vercel 发布流程。
+
 ## ⚠️ 演示须知 (Disclaimer)
 
 本项目为 **高保真前端原型 (High-fidelity Frontend Prototype)**。

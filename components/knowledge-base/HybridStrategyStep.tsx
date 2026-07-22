@@ -254,11 +254,12 @@ function AddNodeMenu({
 
   useEffect(() => {
     if (!open) return;
-    updatePosition();
+    const frame = window.requestAnimationFrame(updatePosition);
     const onScrollOrResize = () => updatePosition();
     window.addEventListener("resize", onScrollOrResize);
     window.addEventListener("scroll", onScrollOrResize, true);
     return () => {
+      window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", onScrollOrResize);
       window.removeEventListener("scroll", onScrollOrResize, true);
     };
@@ -684,7 +685,9 @@ function StrategyPipelineCanvas({
   const lastPointerRef = useRef({ x: 0, y: 0 });
 
   const strategyRef = useRef(strategy);
-  strategyRef.current = strategy;
+  useEffect(() => {
+    strategyRef.current = strategy;
+  }, [strategy]);
 
   const selected = findSelected(strategy.stages, strategy.selectedNodeId);
 

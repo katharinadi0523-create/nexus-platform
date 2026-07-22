@@ -26,7 +26,7 @@ function replaceClawInText(value: string): string {
     .replaceAll("Claw", "多智能体");
 }
 
-function mapDisplayFields<T extends Record<string, unknown>>(item: T): T {
+function mapDisplayFields<T extends object>(item: T): T {
   const next = { ...item };
   for (const [key, value] of Object.entries(next)) {
     if (typeof value === "string" && DISPLAY_KEYS.has(key)) {
@@ -36,7 +36,7 @@ function mapDisplayFields<T extends Record<string, unknown>>(item: T): T {
   return next;
 }
 
-function mapList<T extends Record<string, unknown>>(
+function mapList<T extends object>(
   items: T[] | undefined | null
 ): T[] {
   return (items ?? []).map((item) => mapDisplayFields(item));

@@ -655,8 +655,11 @@ function KnowledgeBaseDocumentList({
 function toKbDocuments(docs: StoredKbDocument[]): KbDocument[] {
   return docs.map((doc) => ({
     ...doc,
+    type: normalizeDocType(doc.type),
     processStatus: doc.processStatus as ProcessStatus,
     usageStatus: doc.usageStatus as UsageStatus,
+    quality: doc.quality as QualityLevel,
+    layoutComplexity: doc.layoutComplexity as QualityLevel,
   }));
 }
 
@@ -672,11 +675,17 @@ function formatNowLocal() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function resolveFileType(fileName: string): string {
+function normalizeDocType(value: string): DocType {
+  const normalized = value.toUpperCase();
+  if (["PDF", "DOC", "DOCX", "TXT"].includes(normalized)) {
+    return normalized as DocType;
+  }
+  return "TXT";
+}
+
+function resolveFileType(fileName: string): DocType {
   const ext = fileName.split(".").pop()?.toUpperCase();
-  if (!ext) return "未知";
-  if (["PDF", "DOC", "DOCX", "TXT"].includes(ext)) return ext;
-  return ext;
+  return normalizeDocType(ext ?? "TXT");
 }
 
 export function TemplateKnowledgeBaseDetail({
@@ -705,6 +714,7 @@ export function TemplateKnowledgeBaseDetail({
     contentTags: ["标签", "标签", "标签", "标签", "标签"],
   });
 
+  /* eslint-disable react-hooks/set-state-in-effect -- document data is restored from browser localStorage after hydration. */
   useEffect(() => {
     const stored = loadKnowledgeBaseDocuments(meta.id);
     if (stored !== null) {
@@ -716,6 +726,7 @@ export function TemplateKnowledgeBaseDetail({
     }
     setDocsReady(true);
   }, [meta.id, meta.documentCount]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (!docsReady) return;

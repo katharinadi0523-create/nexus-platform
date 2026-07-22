@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface HistoryRecord {
   id: string;

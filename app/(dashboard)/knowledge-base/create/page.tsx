@@ -1,1146 +1,839 @@
 "use client";
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { FileText, Sparkles, HelpCircle, Upload, X, CheckCircle2, RefreshCw } from "lucide-react";
+import { Suspense, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  FileText,
+  Folder,
+  Info,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { SelectableCard } from "@/components/knowledge-base/SelectableCard";
-import { FileUpload } from "@/components/knowledge-base/FileUpload";
-import { TagTreeSelector, type TagTreeItem } from "@/components/knowledge-base/TagTreeSelector";
-import { MultiSelect } from "@/components/knowledge-base/MultiSelect";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
-// Zod Schema with conditional validation
-const formSchema = z
-  .object({
-    // Basic Info
-    name: z
-      .string()
-      .min(1, "知识库名称不能为空")
-      .max(100, "知识库名称不能超过100个字符")
-      .regex(
-        /^[a-zA-Z\u4e00-\u9fa5][a-zA-Z0-9\u4e00-\u9fa5_.-]*$/,
-        "只能输入字母、中文、数字、下划线(_)、中划线(-)、点(.)，并且必须以字母或中文开头"
-      ),
-    description: z.string().max(200, "描述不能超过200个字符").optional(),
-    groupId: z.string().min(1, "请选择所属群组"),
-    fileType: z.enum(["text", "table"]),
-    files: z.array(z.instanceof(File)).min(1, "请至少上传一个文件"),
+const steps = ["定义知识库", "索引配置", "混合检索策略配置"];
 
-    // Strategy
-    parsingStrategies: z
-      .array(
-        z.enum([
-          "text-recognition",
-          "image-understanding",
-          "table-parsing",
-          "formula-parsing",
-        ])
-      )
-      .min(1, "请至少选择一种解析策略"),
-    imageParsingMode: z.enum(["ocr", "understanding"]).optional(),
-    chunkingStrategy: z.enum([
-      "auto",
-      "by-identifiers",
-      "by-page",
-      "by-regex",
-      "by-hierarchy",
-    ]),
+const retrievalEngines = [
+  {
+    id: "fulltext",
+    title: "全文检索",
+    description: "基于 BM25 的稀疏向量倒排索引，适合关键词精确匹配",
+  },
+  {
+    id: "semantic",
+    title: "语义检索",
+    description: "基于 Embedding 的稠密向量索引，适合语义相似与智能问答",
+  },
+  {
+    id: "pageindex",
+    title: "PageIndex 检索",
+    description: "基于文档层级结构的 Page Index，适合长文档全局理解",
+  },
+];
 
-    // Dynamic fields based on chunking strategy
-    identifiers: z.array(z.string()).optional(),
-    maxChunkLength: z.number().min(1, "切片最大长度必须大于0").default(600),
-    chunkOverlapLength: z
-      .number()
-      .min(0, "重叠长度不能小于0")
-      .max(100, "重叠长度不能超过100%")
-      .default(15),
-    regexExpression: z.string().max(250).optional(),
-    regexPosition: z.enum(["before", "after"]).optional(),
+interface MetadataFieldDraft {
+  id: string;
+  name: string;
+  description: string;
+  matchModes: string[];
+}
 
-    // Tags
-    documentTags: z.array(z.string()).optional(),
-    chunkTagsEnabled: z.boolean().default(false),
-    chunkTags: z.array(z.string()).optional(),
+interface MixedStrategyDraft {
+  id: string;
+  name: string;
+  enabledEngines: string[];
+  fusionMode: string;
+  topK: string;
+  scoreThreshold: string;
+  collapsed: boolean;
+  weights: Record<string, string>;
+}
 
-    // Table-specific fields
-    tableHeaderRow: z.number().min(1).default(1),
-    tableDataStartRow: z.number().min(1).default(2),
-    tableColumns: z.array(z.object({
-      name: z.string().min(1, "列名不能为空"),
-      description: z.string().max(30, "描述不能超过30个字符").optional(),
-    })).optional(),
-  })
-  .refine(
-    (data) => {
-      if (data.chunkingStrategy === "by-identifiers") {
+const documentTagOptions = ["产品手册", "制度规范", "FAQ", "合同资料", "培训材料"];
+const contentTagOptions = ["奶茶", "门店经营", "供应商", "定价", "售后"];
+
+function Stepper({ currentStep }: { currentStep: number }) {
+  return (
+    <div className="flex items-center justify-center border-t border-slate-100 px-10 py-5">
+      {steps.map((step, index) => {
+        const stepNumber = index + 1;
+        const completed = stepNumber < currentStep;
+        const active = stepNumber === currentStep;
         return (
-          data.identifiers && data.identifiers.length > 0
+          <div key={step} className="flex items-center">
+            <div
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium",
+                completed && "bg-blue-50 text-blue-600",
+                active && "bg-blue-600 text-white",
+                !completed && !active && "bg-slate-100 text-slate-500"
+              )}
+            >
+              {completed ? <Check className="h-4 w-4" /> : stepNumber}
+            </div>
+            <span
+              className={cn(
+                "ml-3 text-sm",
+                active ? "font-medium text-slate-950" : "text-slate-600"
+              )}
+            >
+              {step}
+            </span>
+            {index < steps.length - 1 && <div className="mx-10 h-px w-40 bg-slate-200" />}
+          </div>
         );
-      }
-      return true;
-    },
-    {
-      message: "请至少选择一个标识符",
-      path: ["identifiers"],
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.chunkingStrategy === "by-regex") {
-        return (
-          data.regexExpression &&
-          data.regexExpression.length > 0 &&
-          data.regexPosition
-        );
-      }
-      return true;
-    },
-    {
-      message: "请输入正则表达式并选择位置",
-      path: ["regexExpression"],
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.chunkTagsEnabled) {
-        return data.chunkTags && data.chunkTags.length > 0;
-      }
-      return true;
-    },
-    {
-      message: "请选择切片标签范围",
-      path: ["chunkTags"],
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.parsingStrategies.includes("image-understanding")) {
-        return data.imageParsingMode !== undefined;
-      }
-      return true;
-    },
-    {
-      message: "请选择图片解析模式",
-      path: ["imageParsingMode"],
-    }
-  )
-  .refine(
-    (data) => {
-      if (data.fileType === "table") {
-        return data.tableColumns && data.tableColumns.length > 0;
-      }
-      return true;
-    },
-    {
-      message: "请至少配置一列",
-      path: ["tableColumns"],
-    }
+      })}
+    </div>
   );
+}
 
-type FormData = z.infer<typeof formSchema>;
+function FieldLabel({ children, required }: { children: string; required?: boolean }) {
+  return (
+    <div className="flex items-center gap-1 text-sm text-slate-700">
+      {required && <span className="text-red-500">*</span>}
+      <span>{children}</span>
+      <Info className="h-3.5 w-3.5 text-slate-400" />
+    </div>
+  );
+}
 
-// Mock groups
-const mockGroups = [
-  { value: "all", label: "全部群组" },
-  { value: "tianjin", label: "全部群组/天津纪委知识库" },
-  { value: "test1", label: "全部群组/测试群组1" },
-];
+function EngineCard({
+  title,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onCheckedChange(!checked)}
+      className={cn(
+        "relative min-h-[104px] flex-1 border bg-white p-4 text-left transition-colors",
+        checked ? "border-blue-500 bg-blue-50/70" : "border-slate-200 hover:border-blue-300"
+      )}
+    >
+      <div className="absolute right-0 top-0 h-0 w-0 border-l-[18px] border-t-[18px] border-l-transparent border-t-blue-600 opacity-0 data-[checked=true]:opacity-100" data-checked={checked} />
+      <div className="flex items-start gap-3">
+        <Checkbox checked={checked} onCheckedChange={(value) => onCheckedChange(Boolean(value))} />
+        <div>
+          <div className="font-semibold text-blue-700">{title}</div>
+          <p className="mt-3 text-sm leading-6 text-slate-700">{description}</p>
+        </div>
+      </div>
+    </button>
+  );
+}
 
-// Mock tag tree
-const mockTagTree: TagTreeItem[] = [
-  {
-    key: "南航",
-    label: "南航",
-    values: ["PPT", "客服", "行业通识", "无陪伴", "退改签"],
-  },
-  {
-    key: "水利设备",
-    label: "水利设备",
-    values: ["故障手册", "SOP"],
-  },
-];
+function ConfigBlock({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex h-12 w-full items-center gap-2 px-4 text-sm font-medium text-slate-900"
+      >
+        <ChevronDown className={cn("h-4 w-4 transition-transform", !open && "-rotate-90")} />
+        {title}
+      </button>
+      {open && <div className="border-t border-slate-100 px-5 py-4">{children}</div>}
+    </div>
+  );
+}
 
-// Mock table columns data
-const mockTableColumns = [
-  { name: "公告日期", description: "" },
-  { name: "采购单位", description: "" },
-  { name: "项目名称", description: "" },
-  { name: "中标企业", description: "" },
-  { name: "厂商系", description: "3" },
-  { name: "中标金额(万元)", description: "8" },
-  { name: "细分赛道", description: "" },
-  { name: "场景/说明", description: "" },
-];
+function OptionButton({
+  children,
+  selected,
+  onClick,
+}: {
+  children: string;
+  selected?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "h-9 border px-4 text-sm",
+        selected
+          ? "border-blue-500 bg-blue-50 font-medium text-blue-700"
+          : "border-slate-200 bg-white text-slate-700 hover:border-blue-300"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
-export default function CreateKnowledgeBasePage() {
-  const router = useRouter();
-  const [charCount, setCharCount] = useState({ name: 0, description: 0 });
-  const [regexCharCount, setRegexCharCount] = useState(0);
-  const [tableFileUploaded, setTableFileUploaded] = useState(false);
-  const [tableColumnDescriptions, setTableColumnDescriptions] = useState<Record<number, string>>({});
-  const [isDragging, setIsDragging] = useState(false);
+function StepOne({
+  name,
+  setName,
+  description,
+  setDescription,
+}: {
+  name: string;
+  setName: (value: string) => void;
+  description: string;
+  setDescription: (value: string) => void;
+}) {
+  return (
+    <div className="mx-auto w-full max-w-4xl space-y-7 py-8">
+      <p className="text-base font-semibold text-slate-950">基本信息</p>
+      <div className="grid grid-cols-[120px_1fr] items-start gap-x-4 gap-y-6">
+        <FieldLabel required>知识库名称</FieldLabel>
+        <div>
+          <div className="relative">
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              maxLength={100}
+              placeholder="请输入"
+              className="h-10 pr-16"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
+              {name.length}/100
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            支持字母、中文、数字、下划线(_)、中划线(-)、点(.)，并且必须以字母或中文开头
+          </p>
+        </div>
 
-  const form = useForm<FormData>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      groupId: "",
-      fileType: "text",
-      files: [],
-      parsingStrategies: [],
-      imageParsingMode: undefined,
-      chunkingStrategy: "auto",
-      maxChunkLength: 600,
-      chunkOverlapLength: 15,
-      chunkTagsEnabled: false,
-      tableHeaderRow: 1,
-      tableDataStartRow: 2,
-      tableColumns: [],
+        <FieldLabel>描述</FieldLabel>
+        <div>
+          <Textarea
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            maxLength={200}
+            placeholder="请输入知识库内容备注说明，便于查找和管理知识库。描述不影响Agent对知识库的调用效果"
+            className="min-h-24 resize-none pr-16"
+          />
+          <div className="mt-1 text-right text-xs text-slate-400">{description.length}/200</div>
+        </div>
+
+        <FieldLabel required>所属群组</FieldLabel>
+        <button
+          type="button"
+          className="flex h-10 w-full items-center justify-between border border-slate-200 bg-white px-3 text-sm text-slate-800"
+        >
+          <span className="inline-flex items-center gap-2">
+            <Folder className="h-4 w-4 fill-amber-300 text-amber-500" />
+            全部群组
+          </span>
+          <ChevronDown className="h-4 w-4 text-slate-400" />
+        </button>
+
+        <FieldLabel>图标</FieldLabel>
+        <div className="flex h-12 w-12 items-center justify-center rounded bg-blue-500 text-white">
+          <FileText className="h-6 w-6" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StepTwo({
+  selectedEngines,
+  setSelectedEngines,
+}: {
+  selectedEngines: string[];
+  setSelectedEngines: (value: string[]) => void;
+}) {
+  const [contentTagEnabled, setContentTagEnabled] = useState(true);
+  const [metadataEnabled, setMetadataEnabled] = useState(true);
+  const [documentTagEnabled, setDocumentTagEnabled] = useState(true);
+  const [contentTags, setContentTags] = useState<string[]>(["奶茶"]);
+  const [documentTags, setDocumentTags] = useState<string[]>(["产品手册"]);
+  const [metadataFields, setMetadataFields] = useState<MetadataFieldDraft[]>([
+    {
+      id: "metadata-source",
+      name: "来源",
+      description: "文档来源系统或资料出处",
+      matchModes: ["精准匹配"],
     },
-  });
+  ]);
 
-  const fileType = form.watch("fileType");
-  const files = form.watch("files");
-  const tableColumns = form.watch("tableColumns") || [];
-
-  const chunkingStrategy = form.watch("chunkingStrategy");
-  const chunkTagsEnabled = form.watch("chunkTagsEnabled");
-  const parsingStrategies: Array<"text-recognition" | "image-understanding" | "table-parsing" | "formula-parsing"> = 
-    form.watch("parsingStrategies") || [];
-  const imageParsingMode = form.watch("imageParsingMode");
-
-  // Handle table file upload
-  const handleTableFileUpload = (uploadedFiles: File[]) => {
-    form.setValue("files", uploadedFiles);
-    if (uploadedFiles.length > 0 && !tableFileUploaded) {
-      setTableFileUploaded(true);
-      // Auto-fill mock columns when file is uploaded
-      form.setValue("tableColumns", mockTableColumns);
-      // Initialize description states
-      const descMap: Record<number, string> = {};
-      mockTableColumns.forEach((col, idx) => {
-        if (col.description) {
-          descMap[idx] = col.description;
-        }
-      });
-      setTableColumnDescriptions(descMap);
+  const toggleEngine = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedEngines(Array.from(new Set([...selectedEngines, id])));
+      return;
+    }
+    if (selectedEngines.length > 1) {
+      setSelectedEngines(selectedEngines.filter((item) => item !== id));
     }
   };
 
-  // Handle table file removal
-  const handleTableFileRemove = () => {
-    form.setValue("files", []);
-    form.setValue("tableColumns", []);
-    setTableFileUploaded(false);
-    setTableColumnDescriptions({});
-  };
-
-  // Handle table column description change
-  const handleColumnDescriptionChange = (index: number, value: string) => {
-    const newDesc = { ...tableColumnDescriptions, [index]: value };
-    setTableColumnDescriptions(newDesc);
-    const updatedColumns = [...tableColumns];
-    updatedColumns[index] = {
-      ...updatedColumns[index],
-      description: value,
-    };
-    form.setValue("tableColumns", updatedColumns);
-  };
-
-  // Handle table column removal
-  const handleColumnRemove = (index: number) => {
-    const updatedColumns = tableColumns.filter((_, i) => i !== index);
-    form.setValue("tableColumns", updatedColumns);
-    const newDesc = { ...tableColumnDescriptions };
-    delete newDesc[index];
-    setTableColumnDescriptions(newDesc);
-  };
-
-  // Handle file type change
-  const handleFileTypeChange = (value: "text" | "table") => {
-    form.setValue("fileType", value);
-    if (value === "text") {
-      setTableFileUploaded(false);
-      form.setValue("tableColumns", []);
-      setTableColumnDescriptions({});
+  const toggleTag = (value: string, selected: string[], setSelected: (next: string[]) => void) => {
+    if (selected.includes(value)) {
+      setSelected(selected.filter((item) => item !== value));
+      return;
     }
+    setSelected([...selected, value]);
   };
 
-  // Handle parsing strategy toggle (multi-select)
-  const handleParsingStrategyToggle = (
-    strategy: "text-recognition" | "image-understanding" | "table-parsing" | "formula-parsing"
-  ) => {
-    const current = parsingStrategies;
-    const isSelected = current.includes(strategy);
-
-    if (isSelected) {
-      // Remove strategy
-      const updated = current.filter((s) => s !== strategy);
-      form.setValue("parsingStrategies", updated);
-      // If removing image-understanding, clear imageParsingMode
-      if (strategy === "image-understanding") {
-        form.setValue("imageParsingMode", undefined);
-      }
-    } else {
-      // Add strategy
-      const updated = [...current, strategy];
-      form.setValue("parsingStrategies", updated);
-      // If adding image-understanding, set default to OCR
-      if (strategy === "image-understanding" && !imageParsingMode) {
-        form.setValue("imageParsingMode", "ocr");
-      }
-    }
+  const addMetadataField = () => {
+    setMetadataFields((current) => [
+      ...current,
+      {
+        id: `metadata-${Date.now()}`,
+        name: "",
+        description: "",
+        matchModes: ["精准匹配"],
+      },
+    ]);
   };
 
-  const onSubmit = (data: FormData) => {
-    console.log("Form submitted:", data);
-    // Handle form submission
-    router.push("/knowledge-base");
+  const updateMetadataField = (id: string, patch: Partial<MetadataFieldDraft>) => {
+    setMetadataFields((current) =>
+      current.map((field) => (field.id === id ? { ...field, ...patch } : field))
+    );
+  };
+
+  const removeMetadataField = (id: string) => {
+    setMetadataFields((current) => current.filter((field) => field.id !== id));
+  };
+
+  const toggleMetadataMatchMode = (id: string, mode: string) => {
+    setMetadataFields((current) =>
+      current.map((field) => {
+        if (field.id !== id) return field;
+        const nextModes = field.matchModes.includes(mode)
+          ? field.matchModes.filter((item) => item !== mode)
+          : [...field.matchModes, mode];
+        return { ...field, matchModes: nextModes };
+      })
+    );
   };
 
   return (
-    <div className="space-y-6 pb-24">
-      {/* Page Title */}
-      <h1 className="text-2xl font-semibold">创建知识库</h1>
+    <div className="mx-auto w-full max-w-6xl space-y-8 py-8">
+      <p className="text-base font-semibold text-slate-950">索引配置</p>
+      <div className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-6">
+        <FieldLabel required>核心检索引擎</FieldLabel>
+        <div className="flex gap-4">
+          {retrievalEngines.map((engine) => (
+            <EngineCard
+              key={engine.id}
+              title={engine.title}
+              description={engine.description}
+              checked={selectedEngines.includes(engine.id)}
+              onCheckedChange={(checked) => toggleEngine(engine.id, checked)}
+            />
+          ))}
+        </div>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {/* Basic Info Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>基础信息</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Name */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-1">
-                <Label htmlFor="name">知识库名称</Label>
-                <span className="text-red-500">*</span>
-              </div>
-              <div className="relative">
-                <Input
-                  id="name"
-                  placeholder="请输入知识库名称"
-                  maxLength={100}
-                  {...form.register("name", {
-                    onChange: (e) =>
-                      setCharCount((prev) => ({
-                        ...prev,
-                        name: e.target.value.length,
-                      })),
-                  })}
-                  className={form.formState.errors.name ? "border-red-500" : ""}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
-                  {charCount.name}/100
-                </span>
-              </div>
-              {form.formState.errors.name && (
-                <p className="text-xs text-red-500">
-                  {form.formState.errors.name.message}
-                </p>
-              )}
-              <p className="text-xs text-slate-500">
-                支持100位字符,只能输入字母、中文、数字、下划线(_)、中划线(-)、点(.)，并且必须以字母或中文开头
-              </p>
-            </div>
-
-            {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="description">知识库描述</Label>
-              <Textarea
-                id="description"
-                placeholder="请输入知识库内容备注说明,便于查找和管理知识库。描述不影响Agent对知识库的调用效果"
-                maxLength={200}
-                rows={4}
-                {...form.register("description", {
-                  onChange: (e) =>
-                    setCharCount((prev) => ({
-                      ...prev,
-                      description: e.target.value.length,
-                    })),
-                })}
-              />
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500">支持0-200位字符</span>
-                <span className="text-xs text-slate-400">
-                  {charCount.description}/200
-                </span>
-              </div>
-            </div>
-
-            {/* Icon */}
-            <div className="space-y-2">
-              <Label>图标</Label>
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded bg-blue-600">
-                  <FileText className="h-5 w-5 text-white" />
-                </div>
-                <Button type="button" variant="outline" size="sm">
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  AI生成
-                </Button>
-              </div>
-            </div>
-
-            {/* Group */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-1">
-                <Label>所属群组</Label>
-                <span className="text-red-500">*</span>
-              </div>
-              <Select
-                value={form.watch("groupId")}
-                onValueChange={(value) => form.setValue("groupId", value)}
-                options={mockGroups}
-                placeholder="请选择所属群组"
-                className={
-                  form.formState.errors.groupId ? "border-red-500" : ""
-                }
-              />
-              {form.formState.errors.groupId && (
-                <p className="text-xs text-red-500">
-                  {form.formState.errors.groupId.message}
-                </p>
-              )}
-            </div>
-
-          </CardContent>
-        </Card>
-
-        {/* Conditional Content Based on File Type */}
-        {fileType === "text" ? (
+        {selectedEngines.includes("fulltext") && (
           <>
-            {/* File Upload for Text Type */}
-            <Card>
-              <CardHeader>
-                <CardTitle>文件上传</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* File Type Toggle */}
-                <div className="flex items-center gap-3">
-                  <Label className="text-sm font-medium">文件类型：</Label>
-                  <Tabs
-                    value={fileType}
-                    onValueChange={(value) => handleFileTypeChange(value as "text" | "table")}
-                  >
-                    <TabsList>
-                      <TabsTrigger value="text">文本型数据</TabsTrigger>
-                      <TabsTrigger value="table">表格型数据</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-                <FileUpload
-                  value={files}
-                  onChange={(files) => form.setValue("files", files)}
-                />
-                {form.formState.errors.files && (
-                  <p className="text-xs text-red-500 mt-2">
-                    {form.formState.errors.files.message}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Strategy Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>策略配置</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-8">
-            {/* Parsing Strategy */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-1">
-                <Label>解析策略</Label>
-                <span className="text-red-500">*</span>
-              </div>
-              <div className="space-y-4">
-                {/* Four-column grid layout */}
-                <div className="grid grid-cols-4 gap-4">
-                  <SelectableCard
-                    title="文字识别"
-                    description="基于规则的文档提取"
-                    selected={parsingStrategies.includes("text-recognition")}
-                    onSelect={() => handleParsingStrategyToggle("text-recognition")}
-                  />
-                  <SelectableCard
-                    title="图片解析"
-                    description="将图片内文字或图片内容描述作为切片的一部分"
-                    selected={parsingStrategies.includes("image-understanding")}
-                    onSelect={() => handleParsingStrategyToggle("image-understanding")}
-                  />
-                  <SelectableCard
-                    title="表格解析"
-                    description="保留文内表格中的结构化信息"
-                    selected={parsingStrategies.includes("table-parsing")}
-                    onSelect={() => handleParsingStrategyToggle("table-parsing")}
-                  />
-                  <SelectableCard
-                    title="公式解析"
-                    description="识别并解析文档中的数学公式"
-                    selected={parsingStrategies.includes("formula-parsing")}
-                    onSelect={() => handleParsingStrategyToggle("formula-parsing")}
-                  />
-                </div>
-                {/* Image Understanding Sub-options - Display below grid */}
-                {parsingStrategies.includes("image-understanding") && (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-4">
-                    <div className="flex items-center gap-4">
-                      <Label className="text-sm font-medium text-slate-700 whitespace-nowrap">
-                        图片解析模式：
-                      </Label>
-                      <RadioGroup
-                        value={imageParsingMode || "ocr"}
-                        onValueChange={(value) =>
-                          form.setValue("imageParsingMode", value as "ocr" | "understanding")
-                        }
-                        className="flex gap-6"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="ocr" id="ocr" />
-                          <Label htmlFor="ocr" className="font-normal cursor-pointer text-sm">
-                            图片文字识别 (OCR)
-                          </Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button type="button" className="cursor-help">
-                                <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent
-                              className="w-64 p-3 text-xs text-slate-700"
-                              side="right"
-                              sideOffset={8}
-                            >
-                              识别图片、扫描件中的文字信息
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="understanding" id="understanding" />
-                          <Label htmlFor="understanding" className="font-normal cursor-pointer text-sm">
-                            图片内容理解
-                          </Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button type="button" className="cursor-help">
-                                <HelpCircle className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent
-                              className="w-64 p-3 text-xs text-slate-700"
-                              side="right"
-                              sideOffset={8}
-                            >
-                              调用模型理解图片，适用于画面描述、图表研读等
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                    {form.formState.errors.imageParsingMode && (
-                      <p className="text-xs text-red-500 mt-2">
-                        {form.formState.errors.imageParsingMode.message}
-                      </p>
-                    )}
+            <div className="pt-4 text-sm text-slate-700">全文检索</div>
+            <div className="space-y-3">
+              <ConfigBlock title="索引配置">
+                <div className="grid grid-cols-[150px_1fr] gap-y-5">
+                  <FieldLabel required>索引类型</FieldLabel>
+                  <div>
+                    <OptionButton selected>SPARSE_INVERTED_INDEX</OptionButton>
+                    <p className="mt-2 text-xs text-slate-500">标准倒排索引，完整记录词汇与文档的映射关系，保证最高召回率</p>
                   </div>
-                )}
-                {/* Validation error for parsingStrategies */}
-                {form.formState.errors.parsingStrategies && (
-                  <p className="text-xs text-red-500">
-                    {form.formState.errors.parsingStrategies.message}
-                  </p>
-                )}
-              </div>
+                  <FieldLabel required>倒排检索算法</FieldLabel>
+                  <div className="flex items-center gap-0">
+                    <OptionButton>DAAT_MAXSCORE</OptionButton>
+                    <OptionButton selected>DAAT_WAND</OptionButton>
+                    <OptionButton>TAAT_NAIVE</OptionButton>
+                  </div>
+                  <FieldLabel required>词频饱和度</FieldLabel>
+                  <div className="flex items-center gap-4">
+                    <input type="range" min="1.2" max="2" step="0.1" defaultValue="1.2" className="w-80" />
+                    <Input value="1.2" readOnly className="h-9 w-16 text-center" />
+                    <span className="text-xs text-slate-500">阈值范围区间：1.2~2.0（精度0.1）</span>
+                  </div>
+                  <FieldLabel required>文档长度归一化</FieldLabel>
+                  <div className="flex items-center gap-4">
+                    <input type="range" min="0" max="1" step="0.01" defaultValue="0.75" className="w-80" />
+                    <Input value="0.75" readOnly className="h-9 w-16 text-center" />
+                    <span className="text-xs text-slate-500">阈值范围区间：0~1.0（精度0.01）</span>
+                  </div>
+                  <FieldLabel required>距离度量</FieldLabel>
+                  <div>
+                    <OptionButton selected>BM25</OptionButton>
+                    <p className="mt-2 text-xs text-slate-500">基于词频、逆文档频率和文档长度归一化的全文检索相关性评分模型</p>
+                  </div>
+                </div>
+              </ConfigBlock>
+              <ConfigBlock title="分析器配置" defaultOpen={false}>
+                <RadioGroup defaultValue="Standard" className="flex gap-5">
+                  {["Standard", "English", "Chinese", "自定义"].map((item) => (
+                    <label key={item} className="flex items-center gap-2 text-sm">
+                      <RadioGroupItem value={item} />
+                      {item}
+                    </label>
+                  ))}
+                </RadioGroup>
+                <div className="mt-4 border border-dashed border-slate-300 px-6 py-8 text-center text-sm text-slate-500">
+                  点击或拖拽文件到此处上传，支持上传 .txt 格式的文件
+                </div>
+              </ConfigBlock>
             </div>
-
-            {/* Chunking Strategy */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-1">
-                <Label>切片策略</Label>
-                <span className="text-red-500">*</span>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <SelectableCard
-                  title="自动切片"
-                  description="通用格式文本常见切分方法"
-                  selected={chunkingStrategy === "auto"}
-                  onSelect={() => form.setValue("chunkingStrategy", "auto")}
-                />
-                <SelectableCard
-                  title="按常见标识符切分"
-                  description="配置常见的标识符、切片最大长度等选项"
-                  selected={chunkingStrategy === "by-identifiers"}
-                  onSelect={() =>
-                    form.setValue("chunkingStrategy", "by-identifiers")
-                  }
-                />
-                <SelectableCard
-                  title="按页切分"
-                  description="适用于PPT、单页图标等"
-                  selected={chunkingStrategy === "by-page"}
-                  onSelect={() => form.setValue("chunkingStrategy", "by-page")}
-                />
-                <SelectableCard
-                  title="自定义正则切分"
-                  description="通过正则表达式,自定义匹配切片分隔符"
-                  selected={chunkingStrategy === "by-regex"}
-                  onSelect={() => form.setValue("chunkingStrategy", "by-regex")}
-                />
-                <SelectableCard
-                  title="按层级切分"
-                  description="根据文档中的标题层级结构,智能切分内容片段"
-                  selected={chunkingStrategy === "by-hierarchy"}
-                  onSelect={() =>
-                    form.setValue("chunkingStrategy", "by-hierarchy")
-                  }
-                />
-              </div>
-
-              {/* Dynamic Fields */}
-              <div className="space-y-4 pt-4">
-                {/* Auto / By Page / By Hierarchy: Show max length and overlap */}
-                {(chunkingStrategy === "auto" ||
-                  chunkingStrategy === "by-page" ||
-                  chunkingStrategy === "by-hierarchy") && (
-                  <>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1">
-                        <Label>切片最大长度</Label>
-                        <span className="text-red-500">*</span>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button type="button" className="cursor-help">
-                              <HelpCircle className="h-3.5 w-3.5 text-slate-400" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64 p-3 text-xs">
-                            设置每个切片的最大字符数
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <Input
-                        type="number"
-                        {...form.register("maxChunkLength", {
-                          valueAsNumber: true,
-                        })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1">
-                        <Label>切片重叠长度</Label>
-                        <span className="text-red-500">*</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          {...form.register("chunkOverlapLength", {
-                            valueAsNumber: true,
-                          })}
-                          className="flex-1"
-                        />
-                        <span className="text-sm text-slate-500">%</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* By Identifiers */}
-                {chunkingStrategy === "by-identifiers" && (
-                  <>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1">
-                        <Label>标识符</Label>
-                        <span className="text-red-500">*</span>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button type="button" className="cursor-help">
-                              <HelpCircle className="h-3.5 w-3.5 text-slate-400" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64 p-3 text-xs">
-                            选择用于切片的标识符
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <MultiSelect
-                        value={form.watch("identifiers") || []}
-                        onChange={(values) =>
-                          form.setValue("identifiers", values)
-                        }
-                        options={[
-                          { value: "period", label: "中/英文句号" },
-                          { value: "comma", label: "中/英文逗号" },
-                          { value: "question", label: "中/英文问号" },
-                          { value: "exclamation", label: "中/英文叹号" },
-                          { value: "ellipsis", label: "中/英文省略号" },
-                          { value: "newline", label: "中/英文换行符" },
-                        ]}
-                        placeholder="请选择标识符"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1">
-                        <Label>切片最大长度</Label>
-                        <span className="text-red-500">*</span>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button type="button" className="cursor-help">
-                              <HelpCircle className="h-3.5 w-3.5 text-slate-400" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64 p-3 text-xs">
-                            设置每个切片的最大字符数
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <Input
-                        type="number"
-                        {...form.register("maxChunkLength", {
-                          valueAsNumber: true,
-                        })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1">
-                        <Label>切片重叠长度</Label>
-                        <span className="text-red-500">*</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          {...form.register("chunkOverlapLength", {
-                            valueAsNumber: true,
-                          })}
-                          className="flex-1"
-                        />
-                        <span className="text-sm text-slate-500">%</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* By Regex */}
-                {chunkingStrategy === "by-regex" && (
-                  <>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1">
-                        <Label>表达式</Label>
-                        <span className="text-red-500">*</span>
-                      </div>
-                      <div className="relative">
-                        <Input
-                          placeholder="请输入正则表达式,如第d+章"
-                          maxLength={250}
-                          {...form.register("regexExpression", {
-                            onChange: (e) =>
-                              setRegexCharCount(e.target.value.length),
-                          })}
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">
-                          {regexCharCount}/250
-                        </span>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1">
-                        <Label>正则式位置</Label>
-                        <span className="text-red-500">*</span>
-                      </div>
-                      <RadioGroup
-                        value={form.watch("regexPosition")}
-                        onValueChange={(value) =>
-                          form.setValue("regexPosition", value as "before" | "after")
-                        }
-                        className="flex gap-6"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="before" id="before" />
-                          <Label htmlFor="before" className="font-normal cursor-pointer">
-                            正则式与前序切片合并
-                          </Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="after" id="after" />
-                          <Label htmlFor="after" className="font-normal cursor-pointer">
-                            正则式与后序切片合并
-                          </Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1">
-                        <Label>切片最大长度</Label>
-                        <span className="text-red-500">*</span>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button type="button" className="cursor-help">
-                              <HelpCircle className="h-3.5 w-3.5 text-slate-400" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64 p-3 text-xs">
-                            设置每个切片的最大字符数
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <Input
-                        type="number"
-                        {...form.register("maxChunkLength", {
-                          valueAsNumber: true,
-                        })}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-          </>
-        ) : (
-          <>
-            {/* Table File Upload */}
-            <Card>
-              <CardHeader>
-                <CardTitle>文件上传</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* File Type Toggle */}
-                <div className="flex items-center gap-3">
-                  <Label className="text-sm font-medium">文件类型：</Label>
-                  <Tabs
-                    value={fileType}
-                    onValueChange={(value) => handleFileTypeChange(value as "text" | "table")}
-                  >
-                    <TabsList>
-                      <TabsTrigger value="text">文本型数据</TabsTrigger>
-                      <TabsTrigger value="table">表格型数据</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-                {!tableFileUploaded ? (
-                  <div className="space-y-3">
-                    <div
-                      onClick={() => {
-                        const input = document.createElement("input");
-                        input.type = "file";
-                        input.accept = ".xlsx,.csv";
-                        input.onchange = (e) => {
-                          const file = (e.target as HTMLInputElement).files?.[0];
-                          if (file) {
-                            handleTableFileUpload([file]);
-                          }
-                        };
-                        input.click();
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setIsDragging(false);
-                        const file = e.dataTransfer.files[0];
-                        if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.csv'))) {
-                          handleTableFileUpload([file]);
-                        }
-                      }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setIsDragging(true);
-                      }}
-                      onDragLeave={(e) => {
-                        e.preventDefault();
-                        setIsDragging(false);
-                      }}
-                      className={`relative flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors ${
-                        isDragging
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-slate-100"
-                      }`}
-                    >
-                      <Upload className="mb-4 h-12 w-12 text-slate-400" />
-                      <p className="mb-2 text-sm font-medium text-slate-700">
-                        将文件拖拽到此处或点击上传
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        支持上传 .xlsx、.csv 文件；单次至多上传 1 个文件；每个文件不超过 50MB；最多 30,000 行；每行最多 5,000 字符
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {files.map((file, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between rounded-md border border-green-200 bg-green-50 p-3"
-                      >
-                        <div className="flex items-center gap-3 flex-1">
-                          <CheckCircle2 className="h-5 w-5 text-green-600" />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-slate-900">{file.name}</p>
-                            <p className="text-xs text-slate-500">
-                              {(file.size / 1024 / 1024).toFixed(2)} MB
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => {
-                              const input = document.createElement("input");
-                              input.type = "file";
-                              input.accept = ".xlsx,.csv";
-                              input.onchange = (e) => {
-                                const file = (e.target as HTMLInputElement).files?.[0];
-                                if (file) {
-                                  handleTableFileUpload([file]);
-                                }
-                              };
-                              input.click();
-                            }}
-                          >
-                            <RefreshCw className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={handleTableFileRemove}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {form.formState.errors.files && (
-                  <p className="text-xs text-red-500">
-                    {form.formState.errors.files.message}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Table Structure Configuration */}
-            {tableFileUploaded && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>表结构配置</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {/* Configuration Row */}
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2">
-                      <Label className="text-sm font-medium whitespace-nowrap">
-                        <span className="text-red-500">*</span>表头：
-                      </Label>
-                      <Input
-                        type="number"
-                        value={form.watch("tableHeaderRow")}
-                        onChange={(e) =>
-                          form.setValue("tableHeaderRow", parseInt(e.target.value) || 1)
-                        }
-                        className="w-24"
-                        min={1}
-                      />
-                      <span className="text-sm text-slate-600">行</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Label className="text-sm font-medium whitespace-nowrap">
-                        <span className="text-red-500">*</span>数据起始行：
-                      </Label>
-                      <Input
-                        type="number"
-                        value={form.watch("tableDataStartRow")}
-                        onChange={(e) =>
-                          form.setValue("tableDataStartRow", parseInt(e.target.value) || 2)
-                        }
-                        className="w-24"
-                        min={1}
-                      />
-                      <span className="text-sm text-slate-600">行</span>
-                    </div>
-                  </div>
-
-                  {/* Columns Table */}
-                  <div className="border rounded-lg">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[200px]">列名</TableHead>
-                          <TableHead>描述</TableHead>
-                          <TableHead className="w-[100px]">操作</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {tableColumns.map((column, index) => (
-                          <TableRow key={index}>
-                            <TableCell className="font-medium">{column.name}</TableCell>
-                            <TableCell>
-                              <div className="relative">
-                                <Input
-                                  value={tableColumnDescriptions[index] || ""}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    if (value.length <= 30) {
-                                      handleColumnDescriptionChange(index, value);
-                                    }
-                                  }}
-                                  placeholder="请输入描述"
-                                  maxLength={30}
-                                  className="w-full"
-                                />
-                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">
-                                  {(tableColumnDescriptions[index] || "").length}/30
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-slate-400">
-                                  {(tableColumnDescriptions[index] || "").length}/100
-                                </span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleColumnRemove(index)}
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  删除
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  {form.formState.errors.tableColumns && (
-                    <p className="text-xs text-red-500">
-                      {form.formState.errors.tableColumns.message}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            )}
           </>
         )}
 
-        {/* Tags Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>标签配置</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Document Tags */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-1">
-                <Label>文档标签</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button type="button" className="cursor-help">
-                      <HelpCircle className="h-3.5 w-3.5 text-slate-400" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 p-3 text-xs">
-                    为文档添加标签以便分类管理
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <TagTreeSelector
-                value={form.watch("documentTags") || []}
-                onChange={(values) => form.setValue("documentTags", values)}
-                options={mockTagTree}
-                placeholder="请输入标签搜索或选择标签"
-              />
+        {selectedEngines.includes("semantic") && (
+          <>
+            <div className="pt-4 text-sm text-slate-700">语义检索</div>
+            <div className="space-y-3">
+              <ConfigBlock title="向量构建参数">
+                <div className="grid grid-cols-[140px_1fr] gap-y-5">
+                  <FieldLabel required>向量模型</FieldLabel>
+                  <div>
+                    <div className="text-sm text-slate-400">暂无可用模型</div>
+                  </div>
+                  <FieldLabel required>向量精度</FieldLabel>
+                  <div className="flex items-center gap-0">
+                    <OptionButton selected>FLOAT_VECTOR</OptionButton>
+                    <OptionButton>FLOAT16_VECTOR</OptionButton>
+                    <OptionButton>BFLOAT16_VECTOR</OptionButton>
+                    <OptionButton>INT8_VECTOR</OptionButton>
+                  </div>
+                  <FieldLabel>向量归一化</FieldLabel>
+                  <Switch defaultChecked />
+                </div>
+              </ConfigBlock>
+              <ConfigBlock title="索引构建参数" defaultOpen={false}>
+                <p className="text-sm text-slate-500">可配置向量维度、最大 Token 数量、索引算法等参数。</p>
+              </ConfigBlock>
             </div>
+          </>
+        )}
 
-            {/* Chunk Tags */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-1">
-                <Label>切片标签</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button type="button" className="cursor-help">
-                      <HelpCircle className="h-3.5 w-3.5 text-slate-400" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 p-3 text-xs">
-                    开启后针对所选的标签范围,大模型对文档所有切片自动选择标签
-                  </PopoverContent>
-                </Popover>
+        {selectedEngines.includes("pageindex") && (
+          <>
+            <div className="pt-4 text-sm text-slate-700">PageIndex 检索</div>
+            <ConfigBlock title="层级索引参数">
+              <div className="grid grid-cols-[140px_1fr] gap-y-5">
+                <FieldLabel required>最小字符数</FieldLabel>
+                <Input value="100" readOnly className="h-9 w-40" />
+                <FieldLabel required>最大字符数</FieldLabel>
+                <Input value="4000" readOnly className="h-9 w-40" />
+                <FieldLabel>数据瘦身</FieldLabel>
+                <Switch defaultChecked />
               </div>
+            </ConfigBlock>
+          </>
+        )}
+
+        <div className="pt-2 text-sm text-slate-700">内容标签增强</div>
+        <div className="space-y-3 border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-3">
+            <Switch checked={contentTagEnabled} onCheckedChange={setContentTagEnabled} />
+            <span className="text-sm text-slate-900">启用内容标签增强</span>
+          </div>
+          <div className={cn("flex flex-wrap gap-2", !contentTagEnabled && "opacity-50")}>
+            {contentTagOptions.map((tag) => (
+              <OptionButton
+                key={tag}
+                selected={contentTagEnabled && contentTags.includes(tag)}
+                onClick={() => contentTagEnabled && toggleTag(tag, contentTags, setContentTags)}
+              >
+                {tag}
+              </OptionButton>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">用于文档内容层面的标签召回和过滤，创建后导入文档时可继续补充。</p>
+        </div>
+
+        <div className="pt-2 text-sm text-slate-700">过滤器配置</div>
+        <div className="space-y-5">
+          <div className="border border-slate-200 bg-white">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
               <div className="flex items-center gap-3">
-                <Switch
-                  checked={chunkTagsEnabled}
-                  onCheckedChange={(checked) =>
-                    form.setValue("chunkTagsEnabled", checked)
-                  }
-                />
-                <span className="text-sm text-slate-600">
-                  {chunkTagsEnabled ? "开启" : "关闭"}
-                </span>
+                <Switch checked={metadataEnabled} onCheckedChange={setMetadataEnabled} />
+                <span className="text-sm font-medium text-slate-950">元数据增强</span>
               </div>
-              {chunkTagsEnabled && (
-                <p className="text-xs text-slate-500">
-                  开启后针对所选的标签范围,大模型对文档所有切片自动选择标签
-                </p>
-              )}
-              {chunkTagsEnabled && (
-                <TagTreeSelector
-                  value={form.watch("chunkTags") || []}
-                  onChange={(values) => form.setValue("chunkTags", values)}
-                  options={mockTagTree}
-                  placeholder="请选择切片标签范围"
-                />
-              )}
+              <Button type="button" variant="outline" size="sm" className="rounded" onClick={addMetadataField} disabled={!metadataEnabled}>
+                <Plus className="mr-2 h-4 w-4" />
+                添加字段
+              </Button>
             </div>
-          </CardContent>
-        </Card>
+            <div className={cn(!metadataEnabled && "opacity-50")}>
+              <div className="grid grid-cols-[180px_1fr_260px_52px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                <span>字段名称</span>
+                <span>字段描述</span>
+                <span>匹配模式</span>
+                <span />
+              </div>
+              <div className="divide-y divide-slate-100">
+                {metadataFields.map((field) => (
+                  <div key={field.id} className="grid grid-cols-[180px_1fr_260px_52px] items-center gap-3 px-4 py-3">
+                    <Input
+                      value={field.name}
+                      onChange={(event) => updateMetadataField(field.id, { name: event.target.value })}
+                      placeholder="请输入字段名"
+                      maxLength={20}
+                      disabled={!metadataEnabled}
+                      className="h-9 rounded"
+                    />
+                    <Input
+                      value={field.description}
+                      onChange={(event) => updateMetadataField(field.id, { description: event.target.value })}
+                      placeholder="请输入字段描述"
+                      maxLength={100}
+                      disabled={!metadataEnabled}
+                      className="h-9 rounded"
+                    />
+                    <div className="flex items-center gap-4 text-sm">
+                      {["精准匹配", "语义匹配"].map((mode) => (
+                        <label key={mode} className="flex items-center gap-2">
+                          <Checkbox
+                            checked={field.matchModes.includes(mode)}
+                            disabled={!metadataEnabled}
+                            onCheckedChange={() => metadataEnabled && toggleMetadataMatchMode(field.id, mode)}
+                          />
+                          {mode}
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!metadataEnabled}
+                      className="text-slate-400 hover:text-red-600 disabled:hover:text-slate-400"
+                      onClick={() => removeMetadataField(field.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
 
-        {/* Fixed Bottom Bar */}
-        <div className="fixed bottom-0 left-60 right-0 z-50 border-t bg-white px-6 py-4 shadow-lg">
-          <div className="flex items-center justify-end gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.back()}
-            >
-              取消
-            </Button>
-            <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-              确认创建
-            </Button>
+          <div className="space-y-3 border border-slate-200 bg-white p-4">
+            <div className="flex items-center gap-3">
+              <Switch checked={documentTagEnabled} onCheckedChange={setDocumentTagEnabled} />
+              <span className="text-sm font-medium text-slate-950">文档标签增强</span>
+            </div>
+            <div className={cn("flex flex-wrap gap-2", !documentTagEnabled && "opacity-50")}>
+              {documentTagOptions.map((tag) => (
+                <OptionButton
+                  key={tag}
+                  selected={documentTagEnabled && documentTags.includes(tag)}
+                  onClick={() => documentTagEnabled && toggleTag(tag, documentTags, setDocumentTags)}
+                >
+                  {tag}
+                </OptionButton>
+              ))}
+            </div>
           </div>
         </div>
-      </form>
+      </div>
     </div>
+  );
+}
+
+function StepThree({ selectedEngines }: { selectedEngines: string[] }) {
+  const enginesInStrategy = retrievalEngines.filter((engine) => selectedEngines.includes(engine.id));
+  const [strategies, setStrategies] = useState<MixedStrategyDraft[]>([
+    {
+      id: "strategy-1",
+      name: "检索策略_1",
+      enabledEngines: selectedEngines,
+      fusionMode: "加权融合",
+      topK: "20",
+      scoreThreshold: "0.50",
+      collapsed: false,
+      weights: Object.fromEntries(selectedEngines.map((engineId) => [engineId, engineId === "semantic" ? "0.6" : "0.4"])),
+    },
+  ]);
+
+  const selectedEngineSet = new Set(selectedEngines);
+
+  const updateStrategy = (id: string, patch: Partial<MixedStrategyDraft>) => {
+    setStrategies((current) =>
+      current.map((strategy) => (strategy.id === id ? { ...strategy, ...patch } : strategy))
+    );
+  };
+
+  const addStrategy = () => {
+    const nextIndex = strategies.length + 1;
+    setStrategies((current) => [
+      ...current,
+      {
+        id: `strategy-${Date.now()}`,
+        name: `检索策略_${nextIndex}`,
+        enabledEngines: selectedEngines,
+        fusionMode: "加权融合",
+        topK: "20",
+        scoreThreshold: "0.50",
+        collapsed: false,
+        weights: Object.fromEntries(selectedEngines.map((engineId) => [engineId, engineId === "semantic" ? "0.6" : "0.4"])),
+      },
+    ]);
+  };
+
+  const removeStrategy = (id: string) => {
+    if (strategies.length === 1) return;
+    setStrategies((current) => current.filter((strategy) => strategy.id !== id));
+  };
+
+  const toggleStrategyEngine = (strategy: MixedStrategyDraft, engineId: string) => {
+    const engineEnabled = strategy.enabledEngines.includes(engineId);
+    if (engineEnabled && strategy.enabledEngines.length === 1) return;
+    const nextEngines = engineEnabled
+      ? strategy.enabledEngines.filter((item) => item !== engineId)
+      : [...strategy.enabledEngines, engineId];
+    updateStrategy(strategy.id, { enabledEngines: nextEngines });
+  };
+
+  const updateWeight = (strategy: MixedStrategyDraft, engineId: string, value: string) => {
+    updateStrategy(strategy.id, {
+      weights: {
+        ...strategy.weights,
+        [engineId]: value,
+      },
+    });
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-6xl space-y-5 py-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-base font-semibold text-slate-950">混合检索策略配置</p>
+          <p className="mt-1 text-xs text-slate-500">按已启用的检索器配置召回融合策略，创建后可在详情页继续调整。</p>
+        </div>
+        <Button type="button" variant="outline" className="rounded" onClick={addStrategy}>
+          <Plus className="mr-2 h-4 w-4" />
+          新增策略
+        </Button>
+      </div>
+
+      <div className="space-y-4">
+        {strategies.map((strategy, index) => {
+          const availableEngines = enginesInStrategy.filter((engine) => selectedEngineSet.has(engine.id));
+          const activeEngines = availableEngines.filter((engine) => strategy.enabledEngines.includes(engine.id));
+          const configured = strategy.name.trim().length > 0 && activeEngines.length > 0;
+
+          return (
+            <div key={strategy.id} className="border border-slate-200 bg-white">
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => updateStrategy(strategy.id, { collapsed: !strategy.collapsed })}
+                    className="text-slate-500 hover:text-slate-900"
+                  >
+                    <ChevronDown className={cn("h-4 w-4 transition-transform", strategy.collapsed && "-rotate-90")} />
+                  </button>
+                  <div>
+                    <div className="font-medium text-slate-950">检索策略（{index + 1}）</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      {activeEngines.map((engine) => engine.title).join("、") || "至少选择一个检索器"}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={cn("rounded px-2 py-1 text-xs", configured ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-500")}>
+                    {configured ? "已配置" : "待配置"}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded text-slate-400 hover:text-red-600"
+                    disabled={strategies.length === 1}
+                    onClick={() => removeStrategy(strategy.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {!strategy.collapsed && (
+                <div className="space-y-6 px-5 py-5">
+                  <div className="grid grid-cols-[150px_1fr] gap-x-4 gap-y-5">
+                    <FieldLabel required>策略名称</FieldLabel>
+                    <Input
+                      value={strategy.name}
+                      onChange={(event) => updateStrategy(strategy.id, { name: event.target.value })}
+                      placeholder="请输入策略名称"
+                      maxLength={50}
+                      className="h-9 max-w-md rounded"
+                    />
+
+                    <FieldLabel required>生效检索器</FieldLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {availableEngines.map((engine) => (
+                        <OptionButton
+                          key={engine.id}
+                          selected={strategy.enabledEngines.includes(engine.id)}
+                          onClick={() => toggleStrategyEngine(strategy, engine.id)}
+                        >
+                          {engine.title}
+                        </OptionButton>
+                      ))}
+                    </div>
+
+                    <FieldLabel required>融合方式</FieldLabel>
+                    <div className="flex items-center gap-0">
+                      {["加权融合", "RRF", "Rerank"].map((mode) => (
+                        <OptionButton
+                          key={mode}
+                          selected={strategy.fusionMode === mode}
+                          onClick={() => updateStrategy(strategy.id, { fusionMode: mode })}
+                        >
+                          {mode}
+                        </OptionButton>
+                      ))}
+                    </div>
+
+                    <FieldLabel required>Top K</FieldLabel>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={strategy.topK}
+                      onChange={(event) => updateStrategy(strategy.id, { topK: event.target.value })}
+                      className="h-9 w-40 rounded"
+                    />
+
+                    <FieldLabel>Score 阈值</FieldLabel>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={strategy.scoreThreshold}
+                      onChange={(event) => updateStrategy(strategy.id, { scoreThreshold: event.target.value })}
+                      className="h-9 w-40 rounded"
+                    />
+                  </div>
+
+                  <div className="border border-slate-200">
+                    <div className="border-b border-slate-100 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800">
+                      权重配置
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {activeEngines.map((engine) => (
+                        <div key={engine.id} className="grid grid-cols-[180px_1fr_90px] items-center gap-4 px-4 py-3">
+                          <span className="text-sm text-slate-800">{engine.title}</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={strategy.weights[engine.id] ?? "0.5"}
+                            onChange={(event) => updateWeight(strategy, engine.id, event.target.value)}
+                            disabled={strategy.fusionMode !== "加权融合"}
+                          />
+                          <Input
+                            type="number"
+                            min={0}
+                            max={1}
+                            step={0.1}
+                            value={strategy.weights[engine.id] ?? "0.5"}
+                            onChange={(event) => updateWeight(strategy, engine.id, event.target.value)}
+                            disabled={strategy.fusionMode !== "加权融合"}
+                            className="h-8 rounded text-center"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CreateKnowledgeBaseContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const createType = searchParams.get("type") ?? "Custom";
+  const isTemplate = createType === "Template";
+  const [currentStep, setCurrentStep] = useState(isTemplate ? 1 : 1);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [selectedEngines, setSelectedEngines] = useState(["fulltext", "semantic"]);
+
+  const nextDisabled = useMemo(() => currentStep === 1 && name.trim().length === 0, [currentStep, name]);
+
+  return (
+    <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col bg-white">
+      <div className="flex h-20 items-center gap-4 border-b border-slate-200 px-6">
+        <Button variant="outline" size="icon" className="h-8 w-8 rounded" onClick={() => router.push("/knowledge-base")}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div>
+          <h1 className="text-xl font-semibold text-slate-950">创建知识库</h1>
+          <p className="mt-1 text-xs text-slate-500">
+            {isTemplate ? "使用系统预制的知识库配置快速创建。" : "自定义选择索引模式及参数，创建后再导入文档。"}
+          </p>
+        </div>
+      </div>
+      <Stepper currentStep={currentStep} />
+      <div className="min-h-0 flex-1 overflow-auto bg-white px-6">
+        {currentStep === 1 && <StepOne name={name} setName={setName} description={description} setDescription={setDescription} />}
+        {currentStep === 2 && <StepTwo selectedEngines={selectedEngines} setSelectedEngines={setSelectedEngines} />}
+        {currentStep === 3 && <StepThree selectedEngines={selectedEngines} />}
+      </div>
+      <div className="flex h-16 items-center gap-3 border-t border-slate-200 bg-white px-6">
+        <Button
+          disabled={nextDisabled}
+          onClick={() => {
+            if (currentStep < 3) setCurrentStep(currentStep + 1);
+            else router.push("/knowledge-base/docstore_JzrYZMN9");
+          }}
+          className="rounded bg-blue-600 px-8 hover:bg-blue-700"
+        >
+          {currentStep === 3 ? "确定" : "下一步"}
+        </Button>
+        {currentStep > 1 && (
+          <Button variant="outline" className="rounded px-6" onClick={() => setCurrentStep(currentStep - 1)}>
+            上一步
+          </Button>
+        )}
+        <Button variant="outline" className="rounded px-6" onClick={() => router.push("/knowledge-base")}>
+          取消
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export default function CreateKnowledgeBasePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-[calc(100vh-4rem)] items-center justify-center bg-white text-sm text-slate-400">
+          加载创建配置...
+        </div>
+      }
+    >
+      <CreateKnowledgeBaseContent />
+    </Suspense>
   );
 }

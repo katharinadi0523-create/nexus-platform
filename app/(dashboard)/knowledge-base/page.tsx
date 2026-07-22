@@ -6,20 +6,20 @@ import { KnowledgeBaseTable } from "@/components/knowledge-base/KnowledgeBaseTab
 import type { KnowledgeBaseGroup } from "@/components/knowledge-base/GroupTreeSidebar";
 
 export default function KnowledgeBasePage() {
-  const [selectedGroup, setSelectedGroup] = useState<KnowledgeBaseGroup | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<KnowledgeBaseGroup | null>({
+    id: "all",
+    name: "全部群组",
+  });
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4">
-      {/* Left Sidebar */}
-      <div className="w-[280px] bg-white rounded-lg border border-slate-200 flex-shrink-0">
+    <div className="flex h-[calc(100vh-4rem)] min-h-0 bg-white">
+      <div className="w-[260px] shrink-0 border-r border-slate-200">
         <GroupTreeSidebar
           selectedGroup={selectedGroup}
           onSelectGroup={setSelectedGroup}
         />
       </div>
-
-      {/* Right Main Content */}
-      <div className="flex-1 bg-white rounded-lg border border-slate-200 overflow-hidden">
+      <div className="min-w-0 flex-1 overflow-hidden">
         <KnowledgeBaseTable selectedGroup={selectedGroup} />
       </div>
     </div>
