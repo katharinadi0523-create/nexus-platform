@@ -116,13 +116,19 @@ function taskStatus(stage: number, start: number, done: number): TaskStatus {
   return "done";
 }
 
-function AssistantText({ children }: { children: string }) {
+function AssistantText({
+  children,
+  sender,
+}: {
+  children: string;
+  sender: string;
+}) {
   return (
     <ClawAgentOutput
       item={{
         key: children,
         type: "output",
-        message: { id: children, role: "assistant", sender: "科研 Claw", time: "", content: children, auditRecords: [] },
+        message: { id: children, role: "assistant", sender, time: "", content: children, auditRecords: [] },
       }}
     />
   );
@@ -177,7 +183,9 @@ function SubAgentSession({ agent, stage, onBack }: { agent: string; stage: numbe
           />
           <AgentToolAction title={item.skill} kind="skill" done={complete || hasDraftDelivery} />
           <AgentToolAction title={item.tool} kind="tool" done={complete || hasDraftDelivery} />
-          {complete || hasDraftDelivery ? <AssistantText>{item.result}</AssistantText> : null}
+          {complete || hasDraftDelivery ? (
+            <AssistantText sender={agentDisplayName}>{item.result}</AssistantText>
+          ) : null}
           {complete || hasDraftDelivery ? (
             <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
               <FileCheck2 className="h-4 w-4 text-blue-600" />
@@ -215,6 +223,7 @@ function ToolLayer({ name, items }: { name: string; items: Array<{ label: string
 }
 
 export function ResearchMultiAgentDebugPanel({ detail, inspectorMode = "auto" }: { detail: ClawDetailData; inspectorMode?: "auto" | "open" | "closed" }) {
+  const mainSender = detail.overview.name;
   const [stage, setStage] = useState(0);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [composerText, setComposerText] = useState("");
@@ -307,7 +316,7 @@ export function ResearchMultiAgentDebugPanel({ detail, inspectorMode = "auto" }:
             {stage >= 1 ? <ClawAgentAction item={{ key: "insight-skill", type: "action", title: "调用需求洞察 skill", kind: "skill", status: "done", logs: ["识别研究对象、成果形态、证据要求与时间范围。"], source: "audit" }} expanded={false} onToggle={() => undefined} /> : null}
             {stage >= 2 ? <ClawAgentAction item={{ key: "clarify", type: "action", title: "澄清研究范围", kind: "user", status: stage === 2 ? "running" : "done", logs: [], source: "audit" }} expanded onToggle={() => undefined}><div className="space-y-3 text-sm text-slate-600"><p>为了让研究可验证，请确认：聚焦高校科研团队，并以近五年公开研究和模拟实验数据为依据，可以吗？</p><div className="flex gap-2"><span className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-blue-700">确认，按此范围继续</span><span className="rounded-md border border-slate-200 px-3 py-1.5">调整范围</span></div></div></ClawAgentAction> : null}
             {stage >= 3 ? <div className="flex justify-end"><div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">确认，按高校科研团队、近五年公开研究继续。</div></div> : null}
-            {stage >= 4 ? <AssistantText>{`已完成任务规划，将按照以下步骤推进研究：
+            {stage >= 4 ? <AssistantText sender={mainSender}>{`已完成任务规划，将按照以下步骤推进研究：
 
 1. 生成可验证研究假设，明确关键变量与验证方法
 2. 检索近五年高质量文献，建立核心文献证据矩阵
@@ -315,13 +324,13 @@ export function ResearchMultiAgentDebugPanel({ detail, inspectorMode = "auto" }:
 4. 整合假设、证据和图表，生成并修订论文初稿
 5. 按同行评审标准审核论文，汇总最终研究成果`}</AssistantText> : null}
             {stage >= 5 ? <ClawSubAgentSummonedEvent agentName="假设生成智能体" running={stage < 6} onOpen={() => setSelectedAgent("假设生成智能体")} /> : null}
-            {stage >= 6 ? <AssistantText>已收到假设生成结果。综合可验证性、证据可得性和研究成本，选择 H2 作为核心假设，并将文献检索拆分为预印本与技术演进、实证研究、同行评审与争议证据三个方向。</AssistantText> : null}
+            {stage >= 6 ? <AssistantText sender={mainSender}>已收到假设生成结果。综合可验证性、证据可得性和研究成本，选择 H2 作为核心假设，并将文献检索拆分为预印本与技术演进、实证研究、同行评审与争议证据三个方向。</AssistantText> : null}
             {stage >= 7 ? <><ClawSubAgentSummonedEvent agentName="文献检索智能体" running={stage < 8} onOpen={() => setSelectedAgent("文献检索智能体")} /><ClawSubAgentSummonedEvent agentName="文献检索智能体+1" running={stage < 8} onOpen={() => setSelectedAgent("文献检索智能体+1")} /><ClawSubAgentSummonedEvent agentName="文献检索智能体+2" running={stage < 8} onOpen={() => setSelectedAgent("文献检索智能体+2")} /></> : null}
-            {stage >= 8 ? <AssistantText>已收到三路文献检索结果。三个执行实例分别完成预印本、实证研究与同行评审文献检索，合并后的证据矩阵确认了研究热点、争议结论与证据缺口，我将据此继续下一轮分析。</AssistantText> : null}
+            {stage >= 8 ? <AssistantText sender={mainSender}>已收到三路文献检索结果。三个执行实例分别完成预印本、实证研究与同行评审文献检索，合并后的证据矩阵确认了研究热点、争议结论与证据缺口，我将据此继续下一轮分析。</AssistantText> : null}
             {stage >= 9 ? <><ClawSubAgentSummonedEvent agentName="科研绘图智能体" running={stage < 10} onOpen={() => setSelectedAgent("科研绘图智能体")} /><ClawSubAgentSummonedEvent agentName="论文生成智能体" running={stage < 11} onOpen={() => setSelectedAgent("论文生成智能体")} /></> : null}
-            {stage >= 10 ? <AssistantText>论文初稿的讨论章节缺少反例与局限性。我已向论文生成智能体追加修改要求，科研图表结果已验收通过。</AssistantText> : null}
-            {stage >= 11 ? <><AssistantText>论文修订版已通过阶段验收，现进入最终质量检查。</AssistantText><ClawSubAgentSummonedEvent agentName="论文审核智能体" running={stage < 12} onOpen={() => setSelectedAgent("论文审核智能体")} /></> : null}
-            {stage >= 12 ? <><AssistantText>所有子任务均已完成。论文、研究图表和审核意见已汇总，最终成果已生成。</AssistantText><div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/60 px-4 py-3"><FileCheck2 className="h-5 w-5 text-blue-600" /><span className="text-sm font-medium text-slate-800">科研协作效率影响研究报告.docx</span></div></> : null}
+            {stage >= 10 ? <AssistantText sender={mainSender}>论文初稿的讨论章节缺少反例与局限性。我已向论文生成智能体追加修改要求，科研图表结果已验收通过。</AssistantText> : null}
+            {stage >= 11 ? <><AssistantText sender={mainSender}>论文修订版已通过阶段验收，现进入最终质量检查。</AssistantText><ClawSubAgentSummonedEvent agentName="论文审核智能体" running={stage < 12} onOpen={() => setSelectedAgent("论文审核智能体")} /></> : null}
+            {stage >= 12 ? <><AssistantText sender={mainSender}>所有子任务均已完成。论文、研究图表和审核意见已汇总，最终成果已生成。</AssistantText><div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/60 px-4 py-3"><FileCheck2 className="h-5 w-5 text-blue-600" /><span className="text-sm font-medium text-slate-800">科研协作效率影响研究报告.docx</span></div></> : null}
             <p className="pt-2 text-center text-xs text-slate-400">← 上一步 · 点击页面或按 → 进入下一步</p>
           </div>
         </main>

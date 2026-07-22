@@ -23,6 +23,7 @@ import {
 } from "./constants";
 import { SectionCard } from "./section-card";
 import { canDeleteCapability } from "./utils";
+import { useWorkbenchEntity } from "@/components/claw-hub-next/workbench-entity-context";
 
 type CapabilitySectionProps = {
   panel: CapabilityPanelKey;
@@ -39,6 +40,10 @@ type CapabilitySectionProps = {
   onDeleteTool: (scope: CapabilityScope, id: string) => void;
   onToggleSkill: (scope: CapabilityScope, id: string, enabled: boolean) => void;
   onDeleteSkill: (scope: CapabilityScope, id: string) => void;
+  /** 子智能体等场景：隐藏「内置技能」分层，仅展示可配置技能列表 */
+  hideSkillPreset?: boolean;
+  /** 子智能体等场景：隐藏插件「内置/来源」筛选 */
+  hideToolOriginFilter?: boolean;
 };
 
 type ToolListRow = {
@@ -79,9 +84,22 @@ export function ClawCapabilitySection({
   onDeleteTool,
   onToggleSkill,
   onDeleteSkill,
+  hideSkillPreset = false,
+  hideToolOriginFilter = false,
 }: CapabilitySectionProps) {
+  const { configLabel } = useWorkbenchEntity();
+  const skillViewScopeLabels = useMemo(
+    () => ({
+      ...SKILL_VIEW_SCOPE_LABELS,
+      claw: configLabel,
+    }),
+    [configLabel]
+  );
+  const effectiveSkillScope: ToolSkillViewScope = hideSkillPreset ? "claw" : skillScope;
   const toolTotalCount = Object.values(capabilityConfig.tools).reduce((total, items) => total + items.length, 0);
-  const skillTotalCount = Object.values(capabilityConfig.skills).reduce((total, items) => total + items.length, 0);
+  const skillTotalCount = hideSkillPreset
+    ? capabilityConfig.skills.claw.length
+    : Object.values(capabilityConfig.skills).reduce((total, items) => total + items.length, 0);
   const skillPresetCount =
     capabilityConfig.skills.platform.length + capabilityConfig.skills.tenant.length;
 
@@ -90,11 +108,15 @@ export function ClawCapabilitySection({
   const [toolOriginFilter, setToolOriginFilter] = useState<ToolOriginFilter>("all");
   const toolRows = useMemo<ToolListRow[]>(
     () => [
-      ...capabilityConfig.tools.platform.map((item) => ({ item, scope: "platform" as const })),
-      ...capabilityConfig.tools.tenant.map((item) => ({ item, scope: "tenant" as const })),
+      ...(hideToolOriginFilter
+        ? []
+        : [
+            ...capabilityConfig.tools.platform.map((item) => ({ item, scope: "platform" as const })),
+            ...capabilityConfig.tools.tenant.map((item) => ({ item, scope: "tenant" as const })),
+          ]),
       ...capabilityConfig.tools.claw.map((item) => ({ item, scope: "claw" as const })),
     ],
-    [capabilityConfig.tools]
+    [capabilityConfig.tools, hideToolOriginFilter]
   );
   const toolKindTabs = useMemo<ToolKindTab[]>(() => {
     const counts = new Map<CapabilityToolKind, number>();
@@ -145,8 +167,9 @@ export function ClawCapabilitySection({
     };
   }, [capabilityConfig.skills, skillSearchQuery]);
 
-  const skillSearchMatchTotal =
-    filteredSkills.platform.length + filteredSkills.tenant.length + filteredSkills.claw.length;
+  const skillSearchMatchTotal = hideSkillPreset
+    ? filteredSkills.claw.length
+    : filteredSkills.platform.length + filteredSkills.tenant.length + filteredSkills.claw.length;
   const filteredPresetSkillCount = filteredSkills.platform.length + filteredSkills.tenant.length;
 
   return (
@@ -175,18 +198,20 @@ export function ClawCapabilitySection({
                   aria-label="按名称检索插件"
                 />
               </div>
-              <div className="w-full sm:w-[176px]">
-                <select
-                  value={toolOriginFilter}
-                  onChange={(event) => setToolOriginFilter(event.target.value as ToolOriginFilter)}
-                  className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-300"
-                  aria-label="按是否内置筛选插件"
-                >
-                  <option value="all">全部来源</option>
-                  <option value="builtin">内置</option>
-                  <option value="claw">Claw配置</option>
-                </select>
-              </div>
+              {hideToolOriginFilter ? null : (
+                <div className="w-full sm:w-[176px]">
+                  <select
+                    value={toolOriginFilter}
+                    onChange={(event) => setToolOriginFilter(event.target.value as ToolOriginFilter)}
+                    className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-300"
+                    aria-label="按是否内置筛选插件"
+                  >
+                    <option value="all">全部来源</option>
+                    <option value="builtin">内置</option>
+                    <option value="claw">{configLabel}</option>
+                  </select>
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
                 {onSetAllToolsEnabled ? (
                   <Button
@@ -296,16 +321,18 @@ export function ClawCapabilitySection({
             </div>
           }
         >
+          {hideSkillPreset ? null : (
           <PresetClawViewTabs
             scope={skillScope}
             presetCount={skillPresetCount}
             clawCount={capabilityConfig.skills.claw.length}
             onChange={onSkillScopeChange}
             prefix="skills"
-            labels={SKILL_VIEW_SCOPE_LABELS}
+            labels={skillViewScopeLabels}
           />
+          )}
 
-          {skillScope === "preset" ? (
+          {effectiveSkillScope === "preset" ? (
             skillPresetCount > 0 ? (
               filteredPresetSkillCount > 0 ? (
                 <CapabilityTable>
@@ -569,6 +596,7 @@ function CapabilityToolKindCell({ kind }: { kind: CapabilityToolKind }) {
 }
 
 function ToolOriginBadge({ scope }: { scope: CapabilityScope }) {
+  const { configLabel } = useWorkbenchEntity();
   const isBuiltin = getToolOrigin(scope) === "builtin";
   return (
     <Badge
@@ -577,7 +605,7 @@ function ToolOriginBadge({ scope }: { scope: CapabilityScope }) {
         isBuiltin ? "border-slate-200 bg-slate-50 text-slate-600" : "border-blue-100 bg-blue-50 text-blue-700"
       )}
     >
-      {isBuiltin ? "内置" : "Claw配置"}
+      {isBuiltin ? "内置" : configLabel}
     </Badge>
   );
 }

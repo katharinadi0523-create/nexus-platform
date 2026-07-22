@@ -20,6 +20,7 @@ import type { CapabilityAgentItem, CapabilityKnowledgeItem, CapabilitySkillItem,
 import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 import { SectionCard } from "./section-card";
+import { useWorkbenchEntity } from "@/components/claw-hub-next/workbench-entity-context";
 
 type Props = {
   agents: CapabilityAgentItem[];
@@ -37,6 +38,7 @@ const REFERENCE_CANDIDATES: CapabilityAgentItem[] = [
 ];
 
 export function ClawAgentResourceSection({ agents, clawDetail, compact = false, onChange }: Props) {
+  const { entityLabel } = useWorkbenchEntity();
   const [query, setQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CapabilityAgentItem | null>(null);
@@ -60,7 +62,7 @@ export function ClawAgentResourceSection({ agents, clawDetail, compact = false, 
   function createAgent() {
     const id = `agent-${Date.now()}`;
     setEditingId(id);
-    setDraft({ id, name: "", description: "", enabled: true, target: "Claw私有智能体", primaryModel: PRESET_MODEL_IDS[0], fallbackModel: PRESET_MODEL_IDS[1], prompt: "", sourceType: "created", resources: { skills: [], tools: [], knowledge: [] } });
+    setDraft({ id, name: "", description: "", enabled: true, target: `${entityLabel}私有智能体`, primaryModel: PRESET_MODEL_IDS[0], fallbackModel: PRESET_MODEL_IDS[1], prompt: "", sourceType: "created", resources: { skills: [], tools: [], knowledge: [] } });
   }
 
   function addReference() {
@@ -123,7 +125,7 @@ export function ClawAgentResourceSection({ agents, clawDetail, compact = false, 
         <div className={cn("flex gap-3", compact ? "flex-col" : "flex-col sm:flex-row sm:items-center sm:justify-between")}>
           <div className="min-w-0">
             <h2 className="whitespace-nowrap text-xl font-semibold text-slate-950">智能体</h2>
-            <p className="mt-1 text-sm text-slate-500">管理当前 Claw 在任务执行中可调度的专业智能体。</p>
+            <p className="mt-1 text-sm text-slate-500">管理当前 {entityLabel} 在任务执行中可调度的专业智能体。</p>
           </div>
           <div className={cn("flex w-full items-center gap-2", !compact && "sm:w-auto")}>
             <div className={cn("relative min-w-0 flex-1", !compact && "sm:w-[320px]")}>

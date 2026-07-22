@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { getManagedSkillConfigOptions, getMarketplaceSkillConfigOptions } from "@/lib/mock/skills-marketplace";
 import { cn } from "@/lib/utils";
+import { useWorkbenchEntity } from "@/components/claw-hub-next/workbench-entity-context";
 
 export interface SkillConfigSelection {
   id: string;
@@ -70,6 +71,7 @@ function shouldEllipsisBefore(page: number, prev: number | undefined): boolean {
 }
 
 export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfigDialogProps) {
+  const { configLabel } = useWorkbenchEntity();
   const [sourceTab, setSourceTab] = useState<SkillSourceTab>("skillshub");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -357,7 +359,7 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
                   disabled={!selectedIds.length}
                   onClick={handleSubmit}
                 >
-                  添加到 Claw配置
+                  添加到{configLabel}
                 </Button>
               </div>
             </div>

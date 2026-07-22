@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   ArrowLeft,
@@ -45,6 +46,15 @@ import { ClawCoreConfigSection } from "@/components/claw-hub-next/detail/core-co
 import { ClawInteractiveChatPanel } from "@/components/claw-hub-next/interactive-chat-panel";
 import { ResearchMultiAgentDebugPanel } from "@/components/claw-hub-next/research-multi-agent-debug-panel";
 import { ClawWorkspaceSection } from "@/components/claw-hub-next/detail/workspace-section";
+import { WorkbenchEntityProvider } from "@/components/claw-hub-next/workbench-entity-context";
+import {
+  MultiAgentMainAgentConfig,
+} from "@/components/agent/multi-agent-main-agent-config";
+import {
+  MULTI_AGENT_ROOT_NODE_ID,
+  MultiAgentOrchestrationPanel,
+} from "@/components/agent/multi-agent-orchestration-panel";
+import { MultiAgentSubAgentConfig } from "@/components/agent/multi-agent-sub-agent-config";
 import {
   type DetailSectionKey,
   type KnowledgePanelKey,
@@ -119,6 +129,10 @@ import {
 } from "@/lib/mock/claw-hub-next";
 import { ModelSelector, type ModelParams } from "@/components/agent-editor/ModelSelector";
 import { PRESET_MODEL_IDS, getDefaultModelParams, type ModelParamKey } from "@/lib/model-schemas";
+import {
+  formatMultiAgentUpdatedAt,
+  upsertPublishedMultiAgent,
+} from "@/lib/published-multi-agents";
 import { cn } from "@/lib/utils";
 
 const CLAW_MODEL_SELECTOR_HIDDEN_KEYS: readonly ModelParamKey[] = ["context_turns", "current_time"];
@@ -303,8 +317,21 @@ function buildEditableDistributionChannels(
 
 function ClawPublishedBadge() {
   return (
-    <span className="inline-flex shrink-0 items-center rounded-[4px] border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-[4px] border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
       已发布
+    </span>
+  );
+}
+
+function MultiAgentStatusBadge({ published }: { published: boolean }) {
+  if (published) {
+    return <ClawPublishedBadge />;
+  }
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-[4px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-500">
+      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" aria-hidden />
+      未发布
     </span>
   );
 }
@@ -496,13 +523,80 @@ function normalizeAutomatedTaskExecutionStatus(status: string): ClawAutomatedTas
   return status === "failure" ? "failure" : "success";
 }
 
-export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
+export type ClawDetailWorkbenchMode = "claw" | "multi-agent";
+
+export type ClawDetailWorkbenchProps = {
+  detail: ClawDetailData;
+  /** claw：原 Claw 详情；multi-agent：多智能体创建/配置（无顶栏开关、无渠道） */
+  mode?: ClawDetailWorkbenchMode;
+  backHref?: string;
+  backAriaLabel?: string;
+};
+
+export function ClawDetailWorkbench({
+  detail,
+  mode = "claw",
+  backHref = "/claw-hub-next",
+  backAriaLabel = "返回 Claw 列表",
+}: ClawDetailWorkbenchProps) {
+  const isMultiAgentMode = mode === "multi-agent";
+  const entityLabel = isMultiAgentMode ? "多智能体" : "Claw";
+  const router = useRouter();
   const [activeSection, setActiveSection] = useState<DetailSectionKey>("core");
+  const [entityName, setEntityName] = useState(detail.overview.name);
+  const [entityDescription, setEntityDescription] = useState(detail.overview.summary);
   const [subAgentConfigEnabled, setSubAgentConfigEnabled] = useState(
-    () => detail.capabilityConfig.agents.claw.length > 0
+    () => isMultiAgentMode || detail.capabilityConfig.agents.claw.length > 0
+  );
+
+  const navGroups = useMemo(() => {
+    const multiAgentHiddenNavKeys = new Set<DetailSectionKey>([
+      "channels",
+      "skills",
+      "tools",
+      "knowledge",
+      "agents",
+    ]);
+    return CLAW_DETAIL_NAV_GROUPS.map((group) => ({
+      ...group,
+      items: group.items
+        .filter((item) => !(isMultiAgentMode && multiAgentHiddenNavKeys.has(item.value)))
+        .map((item) => {
+          if (item.value === "core") {
+            return {
+              ...item,
+              label: isMultiAgentMode ? "多智能体配置" : `${entityLabel}配置`,
+            };
+          }
+          return item;
+        }),
+    })).filter((group) => group.items.length > 0);
+  }, [isMultiAgentMode, entityLabel]);
+
+  const automatedTaskPanelItems = useMemo(
+    () => [
+      {
+        key: "task-list" as const,
+        label: "任务列表",
+        description: `管理当前 ${entityLabel} 已配置的自动化任务。`,
+      },
+      {
+        key: "execution-history" as const,
+        label: "执行历史",
+        description: "查看每次触发与执行产生的历史记录。",
+      },
+    ],
+    [entityLabel]
   );
   const [debugOpen, setDebugOpen] = useState(false);
   const [configCollapsed, setConfigCollapsed] = useState(false);
+  const [orchestrationTreeCollapsed, setOrchestrationTreeCollapsed] = useState(false);
+  const [selectedOrchestrationNodeId, setSelectedOrchestrationNodeId] =
+    useState(MULTI_AGENT_ROOT_NODE_ID);
+  const [mainAgentName, setMainAgentName] = useState("主智能体");
+  const [mainAgentPrompt, setMainAgentPrompt] = useState(
+    () => detail.coreFiles.find((file) => file.key === "agent")?.content ?? ""
+  );
   const [debugWidth, setDebugWidth] = useState(DEBUG_SPLIT_DEFAULT_DEBUG_WIDTH);
   const [isResizingDebug, setIsResizingDebug] = useState(false);
   const [splitWidth, setSplitWidth] = useState(0);
@@ -720,14 +814,17 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const isPublished = publishStatus === "已发布";
   const agentBomTree = useMemo(
     () =>
-      buildAgentBomTreeFromDetail({
-        ...detail,
-        capabilityConfig,
-        knowledgeAssets,
-        securityManagement,
-        resourceConfig: detail.resourceConfig,
-      }),
-    [detail, capabilityConfig, knowledgeAssets, securityManagement]
+      buildAgentBomTreeFromDetail(
+        {
+          ...detail,
+          capabilityConfig,
+          knowledgeAssets,
+          securityManagement,
+          resourceConfig: detail.resourceConfig,
+        },
+        entityLabel
+      ),
+    [detail, capabilityConfig, knowledgeAssets, securityManagement, entityLabel]
   );
   const isApiEffective = isPublished && apiPublishEffective;
   const canConfirmShelf = shelfAgentTypes.length > 0;
@@ -1215,18 +1312,35 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
 
   function handlePublishValidationPassed() {
     const wasPublished = publishStatus === "已发布";
+    const publishedName = entityName.trim() || detail.overview.name;
+
+    if (isMultiAgentMode) {
+      upsertPublishedMultiAgent({
+        id: detail.overview.id || `multi-agent-${Date.now()}`,
+        name: publishedName,
+        desc: entityDescription.trim() || detail.overview.summary,
+        updatedAt: formatMultiAgentUpdatedAt(),
+      });
+      setPublishStatus("已发布");
+      setApiPublishEffective(true);
+      setPublishValidationOpen(false);
+      toast.success(`已发布：${publishedName}`);
+      router.push("/agent");
+      return;
+    }
+
     setPublishStatus("已发布");
     setApiPublishEffective(true);
     if (wasPublished) {
-      toast.success(`校验通过：${detail.overview.name}，API 调用已生效。`);
+      toast.success(`校验通过：${publishedName}，API 调用已生效。`);
       return;
     }
-    toast.success(`已发布：${detail.overview.name}，API 调用已生效。`);
+    toast.success(`已发布：${publishedName}，API 调用已生效。`);
   }
 
   function handleOpenShelfDialog() {
     if (!isPublished) {
-      toast.info("请先发布 Claw，再上架到智能体广场。");
+      toast.info(`请先发布 ${entityLabel}，再上架到智能体广场。`);
       return;
     }
 
@@ -1268,6 +1382,66 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
     toast.success(enabled ? "已开启子智能体配置" : "已关闭子智能体配置，已有配置将保留");
   }
 
+  function handleAddOrchestrationSubAgent() {
+    setCapabilityConfig((current) => {
+      const nextIndex = current.agents.claw.length + 1;
+      const nextAgent = {
+        id: `sub-agent-${Date.now()}`,
+        name: `子智能体 ${nextIndex}`,
+        description: "",
+        enabled: true,
+        target: "",
+        primaryModel: clawPrimaryModel,
+        fallbackModel: pickDefaultFallbackModel(clawPrimaryModel),
+        prompt: "",
+        sourceType: "created" as const,
+        resources: {
+          skills: [],
+          tools: [],
+          knowledge: [],
+        },
+      };
+      return {
+        ...current,
+        agents: {
+          ...current.agents,
+          claw: [...current.agents.claw, nextAgent],
+        },
+      };
+    });
+    setSubAgentConfigEnabled(true);
+    toast.success("已添加子智能体");
+  }
+
+  function handleRemoveOrchestrationSubAgent(agentId: string) {
+    setCapabilityConfig((current) => ({
+      ...current,
+      agents: {
+        ...current.agents,
+        claw: current.agents.claw.filter((agent) => agent.id !== agentId),
+      },
+    }));
+    if (selectedOrchestrationNodeId === agentId) {
+      setSelectedOrchestrationNodeId(MULTI_AGENT_ROOT_NODE_ID);
+    }
+    toast.success("已删除子智能体");
+  }
+
+  function handleUpdateOrchestrationSubAgent(
+    agentId: string,
+    patch: Partial<(typeof capabilityConfig.agents.claw)[number]>
+  ) {
+    setCapabilityConfig((current) => ({
+      ...current,
+      agents: {
+        ...current.agents,
+        claw: current.agents.claw.map((agent) =>
+          agent.id === agentId ? { ...agent, ...patch } : agent
+        ),
+      },
+    }));
+  }
+
   const configSection = activeSection === "chat" ? "core" : activeSection;
   const compactDebugSplit = debugOpen && splitWidth > 0 && splitWidth < DEBUG_SPLIT_COLLAPSE_WIDTH;
   const debugPaneWidth =
@@ -1293,54 +1467,90 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
   const debugInspectorToggleLabel = showDebugInspector ? "收起侧栏" : "展开侧栏";
 
   return (
+    <WorkbenchEntityProvider entityLabel={entityLabel}>
     <div className="claw-detail-muted-theme flex h-full min-h-0 flex-col overflow-hidden bg-slate-50">
       <section className="shrink-0 border-b border-slate-200 bg-white px-5 py-3">
         <div className="flex min-h-12 items-center gap-3">
           <Link
-            href="/claw-hub-next"
+            href={backHref}
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-            aria-label="返回 Claw 列表"
+            aria-label={backAriaLabel}
             title="返回"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <h1 className="min-w-0 truncate text-xl font-semibold text-slate-950">
-              {detail.overview.name}
-            </h1>
-            {isPublished ? <ClawPublishedBadge /> : null}
-            {isPublished ? <AgentBomBadge tree={agentBomTree} versionLabel={detail.overview.version} /> : null}
-            <div className="ml-1 flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3">
-              <span className="text-xs font-medium text-slate-500">多智能体</span>
-              <Switch
-                checked={subAgentConfigEnabled}
-                onCheckedChange={handleSubAgentConfigToggle}
-                aria-label="启用多智能体配置"
-                title={subAgentConfigEnabled ? "关闭后将不能配置子智能体" : "开启后可配置子智能体"}
-                className="data-[state=checked]:bg-blue-600"
+          {isMultiAgentMode ? (
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <Input
+                  value={entityName}
+                  onChange={(event) => setEntityName(event.target.value)}
+                  placeholder="请输入多智能体名称"
+                  aria-label="多智能体名称"
+                  className="h-8 max-w-[420px] min-w-[160px] truncate rounded-md border-transparent bg-transparent px-1.5 text-lg font-semibold text-slate-950 shadow-none hover:border-slate-200 hover:bg-white focus-visible:border-blue-300 focus-visible:bg-white focus-visible:ring-blue-100"
+                />
+                <MultiAgentStatusBadge published={isPublished} />
+              </div>
+              <Input
+                value={entityDescription}
+                onChange={(event) => setEntityDescription(event.target.value)}
+                placeholder="请输入多智能体描述"
+                aria-label="多智能体描述"
+                className="mt-0.5 h-7 max-w-[640px] truncate rounded-md border-transparent bg-transparent px-1.5 text-sm text-slate-500 shadow-none hover:border-slate-200 hover:bg-white focus-visible:border-blue-300 focus-visible:bg-white focus-visible:ring-blue-100"
               />
             </div>
-          </div>
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <h1 className="min-w-0 truncate text-xl font-semibold text-slate-950">
+                {entityName || detail.overview.name}
+              </h1>
+              {isPublished ? <ClawPublishedBadge /> : null}
+              {isPublished ? <AgentBomBadge tree={agentBomTree} versionLabel={detail.overview.version} /> : null}
+              <div className="ml-1 flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3">
+                <span className="text-xs font-medium text-slate-500">多智能体</span>
+                <Switch
+                  checked={subAgentConfigEnabled}
+                  onCheckedChange={handleSubAgentConfigToggle}
+                  aria-label="启用多智能体配置"
+                  title={subAgentConfigEnabled ? "关闭后将不能配置子智能体" : "开启后可配置子智能体"}
+                  className="data-[state=checked]:bg-blue-600"
+                />
+              </div>
+            </div>
+          )}
           <div className="ml-auto flex shrink-0 items-center gap-2">
             <Button
               type="button"
               size="sm"
+              variant={isMultiAgentMode ? "outline" : "default"}
               className={cn(
-                "h-10 rounded-md border border-blue-600 bg-blue-600 px-5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(37,99,235,0.30)] transition-all hover:-translate-y-px hover:border-blue-700 hover:bg-blue-700 hover:shadow-[0_6px_18px_rgba(37,99,235,0.34)] focus-visible:ring-blue-500/30",
-                debugOpen && "border-blue-800 bg-blue-800 shadow-[0_4px_14px_rgba(30,64,175,0.28)] hover:border-blue-900 hover:bg-blue-900"
+                isMultiAgentMode
+                  ? cn(
+                      "h-9 rounded-md border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-600 shadow-none hover:border-slate-400 hover:bg-slate-50 hover:text-slate-800",
+                      debugOpen && "border-blue-300 bg-blue-50 text-blue-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-800"
+                    )
+                  : cn(
+                      "h-10 rounded-md border border-blue-600 bg-blue-600 px-5 text-sm font-semibold text-white shadow-[0_4px_14px_rgba(37,99,235,0.30)] transition-all hover:-translate-y-px hover:border-blue-700 hover:bg-blue-700 hover:shadow-[0_6px_18px_rgba(37,99,235,0.34)] focus-visible:ring-blue-500/30",
+                      debugOpen &&
+                        "border-blue-800 bg-blue-800 shadow-[0_4px_14px_rgba(30,64,175,0.28)] hover:border-blue-900 hover:bg-blue-900"
+                    )
               )}
               onClick={handleToggleDebugPanel}
             >
-              <MessageSquareText className="size-[18px]" />
-              对话调试
+              {isMultiAgentMode ? null : <MessageSquareText className="size-[18px]" />}
+              {isMultiAgentMode ? "预览与调试" : "对话调试"}
             </Button>
             <Popover open={publishPanelOpen} onOpenChange={setPublishPanelOpen}>
               <PopoverTrigger asChild>
                 <Button
                   type="button"
-                  variant="outline"
                   size="sm"
-                  className="h-9 rounded-md border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-600 shadow-none hover:border-slate-400 hover:bg-slate-50 hover:text-slate-800"
+                  className={cn(
+                    isMultiAgentMode
+                      ? "h-9 rounded-md bg-blue-600 px-3.5 text-sm font-medium text-white shadow-none hover:bg-blue-700"
+                      : "h-9 rounded-md border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-600 shadow-none hover:border-slate-400 hover:bg-slate-50 hover:text-slate-800"
+                  )}
+                  variant={isMultiAgentMode ? "default" : "outline"}
                 >
                   发布
                   <ChevronDown className="h-4 w-4" />
@@ -1437,7 +1647,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
             )}
           >
             <nav className={cn("h-full overflow-y-auto py-5", compactConfigNav ? "px-2" : "px-4")}>
-              {CLAW_DETAIL_NAV_GROUPS.map((group) => (
+              {navGroups.map((group) => (
                 <div key={group.title} className={cn(compactConfigNav ? "mb-3" : "mb-6", "last:mb-0")}>
                   {compactConfigNav ? null : (
                     <div className="mb-2 px-2 text-xs font-medium text-slate-400">{group.title}</div>
@@ -1475,6 +1685,18 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               ))}
             </nav>
           </aside>
+          {isMultiAgentMode && configSection === "core" ? (
+            <MultiAgentOrchestrationPanel
+              collapsed={orchestrationTreeCollapsed}
+              onCollapsedChange={setOrchestrationTreeCollapsed}
+              selectedNodeId={selectedOrchestrationNodeId}
+              onSelectNode={setSelectedOrchestrationNodeId}
+              rootLabel={mainAgentName || "主智能体"}
+              subAgents={capabilityConfig.agents.claw}
+              onAddSubAgent={handleAddOrchestrationSubAgent}
+              onRemoveSubAgent={handleRemoveOrchestrationSubAgent}
+            />
+          ) : null}
           <div
             className={cn(
               "min-h-0 min-w-0 flex-1",
@@ -1520,28 +1742,102 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
           </TabsContent>
 
           <TabsContent value="core" className="mt-0">
-            <ClawCoreConfigSection
-              agentMdContent={agentMdDraft}
-              primaryModel={clawPrimaryModel}
-              primaryModelParams={clawPrimaryModelParams}
-              fallbackModels={clawFallbackModels}
-              hiddenModelParamKeys={CLAW_MODEL_SELECTOR_HIDDEN_KEYS}
-              onAgentMdContentChange={setAgentMdDraft}
-              onSaveAgentMd={handleSaveAgentMd}
-              onPrimaryModelChange={setClawPrimaryModel}
-              onPrimaryModelParamsChange={setClawPrimaryModelParams}
-              onAddFallbackModel={addClawFallbackModel}
-              onRemoveFallbackModel={removeClawFallbackModel}
-              onFallbackModelChange={(rowId, model) =>
-                setClawFallbackModels((rows) => rows.map((r) => (r.id === rowId ? { ...r, model } : r)))
-              }
-              onFallbackModelParamsChange={(rowId, params) =>
-                setClawFallbackModels((rows) => rows.map((r) => (r.id === rowId ? { ...r, params } : r)))
-              }
-              isFallbackModelDuplicate={(index) =>
-                isClawFallbackModelDuplicate(clawPrimaryModel, clawFallbackModels, index)
-              }
-            />
+            {isMultiAgentMode ? (
+              selectedOrchestrationNodeId === MULTI_AGENT_ROOT_NODE_ID ? (
+                <MultiAgentMainAgentConfig
+                  agentName={mainAgentName}
+                  onAgentNameChange={setMainAgentName}
+                  prompt={mainAgentPrompt}
+                  onPromptChange={setMainAgentPrompt}
+                  primaryModel={clawPrimaryModel}
+                  primaryModelParams={clawPrimaryModelParams}
+                  fallbackModels={clawFallbackModels}
+                  hiddenModelParamKeys={CLAW_MODEL_SELECTOR_HIDDEN_KEYS}
+                  onPrimaryModelChange={setClawPrimaryModel}
+                  onPrimaryModelParamsChange={setClawPrimaryModelParams}
+                  onAddFallbackModel={addClawFallbackModel}
+                  onRemoveFallbackModel={removeClawFallbackModel}
+                  onFallbackModelChange={(rowId, model) =>
+                    setClawFallbackModels((rows) => rows.map((r) => (r.id === rowId ? { ...r, model } : r)))
+                  }
+                  onFallbackModelParamsChange={(rowId, params) =>
+                    setClawFallbackModels((rows) => rows.map((r) => (r.id === rowId ? { ...r, params } : r)))
+                  }
+                  isFallbackModelDuplicate={(index) =>
+                    isClawFallbackModelDuplicate(clawPrimaryModel, clawFallbackModels, index)
+                  }
+                  capabilityConfig={capabilityConfig}
+                  toolScope={toolScope}
+                  onToolScopeChange={setToolScope}
+                  skillScope={skillScope}
+                  onSkillScopeChange={setSkillScope}
+                  onOpenToolConfigDialog={handleOpenToolConfigDialog}
+                  onOpenSkillConfigDialog={handleOpenSkillConfigDialog}
+                  onSetAllSkillsEnabled={handleSetAllSkillsEnabled}
+                  onSetAllToolsEnabled={handleSetAllToolsEnabled}
+                  onToggleTool={handleToggleTool}
+                  onDeleteTool={handleDeleteTool}
+                  onToggleSkill={handleToggleSkill}
+                  onDeleteSkill={handleDeleteSkill}
+                  activeKnowledgePanel={activeKnowledgePanel}
+                  onActiveKnowledgePanelChange={setActiveKnowledgePanel}
+                  knowledgeAssets={knowledgeAssets}
+                  onDeleteKnowledgeBase={handleDeleteKnowledgeBase}
+                  onDeleteDatabase={handleDeleteDatabase}
+                  onDeleteOntology={handleDeleteOntologyObject}
+                  onDeleteTermBank={handleDeleteTermBank}
+                  onOpenKnowledgeBaseConfig={() => setKnowledgeConfigDialogOpen(true)}
+                  onOpenDatabaseConfig={() => toast.info("配置数据库入口即将接入。")}
+                  onOpenOntologyConfig={() => toast.info("配置本体对象入口即将接入。")}
+                  onOpenTermBankConfig={() => toast.info("配置术语库入口即将接入。")}
+                />
+              ) : (
+                (() => {
+                  const selectedSubAgent = capabilityConfig.agents.claw.find(
+                    (agent) => agent.id === selectedOrchestrationNodeId
+                  );
+                  if (!selectedSubAgent) {
+                    return (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
+                        未找到该子智能体，请从左侧树重新选择。
+                      </div>
+                    );
+                  }
+                  return (
+                    <MultiAgentSubAgentConfig
+                      agent={selectedSubAgent}
+                      clawDetail={{ ...detail, capabilityConfig }}
+                      onChange={(patch) =>
+                        handleUpdateOrchestrationSubAgent(selectedSubAgent.id, patch)
+                      }
+                    />
+                  );
+                })()
+              )
+            ) : (
+              <ClawCoreConfigSection
+                agentMdContent={agentMdDraft}
+                primaryModel={clawPrimaryModel}
+                primaryModelParams={clawPrimaryModelParams}
+                fallbackModels={clawFallbackModels}
+                hiddenModelParamKeys={CLAW_MODEL_SELECTOR_HIDDEN_KEYS}
+                onAgentMdContentChange={setAgentMdDraft}
+                onSaveAgentMd={handleSaveAgentMd}
+                onPrimaryModelChange={setClawPrimaryModel}
+                onPrimaryModelParamsChange={setClawPrimaryModelParams}
+                onAddFallbackModel={addClawFallbackModel}
+                onRemoveFallbackModel={removeClawFallbackModel}
+                onFallbackModelChange={(rowId, model) =>
+                  setClawFallbackModels((rows) => rows.map((r) => (r.id === rowId ? { ...r, model } : r)))
+                }
+                onFallbackModelParamsChange={(rowId, params) =>
+                  setClawFallbackModels((rows) => rows.map((r) => (r.id === rowId ? { ...r, params } : r)))
+                }
+                isFallbackModelDuplicate={(index) =>
+                  isClawFallbackModelDuplicate(clawPrimaryModel, clawFallbackModels, index)
+                }
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="model" className="mt-0">
@@ -1881,7 +2177,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="inline-flex w-fit rounded-md border border-slate-200 bg-slate-50 p-1">
-                    {AUTOMATED_TASK_PANEL_ITEMS.map((panel) => (
+                    {automatedTaskPanelItems.map((panel) => (
                       <button
                         key={panel.key}
                         type="button"
@@ -1898,7 +2194,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                     ))}
                   </div>
                   <div className="max-w-2xl text-sm leading-6 text-slate-500">
-                    {AUTOMATED_TASK_PANEL_ITEMS.find((panel) => panel.key === activeAutomatedTaskPanel)?.description}
+                    {automatedTaskPanelItems.find((panel) => panel.key === activeAutomatedTaskPanel)?.description}
                   </div>
                 </div>
 
@@ -2069,7 +2365,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                       <div>
                         <h3 className="text-base font-semibold text-slate-950">自动化任务执行历史</h3>
                         <p className="mt-1 text-sm leading-6 text-slate-500">
-                          用于查看当前 Claw 的自动化任务历史执行记录，一条记录对应一次任务触发与执行。
+                          用于查看当前 {entityLabel} 的自动化任务历史执行记录，一条记录对应一次任务触发与执行。
                         </p>
                       </div>
                       <div className="text-xs font-medium text-slate-400">排序：最新优先</div>
@@ -2760,7 +3056,8 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-hidden">
-                  {detail.overview.id === "claw-scientific-research" ? (
+                  {detail.overview.id === "claw-scientific-research" ||
+                  isMultiAgentMode ? (
                     <ResearchMultiAgentDebugPanel key={`research-debug-${debugPanelKey}`} detail={detail} inspectorMode={debugInspectorMode} />
                   ) : (
                     <ClawInteractiveChatPanel
@@ -2986,7 +3283,7 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
                       )
                     }
                     className="min-h-[120px] resize-y rounded-md border-slate-200 text-sm leading-6"
-                    placeholder="说明该 Agent 的能力、专长及在本 Claw 中的用途…"
+                    placeholder={`说明该 Agent 的能力、专长及在本 ${entityLabel} 中的用途…`}
                   />
                 </div>
               </div>
@@ -3029,10 +3326,11 @@ export function ClawDetailWorkbench({ detail }: { detail: ClawDetailData }) {
       <ClawPublishValidationDialog
         open={publishValidationOpen}
         onOpenChange={setPublishValidationOpen}
-        agentName={detail.overview.name}
+        agentName={entityName.trim() || detail.overview.name}
         confirmLabel={isPublished ? "确认生效" : "确认发布"}
         onValidationPassed={handlePublishValidationPassed}
       />
     </div>
+    </WorkbenchEntityProvider>
   );
 }

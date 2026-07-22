@@ -18,6 +18,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import {
+  replaceClawLabel,
+  useWorkbenchEntity,
+} from "@/components/claw-hub-next/workbench-entity-context";
 
 export type ToolConfigKind = "workflow" | "mcp" | "plugin" | "ontology_action";
 
@@ -268,6 +272,7 @@ function shouldEllipsisBefore(page: number, prev: number | undefined): boolean {
 }
 
 export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDialogProps) {
+  const { entityLabel, configLabel } = useWorkbenchEntity();
   const [activeKind, setActiveKind] = useState<ToolConfigKind>("mcp");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -436,7 +441,12 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                           size="sm"
                           className="h-8 border-slate-300 bg-white px-3 text-slate-800 shadow-none hover:bg-slate-50"
                           onClick={() =>
-                            toast.message(item.name, { description: item.description || item.hint })
+                            toast.message(item.name, {
+                              description: replaceClawLabel(
+                                item.description || item.hint,
+                                entityLabel
+                              ),
+                            })
                           }
                         >
                           查看
@@ -551,7 +561,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                   disabled={!selectedIds.length}
                   onClick={handleSubmit}
                 >
-                  添加到 Claw配置
+                  添加到{configLabel}
                 </Button>
               </div>
             </div>

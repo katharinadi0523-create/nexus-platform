@@ -204,7 +204,7 @@ export function mergeClawToolSelections(clawTools: CapabilityToolItem[], selecti
       name: selection.name,
       description: selection.description,
       enabled: true,
-      badge: "Claw配置",
+      badge: "专属配置",
       meta: TOOL_CONFIG_KIND_LABELS[selection.kind],
       kind: selection.kind,
       origin: "claw_only",

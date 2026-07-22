@@ -269,13 +269,14 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const isClawDetailPage = pathname.startsWith("/claw-hub-next/claws/");
+  const isMultiAgentCreatePage = pathname.startsWith("/agent/multi-agent");
   const isSpaceOperationsPage = pathname.startsWith("/space-operations");
   /** 仅技能广场（/skills-hub、/skills）：灰蓝渐变壳底；其它路由不套广场背景 */
   const isSkillsPlazaPage =
     pathname.startsWith("/skills-hub") || pathname === "/skills";
   const isSkillsManagementPage = pathname.startsWith("/skills-management");
   const isOpenApiManagementPage = pathname.startsWith("/openapi-management");
-  if (isClawDetailPage) {
+  if (isClawDetailPage || isMultiAgentCreatePage) {
     return (
       <>
         <main className="h-screen min-h-0 overflow-hidden bg-slate-50">{children}</main>

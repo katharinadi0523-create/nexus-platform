@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Bot,
   ChevronLeft,
   ChevronRight,
-  GitBranch,
+  Network,
   Plus,
   RefreshCw,
   Search,
@@ -32,6 +32,11 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { getAllAgents } from "@/lib/agent-data";
+import {
+  getPublishedMultiAgents,
+  removePublishedMultiAgent,
+  type PublishedMultiAgentItem,
+} from "@/lib/published-multi-agents";
 
 interface Agent {
   id: string;
@@ -53,6 +58,17 @@ function convertAgentProfileToAgent(profile: ReturnType<typeof getAllAgents>[0])
   };
 }
 
+function convertPublishedMultiAgent(item: PublishedMultiAgentItem): Agent {
+  return {
+    id: item.id,
+    name: item.name,
+    type: item.type,
+    status: item.status,
+    desc: item.desc,
+    updatedAt: item.updatedAt,
+  };
+}
+
 const AGENTS_STATUS_MAP: Record<string, string> = {
   "agent-situational": "已发布",
   "agent-intent-analysis": "已发布",
@@ -67,20 +83,28 @@ export default function AgentPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
+  const [publishedMultiAgents, setPublishedMultiAgents] = useState<PublishedMultiAgentItem[]>([]);
+
+  useEffect(() => {
+    setPublishedMultiAgents(getPublishedMultiAgents());
+  }, []);
 
   const agents = useMemo(() => {
-    return getAllAgents().map((profile) => {
+    const baseAgents = getAllAgents().map((profile) => {
       const agent = convertAgentProfileToAgent(profile);
       if (AGENTS_STATUS_MAP[agent.id]) {
         agent.status = AGENTS_STATUS_MAP[agent.id];
       }
       return agent;
     });
-  }, []);
+    const multiAgents = publishedMultiAgents.map(convertPublishedMultiAgent);
+    return [...multiAgents, ...baseAgents];
+  }, [publishedMultiAgents]);
 
-  const filteredAgents = agents.filter((agent) =>
-    agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    agent.desc.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredAgents = agents.filter(
+    (agent) =>
+      agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      agent.desc.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const totalPages = Math.max(1, Math.ceil(filteredAgents.length / itemsPerPage));
@@ -88,6 +112,7 @@ export default function AgentPage() {
   const paginatedAgents = filteredAgents.slice(startIndex, startIndex + itemsPerPage);
 
   const handleRefresh = () => {
+    setPublishedMultiAgents(getPublishedMultiAgents());
     toast.success("刷新成功");
   };
 
@@ -96,6 +121,10 @@ export default function AgentPage() {
   };
 
   const handleDelete = (agent: Agent) => {
+    if (agent.type === "多智能体") {
+      removePublishedMultiAgent(agent.id);
+      setPublishedMultiAgents(getPublishedMultiAgents());
+    }
     toast.success(`已删除：${agent.name}`);
   };
 
@@ -171,6 +200,12 @@ export default function AgentPage() {
                   <Workflow className="h-4 w-4 text-slate-500" />
                   工作流智能体
                 </DropdownMenuItem>
+                <DropdownMenuItem asChild className="rounded-[4px] px-3 py-2">
+                  <Link href="/agent/multi-agent" className="flex cursor-pointer items-center gap-2">
+                    <Network className="h-4 w-4 text-slate-500" />
+                    多智能体
+                  </Link>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -199,7 +234,9 @@ export default function AgentPage() {
                     </div>
                     <div className="text-lg font-semibold text-slate-900">暂无匹配结果</div>
                     <p className="text-sm leading-6 text-slate-500">
-                      {searchQuery ? "试试缩短关键词，或改用描述中的核心能力进行检索。" : "当前没有可展示的智能体。"}
+                      {searchQuery
+                        ? "试试缩短关键词，或改用描述中的核心能力进行检索。"
+                        : "当前没有可展示的智能体。"}
                     </p>
                   </div>
                 </TableCell>
@@ -207,7 +244,9 @@ export default function AgentPage() {
             ) : (
               paginatedAgents.map((agent) => {
                 const isAutonomous = agent.type === "自主规划智能体";
+                const isMultiAgent = agent.type === "多智能体";
                 const isPublished = agent.status === "已发布";
+                const editHref = isMultiAgent ? `/agent/multi-agent?id=${encodeURIComponent(agent.id)}` : `/agent/${agent.id}`;
 
                 return (
                   <TableRow key={agent.id} className="border-slate-200 bg-white hover:bg-slate-50/40">
@@ -215,12 +254,19 @@ export default function AgentPage() {
                       <div className="flex items-center gap-4">
                         <div
                           className={`flex h-10 w-10 items-center justify-center rounded-[8px] ${
-                            isAutonomous ? "bg-indigo-500 text-white" : "bg-blue-500 text-white"
+                            isMultiAgent
+                              ? "bg-cyan-500 text-white"
+                              : isAutonomous
+                                ? "bg-indigo-500 text-white"
+                                : "bg-blue-500 text-white"
                           }`}
                         >
-                          <Bot className="h-4 w-4" />
+                          {isMultiAgent ? <Network className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                         </div>
-                        <Link href={`/agent/${agent.id}`} className="text-[15px] font-medium text-slate-900 hover:text-blue-600">
+                        <Link
+                          href={editHref}
+                          className="text-[15px] font-medium text-slate-900 hover:text-blue-600"
+                        >
                           {agent.name}
                         </Link>
                       </div>
@@ -229,10 +275,20 @@ export default function AgentPage() {
                     <TableCell className="px-4 py-3 align-middle">
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-[4px] px-2 py-1 text-xs font-medium ${
-                          isAutonomous ? "bg-indigo-50 text-indigo-600" : "bg-blue-50 text-blue-600"
+                          isMultiAgent
+                            ? "bg-cyan-50 text-cyan-700"
+                            : isAutonomous
+                              ? "bg-indigo-50 text-indigo-600"
+                              : "bg-blue-50 text-blue-600"
                         }`}
                       >
-                        {isAutonomous ? <Sparkles className="h-3 w-3" /> : <GitBranch className="h-3 w-3" />}
+                        {isMultiAgent ? (
+                          <Network className="h-3 w-3" />
+                        ) : isAutonomous ? (
+                          <Sparkles className="h-3 w-3" />
+                        ) : (
+                          <Workflow className="h-3 w-3" />
+                        )}
                         {agent.type}
                       </span>
                     </TableCell>
@@ -260,13 +316,19 @@ export default function AgentPage() {
 
                     <TableCell className="px-4 py-3 align-middle">
                       <div className="flex items-center gap-4 text-sm">
-                        <button onClick={() => handleCopy(agent)} className="text-blue-600 hover:text-blue-700">
+                        <button
+                          onClick={() => handleCopy(agent)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
                           复制
                         </button>
-                        <Link href={`/agent/${agent.id}`} className="text-blue-600 hover:text-blue-700">
+                        <Link href={editHref} className="text-blue-600 hover:text-blue-700">
                           编辑
                         </Link>
-                        <button onClick={() => handleDelete(agent)} className="text-blue-600 hover:text-blue-700">
+                        <button
+                          onClick={() => handleDelete(agent)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
                           删除
                         </button>
                       </div>

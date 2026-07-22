@@ -60,12 +60,16 @@ function countKnowledgeAssets(detail: ClawDetailData) {
   };
 }
 
-export function buildAgentBomTreeFromDetail(detail: ClawDetailData): AgentBomTreeNode[] {
+export function buildAgentBomTreeFromDetail(
+  detail: ClawDetailData,
+  entityLabel = "Claw"
+): AgentBomTreeNode[] {
   const toolCounts = countEnabledTools(detail);
   const skillCount = countEnabledSkills(detail);
   const knowledgeCounts = countKnowledgeAssets(detail);
   const coreFileCount = detail.coreFiles.length;
   const enabledRules = detail.securityManagement.toolProtection.rules.filter((rule) => rule.enabled).length;
+  const configScopeLabel = `${entityLabel}配置`;
 
   return [
     {
@@ -104,7 +108,7 @@ export function buildAgentBomTreeFromDetail(detail: ClawDetailData): AgentBomTre
       count: skillCount,
       children: [
         { id: "skills-preset", label: "内置技能", count: detail.capabilityConfig.skills.platform.filter((s) => s.enabled).length },
-        { id: "skills-claw", label: "Claw 配置", count: detail.capabilityConfig.skills.claw.filter((s) => s.enabled).length },
+        { id: "skills-claw", label: configScopeLabel, count: detail.capabilityConfig.skills.claw.filter((s) => s.enabled).length },
       ],
     },
     {

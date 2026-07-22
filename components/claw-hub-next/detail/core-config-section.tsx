@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { CLAW_AGENT_MD_PLACEHOLDER } from "@/lib/mock/claw-hub-next";
 import type { ModelParamKey } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
+import { useWorkbenchEntity } from "@/components/claw-hub-next/workbench-entity-context";
 
 type FallbackModelRow = {
   id: string;
@@ -49,9 +50,10 @@ export function ClawCoreConfigSection({
   onFallbackModelParamsChange,
   isFallbackModelDuplicate,
 }: ClawCoreConfigSectionProps) {
+  const { entityLabel } = useWorkbenchEntity();
   return (
     <div className="space-y-6">
-      <SectionCard title="模型配置" description="配置 Claw 的主力模型和 Fallback 顺序。">
+      <SectionCard title="模型配置" description={`配置 ${entityLabel} 的主力模型和 Fallback 顺序。`}>
         <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
           <div className="grid gap-0 md:grid-cols-2 md:divide-x md:divide-slate-200">
             <div className="space-y-3 p-5">
@@ -145,7 +147,7 @@ export function ClawCoreConfigSection({
 
       <SectionCard
         title="Agent.md"
-        description="定义 Claw 的身份、目标与行为边界"
+        description={`定义 ${entityLabel} 的身份、目标与行为边界`}
         action={
           <Button type="button" size="sm" onClick={onSaveAgentMd}>
             保存

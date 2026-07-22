@@ -14,6 +14,7 @@ import type {
 } from "@/lib/mock/claw-hub-next";
 import { cn } from "@/lib/utils";
 import { AUTONOMY_BOUNDARY_LEVELS, type SecurityPanelKey } from "./constants";
+import { useWorkbenchEntity } from "@/components/claw-hub-next/workbench-entity-context";
 
 const TOOL_RULE_FORM_DEFAULT = {
   ruleId: "TOOL_CMD_CUSTOM_RULE",
@@ -183,6 +184,7 @@ export function ClawSecuritySection(props: SecuritySectionProps) {
   const [prohibitedDraft, setProhibitedDraft] = useState("");
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [ruleForm, setRuleForm] = useState<ToolRuleFormState>(() => ({ ...TOOL_RULE_FORM_DEFAULT }));
+  const { entityLabel } = useWorkbenchEntity();
 
   const { autonomyBoundaries, toolProtection, securityApprovals } = securityManagement;
 
@@ -192,11 +194,11 @@ export function ClawSecuritySection(props: SecuritySectionProps) {
         <div>
           <h2 className="text-xl font-semibold text-slate-950">安全</h2>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            统一管理当前 Claw 的自主性边界、工具调用防护和高风险动作审批。
+            统一管理当前 {entityLabel} 的自主性边界、工具调用防护和高风险动作审批。
           </p>
         </div>
 
-        <SecurityModule title="自主性边界配置" description="配置 Claw 执行各项操作时的自主性级别。">
+        <SecurityModule title="自主性边界配置" description={`配置 ${entityLabel} 执行各项操作时的自主性级别。`}>
           <ClawSecuritySection {...props} activePanel="autonomy-boundaries" />
         </SecurityModule>
 

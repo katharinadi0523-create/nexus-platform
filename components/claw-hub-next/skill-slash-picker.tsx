@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import type { CapabilityScope, CapabilitySkillItem } from "@/lib/mock/claw-hub-next";
 import { CAPABILITY_SCOPE_LABELS } from "@/components/claw-hub-next/detail/constants";
 import { cn } from "@/lib/utils";
+import { useWorkbenchEntity } from "@/components/claw-hub-next/workbench-entity-context";
 
 export type ConfiguredSkillOption = CapabilitySkillItem & {
   scope: CapabilityScope;
@@ -59,6 +60,7 @@ export function SkillSlashPicker({
   onActiveIndexChange,
   onSelect,
 }: SkillSlashPickerProps) {
+  const { entityLabel, configLabel } = useWorkbenchEntity();
   const filteredSkills = filterConfiguredSkills(skills, query);
   const safeActiveIndex =
     filteredSkills.length === 0 ? 0 : Math.min(activeIndex, filteredSkills.length - 1);
@@ -102,7 +104,9 @@ export function SkillSlashPicker({
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-slate-800">{skill.name}</span>
                     <span className="rounded-[4px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
-                      {CAPABILITY_SCOPE_LABELS[skill.scope]}
+                      {skill.scope === "claw"
+                        ? configLabel
+                        : CAPABILITY_SCOPE_LABELS[skill.scope]}
                     </span>
                   </span>
                   <span className="mt-0.5 block text-xs leading-5 text-slate-500">{skill.description}</span>
@@ -112,7 +116,9 @@ export function SkillSlashPicker({
           })
         ) : (
           <div className="px-3 py-6 text-center text-sm text-slate-400">
-            {skills.length === 0 ? "当前 Claw 尚未配置可用技能" : "没有匹配的技能"}
+            {skills.length === 0
+              ? `当前 ${entityLabel} 尚未配置可用技能`
+              : "没有匹配的技能"}
           </div>
         )}
       </div>

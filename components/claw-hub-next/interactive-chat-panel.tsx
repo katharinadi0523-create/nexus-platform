@@ -35,6 +35,7 @@ import {
   SkillSlashPicker,
   type ConfiguredSkillOption,
 } from "@/components/claw-hub-next/skill-slash-picker";
+import { useWorkbenchEntity } from "@/components/claw-hub-next/workbench-entity-context";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   ChatSessionItem,
@@ -155,10 +156,12 @@ function buildInteractiveFlowTemplate({
   detail,
   session,
   run,
+  entityLabel = "Claw",
 }: {
   detail: ClawDetailData;
   session?: ChatSessionItem;
   run?: ConversationRunItem;
+  entityLabel?: string;
 }): InteractiveFlowTemplate {
   const historyItems = buildConversationTimeline(session, run);
   const userItems = historyItems.filter(
@@ -183,7 +186,7 @@ function buildInteractiveFlowTemplate({
   const contextItems: InteractiveFlowContextItem[] = [
     {
       key: `${session?.id ?? detail.overview.id}-context-claw`,
-      title: `Claw · ${detail.overview.name}`,
+      title: `${entityLabel} · ${detail.overview.name}`,
       kind: "claw",
       revealAtEventIndex: 0,
     },
@@ -470,14 +473,16 @@ export function ClawInteractiveChatPanel({
   run?: ConversationRunItem;
   inspectorMode?: "auto" | "open" | "closed";
 }) {
+  const { entityLabel } = useWorkbenchEntity();
   const template = useMemo(
     () =>
       buildInteractiveFlowTemplate({
         detail,
         session,
         run,
+        entityLabel,
       }),
-    [detail, run, session]
+    [detail, run, session, entityLabel]
   );
   const configuredSkills = useMemo<ConfiguredSkillOption[]>(() => {
     const scopes = ["platform", "tenant", "claw"] as const;

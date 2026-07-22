@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useWorkbenchEntity } from "@/components/claw-hub-next/workbench-entity-context";
 
 export interface KnowledgeConfigSelection {
   id: string;
@@ -118,6 +119,7 @@ function shouldEllipsisBefore(page: number, prev: number | undefined): boolean {
 }
 
 export function KnowledgeConfigDialog({ open, onOpenChange, onConfirm }: KnowledgeConfigDialogProps) {
+  const { configLabel } = useWorkbenchEntity();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -390,7 +392,7 @@ export function KnowledgeConfigDialog({ open, onOpenChange, onConfirm }: Knowled
                   disabled={!selectedIds.length}
                   onClick={handleSubmit}
                 >
-                  添加到 Claw配置
+                  添加到{configLabel}
                 </Button>
               </div>
             </div>

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { GroupTreeSidebar } from "@/components/knowledge-base/GroupTreeSidebar";
 import { KnowledgeBaseTable } from "@/components/knowledge-base/KnowledgeBaseTable";
 import type { KnowledgeBaseGroup } from "@/components/knowledge-base/GroupTreeSidebar";
-import type { KnowledgeBase } from "@/components/knowledge-base/KnowledgeBaseTable";
 
 export default function KnowledgeBasePage() {
   const [selectedGroup, setSelectedGroup] = useState<KnowledgeBaseGroup | null>(null);
