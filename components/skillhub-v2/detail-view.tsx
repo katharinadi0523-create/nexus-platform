@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   AlertTriangle,
@@ -8,7 +8,6 @@ import {
   Check,
   Download,
   FileArchive,
-  GitCompareArrows,
   History,
   LoaderCircle,
   Pencil,
@@ -22,7 +21,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,9 +36,9 @@ import {
 import type {
   SkillDependency,
   SkillDetailTab,
+  SkillFile,
   SkillManualDraft,
   SkillRecord,
-  SkillVersion,
 } from "./types";
 
 interface SkillDetailViewProps {
@@ -224,7 +222,13 @@ export function SkillDetailView({
         />
       ) : null}
       {activeTab === "versions" ? (
-        <VersionsTab skill={skill} canManage={canManage} onRollback={onRollback} />
+        <VersionsTab
+          skill={skill}
+          draft={draft}
+          editing={editing}
+          canManage={canManage}
+          onRollback={onRollback}
+        />
       ) : null}
     </section>
   );
@@ -712,42 +716,86 @@ function DependencyGroup({
   );
 }
 
+type FileChangeKind = "added" | "modified" | "removed";
+interface FileChange {
+  path: string;
+  kind: FileChangeKind;
+}
+
+function computeFileChanges(baseline: SkillFile[], draft: SkillFile[]): FileChange[] {
+  const baselineByPath = new Map(baseline.map((file) => [file.path, file.content]));
+  const draftByPath = new Map(draft.map((file) => [file.path, file.content]));
+  const changes: FileChange[] = [];
+
+  draft.forEach((file) => {
+    if (!baselineByPath.has(file.path)) {
+      changes.push({ path: file.path, kind: "added" });
+    } else if (baselineByPath.get(file.path) !== file.content) {
+      changes.push({ path: file.path, kind: "modified" });
+    }
+  });
+  baseline.forEach((file) => {
+    if (!draftByPath.has(file.path)) {
+      changes.push({ path: file.path, kind: "removed" });
+    }
+  });
+
+  return changes;
+}
+
+const CHANGE_META: Record<FileChangeKind, { label: string; className: string }> = {
+  added: { label: "新增", className: "bg-emerald-50 text-emerald-700" },
+  modified: { label: "修改", className: "bg-amber-50 text-amber-700" },
+  removed: { label: "删除", className: "bg-rose-50 text-rose-700" },
+};
+
+function ChangeTag({ kind }: { kind: FileChangeKind }) {
+  const meta = CHANGE_META[kind];
+  return (
+    <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium", meta.className)}>
+      {meta.label}
+    </span>
+  );
+}
+
+function ChangeRow({ label, kind }: { label: string; kind: FileChangeKind }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2">
+      <span className="truncate font-mono text-xs text-slate-700">{label}</span>
+      <ChangeTag kind={kind} />
+    </div>
+  );
+}
+
 function VersionsTab({
   skill,
+  draft,
+  editing,
   canManage,
   onRollback,
 }: {
   skill: SkillRecord;
+  draft: SkillManualDraft;
+  editing: boolean;
   canManage: boolean;
   onRollback: (versionId: string) => void;
 }) {
-  const [selectedVersionIds, setSelectedVersionIds] = useState<string[]>(
-    skill.versions.slice(0, 2).map((item) => item.id)
-  );
-  const comparedVersions = useMemo(
-    () =>
-      selectedVersionIds
-        .map((id) => skill.versions.find((version) => version.id === id))
-        .filter((item): item is SkillVersion => Boolean(item)),
-    [selectedVersionIds, skill.versions]
-  );
-
-  function toggleCompare(versionId: string) {
-    setSelectedVersionIds((current) => {
-      if (current.includes(versionId)) return current.filter((id) => id !== versionId);
-      if (current.length >= 2) return [current[1], versionId];
-      return [...current, versionId];
-    });
-  }
+  const baselineVersion = skill.versions[0];
+  const fileChanges = computeFileChanges(baselineVersion?.files ?? [], draft.files);
+  const basicInfoChanged =
+    draft.name !== skill.name ||
+    draft.displayName !== skill.displayName ||
+    draft.description !== skill.description ||
+    draft.usageInstructions !== skill.usageInstructions;
+  const dependenciesChanged =
+    JSON.stringify(draft.dependencies) !== JSON.stringify(skill.dependencies);
+  const hasChanges = fileChanges.length > 0 || basicInfoChanged || dependenciesChanged;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(360px,0.9fr)_minmax(420px,1.1fr)]">
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
+    <div className={cn("grid gap-5", editing && "lg:grid-cols-[minmax(0,1fr)_360px]")}>
+      <div className={cn("rounded-lg border border-slate-200 bg-white p-5", !editing && "max-w-3xl")}>
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-slate-900">版本历史</h2>
-            <p className="mt-1 text-xs text-slate-500">选择两个版本进行文件级与内容级对比</p>
-          </div>
+          <h2 className="font-semibold text-slate-900">版本历史</h2>
           <History className="h-5 w-5 text-slate-400" />
         </div>
         <div className="mt-4 space-y-2">
@@ -756,11 +804,6 @@ function VersionsTab({
             return (
               <div key={version.id} className="rounded-md border border-slate-200 p-3">
                 <div className="flex items-start gap-3">
-                  <Checkbox
-                    checked={selectedVersionIds.includes(version.id)}
-                    onCheckedChange={() => toggleCompare(version.id)}
-                    aria-label={`选择 ${version.version} 对比`}
-                  />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-semibold text-slate-900">
@@ -804,69 +847,27 @@ function VersionsTab({
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-            <GitCompareArrows className="h-4 w-4 text-slate-400" />
-            版本对比
-          </div>
-          <span className="font-mono text-xs text-slate-400">
-            {comparedVersions.length === 2
-              ? `${comparedVersions[1].version} → ${comparedVersions[0].version}`
-              : "请选择两个版本"}
-          </span>
-        </div>
-        {comparedVersions.length === 2 ? (
-          <div className="p-4">
-            <DiffBlock title="src/parser.py" additions={4} deletions={1}>
-              <div className="px-3 text-slate-500">def read(file):</div>
-              <div className="bg-rose-50 px-3 text-rose-700">- header = next(file)</div>
-              <div className="bg-emerald-50 px-3 text-emerald-700">+ first = peek(file)</div>
-              <div className="bg-emerald-50 px-3 text-emerald-700">
-                + header = first if looks_like_header(first)
-              </div>
-            </DiffBlock>
-            <div className="mt-3">
-              <DiffBlock title="tests/test_headerless.py" additions={3} deletions={0}>
-                <div className="bg-emerald-50 px-3 text-emerald-700">
-                  + def test_missing_header():
-                </div>
-                <div className="bg-emerald-50 px-3 text-emerald-700">
-                  + assert result.columns == expected
-                </div>
-              </DiffBlock>
+      {editing ? (
+        <aside className="rounded-lg border border-slate-200 bg-white p-5">
+          <h2 className="font-semibold text-slate-900">本次改动</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            基于 {baselineVersion?.version ?? "当前版本"} · 保存后生成新版本
+          </p>
+          {hasChanges ? (
+            <div className="mt-4 space-y-2">
+              {fileChanges.map((change) => (
+                <ChangeRow key={change.path} label={change.path} kind={change.kind} />
+              ))}
+              {basicInfoChanged ? <ChangeRow label="基本信息" kind="modified" /> : null}
+              {dependenciesChanged ? <ChangeRow label="依赖配置" kind="modified" /> : null}
             </div>
-          </div>
-        ) : (
-          <div className="px-6 py-20 text-center text-sm text-slate-500">
-            从左侧勾选两个版本开始对比。
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DiffBlock({
-  title,
-  additions,
-  deletions,
-  children,
-}: {
-  title: string;
-  additions: number;
-  deletions: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="overflow-hidden rounded-md border border-slate-200">
-      <div className="flex items-center justify-between bg-slate-50 px-3 py-2 font-mono text-xs text-slate-600">
-        <span>{title}</span>
-        <span>
-          +{additions} −{deletions}
-        </span>
-      </div>
-      <div className="py-2 font-mono text-xs leading-6">{children}</div>
+          ) : (
+            <div className="mt-4 rounded-md border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+              尚无改动
+            </div>
+          )}
+        </aside>
+      ) : null}
     </div>
   );
 }
