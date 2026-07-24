@@ -34,6 +34,7 @@ import {
 } from "./claw-mock-flows";
 import { buildFileTree, FileGlyph } from "./shared";
 import type { SkillFile, SkillRecord, SkillWorkOrder, WorkOrderType } from "./types";
+import { getCurrentManagedVersion } from "./versioning";
 
 interface SkillWorkspaceViewProps {
   mode: WorkOrderType;
@@ -168,7 +169,7 @@ export function SkillWorkspaceView({
   onBack,
   onSaveVersion,
 }: SkillWorkspaceViewProps) {
-  const baseFiles = skill?.versions[0]?.files ?? CREATE_FILES;
+  const baseFiles = (skill ? getCurrentManagedVersion(skill)?.files : undefined) ?? CREATE_FILES;
   const isResearchOptimization = mode === "optimize" && skill?.id === "research-evidence-extractor";
   const evidenceOptions = isResearchOptimization
     ? [

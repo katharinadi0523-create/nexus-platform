@@ -20,6 +20,7 @@ export interface SkillFile {
 export interface SkillVersion {
   id: string;
   version: string;
+  baseVersionId?: string;
   createdAt: string;
   createdBy: string;
   source: SkillVersionSource;
@@ -62,7 +63,8 @@ export interface SkillRecord {
   owner: string;
   updatedAt: string;
   status: SkillStatus;
-  currentVersion?: string;
+  currentVersionId: string;
+  publishedVersionId?: string;
   sourceLabel: string;
   usageInstructions: string;
   versions: SkillVersion[];

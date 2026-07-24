@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Check,
+  ChevronDown,
   Download,
   FileArchive,
   History,
@@ -21,6 +22,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,6 +48,11 @@ import type {
   SkillManualDraft,
   SkillRecord,
 } from "./types";
+import {
+  getCurrentManagedVersion,
+  getCurrentPublishedVersion,
+  hasUnpublishedChanges,
+} from "./versioning";
 
 interface SkillDetailViewProps {
   skill: SkillRecord;
@@ -48,6 +61,10 @@ interface SkillDetailViewProps {
   onBack: () => void;
   onTabChange: (tab: SkillDetailTab) => void;
   onOptimize: () => void;
+  onImportUpdate: () => void;
+  onSubmitPublish: () => void;
+  canSubmitPublish: boolean;
+  publishLabel: string;
   onExport: () => void;
   onRunAssembly: () => void;
   onRollback: (versionId: string) => void;
@@ -68,18 +85,30 @@ export function SkillDetailView({
   onBack,
   onTabChange,
   onOptimize,
+  onImportUpdate,
+  onSubmitPublish,
+  canSubmitPublish,
+  publishLabel,
   onExport,
   onRunAssembly,
   onRollback,
   onSaveManualVersion,
 }: SkillDetailViewProps) {
-  const lockedVersion = skill.versions[0]?.version ?? "v1.0";
+  const currentManagedVersion = getCurrentManagedVersion(skill);
+  const currentPublishedVersion = getCurrentPublishedVersion(skill);
+  const hasPendingVersion = hasUnpublishedChanges(skill);
+  const releaseStatus = currentPublishedVersion
+    ? skill.status === "offline"
+      ? "offline"
+      : "published"
+    : skill.status;
+  const lockedVersion = currentManagedVersion?.version ?? "v1.0";
   const createDraft = (): SkillManualDraft => ({
     name: skill.name,
     displayName: skill.displayName,
     description: skill.description,
     usageInstructions: skill.usageInstructions,
-    files: (skill.versions[0]?.files ?? []).map((file) => ({ ...file })),
+    files: (currentManagedVersion?.files ?? []).map((file) => ({ ...file })),
     dependencies: skill.dependencies.map((dependency) => ({ ...dependency })),
   });
   const [editing, setEditing] = useState(false);
@@ -97,9 +126,9 @@ export function SkillDetailView({
   }
 
   return (
-    <section className="space-y-5" data-testid="skillhub-detail-view">
-      <div className="rounded-lg border border-slate-200 bg-white">
-        <header className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+    <section className="space-y-5 px-5" data-testid="skillhub-detail-view">
+      <div className="border-b border-slate-200 bg-white">
+        <header className="flex flex-col gap-4 border-b border-slate-200 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <Button
               type="button"
@@ -117,12 +146,17 @@ export function SkillDetailView({
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="truncate text-xl font-semibold text-slate-950">{skill.name}</h1>
-                <SkillStatusPill status={skill.status} />
+                <SkillStatusPill status={releaseStatus} />
+                {hasPendingVersion && currentPublishedVersion ? (
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                    {skill.status === "reviewing" ? "更新审核中" : "有未发布更新"}
+                  </span>
+                ) : null}
               </div>
               <p className="mt-1 line-clamp-1 text-sm text-slate-500">{skill.description}</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 pl-11 lg:pl-0">
+          <div className="flex flex-wrap items-center gap-2 pl-11 lg:shrink-0 lg:flex-nowrap lg:pl-0">
             <Button type="button" variant="outline" className="h-9 rounded-[5px]" onClick={onExport}>
               <Download className="h-4 w-4" />
               导出 .zip
@@ -151,26 +185,67 @@ export function SkillDetailView({
                   </>
                 ) : (
                   <>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-9 rounded-[5px] border-slate-200 text-slate-700"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          更新技能
+                          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 rounded-lg p-1.5">
+                        <DropdownMenuItem
+                          className="cursor-pointer rounded-md px-3 py-2.5"
+                          onSelect={() => setEditing(true)}
+                        >
+                          <Pencil className="h-4 w-4 text-slate-500" />
+                          <span>
+                            <span className="block text-sm font-medium text-slate-900">手动编辑</span>
+                            <span className="mt-0.5 block text-xs text-slate-500">
+                              修改概览、文件与依赖
+                            </span>
+                          </span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="cursor-pointer rounded-md px-3 py-2.5"
+                          onSelect={onOptimize}
+                        >
+                          <Sparkles className="h-4 w-4 text-[#2773ff]" />
+                          <span>
+                            <span className="block text-sm font-medium text-slate-900">AI 优化</span>
+                            <span className="mt-0.5 block text-xs text-slate-500">
+                              通过 Claw 对话生成更新
+                            </span>
+                          </span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="cursor-pointer rounded-md px-3 py-2.5"
+                          onSelect={onImportUpdate}
+                        >
+                          <FileArchive className="h-4 w-4 text-slate-500" />
+                          <span>
+                            <span className="block text-sm font-medium text-slate-900">
+                              导入更新包
+                            </span>
+                            <span className="mt-0.5 block text-xs text-slate-500">
+                              用 zip 或链接更新当前技能
+                            </span>
+                          </span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <Button
                       type="button"
-                      variant="outline"
-                      className="h-9 rounded-[5px]"
-                      onClick={() => setEditing(true)}
+                      className="h-9 rounded-[5px] bg-[#2773ff] hover:bg-[#1f66f0]"
+                      onClick={onSubmitPublish}
+                      disabled={!canSubmitPublish}
                     >
-                      <Pencil className="h-4 w-4" />
-                      编辑技能
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-9 rounded-[5px] text-[#2773ff]"
-                      onClick={onOptimize}
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      AI 优化
-                    </Button>
-                    <Button type="button" className="h-9 rounded-[5px] bg-[#2773ff]">
-                      更新发布
+                      {publishLabel}
                     </Button>
                   </>
                 )}
@@ -179,7 +254,7 @@ export function SkillDetailView({
           </div>
         </header>
 
-        <nav className="flex items-center gap-6 overflow-x-auto px-5">
+        <nav className="flex items-center gap-6 overflow-x-auto">
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -263,10 +338,19 @@ function OverviewTab({
   editing: boolean;
   onChange: Dispatch<SetStateAction<SkillManualDraft>>;
 }) {
+  const currentManagedVersion = getCurrentManagedVersion(skill);
+  const currentPublishedVersion = getCurrentPublishedVersion(skill);
+  const currentVersionStatus =
+    currentManagedVersion?.id === currentPublishedVersion?.id
+      ? "已发布"
+      : skill.status === "reviewing"
+        ? "审核中"
+        : "草稿";
+
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_320px]">
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="font-semibold text-slate-900">基本信息</h2>
+    <div className="grid lg:grid-cols-[minmax(0,1.25fr)_320px] lg:divide-x lg:divide-slate-200">
+      <div className="bg-white py-5 lg:pr-8">
+        <h2 className="text-base font-semibold text-slate-900">基本信息</h2>
 
         {editing ? (
           <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -322,18 +406,31 @@ function OverviewTab({
       </div>
 
       <aside>
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="font-semibold text-slate-900">资产状态</h2>
+        <div className="bg-white py-5 lg:pl-8">
+          <h2 className="text-base font-semibold text-slate-900">资产状态</h2>
           <dl className="mt-4 space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <dt className="text-slate-500">当前版本</dt>
+              <dd className="flex items-center gap-2">
+                <span className="font-mono font-medium text-slate-800">
+                  {currentManagedVersion?.version ?? "—"}
+                </span>
+                {currentManagedVersion ? (
+                  <span className="text-xs text-slate-500">{currentVersionStatus}</span>
+                ) : null}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-slate-500">当前发布</dt>
               <dd className="font-mono font-medium text-slate-800">
-                {skill.currentVersion ?? skill.versions[0]?.version}
+                {currentPublishedVersion?.version ?? "—"}
               </dd>
             </div>
             <div className="flex items-center justify-between">
               <dt className="text-slate-500">版本来源</dt>
-              <dd>{skill.versions[0] ? <SourcePill source={skill.versions[0].source} /> : "—"}</dd>
+              <dd>
+                {currentManagedVersion ? <SourcePill source={currentManagedVersion.source} /> : "—"}
+              </dd>
             </div>
             <div className="flex items-center justify-between">
               <dt className="text-slate-500">创建人</dt>
@@ -370,7 +467,7 @@ function FilesTab({
   }
 
   return (
-    <div className="grid min-h-[580px] overflow-hidden rounded-lg border border-slate-200 bg-white lg:grid-cols-[300px_minmax(0,1fr)]">
+    <div className="grid min-h-[580px] overflow-hidden border-b border-slate-200 bg-white lg:grid-cols-[300px_minmax(0,1fr)]">
       <div className="border-b border-slate-200 lg:border-b-0 lg:border-r">
         <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
           文件结构
@@ -491,11 +588,11 @@ function DependenciesTab({
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_300px]">
-      <div className="rounded-lg border border-slate-200 bg-white">
-        <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="grid lg:grid-cols-[minmax(0,1.15fr)_300px] lg:divide-x lg:divide-slate-200">
+      <div className="bg-white lg:pr-8">
+        <div className="flex flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-semibold text-slate-900">依赖与 AI 试运行</h2>
+            <h2 className="text-base font-semibold text-slate-900">依赖与 AI 试运行</h2>
             <p className="mt-1 text-sm text-slate-500">
               静态扫描候选依赖，再通过沙箱试运行完成安装、锁版本和快照绑定。
             </p>
@@ -512,7 +609,7 @@ function DependenciesTab({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-t border-slate-100 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2.5">
             {snapshot.status === "ready" ? (
               <Check className="h-4 w-4 text-emerald-600" />
@@ -560,7 +657,7 @@ function DependenciesTab({
           onRemove={removeDependency}
         />
         {editing ? (
-          <div className="border-t border-slate-100 px-5 py-4">
+          <div className="border-t border-slate-100 py-4">
             <Button
               type="button"
               variant="outline"
@@ -587,8 +684,8 @@ function DependenciesTab({
       </div>
 
       <aside>
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="font-semibold text-slate-900">装配流程</h2>
+        <div className="bg-white py-5 lg:pl-8">
+          <h2 className="text-base font-semibold text-slate-900">装配流程</h2>
           <ol className="mt-4 space-y-4">
             {[
               ["1", "静态扫描", "扫描 imports 与声明，形成候选依赖"],
@@ -631,7 +728,7 @@ function DependencyGroup({
   onRemove: (id: string) => void;
 }) {
   return (
-    <div className="border-t border-slate-100 px-5 py-4">
+    <div className="border-t border-slate-100 py-4">
       <div>
         <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
         <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
@@ -642,7 +739,7 @@ function DependencyGroup({
             <div
               key={dependency.id}
               className={cn(
-                "flex flex-col gap-3 rounded-md border px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
+                "flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
                 dependency.status === "offline" ? "border-rose-200 bg-rose-50/40" : "border-slate-200"
               )}
             >
@@ -707,7 +804,7 @@ function DependencyGroup({
             </div>
           ))
         ) : (
-          <div className="rounded-md border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
+          <div className="border-b border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">
             {emptyText}
           </div>
         )}
@@ -760,7 +857,7 @@ function ChangeTag({ kind }: { kind: FileChangeKind }) {
 
 function ChangeRow({ label, kind }: { label: string; kind: FileChangeKind }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2">
+    <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2">
       <span className="truncate font-mono text-xs text-slate-700">{label}</span>
       <ChangeTag kind={kind} />
     </div>
@@ -780,7 +877,7 @@ function VersionsTab({
   canManage: boolean;
   onRollback: (versionId: string) => void;
 }) {
-  const baselineVersion = skill.versions[0];
+  const baselineVersion = getCurrentManagedVersion(skill);
   const fileChanges = computeFileChanges(baselineVersion?.files ?? [], draft.files);
   const basicInfoChanged =
     draft.name !== skill.name ||
@@ -792,27 +889,38 @@ function VersionsTab({
   const hasChanges = fileChanges.length > 0 || basicInfoChanged || dependenciesChanged;
 
   return (
-    <div className={cn("grid gap-5", editing && "lg:grid-cols-[minmax(0,1fr)_360px]")}>
-      <div className={cn("rounded-lg border border-slate-200 bg-white p-5", !editing && "max-w-3xl")}>
+    <div className={cn("grid", editing && "lg:grid-cols-[minmax(0,1fr)_360px] lg:divide-x lg:divide-slate-200")}>
+      <div className={cn(editing && "lg:pr-8")}>
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-slate-900">版本历史</h2>
+          <h2 className="text-base font-semibold text-slate-900">版本历史</h2>
           <History className="h-5 w-5 text-slate-400" />
         </div>
         <div className="mt-4 space-y-2">
           {skill.versions.map((version) => {
-            const current = version.version === skill.currentVersion;
+            const current = version.id === skill.currentVersionId;
+            const published = version.id === skill.publishedVersionId;
             return (
-              <div key={version.id} className="rounded-md border border-slate-200 p-3">
+              <div key={version.id} className="border-b border-slate-200 pb-3 pt-3 first:pt-0 last:border-b-0">
                 <div className="flex items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-sm font-semibold text-slate-900">
-                        {version.version}
+                      <span className="font-mono text-base font-semibold text-slate-900">
+                       {version.version}
                       </span>
                       <SourcePill source={version.source} />
                       {current ? (
+                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                          当前版本
+                        </span>
+                      ) : null}
+                      {published ? (
                         <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
                           当前发布
+                        </span>
+                      ) : null}
+                      {current && !published ? (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                          {skill.status === "reviewing" ? "审核中" : "草稿"}
                         </span>
                       ) : null}
                     </div>
@@ -848,8 +956,8 @@ function VersionsTab({
       </div>
 
       {editing ? (
-        <aside className="rounded-lg border border-slate-200 bg-white p-5">
-          <h2 className="font-semibold text-slate-900">本次改动</h2>
+        <aside className="bg-white py-5 lg:pl-8">
+          <h2 className="text-base font-semibold text-slate-900">本次改动</h2>
           <p className="mt-1 text-xs text-slate-500">
             基于 {baselineVersion?.version ?? "当前版本"} · 保存后生成新版本
           </p>
@@ -862,7 +970,7 @@ function VersionsTab({
               {dependenciesChanged ? <ChangeRow label="依赖配置" kind="modified" /> : null}
             </div>
           ) : (
-            <div className="mt-4 rounded-md border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+            <div className="mt-4 border-b border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
               尚无改动
             </div>
           )}

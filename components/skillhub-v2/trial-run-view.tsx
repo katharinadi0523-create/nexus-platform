@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TRIAL_RUN_TIMELINE_ITEMS } from "./claw-mock-flows";
 import type { SkillRecord } from "./types";
+import { getCurrentManagedVersion } from "./versioning";
 
 interface TrialRunViewProps {
   skill: SkillRecord;
@@ -28,7 +29,7 @@ export function TrialRunView({ skill, onBack, onComplete }: TrialRunViewProps) {
   const [state, setState] = useState<"idle" | "running" | "complete">(
     skill.runtimeSnapshot.status === "ready" ? "complete" : "idle"
   );
-  const lockedVersion = skill.versions[0]?.version ?? "v1.0";
+  const lockedVersion = getCurrentManagedVersion(skill)?.version ?? "v1.0";
   const isResearchSkill = skill.id === "research-evidence-extractor";
   const sampleInput = isResearchSkill
     ? "samples/rice_drought_study.pdf"

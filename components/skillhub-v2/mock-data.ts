@@ -104,7 +104,8 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     owner: "邸若楠",
     updatedAt: "2026-07-24 10:16",
     status: "published",
-    currentVersion: "v1.3",
+    currentVersionId: "ppt-v13",
+    publishedVersionId: "ppt-v12",
     sourceLabel: "AI 优化",
     usageInstructions: "上传材料并说明汇报对象、时长和视觉风格，技能会生成可编辑演示文稿。",
     versions: [
@@ -112,6 +113,8 @@ export const INITIAL_SKILLS: SkillRecord[] = [
         id: "ppt-v13",
         version: "v1.3",
         source: "ai-optimize",
+        status: "draft",
+        baseVersionId: "ppt-v12",
         releaseNotes: "增强缺表头输入的健壮性并补充单元测试。",
         conversationId: "CONV-2087",
         evidence: ["失败运行 TASK-2087", "样本 no_header.csv"],
@@ -121,6 +124,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
         version: "v1.2",
         createdAt: "2026-07-10 09:20",
         source: "import",
+        status: "published",
         releaseNotes: "支持品牌模板与结构化大纲。",
         files: PPT_FILES.filter((file) => file.path !== "tests/test_headerless.py").map((file) =>
           file.path === "src/parser.py"
@@ -201,6 +205,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     owner: "邸若楠",
     updatedAt: "2026-07-24 09:48",
     status: "draft",
+    currentVersionId: "scholar-v10",
     sourceLabel: "链接导入",
     usageInstructions: "输入研究主题、时间范围和目标数据库。",
     versions: [
@@ -235,6 +240,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     owner: "sunli01",
     updatedAt: "2026-07-22 14:24",
     status: "draft",
+    currentVersionId: "tone-v10",
     sourceLabel: "AI 创建",
     usageInstructions: "粘贴待优化文本并说明目标受众。",
     versions: [
@@ -261,7 +267,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     owner: "邸若楠",
     updatedAt: "2026-07-24 10:02",
     status: "reviewing",
-    currentVersion: undefined,
+    currentVersionId: "rna-v10",
     sourceLabel: "AI 创建",
     usageInstructions: "上传表达矩阵与样本分组文件。",
     versions: [
@@ -370,4 +376,3 @@ export const SOURCE_LABELS = {
   "ai-optimize": "AI 优化",
   rollback: "回滚",
 } as const;
-

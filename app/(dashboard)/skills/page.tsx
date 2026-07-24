@@ -184,6 +184,7 @@ interface MySkill {
   updatedAt: string;
   updatedBy: string;
   version?: string;
+  publishedVersion?: string;
   publishScope: PublishScope;
   releaseNotes: string;
   publishedTemplateId?: string;
@@ -393,6 +394,7 @@ function createMySkill(input: {
   linkedCECClaws?: string[];
   updatedBy?: string;
   version?: string;
+  publishedVersion?: string;
   publishScope?: PublishScope;
   releaseNotes?: string;
   publishedTemplateId?: string;
@@ -422,6 +424,8 @@ function createMySkill(input: {
     updatedAt: INITIAL_SKILL_UPDATED_AT,
     updatedBy: input.updatedBy ?? CURRENT_SKILL_EDITOR,
     version: input.version,
+    publishedVersion:
+      input.publishedVersion ?? (input.status === "published" ? input.version : undefined),
     publishScope: input.publishScope ?? "org",
     releaseNotes: input.releaseNotes ?? "",
     publishedTemplateId: input.publishedTemplateId,
@@ -611,8 +615,9 @@ description: "为 AI 产线项目生成规范、正式、可审批的公文与�
     declaredDependencies: [DEPENDENCY_TOOL_OPTIONS[0]],
     source: "blank",
     status: "published",
-    version: "1.0",
-    releaseNotes: "首版支持农业科研文献的实体、实验条件、结论与来源证据抽取。",
+    version: "1.1",
+    publishedVersion: "1.0",
+    releaseNotes: "补充实验条件归一化规则，当前为尚未发布的管理版本。",
     createdBy: "科研数据组",
     updatedBy: "科研数据组",
     linkedCECClaws: [CEC_CLAW_INSTANCE],
@@ -1689,6 +1694,7 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
           ? "failed"
           : selectedMySkillDetail.status,
       version: selectedMySkillDetail.version,
+      publishedVersion: selectedMySkillDetail.publishedVersion,
       usageInstructions: selectedMySkillDetail.usageInstructions?.trim() || "暂未填写使用说明",
       files: selectedMySkillDetail.files.map((file) => ({
         path: file.path,
@@ -1958,6 +1964,7 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
         updatedBy: CURRENT_SKILL_EDITOR,
         dirty: false,
         hasPublishedHistory: true,
+        publishedVersion: target.version,
         publishedTemplateId: target.publishedTemplateId ?? `${target.id}-published`,
       };
 
@@ -2386,11 +2393,6 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
   const openSkillHubV2Create = () => {
     setSelectedMySkillDetailId("");
     setSkillHubV2Screen({ kind: "workspace", mode: "create" });
-  };
-
-  const openSkillHubV2Optimize = (skillId: string) => {
-    setSelectedMySkillDetailId(skillId);
-    setSkillHubV2Screen({ kind: "workspace", mode: "optimize", skillId });
   };
 
   const openSkillHubV2WorkOrder = (workOrderId: string) => {
@@ -4384,7 +4386,7 @@ source_url: "${parsedUrl.toString()}"
                         <TableHead className="h-9 w-[120px] px-3 text-left text-xs font-semibold text-slate-600">
                           更新时间
                         </TableHead>
-                        <TableHead className="h-9 w-[360px] border-l border-slate-200 bg-slate-50 px-3 text-left text-xs font-semibold text-slate-600">
+                        <TableHead className="h-9 w-[260px] border-l border-slate-200 bg-slate-50 px-3 text-left text-xs font-semibold text-slate-600">
                           操作
                         </TableHead>
                       </TableRow>
@@ -4413,11 +4415,12 @@ source_url: "${parsedUrl.toString()}"
                           });
                           const statusMeta = getSkillStatusMeta(skill.status);
                           const StatusIcon = statusMeta.icon;
-                          const releaseAction = getSkillReleaseActionMeta(skill);
                           const statusVersionLabel = skill.version
-                            ? skill.status === "draft" && hasPublishedHistory(skill)
-                              ? `历史 ${formatSkillVersion(skill.version)}`
-                              : formatSkillVersion(skill.version)
+                            ? skill.publishedVersion && skill.publishedVersion !== skill.version
+                              ? `当前 ${formatSkillVersion(skill.version)} · 发布 ${formatSkillVersion(skill.publishedVersion)}`
+                              : skill.status === "draft" && hasPublishedHistory(skill)
+                                ? `历史 ${formatSkillVersion(skill.version)}`
+                                : formatSkillVersion(skill.version)
                             : null;
 
                           return (
@@ -4489,28 +4492,16 @@ source_url: "${parsedUrl.toString()}"
                                 </div>
                               </TableCell>
 
-                              <TableCell className="w-[360px] border-l border-slate-200 bg-white px-3 py-3 align-top">
+                              <TableCell className="w-[260px] border-l border-slate-200 bg-white px-3 py-3 align-top">
                                 <div className="flex items-center gap-1 whitespace-nowrap">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 px-2 text-xs"
-                                    onClick={() => openMySkillDetail(skill.id)}
-                                    title="查看详情、版本管理和依赖"
+                                  <button
+                                   type="button"
+                                   className="h-7 px-2 text-xs font-medium text-[#2773ff] hover:underline"
+                                   onClick={() => openMySkillDetail(skill.id)}
+                                   title="查看详情、版本管理和依赖"
                                   >
-                                    详情管理
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 px-2 text-xs text-[#2773ff]"
-                                    onClick={() => openSkillHubV2Optimize(skill.id)}
-                                  >
-                                    <Sparkles className="h-3.5 w-3.5" />
-                                    AI 优化
-                                  </Button>
+                                   详情
+                                  </button>
                                   <Button
                                     type="button"
                                     variant="ghost"
@@ -4525,10 +4516,10 @@ source_url: "${parsedUrl.toString()}"
                                     variant="ghost"
                                     size="sm"
                                     className="h-7 px-2 text-xs"
-                                    disabled={releaseAction.disabled}
-                                    onClick={() => openReleaseDialog(skill.id)}
+                                    disabled={skill.status !== "published"}
+                                    onClick={() => handleOfflineMySkill(skill.id)}
                                   >
-                                    {releaseAction.label}
+                                    下架
                                   </Button>
                                   <Button
                                     type="button"
@@ -4538,16 +4529,6 @@ source_url: "${parsedUrl.toString()}"
                                     onClick={() => handleDeleteMySkill(skill.id)}
                                   >
                                     删除
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 px-2 text-xs"
-                                    disabled={skill.status !== "published"}
-                                    onClick={() => handleOfflineMySkill(skill.id)}
-                                  >
-                                    下架
                                   </Button>
                                 </div>
                               </TableCell>
