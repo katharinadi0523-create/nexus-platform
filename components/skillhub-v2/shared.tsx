@@ -110,9 +110,9 @@ export function SourcePill({ source }: { source: SkillVersionSource }) {
   const meta: Record<SkillVersionSource, { label: string; icon: LucideIcon; className: string }> = {
     import: { label: "导入", icon: Upload, className: "bg-slate-100 text-slate-600" },
     "ai-create": { label: "AI 创建", icon: Sparkles, className: "bg-blue-50 text-blue-700" },
-    "ai-optimize": { label: "AI 优化", icon: Sparkles, className: "bg-violet-50 text-violet-700" },
-    "manual-edit": { label: "手动编辑", icon: Pencil, className: "bg-cyan-50 text-cyan-700" },
-    rollback: { label: "回滚", icon: RotateCcw, className: "bg-amber-50 text-amber-700" },
+    "ai-optimize": { label: "AI 优化", icon: Sparkles, className: "bg-blue-50 text-blue-700" },
+    "manual-edit": { label: "手动编辑", icon: Pencil, className: "bg-slate-100 text-slate-600" },
+    rollback: { label: "回滚", icon: RotateCcw, className: "bg-slate-100 text-slate-600" },
   };
   const item = meta[source];
   const Icon = item.icon;

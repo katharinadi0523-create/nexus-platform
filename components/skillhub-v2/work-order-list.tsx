@@ -44,7 +44,7 @@ export function WorkOrderList({ workOrders, onOpenWorkOrder }: WorkOrderListProp
                     "inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium",
                     item.type === "create"
                       ? "bg-blue-50 text-blue-700"
-                      : "bg-violet-50 text-violet-700"
+                      : "bg-slate-100 text-slate-600"
                   )}
                 >
                   {item.type === "create" ? (

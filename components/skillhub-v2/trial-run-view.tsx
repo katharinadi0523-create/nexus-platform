@@ -101,7 +101,7 @@ export function TrialRunView({ skill, onBack, onComplete }: TrialRunViewProps) {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-base font-semibold text-slate-950">AI 试运行</h1>
-              <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700">
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700">
                 <Sparkles className="h-3 w-3" />
                 复用 Claw
               </span>

@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Check,
   Circle,
-  CircleDashed,
   Clock3,
   Sparkles,
 } from "lucide-react";
@@ -84,7 +83,7 @@ export function WorkOrderView({
                   {workOrder.evidence.map((item) => (
                     <span
                       key={item}
-                      className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs text-violet-700"
+                      className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-600"
                     >
                       {item}
                     </span>
@@ -154,22 +153,12 @@ export function WorkOrderView({
               </div>
               <div className="flex items-center justify-between">
                 <dt className="text-slate-500">来源血缘</dt>
-                <dd className="inline-flex items-center gap-1 rounded bg-violet-50 px-2 py-1 text-xs text-violet-700">
+                <dd className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">
                   <Sparkles className="h-3 w-3" />
                   对话
                 </dd>
               </div>
             </dl>
-          </div>
-
-          <div className="rounded-lg border border-dashed border-violet-200 bg-violet-50/50 p-5">
-            <div className="flex items-center gap-2 font-semibold text-violet-800">
-              <CircleDashed className="h-4 w-4" />
-              评测 · 非本期
-            </div>
-            <p className="mt-2 text-xs leading-5 text-violet-700">
-              已预留发布前质量门、版本评测字段、工单结果和详情报告位；本期默认关闭并直通发布链路。
-            </p>
           </div>
         </aside>
       </div>

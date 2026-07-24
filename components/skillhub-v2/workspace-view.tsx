@@ -366,7 +366,7 @@ export function SkillWorkspaceView({
               </span>
             </div>
             {evidence.length > 0 ? (
-              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-violet-600">
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
                 <Link2 className="h-3 w-3" />
                 已挂依据：{evidence.join(" · ")}
               </div>
@@ -432,7 +432,7 @@ export function SkillWorkspaceView({
                     className={cn(
                       "rounded-full border px-2 py-1 text-[11px]",
                       evidence.includes(evidenceOptions[0].label)
-                        ? "border-violet-200 bg-violet-50 text-violet-700"
+                        ? "border-blue-200 bg-blue-50 text-blue-700"
                         : "border-slate-200 text-slate-500"
                     )}
                   >
@@ -448,7 +448,7 @@ export function SkillWorkspaceView({
                     className={cn(
                       "rounded-full border px-2 py-1 text-[11px]",
                       evidence.includes(evidenceOptions[1].label)
-                        ? "border-violet-200 bg-violet-50 text-violet-700"
+                        ? "border-blue-200 bg-blue-50 text-blue-700"
                         : "border-slate-200 text-slate-500"
                     )}
                   >
@@ -513,7 +513,7 @@ export function SkillWorkspaceView({
         <div className="flex min-h-[560px] flex-col bg-slate-50/50">
           <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
             <div className="text-sm font-semibold text-slate-800">生成产物预览</div>
-            <span className="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-medium text-violet-700">
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
               新版本草稿
             </span>
           </div>
@@ -624,7 +624,7 @@ export function SkillWorkspaceView({
               </div>
             ))}
             {evidencePreview ? (
-              <pre className="whitespace-pre-wrap rounded-md border border-violet-200 bg-violet-50/50 p-4 font-mono text-xs leading-6 text-violet-800">
+              <pre className="whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-6 text-slate-700">
                 {evidencePreview}
               </pre>
             ) : null}
