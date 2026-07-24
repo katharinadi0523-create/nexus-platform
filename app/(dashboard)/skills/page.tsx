@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -30,14 +29,14 @@ import {
   FileText,
   Folder,
   FolderOpen,
-  FolderPlus,
   Github,
+  ListFilter,
   LoaderCircle,
   Mail,
   MessagesSquare,
-  PanelLeft,
   Plus,
   Rocket,
+  RefreshCw,
   Save,
   Search,
   ShieldCheck,
@@ -86,9 +85,19 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  SkillsFoundryTab,
-  type SkillsFoundryTemplateSeed,
-} from "@/components/skills/skills-foundry-tab";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  SkillHubV2Workbench,
+  type SkillHubV2Seed,
+} from "@/components/skillhub-v2/skillhub-v2-workbench";
+import { WorkOrderList } from "@/components/skillhub-v2/work-order-list";
+import { INITIAL_WORK_ORDERS } from "@/components/skillhub-v2/mock-data";
+import type { SkillHubScreen } from "@/components/skillhub-v2/types";
 import {
   Tooltip,
   TooltipContent,
@@ -102,11 +111,9 @@ type SkillSource = "template" | "blank" | "imported";
 type SkillStatus = "draft" | "reviewing" | "published" | "reviewFailed";
 type MarketplaceSourceType = "platform" | "org";
 type MarketplaceSourceFilter = "all" | MarketplaceSourceType | "favorite";
-type SkillsExperienceMode = "mvp" | "v2";
-type SkillsTab = "marketplace" | "mine" | "foundry";
+type SkillsTab = "marketplace" | "mine";
 type SkillsModuleView = "hub" | "management";
-type MarketplaceSortMode = "downloads" | "references" | "updatedAt";
-type MySkillStatusFilter = "all" | "reviewing" | "published" | "reviewFailed";
+type MarketplaceSortMode = "downloads" | "updatedAt";
 type SkillImportMode = "local" | "url";
 type SkillImportUrlSource = "github" | "skills.sh" | "clawhub";
 type SkillReleaseMode = "publish" | "update";
@@ -177,6 +184,7 @@ interface MySkill {
   updatedAt: string;
   updatedBy: string;
   version?: string;
+  publishedVersion?: string;
   publishScope: PublishScope;
   releaseNotes: string;
   publishedTemplateId?: string;
@@ -244,17 +252,16 @@ const CATEGORY_OPTIONS = [
   { value: "安全合规", label: "安全合规" },
 ];
 
-const MY_SKILL_STATUS_FILTERS: Array<{ value: MySkillStatusFilter; label: string }> = [
-  { value: "all", label: "全部" },
-  { value: "reviewing", label: "审核中" },
+const MY_SKILL_STATUS_FILTER_OPTIONS: Array<{ value: SkillStatus; label: string }> = [
   { value: "published", label: "已上架" },
+  { value: "draft", label: "未发布" },
+  { value: "reviewing", label: "审核中" },
   { value: "reviewFailed", label: "审核失败" },
 ];
 
 const CEC_CLAW_INSTANCE = "华东专属 CEC-Claw";
 const ALL_SKILLS_VALUE = "__all__";
 const CURRENT_SKILL_EDITOR = "楠不难";
-const PENDING_FOUNDRY_TEMPLATE_STORAGE_KEY = "skills-foundry-pending-template";
 const IMPORT_URL_SOURCE_OPTIONS: Array<{
   value: SkillImportUrlSource;
   label: string;
@@ -341,6 +348,8 @@ const USER_CATEGORY_FILTERS = [
   { value: "security", label: "安全合规" },
 ] satisfies Array<{ value: AudienceCategoryFilter; label: string }>;
 
+const INITIAL_SKILL_UPDATED_AT = "07-24 10:16";
+
 function formatNow() {
   const now = new Date();
   const pad = (value: number) => value.toString().padStart(2, "0");
@@ -385,6 +394,7 @@ function createMySkill(input: {
   linkedCECClaws?: string[];
   updatedBy?: string;
   version?: string;
+  publishedVersion?: string;
   publishScope?: PublishScope;
   releaseNotes?: string;
   publishedTemplateId?: string;
@@ -411,9 +421,11 @@ function createMySkill(input: {
     activeFileId: firstFileId,
     openFileIds: firstFileId ? [firstFileId] : [],
     dirty: false,
-    updatedAt: formatNow(),
+    updatedAt: INITIAL_SKILL_UPDATED_AT,
     updatedBy: input.updatedBy ?? CURRENT_SKILL_EDITOR,
     version: input.version,
+    publishedVersion:
+      input.publishedVersion ?? (input.status === "published" ? input.version : undefined),
     publishScope: input.publishScope ?? "org",
     releaseNotes: input.releaseNotes ?? "",
     publishedTemplateId: input.publishedTemplateId,
@@ -588,6 +600,72 @@ description: "为 AI 产线项目生成规范、正式、可审批的公文与�
 }
 `,
         "my-gov"
+      ),
+    ],
+  }),
+  createMySkill({
+    id: "research-evidence-extractor",
+    name: "科研文献证据抽取",
+    description:
+      "面向农业科研论文与实验记录，抽取物种、样本、实验条件、关键结论和来源证据，输出可追溯的结构化结果。",
+    category: "数据分析",
+    tags: ["科研", "文献", "证据抽取", "农业"],
+    usageInstructions:
+      "上传论文、实验记录或给出研究主题，技能会调用学术检索与证据抽取流程，返回带原文位置的结构化结论。",
+    declaredDependencies: [DEPENDENCY_TOOL_OPTIONS[0]],
+    source: "blank",
+    status: "published",
+    version: "1.1",
+    publishedVersion: "1.0",
+    releaseNotes: "补充实验条件归一化规则，当前为尚未发布的管理版本。",
+    createdBy: "科研数据组",
+    updatedBy: "科研数据组",
+    linkedCECClaws: [CEC_CLAW_INSTANCE],
+    files: [
+      createFile(
+        "SKILL.md",
+        `---
+name: research-evidence-extractor
+description: "从科研文献和实验记录中抽取结构化结论与来源证据。"
+---
+
+# Inputs
+- 论文 PDF / 实验记录
+- 研究主题与物种范围
+
+# Outputs
+- 研究对象与实验条件
+- 关键结论
+- 原文位置与证据片段
+`,
+        "research-evidence"
+      ),
+      createFile(
+        "src/search.py",
+        `def search_literature(query, year_range=None):
+    return crossref.search(query=query, year_range=year_range)
+`,
+        "research-evidence"
+      ),
+      createFile(
+        "src/evidence.py",
+        `def extract_evidence(document):
+    return {
+        "species": find_species(document),
+        "conditions": find_experiment_conditions(document),
+        "claims": trace_claims_to_source(document),
+    }
+`,
+        "research-evidence"
+      ),
+      createFile(
+        "tests/test_rice_paper.py",
+        `def test_rice_drought_evidence():
+    result = extract_fixture("rice_drought_study.pdf")
+    assert result["species"] == "Oryza sativa"
+    assert all(item["source"] for item in result["claims"])
+`,
+        "research-evidence"
       ),
     ],
   }),
@@ -1327,14 +1405,6 @@ function getSkillStatusArcoTagClass(status: SkillStatus): string {
 const SKILL_STATUS_ARCO_TAG_FRAME =
   "inline-flex h-5 items-center gap-1 rounded-sm border border-transparent px-1 text-xs font-normal leading-[18px] whitespace-nowrap";
 
-/** CeCloud 列表页 — 状态筛选为文本 Tab + 底部主题色描边（SKILL.md Primary `#2773ff`） */
-function getMySkillStatusFilterClass(_filterValue: MySkillStatusFilter, active: boolean) {
-  if (!active) {
-    return "border-b-2 border-transparent pb-2.5 text-[13px] font-medium text-[#5a6779] hover:text-[#334155]";
-  }
-  return "border-b-2 border-[#2773ff] pb-2.5 text-[13px] font-semibold text-[#2773ff]";
-}
-
 /** 胶囊筛选：轨道与页面底一致，仅选中项白底（参考应用广场） */
 function getSkillsPlazaCapsuleFilterClass(active: boolean) {
   if (!active) {
@@ -1409,11 +1479,9 @@ interface SkillsPageProps {
 }
 
 export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
-  const router = useRouter();
   const [activeTab, setActiveTab] = useState<SkillsTab>(
     moduleView === "management" ? "mine" : "marketplace"
   );
-  const [experienceMode, setExperienceMode] = useState<SkillsExperienceMode>("mvp");
   const [marketplaceSkills, setMarketplaceSkills] = useState<SkillTemplate[]>(initialMarketplace);
   const [mySkills, setMySkills] = useState<MySkill[]>(initialMySkills);
   const [selectedSkillId, setSelectedSkillId] = useState(initialMySkills[0]?.id ?? "");
@@ -1422,7 +1490,11 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
   const [mySkillSearch, setMySkillSearch] = useState("");
   const [selectedMarketplaceDetailId, setSelectedMarketplaceDetailId] = useState("");
   const [selectedMySkillDetailId, setSelectedMySkillDetailId] = useState("");
-  const [mySkillStatusFilter, setMySkillStatusFilter] = useState<MySkillStatusFilter>("all");
+  const [skillHubV2Screen, setSkillHubV2Screen] = useState<SkillHubScreen | null>(null);
+  const [managementSubTab, setManagementSubTab] = useState<"skills" | "work-orders">("skills");
+  const [mySkillStatusFilters, setMySkillStatusFilters] = useState<SkillStatus[]>([]);
+  const [draftMySkillStatusFilters, setDraftMySkillStatusFilters] = useState<SkillStatus[]>([]);
+  const [mySkillStatusFilterOpen, setMySkillStatusFilterOpen] = useState(false);
   const [marketSourceFilter, setMarketSourceFilter] = useState<MarketplaceSourceFilter>("all");
   const [marketSortMode, setMarketSortMode] = useState<MarketplaceSortMode>("downloads");
   const [audienceCategoryFilter, setAudienceCategoryFilter] =
@@ -1476,9 +1548,6 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
   const [releaseNotesInput, setReleaseNotesInput] = useState("");
   const [releaseScope, setReleaseScope] = useState<PublishScope>("org");
   const [releaseCategory, setReleaseCategory] = useState("通用");
-  const [pendingFoundryTemplate, setPendingFoundryTemplate] =
-    useState<SkillsFoundryTemplateSeed | null>(null);
-  const didResolveModuleEntryRef = useRef(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const releaseImportInputRef = useRef<HTMLInputElement>(null);
   const reviewApprovalTimersRef = useRef<Record<string, number>>({});
@@ -1488,66 +1557,8 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
   const deferredMySkillSearch = useDeferredValue(mySkillSearch);
   const deferredFileSearch = useDeferredValue(fileSearch);
   const isAllSkillsSelected = selectedSkillId === ALL_SKILLS_VALUE;
-  const isMvpMode = experienceMode === "mvp";
   const isHubModule = moduleView === "hub";
   const isManagementModule = moduleView === "management";
-  const isSkillDetailView = Boolean(selectedMarketplaceDetailId || selectedMySkillDetailId);
-  const showManagementTabs = isManagementModule && !isMvpMode;
-  const showExperienceSwitcher = !isSkillDetailView;
-  /** 管理页版本切换为右上角 hover 浮层，不在此占位 */
-  const showTopControlsBar = showManagementTabs;
-
-  useEffect(() => {
-    if (isMvpMode && marketSortMode === "references") {
-      setMarketSortMode("downloads");
-    }
-  }, [isMvpMode, marketSortMode]);
-
-  useEffect(() => {
-    if (didResolveModuleEntryRef.current) {
-      return;
-    }
-
-    const currentSearchParams =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search)
-        : new URLSearchParams();
-    const requestedMode = currentSearchParams.get("mode");
-    const nextExperienceMode: SkillsExperienceMode = requestedMode === "v2" ? "v2" : "mvp";
-    setExperienceMode(nextExperienceMode);
-
-    if (isManagementModule) {
-      const requestedTab = currentSearchParams.get("tab");
-      setActiveTab(
-        nextExperienceMode === "v2" && requestedTab === "foundry" ? "foundry" : "mine"
-      );
-
-      if (nextExperienceMode === "v2" && requestedTab === "foundry") {
-        if (typeof window !== "undefined") {
-          const serializedTemplate = window.sessionStorage.getItem(
-            PENDING_FOUNDRY_TEMPLATE_STORAGE_KEY
-          );
-          if (serializedTemplate) {
-            try {
-              setPendingFoundryTemplate(JSON.parse(serializedTemplate) as SkillsFoundryTemplateSeed);
-            } catch {
-              window.sessionStorage.removeItem(PENDING_FOUNDRY_TEMPLATE_STORAGE_KEY);
-            }
-          }
-        }
-      }
-    } else {
-      setActiveTab("marketplace");
-    }
-
-    didResolveModuleEntryRef.current = true;
-  }, [isManagementModule]);
-
-  useEffect(() => {
-    if (isMvpMode && activeTab === "foundry") {
-      setActiveTab(isManagementModule ? "mine" : "marketplace");
-    }
-  }, [activeTab, isManagementModule, isMvpMode]);
 
   useEffect(() => {
     if (selectedMarketplaceDetailId && !marketplaceSkills.some((skill) => skill.id === selectedMarketplaceDetailId)) {
@@ -1670,6 +1681,27 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
     () => mySkills.find((skill) => skill.id === selectedMySkillDetailId) ?? null,
     [mySkills, selectedMySkillDetailId]
   );
+  const skillHubV2Seed = useMemo<SkillHubV2Seed | undefined>(() => {
+    if (!selectedMySkillDetail) return undefined;
+    return {
+      id: selectedMySkillDetail.id,
+      name: selectedMySkillDetail.name,
+      description: selectedMySkillDetail.description,
+      owner: selectedMySkillDetail.createdBy,
+      updatedAt: selectedMySkillDetail.updatedAt,
+      status:
+        selectedMySkillDetail.status === "reviewFailed"
+          ? "failed"
+          : selectedMySkillDetail.status,
+      version: selectedMySkillDetail.version,
+      publishedVersion: selectedMySkillDetail.publishedVersion,
+      usageInstructions: selectedMySkillDetail.usageInstructions?.trim() || "暂未填写使用说明",
+      files: selectedMySkillDetail.files.map((file) => ({
+        path: file.path,
+        content: file.content,
+      })),
+    };
+  }, [selectedMySkillDetail]);
   const selectedMySkillPublishedTemplate = useMemo(
     () =>
       selectedMySkillDetail?.publishedTemplateId
@@ -1726,11 +1758,6 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
           if (updatedDelta !== 0) {
             return updatedDelta;
           }
-        } else if (marketSortMode === "references") {
-          const referenceDelta = (right.references ?? 0) - (left.references ?? 0);
-          if (referenceDelta !== 0) {
-            return referenceDelta;
-          }
         } else {
           const downloadDelta = right.downloads - left.downloads;
           if (downloadDelta !== 0) {
@@ -1749,7 +1776,7 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
   const filteredMySkills = useMemo(() => {
     const query = deferredMySkillSearch.trim().toLowerCase();
     const scopedSkills = mySkills.filter((skill) =>
-      mySkillStatusFilter === "all" ? true : skill.status === mySkillStatusFilter
+      mySkillStatusFilters.length === 0 ? true : mySkillStatusFilters.includes(skill.status)
     );
 
     if (!query) {
@@ -1762,7 +1789,7 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
         .toLowerCase()
         .includes(query)
     );
-  }, [deferredMySkillSearch, mySkillStatusFilter, mySkills]);
+  }, [deferredMySkillSearch, mySkillStatusFilters, mySkills]);
 
   const visibleFiles = useMemo<TreeFileEntry[]>(() => {
     const scopedSkills = isAllSkillsSelected ? mySkills : activeSkill ? [activeSkill] : [];
@@ -1909,9 +1936,7 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
         downloads: existingTemplate?.downloads ?? 0,
         references: existingTemplate?.references ?? 0,
         referencedAgents: existingTemplate?.referencedAgents ?? [],
-        boundToCEC:
-          !isMvpMode &&
-          (skillToPublish.linkedCECClaws.length > 0 || existingTemplate?.boundToCEC === true),
+        boundToCEC: false,
         files: cloneFiles(skillToPublish.files, `published-${publishedId}`),
       };
 
@@ -1920,7 +1945,7 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
         publishedTemplate,
       };
     },
-    [isMvpMode]
+    []
   );
 
   const approveReviewingSkill = useCallback((skillId: string, expectedVersion: string) => {
@@ -1939,6 +1964,7 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
         updatedBy: CURRENT_SKILL_EDITOR,
         dirty: false,
         hasPublishedHistory: true,
+        publishedVersion: target.version,
         publishedTemplateId: target.publishedTemplateId ?? `${target.id}-published`,
       };
 
@@ -2243,35 +2269,6 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
     toast.success(nextFavorite ? "已加入收藏" : "已取消收藏");
   };
 
-  const handleAddToSkillsFoundry = (template: SkillTemplate) => {
-    const nextTemplate = {
-      requestId: `${template.id}-${Date.now()}`,
-      id: template.id,
-      name: template.name,
-      files: template.files.map((file) => ({
-        path: file.path,
-        content: file.content,
-      })),
-    };
-
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(
-        PENDING_FOUNDRY_TEMPLATE_STORAGE_KEY,
-        JSON.stringify(nextTemplate)
-      );
-    }
-
-    setPendingFoundryTemplate(nextTemplate);
-
-    if (moduleView === "management") {
-      setExperienceMode("v2");
-      setActiveTab("foundry");
-      return;
-    }
-
-    router.push("/skills-management?tab=foundry&mode=v2");
-  };
-
   const handleExportMySkill = async (skillId: string) => {
     const skill = mySkills.find((item) => item.id === skillId);
     if (!skill) {
@@ -2385,10 +2382,28 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
 
   const openMySkillDetail = (skillId: string) => {
     setSelectedMySkillDetailId(skillId);
+    setSkillHubV2Screen({ kind: "detail", skillId, tab: "overview" });
   };
 
   const closeMySkillDetail = () => {
     setSelectedMySkillDetailId("");
+    setSkillHubV2Screen(null);
+  };
+
+  const openSkillHubV2Create = () => {
+    setSelectedMySkillDetailId("");
+    setSkillHubV2Screen({ kind: "workspace", mode: "create" });
+  };
+
+  const openSkillHubV2WorkOrder = (workOrderId: string) => {
+    const workOrder = INITIAL_WORK_ORDERS.find((item) => item.id === workOrderId);
+    setSelectedMySkillDetailId("");
+    setSkillHubV2Screen({
+      kind: "workspace",
+      mode: workOrder?.type ?? "optimize",
+      workOrderId,
+      skillId: workOrder?.skillId,
+    });
   };
 
   const resetImportDraft = () => {
@@ -2458,7 +2473,8 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
 
   const finalizeImportedSkill = (importedSkill: MySkill, successMessage: string) => {
     setMySkills((current) => [importedSkill, ...current]);
-    setMySkillStatusFilter("all");
+    setMySkillStatusFilters([]);
+    setDraftMySkillStatusFilters([]);
     setMySkillSearch("");
     setSelectedSkillId(importedSkill.id);
     setFocusedSkillId(importedSkill.id);
@@ -3154,128 +3170,11 @@ source_url: "${parsedUrl.toString()}"
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className={cn(isManagementModule ? "space-y-4" : "space-y-5")}>
-        {showTopControlsBar ? (
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <TabsList
-            className={cn(
-              "inline-grid h-auto w-fit max-w-full rounded-[20px] border border-slate-200/80 bg-white p-1 shadow-sm",
-              "grid-cols-2"
-            )}
-          >
-            <TabsTrigger
-              value="mine"
-              className="h-12 min-w-[156px] justify-center gap-2 rounded-[16px] px-4 py-2 text-sm font-semibold data-[state=active]:border-slate-200 data-[state=active]:bg-slate-50 data-[state=active]:text-slate-950 data-[state=active]:shadow-sm"
-            >
-              <PanelLeft className="h-4 w-4" />
-              <span>技能管理</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="foundry"
-              className="h-12 min-w-[156px] justify-center gap-2 rounded-[16px] px-4 py-2 text-sm font-semibold data-[state=active]:border-slate-200 data-[state=active]:bg-slate-50 data-[state=active]:text-slate-950 data-[state=active]:shadow-sm"
-            >
-              <Sparkles className="h-4 w-4" />
-              <span>技能工场</span>
-            </TabsTrigger>
-          </TabsList>
-        </div>
-        ) : null}
-
-        {isManagementModule && showExperienceSwitcher ? (
-          <div
-            className="pointer-events-auto fixed bottom-0 right-0 z-50 flex h-36 w-44 flex-col items-end justify-end pb-4 pr-3 pt-0 md:h-40 md:w-52 md:pr-5 md:pb-5 group/mgmt-version"
-            aria-label="右下角版本切换触发区"
-          >
-            <div
-              className={cn(
-                "flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-md transition-opacity duration-200",
-                "pointer-events-none opacity-0 group-hover/mgmt-version:pointer-events-auto group-hover/mgmt-version:opacity-100"
-              )}
-            >
-              <div className="text-[11px] font-semibold tracking-[0.16em] text-slate-500">版本</div>
-              <div className="relative grid grid-cols-2 rounded-full bg-slate-100 p-1">
-                <div
-                  aria-hidden
-                  className={cn(
-                    "absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-slate-900 shadow-sm transition-transform duration-200",
-                    isMvpMode ? "translate-x-0" : "translate-x-full"
-                  )}
-                />
-                <button
-                  type="button"
-                  onClick={() => setExperienceMode("mvp")}
-                  className={cn(
-                    "relative z-10 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
-                    isMvpMode ? "text-white" : "text-slate-600"
-                  )}
-                >
-                  MVP
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setExperienceMode("v2")}
-                  className={cn(
-                    "relative z-10 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
-                    isMvpMode ? "text-slate-600" : "text-white"
-                  )}
-                >
-                  迭代版
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
         {isHubModule ? (
           <TabsContent value="marketplace" className="mt-0 space-y-0">
           {selectedMarketplaceDetail ? renderMarketplaceDetailPage(selectedMarketplaceDetail) : (
             <>
           <div className="skills-plaza-canvas relative">
-            {showExperienceSwitcher && isHubModule ? (
-              <div
-                className="pointer-events-auto absolute right-0 top-0 z-40 flex h-28 w-[min(100%,18rem)] flex-col items-end justify-start pt-1 pr-0 md:pr-1 group/hub-version"
-                aria-label="版本切换触发区"
-              >
-                <div
-                  className={cn(
-                    "flex items-center gap-3 rounded-full px-3 py-2 shadow-md backdrop-blur-sm transition-opacity duration-200",
-                    "pointer-events-none opacity-0 group-hover/hub-version:pointer-events-auto group-hover/hub-version:opacity-100",
-                    "border border-[#dbe7f4]/90 bg-white"
-                  )}
-                >
-                  <div className="text-[11px] font-semibold tracking-[0.16em] text-[#5a6779]">版本</div>
-                  <div className="relative grid grid-cols-2 rounded-full bg-[#f0f6fe] p-1">
-                    <div
-                      aria-hidden
-                      className={cn(
-                        "absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-[#2773ff] shadow-[0_10px_24px_-12px_rgba(39,115,255,0.45)] transition-transform duration-200",
-                        isMvpMode ? "translate-x-0" : "translate-x-full"
-                      )}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setExperienceMode("mvp")}
-                      className={cn(
-                        "relative z-10 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
-                        isMvpMode ? "text-white" : "text-[#5a6779]"
-                      )}
-                    >
-                      MVP
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setExperienceMode("v2")}
-                      className={cn(
-                        "relative z-10 rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
-                        isMvpMode ? "text-[#5a6779]" : "text-white"
-                      )}
-                    >
-                      迭代版
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
             <div className="skills-plaza-filter-top flex flex-col gap-3 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between">
               <div className="min-w-0 flex-1">
                 <span className="skills-plaza-gradient-title skills-display inline-block text-[1.75rem] font-bold leading-tight tracking-tight">
@@ -3349,18 +3248,6 @@ source_url: "${parsedUrl.toString()}"
                     >
                       下载量
                     </button>
-                    {!isMvpMode ? (
-                      <button
-                        type="button"
-                        onClick={() => setMarketSortMode("references")}
-                        className={cn(
-                          "shrink-0",
-                          getSkillsPlazaCapsuleFilterClass(marketSortMode === "references")
-                        )}
-                      >
-                        引用量
-                      </button>
-                    ) : null}
                     <button
                       type="button"
                       onClick={() => setMarketSortMode("updatedAt")}
@@ -3515,64 +3402,7 @@ source_url: "${parsedUrl.toString()}"
                               </Tooltip>
                             </TooltipProvider>
                           ) : null}
-                          {!isMvpMode ? (
-                            <TooltipProvider delayDuration={120}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    onClick={(event) => event.stopPropagation()}
-                                    className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[#dbe7f4] bg-[#f8f9fb] px-2.5 py-1 text-[11px] text-[#5a6779] transition-colors hover:border-[#2773ff]/25 hover:bg-white hover:text-[#2f5fbf]"
-                                  >
-                                    <span className="font-semibold text-[#000000]">
-                                      {(skill.references ?? 0).toLocaleString()}
-                                    </span>
-                                    <span>引用</span>
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  align="start"
-                                  className="max-w-[260px] rounded-2xl border-[#dbe7f4] bg-white px-3 py-3 text-[#5a6779] shadow-[0_20px_48px_-32px_rgba(39,115,255,0.18)]"
-                                >
-                                  <div className="space-y-2">
-                                    <div className="text-[11px] font-semibold tracking-[0.14em] text-[#5a6779] uppercase">
-                                      引用智能体
-                                    </div>
-                                    <div className="grid gap-1">
-                                      {(skill.referencedAgents ?? []).length > 0 ? (
-                                        (skill.referencedAgents ?? []).map((agent) => (
-                                          <div
-                                            key={`${skill.id}-${agent}`}
-                                            className="rounded-xl bg-[#f8f9fb] px-2.5 py-1.5 text-[12px] text-[#000000]/80"
-                                          >
-                                            {agent}
-                                          </div>
-                                        ))
-                                      ) : (
-                                        <div className="rounded-xl bg-[#f8f9fb] px-2.5 py-1.5 text-[12px] text-[#5a6779]">
-                                          暂无引用中的智能体
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          ) : null}
                           <div className="ml-auto flex items-center gap-1.5">
-                            {!isMvpMode ? (
-                              <Button
-                                variant="outline"
-                                className="h-9 rounded-full border border-[#2773ff]/35 bg-white px-3 text-[13px] font-medium text-[#2773ff] shadow-none hover:bg-[#2773ff]/6"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleAddToSkillsFoundry(skill);
-                                }}
-                              >
-                                <FolderPlus className="h-4 w-4" />
-                                加入Foundry
-                              </Button>
-                            ) : null}
                             <Button
                               variant="outline"
                               size="icon"
@@ -3602,24 +3432,6 @@ source_url: "${parsedUrl.toString()}"
           </div>
             </>
           )}
-          </TabsContent>
-        ) : null}
-
-        {isManagementModule ? (
-          <TabsContent
-            value="foundry"
-            forceMount
-            className={cn("space-y-4", activeTab !== "foundry" && "hidden", isMvpMode && "hidden")}
-          >
-            <SkillsFoundryTab
-              pendingTemplate={pendingFoundryTemplate}
-              onPendingTemplateHandled={() => {
-                setPendingFoundryTemplate(null);
-                if (typeof window !== "undefined") {
-                  window.sessionStorage.removeItem(PENDING_FOUNDRY_TEMPLATE_STORAGE_KEY);
-                }
-              }}
-            />
           </TabsContent>
         ) : null}
 
@@ -4362,75 +4174,219 @@ source_url: "${parsedUrl.toString()}"
 
           {useUnifiedSkillsManagementView ? (
             <>
-            {selectedMySkillDetail ? renderMySkillDetailPage(selectedMySkillDetail) : (
+            {skillHubV2Screen ? (
+              <SkillHubV2Workbench
+                key={`${skillHubV2Screen.kind}-${selectedMySkillDetailId || "new"}`}
+                initialScreen={skillHubV2Screen}
+                seedSkill={skillHubV2Seed}
+                onExit={closeMySkillDetail}
+              />
+            ) : selectedMySkillDetail ? renderMySkillDetailPage(selectedMySkillDetail) : (
             <div>
                 {/* list-page: 主标题 */}
                 <div className="mb-5 flex flex-shrink-0 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                  <h2 className="text-[20px] font-medium leading-8 tracking-normal text-[#0f172a]">
-                    技能管理
-                  </h2>
-                  {/** list-page §4：强视觉主按钮（Arco primary default），不用 shadcn Button 以免 h-9 / rounded-md 覆盖 */}
+                  <div>
+                    <h2 className="text-[20px] font-medium leading-8 tracking-normal text-[#0f172a]">
+                      技能管理
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      在现有技能资产上完成创建、优化、版本治理与运行时装配。
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[4px] border border-transparent bg-[#2773ff] px-4 text-[12px] font-semibold leading-[1.5715] text-white shadow-none transition-all duration-100 ease-linear hover:bg-[#1f66f0] active:bg-[#1956d9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/35 focus-visible:ring-offset-0"
+                        >
+                          <Plus className="h-4 w-4" />
+                          新建技能
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-64 rounded-lg p-1.5">
+                        <DropdownMenuItem
+                          className="items-start gap-3 rounded-md p-3"
+                          onSelect={openImportDialog}
+                        >
+                          <span className="rounded-md bg-slate-100 p-2 text-slate-600">
+                            <Upload className="h-4 w-4" />
+                          </span>
+                          <span>
+                            <span className="block font-medium text-slate-900">导入技能</span>
+                            <span className="mt-0.5 block text-xs leading-5 text-slate-500">
+                              上传 zip 或粘贴技能仓库链接
+                            </span>
+                          </span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="items-start gap-3 rounded-md p-3"
+                          onSelect={openSkillHubV2Create}
+                        >
+                          <span className="rounded-md bg-blue-50 p-2 text-blue-600">
+                            <Sparkles className="h-4 w-4" />
+                          </span>
+                          <span>
+                            <span className="block font-medium text-slate-900">AI 创建</span>
+                            <span className="mt-0.5 block text-xs leading-5 text-slate-500">
+                              通过 Claw 对话生成首个技能版本
+                            </span>
+                          </span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+
+                <div className="mb-4 flex items-center gap-6 border-b border-slate-200">
                   <button
                     type="button"
-                    className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[4px] border border-transparent bg-[#2773ff] px-4 text-[12px] font-semibold leading-[1.5715] text-white shadow-none transition-all duration-100 ease-linear hover:bg-[#1f66f0] active:bg-[#1956d9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/35 focus-visible:ring-offset-0 disabled:pointer-events-none disabled:opacity-50"
-                    onClick={openImportDialog}
+                    onClick={() => setManagementSubTab("skills")}
+                    className={cn(
+                      "-mb-px inline-flex h-10 items-center gap-2 border-b-2 px-1 text-sm font-medium transition-colors",
+                      managementSubTab === "skills"
+                        ? "border-[#2773ff] text-[#2773ff]"
+                        : "border-transparent text-slate-500 hover:text-slate-800"
+                    )}
                   >
-                    <Upload className="pointer-events-none h-4 w-4 shrink-0 opacity-100" aria-hidden />
-                    导入技能
+                    技能
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
+                      {mySkills.length}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setManagementSubTab("work-orders")}
+                    className={cn(
+                      "-mb-px inline-flex h-10 items-center gap-2 border-b-2 px-1 text-sm font-medium transition-colors",
+                      managementSubTab === "work-orders"
+                        ? "border-[#2773ff] text-[#2773ff]"
+                        : "border-transparent text-slate-500 hover:text-slate-800"
+                    )}
+                  >
+                    工单
+                    <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[11px] text-violet-700">
+                      {INITIAL_WORK_ORDERS.filter((item) => item.status !== "completed").length}
+                    </span>
                   </button>
                 </div>
 
-                {/* list-page: 工具条（筛选 + 搜索） */}
-                <div className="mb-4 flex flex-shrink-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="-mb-px flex flex-wrap gap-5 border-b border-slate-200">
-                    {MY_SKILL_STATUS_FILTERS.map((filter) => (
-                      <button
-                        key={filter.value}
-                        type="button"
-                        onClick={() => setMySkillStatusFilter(filter.value)}
-                        className={cn(
-                          "transition-colors duration-100",
-                          getMySkillStatusFilterClass(
-                            filter.value,
-                            mySkillStatusFilter === filter.value
-                          )
-                        )}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="relative w-full min-w-0 lg:max-w-[320px]">
+                {managementSubTab === "skills" ? (
+                  <>
+                {/* list-page: 工具条（搜索 + 刷新） */}
+                <div className="mb-4 flex flex-shrink-0 items-center gap-2">
+                  <div className="relative w-full min-w-0 sm:max-w-[280px]">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <Input
                       value={mySkillSearch}
                       onChange={(event) => setMySkillSearch(event.target.value)}
-                      placeholder="搜索 技能管理"
-                      className="h-8 rounded border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-none focus-visible:border-[#2773ff]/40 focus-visible:ring-[#dbe7f4]"
+                      placeholder="搜索技能名称"
+                      className="h-8 rounded-[4px] border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-none focus-visible:border-[#2773ff]/40 focus-visible:ring-[#dbe7f4]"
                     />
                   </div>
+                  <button
+                    type="button"
+                    aria-label="刷新列表"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                    onClick={() => toast.success("刷新成功")}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <Table className="min-w-[1120px]">
+                  <Table className="min-w-[1120px] table-fixed">
                     <TableHeader className="bg-slate-50">
                       <TableRow className="border-slate-200 hover:bg-slate-50">
-                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
+                        <TableHead className="h-9 w-[220px] px-4 text-left text-xs font-semibold text-slate-600">
                           名称
                         </TableHead>
-                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
+                        <TableHead className="h-9 w-[100px] px-3 text-left text-xs font-semibold text-slate-600">
                           创建人
                         </TableHead>
-                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
-                          发布状态
+                        <TableHead className="h-9 w-[120px] px-3 text-left text-xs font-semibold text-slate-600">
+                          <div className="inline-flex items-center gap-1">
+                            <span>发布状态</span>
+                            <Popover
+                              open={mySkillStatusFilterOpen}
+                              onOpenChange={(open) => {
+                                setMySkillStatusFilterOpen(open);
+                                if (open) setDraftMySkillStatusFilters(mySkillStatusFilters);
+                              }}
+                            >
+                              <PopoverTrigger asChild>
+                                <button
+                                  type="button"
+                                  aria-label="筛选发布状态"
+                                  className={cn(
+                                    "inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-200/70 hover:text-slate-600",
+                                    mySkillStatusFilters.length > 0 && "text-[#2773ff]"
+                                  )}
+                                >
+                                  <ListFilter className="h-3.5 w-3.5" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent
+                                align="start"
+                                className="w-[200px] rounded-[6px] border-slate-200 p-0 shadow-md"
+                              >
+                                <div className="space-y-2 p-3">
+                                  {MY_SKILL_STATUS_FILTER_OPTIONS.map((option) => {
+                                    const checked = draftMySkillStatusFilters.includes(option.value);
+                                    return (
+                                      <label
+                                        key={option.value}
+                                        className="flex cursor-pointer items-center gap-2 text-sm text-slate-700"
+                                      >
+                                        <Checkbox
+                                          checked={checked}
+                                          onCheckedChange={(next) => {
+                                            setDraftMySkillStatusFilters((current) =>
+                                              next === true
+                                                ? current.includes(option.value)
+                                                  ? current
+                                                  : [...current, option.value]
+                                                : current.filter((value) => value !== option.value)
+                                            );
+                                          }}
+                                        />
+                                        <span>{option.label}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                                <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-3 py-2">
+                                  <button
+                                    type="button"
+                                    className="h-7 rounded px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                                    onClick={() => setDraftMySkillStatusFilters([])}
+                                  >
+                                    重置
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="h-7 rounded-[4px] bg-[#2773ff] px-3 text-xs font-semibold text-white transition-colors hover:bg-[#1f66f0]"
+                                    onClick={() => {
+                                      setMySkillStatusFilters(draftMySkillStatusFilters);
+                                      setMySkillStatusFilterOpen(false);
+                                    }}
+                                  >
+                                    确定
+                                  </button>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
                         </TableHead>
-                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
+                        <TableHead className="h-9 w-[200px] px-3 text-left text-xs font-semibold text-slate-600">
                           描述
                         </TableHead>
-                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
+                        <TableHead className="h-9 w-[120px] px-3 text-left text-xs font-semibold text-slate-600">
                           更新时间
                         </TableHead>
-                        <TableHead className="h-9 px-4 text-left text-xs font-semibold text-slate-600">
+                        <TableHead className="h-9 w-[260px] border-l border-slate-200 bg-slate-50 px-3 text-left text-xs font-semibold text-slate-600">
                           操作
                         </TableHead>
                       </TableRow>
@@ -4459,15 +4415,13 @@ source_url: "${parsedUrl.toString()}"
                           });
                           const statusMeta = getSkillStatusMeta(skill.status);
                           const StatusIcon = statusMeta.icon;
-                          const releaseAction = getSkillReleaseActionMeta(skill);
                           const statusVersionLabel = skill.version
-                            ? skill.status === "draft" && hasPublishedHistory(skill)
-                              ? `历史 ${formatSkillVersion(skill.version)}`
-                              : formatSkillVersion(skill.version)
+                            ? skill.publishedVersion && skill.publishedVersion !== skill.version
+                              ? `当前 ${formatSkillVersion(skill.version)} · 发布 ${formatSkillVersion(skill.publishedVersion)}`
+                              : skill.status === "draft" && hasPublishedHistory(skill)
+                                ? `历史 ${formatSkillVersion(skill.version)}`
+                                : formatSkillVersion(skill.version)
                             : null;
-
-                          const rowActionClass =
-                            "inline-flex h-auto items-center rounded px-1 py-1 text-xs font-semibold text-[#2773ff] transition-colors hover:bg-[#f0f6fe] hover:text-[#2f5fbf]";
 
                           return (
                             <TableRow
@@ -4538,46 +4492,44 @@ source_url: "${parsedUrl.toString()}"
                                 </div>
                               </TableCell>
 
-                              <TableCell className="px-4 py-3 align-top">
-                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <TableCell className="w-[260px] border-l border-slate-200 bg-white px-3 py-3 align-top">
+                                <div className="flex items-center gap-1 whitespace-nowrap">
                                   <button
+                                   type="button"
+                                   className="h-7 px-2 text-xs font-medium text-[#2773ff] hover:underline"
+                                   onClick={() => openMySkillDetail(skill.id)}
+                                   title="查看详情、版本管理和依赖"
+                                  >
+                                   详情
+                                  </button>
+                                  <Button
                                     type="button"
-                                    className={rowActionClass}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
                                     onClick={() => handleExportMySkill(skill.id)}
                                   >
                                     导出
-                                  </button>
-                                  <button
+                                  </Button>
+                                  <Button
                                     type="button"
-                                    className={cn(
-                                      rowActionClass,
-                                      releaseAction.disabled &&
-                                        "text-[#cbd5e1] hover:bg-transparent hover:text-[#cbd5e1]"
-                                    )}
-                                    onClick={() => openReleaseDialog(skill.id)}
-                                    disabled={releaseAction.disabled}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    disabled={skill.status !== "published"}
+                                    onClick={() => handleOfflineMySkill(skill.id)}
                                   >
-                                    {releaseAction.label}
-                                  </button>
-                                  <button
+                                    下架
+                                  </Button>
+                                  <Button
                                     type="button"
-                                    className={rowActionClass}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                                     onClick={() => handleDeleteMySkill(skill.id)}
                                   >
                                     删除
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={cn(
-                                      rowActionClass,
-                                      skill.status !== "published" &&
-                                        "text-[#cbd5e1] hover:bg-transparent hover:text-[#cbd5e1]"
-                                    )}
-                                    onClick={() => handleOfflineMySkill(skill.id)}
-                                    disabled={skill.status !== "published"}
-                                  >
-                                    下架
-                                  </button>
+                                  </Button>
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -4587,6 +4539,13 @@ source_url: "${parsedUrl.toString()}"
                     </TableBody>
                   </Table>
                 </div>
+                  </>
+                ) : (
+                  <WorkOrderList
+                    workOrders={INITIAL_WORK_ORDERS}
+                    onOpenWorkOrder={openSkillHubV2WorkOrder}
+                  />
+                )}
             </div>
 	            )}
 
@@ -5225,17 +5184,6 @@ source_url: "${parsedUrl.toString()}"
                                 ? "审核失败"
                                 : "草稿"}
                         </span>
-                        {!isMvpMode
-                          ? activeSkill.linkedCECClaws.map((cec) => (
-                              <Badge
-                                key={cec}
-                                variant="outline"
-                                className="border-sky-200 bg-sky-50 text-sky-700"
-                              >
-                                已绑定：{cec}
-                              </Badge>
-                            ))
-                          : null}
                         {activeSkill.dirty ? (
                           <Badge variant="outline" className="border-rose-200 bg-rose-50 text-rose-700">
                             未保存修改
