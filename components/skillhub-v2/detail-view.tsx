@@ -1,0 +1,977 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ChevronRight,
+  CircleDashed,
+  Download,
+  FileArchive,
+  GitCompareArrows,
+  History,
+  LoaderCircle,
+  LockKeyhole,
+  PackageCheck,
+  Pencil,
+  Play,
+  Plus,
+  RotateCcw,
+  Save,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import {
+  buildFileTree,
+  DependencyStatusPill,
+  DependencyTypeIcon,
+  FileGlyph,
+  SkillStatusPill,
+  SourcePill,
+} from "./shared";
+import type {
+  SkillDependency,
+  SkillDetailTab,
+  SkillManualDraft,
+  SkillRecord,
+  SkillVersion,
+} from "./types";
+
+interface SkillDetailViewProps {
+  skill: SkillRecord;
+  activeTab: SkillDetailTab;
+  canManage: boolean;
+  onBack: () => void;
+  onTabChange: (tab: SkillDetailTab) => void;
+  onOptimize: () => void;
+  onExport: () => void;
+  onRunAssembly: () => void;
+  onRollback: (versionId: string) => void;
+  onSaveManualVersion: (draft: SkillManualDraft) => void;
+}
+
+const TABS: Array<{ id: SkillDetailTab; label: string; isNew?: boolean }> = [
+  { id: "overview", label: "概览" },
+  { id: "files", label: "文件结构", isNew: true },
+  { id: "dependencies", label: "依赖", isNew: true },
+  { id: "versions", label: "版本管理", isNew: true },
+];
+
+export function SkillDetailView({
+  skill,
+  activeTab,
+  canManage,
+  onBack,
+  onTabChange,
+  onOptimize,
+  onExport,
+  onRunAssembly,
+  onRollback,
+  onSaveManualVersion,
+}: SkillDetailViewProps) {
+  const lockedVersion = skill.versions[0]?.version ?? "v1.0";
+  const createDraft = (): SkillManualDraft => ({
+    name: skill.name,
+    displayName: skill.displayName,
+    description: skill.description,
+    usageInstructions: skill.usageInstructions,
+    files: (skill.versions[0]?.files ?? []).map((file) => ({ ...file })),
+    dependencies: skill.dependencies.map((dependency) => ({ ...dependency })),
+  });
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<SkillManualDraft>(createDraft);
+
+  function cancelEditing() {
+    setDraft(createDraft());
+    setEditing(false);
+  }
+
+  function saveAsNewVersion() {
+    onSaveManualVersion(draft);
+    setEditing(false);
+    toast.success(`已基于 ${lockedVersion} 保存技能级改动，新版本草稿已生成`);
+  }
+
+  return (
+    <section className="space-y-4" data-testid="skillhub-detail-view">
+      <div className="rounded-lg border border-slate-200 bg-white">
+        <header className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={onBack}
+              aria-label="返回技能管理"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#1bb3a9] text-white">
+              <FileArchive className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-xl font-semibold text-slate-950">{skill.name}</h1>
+                <SkillStatusPill status={skill.status} />
+                {skill.status === "published" ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
+                    <LockKeyhole className="h-3 w-3" />
+                    发布态冻结
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 line-clamp-1 text-sm text-slate-500">{skill.description}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pl-11 lg:pl-0">
+            {canManage && editing ? (
+              <span className="inline-flex h-9 items-center gap-1 rounded-[5px] border border-blue-100 bg-blue-50 px-3 text-xs font-medium text-blue-700">
+                <LockKeyhole className="h-3.5 w-3.5" />
+                基于 {lockedVersion} · 共同生成新版本
+              </span>
+            ) : null}
+            <Button type="button" variant="outline" className="h-9 rounded-[5px]" onClick={onExport}>
+              <Download className="h-4 w-4" />
+              导出 .zip
+            </Button>
+            {canManage ? (
+              <>
+                {editing ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-9 rounded-[5px]"
+                      onClick={cancelEditing}
+                    >
+                      <X className="h-4 w-4" />
+                      取消
+                    </Button>
+                    <Button
+                      type="button"
+                      className="h-9 rounded-[5px] bg-[#2773ff]"
+                      onClick={saveAsNewVersion}
+                    >
+                      <Save className="h-4 w-4" />
+                      保存为新版本
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 rounded-[5px]"
+                      onClick={() => setEditing(true)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      编辑技能
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 rounded-[5px] text-[#2773ff]"
+                      onClick={onOptimize}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      AI 优化
+                    </Button>
+                    <Button type="button" className="h-9 rounded-[5px] bg-[#2773ff]">
+                      更新发布
+                    </Button>
+                  </>
+                )}
+              </>
+            ) : null}
+          </div>
+        </header>
+
+        <nav className="flex items-center gap-6 overflow-x-auto px-5">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onTabChange(tab.id)}
+              className={cn(
+                "relative flex h-12 shrink-0 items-center gap-1.5 border-b-2 text-sm font-medium transition-colors",
+                activeTab === tab.id
+                  ? "border-[#2773ff] text-[#2773ff]"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              )}
+            >
+              {tab.label}
+              {tab.isNew ? (
+                <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] text-violet-700">
+                  新增
+                </span>
+              ) : null}
+            </button>
+          ))}
+          <span className="flex h-12 shrink-0 items-center gap-1.5 text-sm text-slate-300">
+            评测报告
+            <span className="rounded-full border border-dashed border-slate-200 px-1.5 py-0.5 text-[10px]">
+              预留
+            </span>
+          </span>
+        </nav>
+      </div>
+
+      {editing ? (
+        <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-blue-700">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            当前处于技能级编辑态。概览、文件结构与依赖共用同一份草稿，切换 Tab
+            不会丢失修改；点击“保存为新版本”后统一生成一个版本。
+          </span>
+        </div>
+      ) : null}
+
+      {activeTab === "overview" ? (
+        <OverviewTab skill={skill} draft={draft} editing={editing} onChange={setDraft} />
+      ) : null}
+      {activeTab === "files" ? (
+        <FilesTab
+          files={draft.files}
+          editing={editing}
+          lockedVersion={lockedVersion}
+          onChange={(files) => setDraft((current) => ({ ...current, files }))}
+        />
+      ) : null}
+      {activeTab === "dependencies" ? (
+        <DependenciesTab
+          skill={skill}
+          dependencies={draft.dependencies}
+          editing={editing}
+          canManage={canManage}
+          onChange={(dependencies) => setDraft((current) => ({ ...current, dependencies }))}
+          onRunAssembly={onRunAssembly}
+        />
+      ) : null}
+      {activeTab === "versions" ? (
+        <VersionsTab skill={skill} canManage={canManage} onRollback={onRollback} />
+      ) : null}
+    </section>
+  );
+}
+
+function OverviewTab({
+  skill,
+  draft,
+  editing,
+  onChange,
+}: {
+  skill: SkillRecord;
+  draft: SkillManualDraft;
+  editing: boolean;
+  onChange: Dispatch<SetStateAction<SkillManualDraft>>;
+}) {
+  const lockedVersion = skill.versions[0]?.version ?? "v1.0";
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_360px]">
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-slate-900">基本信息</h2>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-mono text-xs text-slate-600">
+              <LockKeyhole className="h-3.5 w-3.5" />
+              锁定 {lockedVersion}
+            </span>
+            <span className="text-xs text-slate-400">
+              {editing ? "技能级编辑中" : "默认只读"}
+            </span>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>技能名称</Label>
+            <Input
+              value={draft.name}
+              disabled={!editing}
+              onChange={(event) => onChange((current) => ({ ...current, name: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>展示名称</Label>
+            <Input
+              value={draft.displayName}
+              disabled={!editing}
+              onChange={(event) =>
+                onChange((current) => ({ ...current, displayName: event.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>描述</Label>
+            <Textarea
+              value={draft.description}
+              disabled={!editing}
+              className="min-h-24"
+              onChange={(event) =>
+                onChange((current) => ({ ...current, description: event.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>使用说明</Label>
+            <Textarea
+              value={draft.usageInstructions}
+              disabled={!editing}
+              className="min-h-28"
+              onChange={(event) =>
+                onChange((current) => ({ ...current, usageInstructions: event.target.value }))
+              }
+            />
+          </div>
+        </div>
+        <div className="mt-4 flex items-start gap-2 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-xs leading-5 text-blue-700">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+            默认只读并锁定当前版本；从页面顶部进入技能级编辑后，三个 Tab 的改动会共同生成一个新版本。
+        </div>
+      </div>
+
+      <aside className="space-y-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-5">
+          <h2 className="font-semibold text-slate-900">资产状态</h2>
+          <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <dt className="text-slate-500">当前版本</dt>
+              <dd className="font-mono font-medium text-[#2773ff]">
+                {skill.currentVersion ?? skill.versions[0]?.version}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-slate-500">版本来源</dt>
+              <dd>{skill.versions[0] ? <SourcePill source={skill.versions[0].source} /> : "—"}</dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-slate-500">创建人</dt>
+              <dd className="font-medium text-slate-700">{skill.owner}</dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-slate-500">运行时</dt>
+              <dd
+                className={cn(
+                  "font-medium",
+                  skill.runtimeSnapshot.status === "ready"
+                    ? "text-emerald-600"
+                    : "text-amber-600"
+                )}
+              >
+                {skill.runtimeSnapshot.status === "ready" ? "已装配" : "未试运行"}
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="rounded-lg border border-dashed border-violet-200 bg-violet-50/40 p-5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-violet-800">
+            <CircleDashed className="h-4 w-4" />
+            质量门扩展点
+          </div>
+          <p className="mt-2 text-xs leading-5 text-violet-700">
+            发布前扩展位已预留，默认直通。版本评测状态与报告字段当前为空，不执行评测。
+          </p>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function FilesTab({
+  files,
+  editing,
+  lockedVersion,
+  onChange,
+}: {
+  files: SkillManualDraft["files"];
+  editing: boolean;
+  lockedVersion: string;
+  onChange: (files: SkillManualDraft["files"]) => void;
+}) {
+  const [selectedPath, setSelectedPath] = useState(files[0]?.path ?? "");
+  const tree = buildFileTree(files);
+  const selectedFile = files.find((file) => file.path === selectedPath) ?? files[0];
+
+  function selectFile(path: string) {
+    setSelectedPath(path);
+  }
+
+  return (
+    <div className="grid min-h-[580px] overflow-hidden rounded-lg border border-slate-200 bg-white lg:grid-cols-[310px_minmax(0,1fr)]">
+      <div className="border-b border-slate-200 lg:border-b-0 lg:border-r">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <h2 className="text-sm font-semibold text-slate-900">文件结构</h2>
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-mono text-[11px] text-slate-600">
+            <LockKeyhole className="h-3 w-3" />
+            锁定 {lockedVersion}
+          </span>
+        </div>
+        <div className="space-y-1 p-3">
+          {tree.rootFiles.map((path) => (
+            <FileButton
+              key={path}
+              path={path}
+              active={selectedPath === path}
+              onClick={() => selectFile(path)}
+            />
+          ))}
+          {tree.folders.map(([folder, children]) => (
+            <div key={folder}>
+              <div className="flex h-8 items-center gap-2 px-2 text-xs font-medium text-slate-600">
+                <FileGlyph path={folder} open />
+                {folder}
+              </div>
+              <div className="ml-3 border-l border-slate-200 pl-2">
+                {children.map((path) => (
+                  <FileButton
+                    key={path}
+                    path={path}
+                    label={path.slice(path.indexOf("/") + 1)}
+                    active={selectedPath === path}
+                    onClick={() => selectFile(path)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="min-w-0 bg-slate-50/50 p-4">
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+            <span className="font-mono text-xs text-slate-600">{selectedFile?.path}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">
+                {editing ? "技能级编辑中" : "默认只读"}
+              </span>
+            </div>
+          </div>
+          {editing ? (
+            <Textarea
+              value={selectedFile?.content ?? ""}
+              onChange={(event) =>
+                onChange(
+                  files.map((file) =>
+                    file.path === selectedFile?.path
+                      ? { ...file, content: event.target.value, change: "modified" }
+                      : file
+                  )
+                )
+              }
+              className="min-h-[500px] resize-none rounded-none border-0 p-5 font-mono text-xs leading-6 shadow-none focus-visible:ring-0"
+            />
+          ) : (
+            <pre className="max-h-[500px] overflow-auto whitespace-pre-wrap p-5 font-mono text-xs leading-6 text-slate-700">
+              {selectedFile?.content}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FileButton({
+  path,
+  label,
+  active,
+  onClick,
+}: {
+  path: string;
+  label?: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex h-8 w-full items-center gap-2 rounded px-2 text-left text-xs",
+        active ? "bg-blue-50 text-[#2773ff]" : "text-slate-600 hover:bg-slate-50"
+      )}
+    >
+      <FileGlyph path={path} />
+      <span className="truncate">{label ?? path}</span>
+    </button>
+  );
+}
+
+function DependenciesTab({
+  skill,
+  dependencies,
+  editing,
+  canManage,
+  onChange,
+  onRunAssembly,
+}: {
+  skill: SkillRecord;
+  dependencies: SkillManualDraft["dependencies"];
+  editing: boolean;
+  canManage: boolean;
+  onChange: (dependencies: SkillManualDraft["dependencies"]) => void;
+  onRunAssembly: () => void;
+}) {
+  const snapshotDependencies = dependencies.filter((item) => item.kind === "snapshot");
+  const platformDependencies = dependencies.filter((item) => item.kind === "platform");
+  const snapshot = skill.runtimeSnapshot;
+  const lockedVersion = skill.versions[0]?.version ?? "v1.0";
+
+  function updateDependency(id: string, patch: Partial<SkillDependency>) {
+    onChange(
+      dependencies.map((dependency) =>
+        dependency.id === id ? { ...dependency, ...patch } : dependency
+      )
+    );
+  }
+
+  function removeDependency(id: string) {
+    onChange(dependencies.filter((dependency) => dependency.id !== id));
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_360px]">
+      <div className="space-y-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-slate-900">依赖与 AI 试运行</h2>
+                <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+                  二期
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-slate-500">
+                静态扫描候选依赖，再通过沙箱试运行完成安装、锁版本和快照绑定。
+              </p>
+            </div>
+            {canManage ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-mono text-[11px] text-slate-600">
+                  <LockKeyhole className="h-3 w-3" />
+                  锁定 {lockedVersion}
+                </span>
+                <Button
+                  type="button"
+                  className="h-9 rounded-[5px] bg-[#2773ff]"
+                  onClick={onRunAssembly}
+                >
+                  <Play className="h-4 w-4" />
+                  {snapshot.status === "ready" ? "重新 AI 试运行" : "进入 AI 试运行"}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+
+          <div
+            className={cn(
+              "mt-4 flex flex-col gap-3 rounded-md border px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
+              snapshot.status === "ready"
+                ? "border-emerald-200 bg-emerald-50/60"
+                : snapshot.status === "assembling"
+                  ? "border-blue-200 bg-blue-50/60"
+                  : "border-amber-200 bg-amber-50/60"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              {snapshot.status === "ready" ? (
+                <PackageCheck className="h-5 w-5 text-emerald-600" />
+              ) : snapshot.status === "assembling" ? (
+                <LoaderCircle className="h-5 w-5 animate-spin text-blue-600" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              )}
+              <div>
+                <div className="text-sm font-medium text-slate-800">
+                  {snapshot.status === "ready"
+                    ? "运行时快照已装配"
+                    : snapshot.status === "assembling"
+                      ? "正在沙箱试运行"
+                      : "尚未试运行"}
+                </div>
+                <div className="mt-0.5 font-mono text-xs text-slate-500">
+                  {snapshot.status === "ready"
+                    ? `${snapshot.id} · 绑定 ${snapshot.boundVersion}`
+                    : "需要样例文件或 Skill 自带 tests/"}
+                </div>
+              </div>
+            </div>
+            {snapshot.sample ? (
+              <span className="rounded bg-white/70 px-2 py-1 text-xs text-slate-600">
+                输入：{snapshot.sample}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <DependencyGroup
+          title="随快照携带"
+          subtitle="试运行已安装并锁定版本，随版本快照复现"
+          dependencies={snapshotDependencies}
+          emptyText="试运行后将在这里展示已安装的运行时依赖。"
+          editing={editing}
+          onChange={updateDependency}
+          onRemove={removeDependency}
+        />
+        <DependencyGroup
+          title="平台引用"
+          subtitle="不随包携带，运行时连接；下架或失效会显式告警"
+          dependencies={platformDependencies}
+          emptyText="当前没有 MCP、插件或外部服务引用。"
+          editing={editing}
+          onChange={updateDependency}
+          onRemove={removeDependency}
+        />
+        {editing ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full border-dashed"
+            onClick={() =>
+              onChange([
+                ...dependencies,
+                {
+                  id: `dependency-${Date.now()}`,
+                  name: "新依赖",
+                  kind: "platform",
+                  type: "mcp",
+                  status: "ready",
+                  note: "待补充说明",
+                },
+              ])
+            }
+          >
+            <Plus className="h-4 w-4" />
+            添加依赖
+          </Button>
+        ) : null}
+      </div>
+
+      <aside className="space-y-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-5">
+          <h2 className="font-semibold text-slate-900">装配流程</h2>
+          <div className="mt-4 space-y-4">
+            {[
+              ["1", "静态扫描", "扫描 imports 与声明，形成候选依赖"],
+              ["2", "沙箱试运行", "用样例或 tests/ 真跑一次"],
+              ["3", "安装并锁版本", "捕获运行时依赖并验证可运行"],
+              ["4", "冻结快照", "绑定到当前 Skill 版本"],
+            ].map(([number, title, detail], index) => (
+              <div key={number} className="flex gap-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-[#2773ff]">
+                  {number}
+                </span>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-slate-800">{title}</div>
+                  <div className="mt-0.5 text-xs leading-5 text-slate-500">{detail}</div>
+                </div>
+                {index < 3 ? <ChevronRight className="ml-auto h-4 w-4 text-slate-300" /> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4 text-xs leading-5 text-blue-700">
+          导入只带代码即可；装不上或跑不通会标记不可用。导出 .zip 以绑定的运行时快照为准。
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function DependencyGroup({
+  title,
+  subtitle,
+  dependencies,
+  emptyText,
+  editing,
+  onChange,
+  onRemove,
+}: {
+  title: string;
+  subtitle: string;
+  dependencies: SkillDependency[];
+  emptyText: string;
+  editing: boolean;
+  onChange: (id: string, patch: Partial<SkillDependency>) => void;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-5">
+      <div>
+        <h3 className="font-semibold text-slate-900">{title}</h3>
+        <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
+      </div>
+      <div className="mt-4 space-y-2">
+        {dependencies.length > 0 ? (
+          dependencies.map((dependency) => (
+            <div
+              key={dependency.id}
+              className={cn(
+                "flex flex-col gap-3 rounded-md border px-4 py-3 sm:flex-row sm:items-center sm:justify-between",
+                dependency.status === "offline"
+                  ? "border-rose-200 bg-rose-50/40"
+                  : "border-slate-200"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-md",
+                    dependency.status === "offline"
+                      ? "bg-rose-100 text-rose-600"
+                      : "bg-slate-100 text-slate-600"
+                  )}
+                >
+                  <DependencyTypeIcon type={dependency.type} />
+                </span>
+                <div>
+                  {editing ? (
+                    <div className="grid gap-2 sm:grid-cols-[minmax(160px,1fr)_120px]">
+                      <Input
+                        value={dependency.name}
+                        className="h-8"
+                        onChange={(event) =>
+                          onChange(dependency.id, { name: event.target.value })
+                        }
+                      />
+                      <Input
+                        value={dependency.version ?? ""}
+                        className="h-8 font-mono"
+                        placeholder="版本"
+                        onChange={(event) =>
+                          onChange(dependency.id, { version: event.target.value })
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-sm font-medium text-slate-800">
+                        {dependency.name}
+                        {dependency.version ? (
+                          <span className="font-mono text-slate-500">=={dependency.version}</span>
+                        ) : null}
+                      </div>
+                      {dependency.note ? (
+                        <div className="mt-0.5 text-xs text-slate-500">{dependency.note}</div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <DependencyStatusPill status={dependency.status} />
+                {editing ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-rose-500"
+                    onClick={() => onRemove(dependency.id)}
+                    aria-label={`删除依赖 ${dependency.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-md border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+            {emptyText}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function VersionsTab({
+  skill,
+  canManage,
+  onRollback,
+}: {
+  skill: SkillRecord;
+  canManage: boolean;
+  onRollback: (versionId: string) => void;
+}) {
+  const [selectedVersionIds, setSelectedVersionIds] = useState<string[]>(
+    skill.versions.slice(0, 2).map((item) => item.id)
+  );
+  const comparedVersions = useMemo(
+    () =>
+      selectedVersionIds
+        .map((id) => skill.versions.find((version) => version.id === id))
+        .filter((item): item is SkillVersion => Boolean(item)),
+    [selectedVersionIds, skill.versions]
+  );
+
+  function toggleCompare(versionId: string) {
+    setSelectedVersionIds((current) => {
+      if (current.includes(versionId)) return current.filter((id) => id !== versionId);
+      if (current.length >= 2) return [current[1], versionId];
+      return [...current, versionId];
+    });
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(360px,0.9fr)_minmax(420px,1.1fr)]">
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-900">版本历史</h2>
+            <p className="mt-1 text-xs text-slate-500">选择两个版本进行文件级与内容级对比</p>
+          </div>
+          <History className="h-5 w-5 text-slate-400" />
+        </div>
+        <div className="mt-4 space-y-2">
+          {skill.versions.map((version) => {
+            const current = version.version === skill.currentVersion;
+            return (
+              <div
+                key={version.id}
+                className={cn(
+                  "rounded-md border p-3",
+                  current ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200"
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    checked={selectedVersionIds.includes(version.id)}
+                    onCheckedChange={() => toggleCompare(version.id)}
+                    aria-label={`选择 ${version.version} 对比`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-semibold text-slate-900">
+                        {version.version}
+                      </span>
+                      <SourcePill source={version.source} />
+                      {current ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                          当前发布
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 text-sm leading-5 text-slate-600">
+                      {version.releaseNotes}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400">
+                      <span>{version.createdAt}</span>
+                      <span>{version.createdBy}</span>
+                      {version.conversationId ? (
+                        <span className="text-violet-600">对话 {version.conversationId}</span>
+                      ) : null}
+                    </div>
+                    {version.evidence?.length ? (
+                      <div className="mt-2 text-xs text-violet-600">
+                        依据：{version.evidence.join(" · ")}
+                      </div>
+                    ) : null}
+                  </div>
+                  {!current && canManage ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 shrink-0 px-2 text-[#2773ff]"
+                      onClick={() => onRollback(version.id)}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      回滚到此
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="rounded-lg border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <GitCompareArrows className="h-4 w-4 text-[#2773ff]" />
+              版本对比
+            </div>
+            <span className="font-mono text-xs text-slate-400">
+              {comparedVersions.length === 2
+                ? `${comparedVersions[1].version} → ${comparedVersions[0].version}`
+                : "请选择两个版本"}
+            </span>
+          </div>
+          {comparedVersions.length === 2 ? (
+            <div className="p-4">
+              <DiffBlock title="src/parser.py" additions={4} deletions={1}>
+                <div className="px-3 text-slate-500">def read(file):</div>
+                <div className="bg-rose-50 px-3 text-rose-700">- header = next(file)</div>
+                <div className="bg-emerald-50 px-3 text-emerald-700">
+                  + first = peek(file)
+                </div>
+                <div className="bg-emerald-50 px-3 text-emerald-700">
+                  + header = first if looks_like_header(first)
+                </div>
+              </DiffBlock>
+              <div className="mt-3">
+                <DiffBlock title="tests/test_headerless.py" additions={3} deletions={0}>
+                  <div className="bg-emerald-50 px-3 text-emerald-700">
+                    + def test_missing_header():
+                  </div>
+                  <div className="bg-emerald-50 px-3 text-emerald-700">
+                    + assert result.columns == expected
+                  </div>
+                </DiffBlock>
+              </div>
+            </div>
+          ) : (
+            <div className="px-6 py-20 text-center text-sm text-slate-500">
+              从左侧勾选两个版本开始对比。
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-start gap-2 rounded-lg border border-violet-200 bg-violet-50/50 px-4 py-3 text-xs leading-5 text-violet-700">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          回滚会生成一条新版本，不抹历史，并重新进入发布流转。已发布版本不可被静默清除。
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiffBlock({
+  title,
+  additions,
+  deletions,
+  children,
+}: {
+  title: string;
+  additions: number;
+  deletions: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-md border border-slate-200">
+      <div className="flex items-center justify-between bg-slate-50 px-3 py-2 font-mono text-xs text-slate-600">
+        <span>{title}</span>
+        <span>
+          +{additions} −{deletions}
+        </span>
+      </div>
+      <div className="py-2 font-mono text-xs leading-6">{children}</div>
+    </div>
+  );
+}
