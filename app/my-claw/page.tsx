@@ -1,12 +1,7 @@
+"use client";
+
+import { ChatWorkspace } from "@/components/my-claw/chat/chat-workspace";
+
 export default function MyClawHomePage() {
-  return (
-    <div className="flex h-full items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-xl font-semibold text-slate-900">会话</h1>
-        <p className="mt-2 text-sm text-[#5a6779]">
-          新建会话工作区占位，后续接入对话宿主。
-        </p>
-      </div>
-    </div>
-  );
+  return <ChatWorkspace sessionId={null} />;
 }
