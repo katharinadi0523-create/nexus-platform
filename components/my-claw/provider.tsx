@@ -33,9 +33,7 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<MyClawSessionListItem[]>(() =>
     MY_CLAW_SESSIONS.map((session) => ({ ...session }))
   );
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(
-    MY_CLAW_SESSIONS[0]?.id ?? null
-  );
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [summonedAgentIds, setSummonedAgentIds] = useState<string[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 

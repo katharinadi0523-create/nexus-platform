@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 import {
   MoreHorizontal,
   Pin,
   PinOff,
   Pencil,
   Trash2,
-  ChevronDown,
 } from "lucide-react";
 import { useMyClaw } from "@/components/my-claw/provider";
 import type { MyClawSessionListItem } from "@/lib/mock/my-claw";
@@ -79,7 +79,7 @@ function SessionRow({ session, isActive }: SessionRowProps) {
           <button
             type="button"
             aria-label="会话操作"
-            className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-white hover:text-slate-600 group-hover:opacity-100 data-[state=open]:opacity-100"
+            className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-white hover:text-slate-600 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/40 group-hover:opacity-100 data-[state=open]:opacity-100"
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
@@ -126,8 +126,7 @@ function SessionGroup({ title, sessions, activeSessionId }: SessionGroupProps) {
 
   return (
     <div className="mb-3">
-      <div className="mb-1 flex items-center gap-1 px-2.5 text-[11px] font-medium tracking-wide text-[#5a6779]">
-        <ChevronDown className="h-3 w-3" />
+      <div className="mb-1 px-2.5 text-[11px] font-medium tracking-wide text-[#5a6779]">
         {title}
       </div>
       <div className="space-y-0.5">
@@ -144,10 +143,24 @@ function SessionGroup({ title, sessions, activeSessionId }: SessionGroupProps) {
 }
 
 export function SessionList() {
-  const { sessions, activeSessionId } = useMyClaw();
+  const { sessions, activeSessionId, setActiveSession } = useMyClaw();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const querySessionId = searchParams.get("sessionId");
-  const resolvedActiveId = querySessionId ?? activeSessionId;
+
+  // URL sessionId is the highlight source of truth; keep provider in sync.
+  useEffect(() => {
+    const nextId =
+      pathname.startsWith("/my-claw/chat") && querySessionId
+        ? querySessionId
+        : null;
+
+    if (activeSessionId !== nextId) {
+      setActiveSession(nextId);
+    }
+  }, [pathname, querySessionId, activeSessionId, setActiveSession]);
+
+  const highlightedSessionId = querySessionId;
 
   const pinned = sessions.filter((s) => s.pinned).sort(sortByUpdatedAt);
   const recent = sessions.filter((s) => !s.pinned).sort(sortByUpdatedAt);
@@ -158,17 +171,16 @@ export function SessionList() {
         <SessionGroup
           title="置顶"
           sessions={pinned}
-          activeSessionId={resolvedActiveId}
+          activeSessionId={highlightedSessionId}
         />
         <SessionGroup
           title="最近"
           sessions={recent}
-          activeSessionId={resolvedActiveId}
+          activeSessionId={highlightedSessionId}
         />
 
         <div className="mb-2 mt-1">
-          <div className="mb-1 flex items-center gap-1 px-2.5 text-[11px] font-medium tracking-wide text-[#5a6779]">
-            <ChevronDown className="h-3 w-3" />
+          <div className="mb-1 px-2.5 text-[11px] font-medium tracking-wide text-[#5a6779]">
             自动化任务
           </div>
           <div className="mx-2 rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-[#5a6779]">

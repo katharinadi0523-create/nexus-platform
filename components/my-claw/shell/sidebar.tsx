@@ -5,11 +5,13 @@ import { usePathname } from "next/navigation";
 import { Search, Settings, Shrimp } from "lucide-react";
 import { Suspense } from "react";
 import { cn } from "@/lib/utils";
+import { useMyClaw } from "@/components/my-claw/provider";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MY_CLAW_PRIMARY_NAV, MY_CLAW_SETTINGS_NAV } from "./nav-items";
 import { SessionList } from "./session-list";
 
@@ -28,6 +30,7 @@ function SessionListFallback() {
 
 export function MyClawSidebar() {
   const pathname = usePathname();
+  const { setActiveSession } = useMyClaw();
 
   return (
     <aside className="flex h-full w-[272px] shrink-0 flex-col border-r border-[#e2e8f0] bg-white">
@@ -63,6 +66,11 @@ export function MyClawSidebar() {
             <Link
               key={item.key}
               href={item.href}
+              onClick={() => {
+                if (item.key === "chat") {
+                  setActiveSession(null);
+                }
+              }}
               className={cn(
                 "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
                 active
@@ -102,34 +110,27 @@ export function MyClawSidebar() {
             <div className="truncate text-[11px] text-[#5a6779]">个人空间</div>
           </div>
 
-          <Popover>
-            <PopoverTrigger asChild>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 aria-label="设置菜单"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#5a6779] transition-colors hover:bg-slate-50 hover:text-slate-700"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#5a6779] transition-colors hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/40"
               >
                 <Settings className="h-4 w-4" />
               </button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              side="top"
-              className="w-48 p-1.5"
-            >
-              <div className="space-y-0.5">
-                {MY_CLAW_SETTINGS_NAV.map((item) => {
-                  const Icon = item.icon;
-                  const active = isNavActive(pathname, item.href);
-                  return (
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="top" className="w-48">
+              {MY_CLAW_SETTINGS_NAV.map((item) => {
+                const Icon = item.icon;
+                const active = isNavActive(pathname, item.href);
+                return (
+                  <DropdownMenuItem key={item.key} asChild>
                     <Link
-                      key={item.key}
                       href={item.href}
                       className={cn(
-                        "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-colors",
-                        active
-                          ? "bg-[#e8f0fb] font-medium text-[#2773ff]"
-                          : "text-slate-700 hover:bg-slate-50"
+                        "cursor-pointer",
+                        active && "bg-[#e8f0fb] font-medium text-[#2773ff]"
                       )}
                     >
                       <Icon
@@ -140,11 +141,11 @@ export function MyClawSidebar() {
                       />
                       {item.label}
                     </Link>
-                  );
-                })}
-              </div>
-            </PopoverContent>
-          </Popover>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </aside>
