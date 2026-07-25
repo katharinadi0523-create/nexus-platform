@@ -15,7 +15,6 @@ import {
   ClawSubAgentSummonedEvent,
   ClawUserMessage,
 } from "@/components/claw-hub-next/conversation-timeline";
-import { ClawInteractiveChatPanel } from "@/components/claw-hub-next/interactive-chat-panel";
 import { useMyClaw } from "@/components/my-claw/provider";
 import {
   buildExpenseConversationView,
@@ -23,6 +22,7 @@ import {
 } from "@/lib/mock/my-claw/expense-adapter";
 import { getPersonalClawDetail } from "@/lib/mock/my-claw/personal-claw";
 import { getMyClawSession } from "@/lib/mock/my-claw/sessions";
+import type { MyClawSessionListItem } from "@/lib/mock/my-claw/types";
 import { cn } from "@/lib/utils";
 import { ComposerWithAgents } from "./composer-with-agents";
 
@@ -462,16 +462,35 @@ function BlankChatPanel() {
   );
 }
 
-function EnterpriseSessionPanel({ sessionId }: { sessionId: string }) {
+/**
+ * Enterprise / non-expense host: empty timeline + ComposerWithAgents.
+ * Avoids ClawInteractiveChatPanel seed-session mismatch (task-* vs office-shrimp-*).
+ */
+function EnterpriseSessionPanel({ session }: { session: MyClawSessionListItem }) {
   const detail = useMemo(() => getPersonalClawDetail(), []);
-  const session = detail.chatSessions.find((item) => item.id === sessionId);
+  const [draft, setDraft] = useState("");
 
   return (
-    <ClawInteractiveChatPanel
-      detail={detail}
-      session={session ?? detail.chatSessions[0]}
-      inspectorMode="open"
-    />
+    <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
+      <div className="flex min-h-0 flex-1 items-center justify-center px-6">
+        <div className="max-w-md text-center">
+          <h2 className="text-xl font-semibold text-slate-900">{session.title}</h2>
+          <p className="mt-2 text-sm leading-6 text-[#5a6779]">
+            {session.preview || "企业会话时间线暂未接入，可先在下方输入继续对话。"}
+          </p>
+        </div>
+      </div>
+      <div className="shrink-0 px-4 py-4 lg:px-8 lg:py-5">
+        <div className="mx-auto w-full max-w-4xl">
+          <ComposerWithAgents
+            detail={detail}
+            value={draft}
+            onChange={setDraft}
+            onSend={() => setDraft("")}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -500,5 +519,5 @@ export function ChatWorkspace({ sessionId }: ChatWorkspaceProps) {
     return <ResearchPlaceholder />;
   }
 
-  return <EnterpriseSessionPanel sessionId={sessionId} />;
+  return <EnterpriseSessionPanel session={session} />;
 }
