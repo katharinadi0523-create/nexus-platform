@@ -27,6 +27,9 @@
 # local brainstorm / agent scratch
 .superpowers/
 
+# git worktrees
+.worktrees/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
