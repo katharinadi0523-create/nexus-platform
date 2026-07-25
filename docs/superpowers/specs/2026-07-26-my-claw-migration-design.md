@@ -17,27 +17,37 @@
 - 不迁移「记忆中心」模块与导航；Claw 配置中不保留「组织记忆」。
 - 不迁移会话交互自带登录遮罩；沿用平台登录态，进入 `/my-claw` 直接进工作台。
 - 不通过 iframe 嵌旧项目。
-- 首期不接真实后端，使用从前端原型迁出的 mock / 演示数据。
+- 首期不接真实后端，使用从前端原型迁出的 mock / 演示数据（差旅、科研等流程完整保留，见 §4.4）。
+
+
 
 ## 2. 已确认决策
 
-| 决策点 | 选择 |
-|--------|------|
-| 壳层 | 独立全屏 `/my-claw`，隐藏 Nexus 顶栏与侧栏 |
-| 技能/插件广场 | 嵌在 my-claw 壳内，左导不消失 |
-| 会话保真度 | 完整迁移演示能力（差旅报销时间线、HITL、多智能体研究模式等） |
-| 入口 | Claw 管理 + 应用广场两处均改为打开 `/my-claw` |
-| 登录 | 不迁 Claw 登录 |
-| 实现路径 | 新建 `my-claw` 模块 + import 复用底座（不扩 Workbench 个人模式、不用 iframe） |
+
+| 决策点     | 选择                                                         |
+| ------- | ---------------------------------------------------------- |
+| 壳层      | 独立全屏 `/my-claw`，隐藏 Nexus 顶栏与侧栏                             |
+| 技能/插件广场 | 嵌在 my-claw 壳内，左导不消失                                        |
+| 会话保真度   | 完整保留会话交互 mock 流程（差旅报销、科研多智能体等），渲染一律用 Nexus 组件 |
+| 入口      | Claw 管理 + 应用广场两处均改为打开 `/my-claw`                           |
+| 登录      | 不迁 Claw 登录                                                 |
+| 实现路径    | 新建 `my-claw` 模块 + import 复用底座（不扩 Workbench 个人模式、不用 iframe） |
+
+
+
 
 ## 3. 信息架构与路由
 
+
+
 ### 3.1 入口
 
-| 现有位置 | 变更 |
-|----------|------|
+
+| 现有位置                                                              | 变更                                                    |
+| ----------------------------------------------------------------- | ----------------------------------------------------- |
 | `components/claw-hub-next/claw-hub-next-workbench.tsx` 「查看我的claw」 | `PERSONAL_CLAW_URL` 改为平台内 `/my-claw`（`target=_blank`） |
-| `app/(dashboard)/app-marketplace/page.tsx` 「我的Claw」卡片 | `externalLink` 改为 `/my-claw`（新开页） |
+| `app/(dashboard)/app-marketplace/page.tsx` 「我的Claw」卡片             | `externalLink` 改为 `/my-claw`（新开页）                     |
+
 
 除此链接目标外，不改这两页其它交互与样式。
 
@@ -45,17 +55,19 @@
 
 `/my-claw` 使用独立 layout（类似现有 `/claw-hub-next/claws/*` 全屏策略），**不**挂 dashboard 顶栏/侧栏。
 
-| 路径 | 模块 | 说明 |
-|------|------|------|
-| `/my-claw` | 新建会话 | 默认进入会话壳 |
-| `/my-claw/chat` | 会话 | 可选 query：`sessionId`、`agentId` |
-| `/my-claw/agents` | 智能体广场 | 新写 |
-| `/my-claw/skills` | 技能 | 我的技能 / 技能广场双 Tab |
-| `/my-claw/plugins` | 插件 | 我的插件 / 插件广场双 Tab |
-| `/my-claw/automation` | 自动化任务 | 新写，list-page 样式 |
-| `/my-claw/files` | 文件 | 复用 Workbench 文件 |
-| `/my-claw/settings` | Claw 配置 | 模型配置 + Agent.md |
-| `/my-claw/product` | 产品说明 | 迁工具调用状态说明 |
+
+| 路径                    | 模块      | 说明                             |
+| --------------------- | ------- | ------------------------------ |
+| `/my-claw`            | 新建会话    | 默认进入会话壳                        |
+| `/my-claw/chat`       | 会话      | 可选 query：`sessionId`、`agentId` |
+| `/my-claw/agents`     | 智能体广场   | 新写                             |
+| `/my-claw/skills`     | 技能      | 我的技能 / 技能广场双 Tab               |
+| `/my-claw/plugins`    | 插件      | 我的插件 / 插件广场双 Tab               |
+| `/my-claw/automation` | 自动化任务   | 新写，list-page 样式                |
+| `/my-claw/files`      | 文件      | 复用 Workbench 文件                |
+| `/my-claw/settings`   | Claw 配置 | 模型配置 + Agent.md                |
+| `/my-claw/product`    | 产品说明    | 迁工具调用状态说明                      |
+
 
 **不建路由：** `/my-claw/subagents`、`/my-claw/memory`。
 
@@ -71,22 +83,28 @@
 
 ## 4. 会话壳与共用底座
 
+
+
 ### 4.1 三栏布局
 
-1. **左栏** — 品牌「我的Claw」、搜索、主导航、会话列表、头像与设置  
-2. **中栏** — 消息时间线、任务进程 dock、composer  
-3. **右栏** — 可拖拽；概览：任务进程 / 会话文件 / 工具调用；文件预览 Tab  
+1. **左栏** — 品牌「我的Claw」、搜索、主导航、会话列表、头像与设置
+2. **中栏** — 消息时间线、任务进程 dock、composer
+3. **右栏** — 可拖拽；概览：任务进程 / 会话文件 / 工具调用；文件预览 Tab
 
 研究多智能体模式下，右栏标题可切换为任务规划 / 产出物 / 工具（对齐会话交互）。
 
 ### 4.2 共用组件（Nexus 已有）
 
-| 能力 | 复用来源 |
-|------|----------|
-| 时间线原子 | `components/claw-hub-next/conversation-timeline.tsx` |
-| 主会话 + 右面板 | `components/claw-hub-next/interactive-chat-panel.tsx` |
-| 输入框 / 技能 slash | `debug-chat-composer.tsx`、`skill-slash-picker.tsx` |
-| 多智能体演示 | `research-multi-agent-debug-panel.tsx` 模式与事件能力 |
+
+| 能力             | 复用来源                                                  |
+| -------------- | ----------------------------------------------------- |
+| 时间线原子          | `components/claw-hub-next/conversation-timeline.tsx`  |
+| 主会话 + 右面板      | `components/claw-hub-next/interactive-chat-panel.tsx` |
+| 输入框 / 技能 slash | `debug-chat-composer.tsx`、`skill-slash-picker.tsx`    |
+| 多智能体演示         | `research-multi-agent-debug-panel.tsx` 模式与事件能力        |
+
+
+
 
 ### 4.3 会话区唯一增量
 
@@ -94,11 +112,31 @@
 
 - 展示已召唤智能体列表，支持选中 / 取消  
 - 「召唤其他智能体」→ 导航至 `/my-claw/agents`  
-- 从广场召唤后写回 `summonedAgentIds` 并回到会话  
+- 从广场召唤后写回 `summonedAgentIds` 并回到会话
 
-消息类型（用户、思考、澄清、计划、工具 HITL、技能、子代理、产物等）全部用 Nexus 时间线组件渲染；演示剧本从会话交互完整迁移。
+消息类型（用户、思考、澄清、计划、工具 HITL、技能、子代理、产物等）全部用 Nexus 时间线组件渲染；演示剧本从会话交互完整迁移（详见 §4.4）。
+
+### 4.4 Mock 流程保留（硬性要求）
+
+会话交互里现有的 **mock 演示流程必须完整保留**，包括但不限于：
+
+| 流程 | 源（会话交互） | 迁入要求 |
+|------|----------------|----------|
+| **差旅报销** | `data.js` 中 `steps`（约 32 步）、会话「上海出差报销」、`kind: expense` | 步骤内容、顺序、澄清问答、技能调用、计划/待办、工具 HITL（如 `erp.expense.write`）、产物与右栏同步 **一比一保留** |
+| **科研多智能体** | `research-multi-agent-module.js` + `research-multi-agent-data.js`；智能体「科研智能体」召唤后进入 | 主智能体 + 子智能体编排、任务规划、技能/知识引用、产出物（论文/图表包等）、右栏「任务规划 / 产出物 / 工具」标题切换 **完整保留** |
+| **其它企业会话预设** | `enterpriseFlowPresets` 等 enterprise 会话模式 | 已有预设一并迁入 mock，不因「先做差旅」而丢弃 |
+
+**分层原则（流程 vs 组件）：**
+
+- **流程 / 剧本 / 状态机**：从会话交互迁出到 `lib/mock/my-claw/*`（及必要时 `components/my-claw/chat` 内的驱动逻辑），行为与步骤对齐原型。
+- **UI 渲染**：禁止使用会话交互 DOM/CSS 卡片；一律映射到 Nexus `ConversationTimeline` / `InteractiveChatPanel` / `DebugChatComposer` / research 面板等价物。
+- 若某原型消息类型在 Nexus 底座尚无一一对应原子：允许用最接近的 Nexus 时间线原子组合表达，**不得删减该步骤在流程中的存在与语义**。
+
+**验收补充：** 在 `/my-claw` 内可完整走通差旅报销 mock 与科研多智能体 mock；侧栏可切换进入对应会话；与外部 `claw-dialogue` 演示关键路径一致（视觉为 Nexus，剧本不缩水）。
 
 ## 5. 业务模块规格
+
+
 
 ### 5.1 智能体广场（新写）
 
@@ -106,11 +144,15 @@
 - 视觉对齐 Nexus CeCloud plaza（灰蓝底、卡片节奏）；修复原类别/Tab 视觉瑕疵。  
 - **不丢功能**；特殊智能体（如 research-claw、pm-senior）行为对齐原型。
 
+
+
 ### 5.2 技能
 
 - 保留 Tab：**我的技能** | **技能广场**。  
 - **我的技能**：Workbench / 管理列表样式（非旧 Cloud Dialog 软卡片），能力含来源筛选、启用开关、删除（非内置）、配置、分页。  
 - **技能广场**：在壳内嵌入 Nexus 技能广场（`SkillsPage` hub 能力）。优先通过向后兼容的 embed / `moduleView` props 复用；禁止破坏 `/skills`、`/skills-management` 现有行为。
+
+
 
 ### 5.3 插件
 
@@ -118,16 +160,22 @@
 - **我的插件**：Workbench 列表样式；类型覆盖 MCP / OpenAPI / workflow / ontology_action 等（对齐原型）。  
 - **插件广场**：平台 `/tool-marketplace` 仍为 ComingSoon，故在 my-claw 内按技能广场视觉与会话交互功能重写一版市场页；后续平台广场就绪时可再切复用。
 
+
+
 ### 5.4 自动化任务（新写）
 
 - 主区：任务列表 / 执行历史，CeCloud list-page 样式（对齐 `components/management/management-list.tsx` 节奏）。  
 - 能力对齐原型：cron/轮询触发、Claw 选择、投递渠道、创建编辑、侧栏树同步。  
 - 侧栏「置顶 / 最近 / 自动化」继续用 Cloud Dialog 左栏会话列表样式。
 
+
+
 ### 5.5 文件
 
 - 复用 `components/claw-hub-next/detail/workspace-section.tsx`（`ClawWorkspaceSection`）。  
 - 不使用会话交互 `FilesModule` UI。
+
+
 
 ### 5.6 Claw 配置
 
@@ -135,18 +183,28 @@
 - **仅保留：** 模型配置 + **Agent.md**（与 Workbench `ClawCoreFileKey = "agent"` 对齐）。  
 - **删除：** 组织记忆；不迁 SOUL.md / IDENTITY.md / USER.md 等多核心文件（除非后续 Workbench 扩展，本规格不包含）。
 
+
+
 ### 5.7 产品说明
 
 - 迁移会话交互 `renderProductDocPage`：工具调用状态说明（阶段轨、请求/代码 Tab、approve/deny 演示）。
 
+
+
 ### 5.8 删除清单
 
-| 原型模块 | 处理 |
-|----------|------|
-| 智能体 `subagents` | 不迁代码、不建导航 |
-| 记忆中心 `memory` | 不迁代码、不建导航；配置中去掉组织记忆 |
+
+| 原型模块            | 处理                  |
+| --------------- | ------------------- |
+| 智能体 `subagents` | 不迁代码、不建导航           |
+| 记忆中心 `memory`   | 不迁代码、不建导航；配置中去掉组织记忆 |
+
+
+
 
 ## 6. 代码边界
+
+
 
 ### 6.1 新增
 
@@ -174,7 +232,8 @@ components/my-claw/
   provider.tsx               # MyClawProvider
 
 lib/mock/my-claw/
-  sessions.ts                # 含差旅报销等演示剧本
+  sessions.ts                # 差旅报销 steps 等
+  research-multi-agent.ts    # 科研多智能体剧本与任务树
   agents.ts
   skills.ts
   plugins.ts
@@ -182,11 +241,15 @@ lib/mock/my-claw/
   ...
 ```
 
+
+
 ### 6.2 允许的最小平台改动
 
 - 两处入口 URL 常量 / 链接目标。  
 - 为技能广场等增加**向后兼容**的 embed props（默认行为不变）。  
 - layout 中识别 `/my-claw` 为全屏路径（若放在 `(dashboard)` 外则可免改；优先放在 dashboard 外的 `app/my-claw`）。
+
+
 
 ### 6.3 禁止
 
@@ -194,7 +257,11 @@ lib/mock/my-claw/
 - 把会话交互的 `styles.css` / 整包 `app.js` 原样拷入。  
 - 引入记忆中心或 subagents。
 
+
+
 ## 7. 数据流与状态
+
+
 
 ### 7.1 MyClawProvider
 
@@ -206,16 +273,22 @@ lib/mock/my-claw/
 - `automationTasks`（供侧栏树）  
 - 右栏开关与宽度（可选持久化到 localStorage）
 
+
+
 ### 7.2 会话消息
 
 - 结构对齐 Workbench timeline / `ConversationRunItem` 等既有类型。  
 - 演示步进由 mock 驱动；键盘或 UI 步进行为对齐原型（若与底座冲突，以底座交互为准并保留剧本内容完整性）。
+
+
 
 ### 7.3 跨模块协作
 
 - 智能体广场「召唤」→ 更新 `summonedAgentIds` → `router.push('/my-claw/chat')`。  
 - 自动化任务变更 → 派发/回调刷新侧栏树。  
 - 技能/插件「添加到我的」→ 更新对应 mine mock 列表。
+
+
 
 ## 8. 错误处理
 
@@ -224,6 +297,8 @@ lib/mock/my-claw/
 - 配置保存（mock）：成功提示；失败保留草稿并提示。  
 - 无平台登录体系时的本地开发：直接可进 `/my-claw`（与现网 mock 管控端一致）。
 
+
+
 ## 9. 视觉与设计系统
 
 - 壳与列表：CeCloud / Nexus B-end（品牌蓝 `#2773ff`、list-page、plaza-page 规范）。  
@@ -231,41 +306,50 @@ lib/mock/my-claw/
 - 广场页：灰蓝 shelf（`#e8f0fb` 系），与 `/skills-hub` 一致。  
 - 不引入会话交互整包 CSS；按需用 Tailwind + 现有 token。
 
+
+
 ## 10. 验收清单
 
-1. 两入口新开页进入 `/my-claw`，无平台顶栏/侧栏。  
-2. 会话三栏可用；composer 有智能体选择器；演示时间线完整可走。  
-3. 智能体广场筛选/排序/召唤功能不丢，Tab/类目无致命视觉瑕疵。  
-4. 技能双 Tab：我的=Workbench 风；广场=Nexus hub 内嵌。  
-5. 插件双 Tab：我的=Workbench 风；广场功能齐、视觉对齐 plaza。  
-6. 自动化：list-page 主区 + 侧栏树。  
-7. 文件=Workbench 文件；配置=模型+Agent.md，无组织记忆、无多余核心文件。  
-8. 无「智能体」「记忆中心」入口；产品说明可打开。  
+1. 两入口新开页进入 `/my-claw`，无平台顶栏/侧栏。
+2. 会话三栏可用；composer 有智能体选择器；**差旅报销 mock 与科研多智能体 mock 均可完整走通**（剧本不缩水，UI 为 Nexus 组件）。
+3. 智能体广场筛选/排序/召唤功能不丢，Tab/类目无致命视觉瑕疵。
+4. 技能双 Tab：我的=Workbench 风；广场=Nexus hub 内嵌。
+5. 插件双 Tab：我的=Workbench 风；广场功能齐、视觉对齐 plaza。
+6. 自动化：list-page 主区 + 侧栏树。
+7. 文件=Workbench 文件；配置=模型+Agent.md，无组织记忆、无多余核心文件。
+8. 无「智能体」「记忆中心」入口；产品说明可打开。
 9. 改动范围符合 §6：无 Workbench 本体逻辑改写。
+
+
 
 ## 11. 源项目对照
 
-| 会话交互 | Nexus my-claw |
-|----------|----------------|
-| `#chat` | `/my-claw`、`/my-claw/chat` |
-| `#agents` | `/my-claw/agents` |
-| `#skillhub` | `/my-claw/skills` |
-| `#plugins` | `/my-claw/plugins` |
-| `#automation` | `/my-claw/automation` |
-| `#files` | `/my-claw/files` |
-| `#clawconfig` | `/my-claw/settings` |
-| `#product` | `/my-claw/product` |
-| `#subagents`、`#memory` | **省略** |
-| 源码根目录 | `/Users/nanbunan/Dev-Projects/会话交互` |
+
+| 会话交互                   | Nexus my-claw                       |
+| ---------------------- | ----------------------------------- |
+| `#chat`                | `/my-claw`、`/my-claw/chat`          |
+| `#agents`              | `/my-claw/agents`                   |
+| `#skillhub`            | `/my-claw/skills`                   |
+| `#plugins`             | `/my-claw/plugins`                  |
+| `#automation`          | `/my-claw/automation`               |
+| `#files`               | `/my-claw/files`                    |
+| `#clawconfig`          | `/my-claw/settings`                 |
+| `#product`             | `/my-claw/product`                  |
+| `#subagents`、`#memory` | **省略**                              |
+| 源码根目录                  | `/Users/nanbunan/Dev-Projects/会话交互` |
+
+
+
 
 ## 12. 实现顺序建议
 
-1. 全屏 layout + 左导壳 + 路由骨架 + 两入口改链  
-2. 会话宿主：接入 InteractiveChatPanel + 智能体选择器 + 演示数据  
-3. 智能体广场  
-4. 技能双 Tab（含 embed）  
-5. 插件双 Tab  
-6. 自动化任务  
-7. 文件 + Claw 配置精简  
-8. 产品说明  
-9. 按 §10 手测验收  
+1. 全屏 layout + 左导壳 + 路由骨架 + 两入口改链
+2. 会话宿主：接入 InteractiveChatPanel + 智能体选择器 + 演示数据
+3. 智能体广场
+4. 技能双 Tab（含 embed）
+5. 插件双 Tab
+6. 自动化任务
+7. 文件 + Claw 配置精简
+8. 产品说明
+9. 按 §10 手测验收
+
