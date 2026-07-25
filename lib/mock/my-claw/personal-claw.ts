@@ -1,11 +1,12 @@
 import {
   type ClawDetailData,
-  clawHubList,
   createClawAgentMdFile,
   getClawDetail,
 } from "@/lib/mock/claw-hub-next";
 
 export const PERSONAL_CLAW_ID = "my-claw-personal";
+
+const OFFICE_CLAW_SEED_ID = "claw-office-shrimp";
 
 const PERSONAL_AGENT_MD = `# 我的Claw
 
@@ -32,17 +33,14 @@ const PERSONAL_AGENT_MD = `# 我的Claw
 
 /**
  * Personal Claw detail fixture for `/my-claw` chat, settings, and files.
- * Cloned from the hub list seed, then remapped to「我的Claw」with Agent.md only.
+ * Seeded from 办公虾 (差旅报销), then remapped to「我的Claw」with Agent.md only.
  */
 export function getPersonalClawDetail(): ClawDetailData {
-  const seed = clawHubList[0];
-  if (!seed) {
-    throw new Error("clawHubList is empty; cannot build personal Claw detail");
-  }
-
-  const base = getClawDetail(seed.id, seed);
+  const base = getClawDetail(OFFICE_CLAW_SEED_ID);
   if (!base) {
-    throw new Error(`Failed to resolve Claw detail for seed "${seed.id}"`);
+    throw new Error(
+      `Failed to resolve Claw detail for seed "${OFFICE_CLAW_SEED_ID}"`
+    );
   }
 
   return {
