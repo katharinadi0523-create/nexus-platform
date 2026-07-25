@@ -8,10 +8,23 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
 import {
   MY_CLAW_SESSIONS,
+  RESEARCH_CLAW_ID,
+  RESEARCH_SESSION_ID,
   type MyClawSessionListItem,
 } from "@/lib/mock/my-claw";
+
+const RESEARCH_SUMMON_IDS = new Set([
+  RESEARCH_CLAW_ID,
+  "research-claw-main",
+  "ra-hypothesis",
+  "ra-literature",
+  "ra-viz",
+  "ra-paper",
+  "ra-review",
+]);
 
 interface MyClawContextValue {
   sessions: MyClawSessionListItem[];
@@ -25,11 +38,13 @@ interface MyClawContextValue {
   summonAgent: (agentId: string) => void;
   dismissAgent: (agentId: string) => void;
   setSelectedAgentId: (agentId: string | null) => void;
+  syncSummonedAgents: (agentIds: string[]) => void;
 }
 
 const MyClawContext = createContext<MyClawContextValue | null>(null);
 
 export function MyClawProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [sessions, setSessions] = useState<MyClawSessionListItem[]>(() =>
     MY_CLAW_SESSIONS.map((session) => ({ ...session }))
   );
@@ -80,16 +95,44 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
     setActiveSessionId((current) => (current === sessionId ? null : current));
   }, []);
 
-  const summonAgent = useCallback((agentId: string) => {
-    setSummonedAgentIds((prev) =>
-      prev.includes(agentId) ? prev : [...prev, agentId]
-    );
-    setSelectedAgentId(agentId);
-  }, []);
+  const summonAgent = useCallback(
+    (agentId: string) => {
+      setSummonedAgentIds((prev) =>
+        prev.includes(agentId) ? prev : [...prev, agentId]
+      );
+      setSelectedAgentId(agentId);
+      if (RESEARCH_SUMMON_IDS.has(agentId)) {
+        setSessions((prev) =>
+          prev.map((session) =>
+            session.id === RESEARCH_SESSION_ID
+              ? {
+                  ...session,
+                  kind: "research_multi_agent",
+                  updatedAt: new Date().toISOString(),
+                }
+              : session
+          )
+        );
+        setActiveSessionId(RESEARCH_SESSION_ID);
+        router.push(
+          `/my-claw/chat?sessionId=${encodeURIComponent(RESEARCH_SESSION_ID)}`
+        );
+      }
+    },
+    [router]
+  );
 
   const dismissAgent = useCallback((agentId: string) => {
     setSummonedAgentIds((prev) => prev.filter((id) => id !== agentId));
     setSelectedAgentId((current) => (current === agentId ? null : current));
+  }, []);
+
+  const syncSummonedAgents = useCallback((agentIds: string[]) => {
+    setSummonedAgentIds((prev) => {
+      const next = new Set(prev);
+      for (const id of agentIds) next.add(id);
+      return Array.from(next);
+    });
   }, []);
 
   const value = useMemo<MyClawContextValue>(
@@ -105,6 +148,7 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
       summonAgent,
       dismissAgent,
       setSelectedAgentId,
+      syncSummonedAgents,
     }),
     [
       sessions,
@@ -117,6 +161,7 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
       deleteSession,
       summonAgent,
       dismissAgent,
+      syncSummonedAgents,
     ]
   );
 

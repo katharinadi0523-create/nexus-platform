@@ -33,6 +33,36 @@ export const MY_CLAW_AGENT_CATALOG: MyClawAgentOption[] = [
     name: "科研智能体",
     description: "多智能体科研协作",
   },
+  {
+    id: "research-claw-main",
+    name: "科研智能体",
+    description: "科研主智能体",
+  },
+  {
+    id: "ra-hypothesis",
+    name: "假设生成智能体",
+    description: "生成可验证假设",
+  },
+  {
+    id: "ra-literature",
+    name: "文献检索智能体",
+    description: "构建文献证据矩阵",
+  },
+  {
+    id: "ra-viz",
+    name: "科研绘图智能体",
+    description: "制作科研图表包",
+  },
+  {
+    id: "ra-paper",
+    name: "论文生成智能体",
+    description: "撰写研究论文",
+  },
+  {
+    id: "ra-review",
+    name: "论文审核智能体",
+    description: "审核论文质量",
+  },
 ];
 
 function resolveAgent(id: string): MyClawAgentOption {

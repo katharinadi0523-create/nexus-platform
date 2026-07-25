@@ -1,30 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { useMyClaw } from "@/components/my-claw/provider";
 import { getPersonalClawDetail } from "@/lib/mock/my-claw/personal-claw";
 import { getMyClawSession } from "@/lib/mock/my-claw/sessions";
 import type { MyClawSessionListItem } from "@/lib/mock/my-claw/types";
 import { ComposerWithAgents } from "./composer-with-agents";
 import { ExpenseChatPanel } from "./expense-chat-panel";
+import { ResearchWorkspace } from "./research-workspace";
 
 interface ChatWorkspaceProps {
   sessionId?: string | null;
-}
-
-function ResearchPlaceholder() {
-  return (
-    <div className="flex h-full items-center justify-center px-6">
-      <div className="max-w-md text-center">
-        <Loader2 className="mx-auto h-5 w-5 text-slate-400" />
-        <h2 className="mt-4 text-lg font-semibold text-slate-900">科研会话</h2>
-        <p className="mt-2 text-sm leading-6 text-[#5a6779]">
-          科研会话将在 Task 5 接入
-        </p>
-      </div>
-    </div>
-  );
 }
 
 function BlankChatPanel() {
@@ -109,7 +95,7 @@ export function ChatWorkspace({ sessionId }: ChatWorkspaceProps) {
   }
 
   if (session.kind === "research_multi_agent") {
-    return <ResearchPlaceholder />;
+    return <ResearchWorkspace />;
   }
 
   return <EnterpriseSessionPanel session={session} />;
