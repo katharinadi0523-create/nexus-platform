@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Search, Settings2 } from "lucide-react";
 import { toast } from "sonner";
-import SkillsPage from "@/app/(dashboard)/skills/page";
+import { SkillsPage } from "@/components/skills/skills-page";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";

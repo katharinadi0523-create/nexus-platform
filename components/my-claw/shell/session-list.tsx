@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -261,10 +261,14 @@ function AutomationTaskRow({
   );
 }
 
-function AutomationTaskGroup() {
+function AutomationTaskGroup({
+  activeTaskId,
+  activeRunId,
+}: {
+  activeTaskId: string | null;
+  activeRunId: string | null;
+}) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { automationTasks } = useMyClaw();
 
   const sidebarTasks = useMemo(
@@ -289,13 +293,6 @@ function AutomationTaskGroup() {
       return firstRunnable ? [firstRunnable.id] : [];
     });
   }, [sidebarTasks]);
-
-  const activeTaskId = pathname.startsWith("/my-claw/automation")
-    ? searchParams.get("taskId")
-    : null;
-  const activeRunId = pathname.startsWith("/my-claw/automation")
-    ? searchParams.get("runId")
-    : null;
 
   const handleToggle = (taskId: string) => {
     setExpandedTaskIds((prev) =>
@@ -356,26 +353,16 @@ function AutomationTaskGroup() {
   );
 }
 
-export function SessionList() {
-  const { sessions, activeSessionId, setActiveSession } = useMyClaw();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const querySessionId = searchParams.get("sessionId");
-
-  // URL sessionId is the highlight source of truth; keep provider in sync.
-  useEffect(() => {
-    const nextId =
-      pathname.startsWith("/my-claw/chat") && querySessionId
-        ? querySessionId
-        : null;
-
-    if (activeSessionId !== nextId) {
-      setActiveSession(nextId);
-    }
-  }, [pathname, querySessionId, activeSessionId, setActiveSession]);
-
-  const highlightedSessionId = querySessionId;
-
+function SessionListBody({
+  highlightedSessionId,
+  activeTaskId,
+  activeRunId,
+}: {
+  highlightedSessionId: string | null;
+  activeTaskId: string | null;
+  activeRunId: string | null;
+}) {
+  const { sessions } = useMyClaw();
   const pinned = sessions.filter((s) => s.pinned).sort(sortByUpdatedAt);
   const recent = sessions.filter((s) => !s.pinned).sort(sortByUpdatedAt);
 
@@ -392,8 +379,86 @@ export function SessionList() {
           sessions={recent}
           activeSessionId={highlightedSessionId}
         />
-        <AutomationTaskGroup />
+        <AutomationTaskGroup
+          activeTaskId={activeTaskId}
+          activeRunId={activeRunId}
+        />
       </div>
     </div>
+  );
+}
+
+function SessionListWithSearchParams() {
+  const { activeSessionId, setActiveSession } = useMyClaw();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const querySessionId = searchParams.get("sessionId");
+  const focusTaskId = searchParams.get("taskId");
+  const focusRunId = searchParams.get("runId");
+
+  useEffect(() => {
+    const nextId =
+      pathname.startsWith("/my-claw/chat") && querySessionId
+        ? querySessionId
+        : null;
+
+    if (activeSessionId !== nextId) {
+      setActiveSession(nextId);
+    }
+  }, [pathname, querySessionId, activeSessionId, setActiveSession]);
+
+  const highlightedSessionId =
+    pathname.startsWith("/my-claw/chat") || pathname === "/my-claw"
+      ? querySessionId
+      : null;
+  const activeTaskId = pathname.startsWith("/my-claw/automation")
+    ? focusTaskId
+    : null;
+  const activeRunId = pathname.startsWith("/my-claw/automation")
+    ? focusRunId
+    : null;
+
+  return (
+    <SessionListBody
+      highlightedSessionId={highlightedSessionId}
+      activeTaskId={activeTaskId}
+      activeRunId={activeRunId}
+    />
+  );
+}
+
+/**
+ * Mount-gate + Suspense: SSR/first paint render the same unfocused list,
+ * then attach URL focus via `useSearchParams` to avoid hydration mismatch.
+ */
+export function SessionList() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <SessionListBody
+        highlightedSessionId={null}
+        activeTaskId={null}
+        activeRunId={null}
+      />
+    );
+  }
+
+  return (
+    <Suspense
+      fallback={
+        <SessionListBody
+          highlightedSessionId={null}
+          activeTaskId={null}
+          activeRunId={null}
+        />
+      }
+    >
+      <SessionListWithSearchParams />
+    </Suspense>
   );
 }

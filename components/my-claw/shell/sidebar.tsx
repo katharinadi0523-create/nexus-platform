@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search, Settings, Shrimp } from "lucide-react";
-import { Suspense } from "react";
 import { cn } from "@/lib/utils";
 import { useMyClaw } from "@/components/my-claw/provider";
 import {
@@ -20,12 +19,6 @@ function isNavActive(pathname: string, href: string) {
     return pathname === "/my-claw" || pathname === "/my-claw/chat";
   }
   return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-function SessionListFallback() {
-  return (
-    <div className="flex-1 px-4 py-6 text-xs text-[#5a6779]">加载会话…</div>
-  );
 }
 
 export function MyClawSidebar() {
@@ -93,9 +86,7 @@ export function MyClawSidebar() {
       <div className="mx-3 border-t border-[#eef2f6]" />
 
       {/* Sessions */}
-      <Suspense fallback={<SessionListFallback />}>
-        <SessionList />
-      </Suspense>
+      <SessionList />
 
       {/* Footer: avatar + settings */}
       <div className="mt-auto border-t border-[#eef2f6] px-3 py-3">
