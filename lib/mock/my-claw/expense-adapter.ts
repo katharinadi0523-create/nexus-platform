@@ -41,6 +41,7 @@ export interface ExpenseInspectorModel {
   completedTaskCount: number;
 }
 
+/** Render nodes consumed by ExpenseNodeView — single conversion path from demo steps. */
 export type ExpenseRenderNode =
   | {
       key: string;
@@ -61,7 +62,6 @@ export type ExpenseRenderNode =
       key: string;
       type: "action";
       timeline: Extract<ConversationTimelineItem, { type: "action" }>;
-      detailLines?: string[];
     }
   | {
       key: string;
@@ -105,7 +105,6 @@ export type ExpenseRenderNode =
       type: "compression";
       title: string;
       summary: string;
-      retained?: string[];
     }
   | {
       key: string;
@@ -121,7 +120,6 @@ export type ExpenseRenderNode =
 export interface ExpenseConversationView {
   stepCount: number;
   nodes: ExpenseRenderNode[];
-  timelineItems: ConversationTimelineItem[];
   inspector: ExpenseInspectorModel;
 }
 
@@ -356,7 +354,6 @@ function mapItem(step: ExpenseDemoStep, item: ExpenseDemoItem, index: number): E
               ? "done"
               : timeline.status,
         },
-        detailLines: logs,
       };
     }
     case "subagent_group":
@@ -380,7 +377,6 @@ function mapItem(step: ExpenseDemoStep, item: ExpenseDemoItem, index: number): E
         type: "compression",
         title: item.completedTitle ?? item.title ?? "上下文压缩",
         summary: item.completedSummary ?? item.summary ?? "",
-        retained: item.retained,
       };
     default: {
       const _exhaustive: never = item;
@@ -390,114 +386,17 @@ function mapItem(step: ExpenseDemoStep, item: ExpenseDemoItem, index: number): E
         timeline: {
           key,
           type: "output",
-          message: assistantMessage(key, `未识别的步骤类型：${String((_exhaustive as ExpenseDemoItem).kind)}`),
+          message: assistantMessage(
+            key,
+            `未识别的步骤类型：${String((_exhaustive as ExpenseDemoItem).kind)}`
+          ),
         },
       };
     }
   }
 }
 
-function toTimelineItem(node: ExpenseRenderNode): ConversationTimelineItem | null {
-  if (
-    node.type === "user" ||
-    node.type === "thinking" ||
-    node.type === "output" ||
-    node.type === "action"
-  ) {
-    return node.timeline;
-  }
-
-  if (node.type === "destructive") {
-    return node.timeline;
-  }
-
-  if (node.type === "clarify") {
-    return {
-      key: node.key,
-      type: "action",
-      title: node.question,
-      kind: "user",
-      status: "done",
-      logs: node.options.map((option) => option.label),
-      source: "audit",
-    };
-  }
-
-  if (node.type === "clarify_summary") {
-    return {
-      key: node.key,
-      type: "output",
-      message: assistantMessage(
-        node.key,
-        node.entries.map((entry) => `${entry.question}\n→ ${entry.answerLabel}`).join("\n\n")
-      ),
-    };
-  }
-
-  if (node.type === "plan") {
-    return {
-      key: node.key,
-      type: "action",
-      title: `执行计划 · ${node.status}`,
-      kind: "tool",
-      status: "done",
-      logs: node.items.map((item) => `${item.title}（${item.tool} · ${item.eta}）`),
-      source: "audit",
-    };
-  }
-
-  if (node.type === "todo") {
-    return {
-      key: node.key,
-      type: "action",
-      title: "任务清单",
-      kind: "tool",
-      status: "done",
-      logs: node.items.map((item) => `${item.title} — ${item.detail}`),
-      source: "audit",
-    };
-  }
-
-  if (node.type === "subagent") {
-    return {
-      key: node.key,
-      type: "action",
-      title: `子智能体 · ${node.principalAgent}`,
-      kind: "user",
-      status: "done",
-      logs: [
-        node.principalAction,
-        ...node.tasks.map((task) => `${task.title}（${task.status}${task.elapsed ? ` · ${task.elapsed}` : ""}）`),
-      ],
-      source: "audit",
-    };
-  }
-
-  if (node.type === "artifacts") {
-    return {
-      key: node.key,
-      type: "output",
-      message: assistantMessage(
-        node.key,
-        node.note ?? "已生成会话文件",
-        node.artifacts.map((artifact) => artifact.name)
-      ),
-    };
-  }
-
-  if (node.type === "compression") {
-    return {
-      key: node.key,
-      type: "thinking",
-      active: false,
-      message: assistantMessage(node.key, `${node.title}\n${node.summary}`),
-    };
-  }
-
-  return null;
-}
-
-function buildInspector(nodes: ExpenseRenderNode[]): ExpenseInspectorModel {
+function buildInspector(): ExpenseInspectorModel {
   const tools: ExpenseInspectorTool[] = [];
   const seenTools = new Set<string>();
 
@@ -516,9 +415,6 @@ function buildInspector(nodes: ExpenseRenderNode[]): ExpenseInspectorModel {
     }
   }
 
-  void nodes;
-  const files = EXPENSE_ARTIFACTS_AFTER_DELETION;
-
   const tasks: ExpenseInspectorTask[] = EXPENSE_TODO_ITEMS.map((item, index) => ({
     id: `todo-${index + 1}`,
     title: item.title,
@@ -528,27 +424,23 @@ function buildInspector(nodes: ExpenseRenderNode[]): ExpenseInspectorModel {
 
   return {
     tasks,
-    files,
+    files: EXPENSE_ARTIFACTS_AFTER_DELETION,
     tools,
     completedTaskCount: tasks.length,
   };
 }
 
-/** Map the full expense demo script into Nexus timeline nodes + inspector model. */
+/** Map the full expense demo script into render nodes + inspector model. */
 export function buildExpenseConversationView(
   steps: ExpenseDemoStep[] = EXPENSE_DEMO_STEPS
 ): ExpenseConversationView {
   const nodes = steps.flatMap((step) =>
     step.items.map((item, index) => mapItem(step, item, index))
   );
-  const timelineItems = nodes
-    .map((node) => toTimelineItem(node))
-    .filter((item): item is ConversationTimelineItem => item !== null);
 
   return {
     stepCount: steps.length,
     nodes,
-    timelineItems,
-    inspector: buildInspector(nodes),
+    inspector: buildInspector(),
   };
 }
