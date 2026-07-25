@@ -10,9 +10,11 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
+  INITIAL_AUTOMATION_TASKS,
   MY_CLAW_SESSIONS,
   RESEARCH_CLAW_ID,
   RESEARCH_SESSION_ID,
+  type AutomationTask,
   type MyClawSessionListItem,
 } from "@/lib/mock/my-claw";
 
@@ -33,6 +35,8 @@ interface MyClawContextValue {
   selectedAgentId: string | null;
   /** Plaza favorite overrides; survives summon → chat → plaza navigation. */
   favoriteOverrides: Record<string, boolean>;
+  /** Automation tasks shared with sidebar tree. */
+  automationTasks: AutomationTask[];
   setActiveSession: (sessionId: string | null) => void;
   pinSession: (sessionId: string, pinned?: boolean) => void;
   renameSession: (sessionId: string, title: string) => void;
@@ -42,6 +46,10 @@ interface MyClawContextValue {
   setSelectedAgentId: (agentId: string | null) => void;
   syncSummonedAgents: (agentIds: string[]) => void;
   setAgentFavorite: (agentId: string, favorite: boolean) => void;
+  setAutomationTasks: (tasks: AutomationTask[]) => void;
+  upsertAutomationTask: (task: AutomationTask) => void;
+  deleteAutomationTask: (taskId: string) => void;
+  toggleAutomationTask: (taskId: string, enabled: boolean) => void;
 }
 
 const MyClawContext = createContext<MyClawContextValue | null>(null);
@@ -60,10 +68,48 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
   const [favoriteOverrides, setFavoriteOverrides] = useState<
     Record<string, boolean>
   >({});
+  const [automationTasks, setAutomationTasksState] = useState<AutomationTask[]>(
+    () => INITIAL_AUTOMATION_TASKS.map((task) => ({ ...task }))
+  );
 
   const setActiveSession = useCallback((sessionId: string | null) => {
     setActiveSessionId(sessionId);
   }, []);
+
+  const setAutomationTasks = useCallback((tasks: AutomationTask[]) => {
+    setAutomationTasksState(tasks.map((task) => ({ ...task })));
+  }, []);
+
+  const upsertAutomationTask = useCallback((task: AutomationTask) => {
+    setAutomationTasksState((prev) => {
+      const index = prev.findIndex((item) => item.id === task.id);
+      if (index === -1) return [task, ...prev];
+      const next = [...prev];
+      next[index] = { ...task };
+      return next;
+    });
+  }, []);
+
+  const deleteAutomationTask = useCallback((taskId: string) => {
+    setAutomationTasksState((prev) => prev.filter((task) => task.id !== taskId));
+  }, []);
+
+  const toggleAutomationTask = useCallback(
+    (taskId: string, enabled: boolean) => {
+      setAutomationTasksState((prev) =>
+        prev.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                enabled,
+                disabled_by: enabled ? undefined : "user",
+              }
+            : task
+        )
+      );
+    },
+    []
+  );
 
   const pinSession = useCallback((sessionId: string, pinned?: boolean) => {
     setSessions((prev) =>
@@ -177,6 +223,7 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
       summonedAgentIds,
       selectedAgentId,
       favoriteOverrides,
+      automationTasks,
       setActiveSession,
       pinSession,
       renameSession,
@@ -186,6 +233,10 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
       setSelectedAgentId,
       syncSummonedAgents,
       setAgentFavorite,
+      setAutomationTasks,
+      upsertAutomationTask,
+      deleteAutomationTask,
+      toggleAutomationTask,
     }),
     [
       sessions,
@@ -193,6 +244,7 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
       summonedAgentIds,
       selectedAgentId,
       favoriteOverrides,
+      automationTasks,
       setActiveSession,
       pinSession,
       renameSession,
@@ -201,6 +253,10 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
       dismissAgent,
       syncSummonedAgents,
       setAgentFavorite,
+      setAutomationTasks,
+      upsertAutomationTask,
+      deleteAutomationTask,
+      toggleAutomationTask,
     ]
   );
 

@@ -138,3 +138,38 @@ export type {
   PluginMarketplaceItem,
   PluginKindMeta,
 } from "./plugins";
+
+export {
+  AUTOMATION_DELIVERY_CHANNELS,
+  AUTOMATION_CLAW_SELECT_GROUPS,
+  INITIAL_AUTOMATION_TASKS,
+  INITIAL_AUTOMATION_EXECUTIONS,
+  getAutomationClawLabel,
+  getTriggerTypeLabel,
+  getLastRunStatusLabel,
+  deriveAutomationWorkspaceName,
+  buildAutomationRunId,
+  getAutomationSidebarTasks,
+  createTaskId,
+  buildTriggerSummary,
+  createScheduledTaskDraft,
+  createPollTaskDraft,
+  getClawSelectOptions,
+  filterAutomationTasks,
+  filterAutomationExecutions,
+} from "./automation";
+
+export type {
+  AutomationDeliveryChannel,
+  AutomationTriggerType,
+  AutomationTriggerMode,
+  AutomationRunResult,
+  AutomationExecutionStatus,
+  AutomationScheduleConfig,
+  AutomationEventConfig,
+  AutomationRecentRun,
+  AutomationTask,
+  AutomationExecution,
+  AutomationSidebarRun,
+  AutomationSidebarTask,
+} from "./automation";
