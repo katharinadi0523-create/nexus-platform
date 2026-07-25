@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# local brainstorm / agent scratch
+.superpowers/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
