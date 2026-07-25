@@ -1406,9 +1406,14 @@ function mapEditorCategoryToAudienceCategory(category: string): AudienceCategory
 
 interface SkillsPageProps {
   moduleView?: SkillsModuleView;
+  /** 嵌入 my-claw 等壳时隐藏外层页面标题/多余 padding */
+  embedded?: boolean;
 }
 
-export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
+export default function SkillsPage({
+  moduleView = "hub",
+  embedded = false,
+}: SkillsPageProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<SkillsTab>(
     moduleView === "management" ? "mine" : "marketplace"
@@ -1493,9 +1498,9 @@ export default function SkillsPage({ moduleView = "hub" }: SkillsPageProps) {
   const isManagementModule = moduleView === "management";
   const isSkillDetailView = Boolean(selectedMarketplaceDetailId || selectedMySkillDetailId);
   const showManagementTabs = isManagementModule && !isMvpMode;
-  const showExperienceSwitcher = !isSkillDetailView;
+  const showExperienceSwitcher = !isSkillDetailView && !embedded;
   /** 管理页版本切换为右上角 hover 浮层，不在此占位 */
-  const showTopControlsBar = showManagementTabs;
+  const showTopControlsBar = showManagementTabs && !embedded;
 
   useEffect(() => {
     if (isMvpMode && marketSortMode === "references") {
@@ -3132,12 +3137,15 @@ source_url: "${parsedUrl.toString()}"
   return (
     <div
       className={cn(
-        "skills-page relative pb-4",
-        isManagementModule ? "space-y-4" : "space-y-6",
-        isHubModule && "skills-hub-cecloud min-h-[calc(100dvh-5rem)] bg-transparent",
-        isManagementModule && !isHubModule && "min-h-[calc(100dvh-5rem)] bg-white"
+        "skills-page relative",
+        embedded ? "space-y-0 bg-transparent pb-0" : "pb-4",
+        !embedded && (isManagementModule ? "space-y-4" : "space-y-6"),
+        isHubModule && "skills-hub-cecloud bg-transparent",
+        isHubModule && !embedded && "min-h-[calc(100dvh-5rem)]",
+        isManagementModule && !isHubModule && !embedded && "min-h-[calc(100dvh-5rem)] bg-white"
       )}
     >
+      {!embedded ? (
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[520px] overflow-hidden">
         {isHubModule ? (
           <>
@@ -3152,6 +3160,7 @@ source_url: "${parsedUrl.toString()}"
           </>
         )}
       </div>
+      ) : null}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className={cn(isManagementModule ? "space-y-4" : "space-y-5")}>
         {showTopControlsBar ? (
@@ -3229,7 +3238,12 @@ source_url: "${parsedUrl.toString()}"
           <TabsContent value="marketplace" className="mt-0 space-y-0">
           {selectedMarketplaceDetail ? renderMarketplaceDetailPage(selectedMarketplaceDetail) : (
             <>
-          <div className="skills-plaza-canvas relative">
+          <div
+            className={cn(
+              "skills-plaza-canvas relative",
+              embedded && "!min-h-0 !px-0 !pt-0"
+            )}
+          >
             {showExperienceSwitcher && isHubModule ? (
               <div
                 className="pointer-events-auto absolute right-0 top-0 z-40 flex h-28 w-[min(100%,18rem)] flex-col items-end justify-start pt-1 pr-0 md:pr-1 group/hub-version"
@@ -3276,7 +3290,13 @@ source_url: "${parsedUrl.toString()}"
               </div>
             ) : null}
 
-            <div className="skills-plaza-filter-top flex flex-col gap-3 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between">
+            <div
+              className={cn(
+                "skills-plaza-filter-top flex flex-col gap-3 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between",
+                embedded && "lg:justify-end"
+              )}
+            >
+              {!embedded ? (
               <div className="min-w-0 flex-1">
                 <span className="skills-plaza-gradient-title skills-display inline-block text-[1.75rem] font-bold leading-tight tracking-tight">
                   技能广场
@@ -3285,6 +3305,7 @@ source_url: "${parsedUrl.toString()}"
                   发现、筛选并复用组织内外的标准化技能资产，沉淀为可治理、可扩展的智能体能力。
                 </p>
               </div>
+              ) : null}
               <div className="relative w-full shrink-0 lg:w-[min(320px,100%)]">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6e7b8d]" />
                 <Input
