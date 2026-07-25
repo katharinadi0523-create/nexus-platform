@@ -5,19 +5,35 @@ import { PluginsMineTable } from "@/components/my-claw/plugins/plugins-mine-tabl
 import { PluginsPlaza } from "@/components/my-claw/plugins/plugins-plaza";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  addMarketplaceItemToMine,
   INITIAL_MINE_PLUGINS,
   type MinePluginItem,
+  type PluginMarketplaceItem,
   type PluginToolKind,
 } from "@/lib/mock/my-claw/plugins";
 
 export function MyClawPluginsHub() {
-  const [plugins, setPlugins] = useState<MinePluginItem[]>(INITIAL_MINE_PLUGINS);
+  const [plugins, setPlugins] = useState<MinePluginItem[]>(() => [
+    ...INITIAL_MINE_PLUGINS,
+  ]);
   const [marketAddSequence, setMarketAddSequence] = useState(0);
   const [activeTab, setActiveTab] = useState<"mine" | "plaza">("mine");
   const [focusRequest, setFocusRequest] = useState<{
     kind: PluginToolKind;
     token: number;
   } | null>(null);
+
+  const handleAddToMine = (item: PluginMarketplaceItem) => {
+    const result = addMarketplaceItemToMine(plugins, item, marketAddSequence);
+    setPlugins(result.plugins);
+    setMarketAddSequence(result.nextSequence);
+    setFocusRequest({
+      kind: result.added.kind,
+      token: Date.now(),
+    });
+    setActiveTab("mine");
+    return { kind: result.added.kind };
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#f8f9fb]">
@@ -55,16 +71,7 @@ export function MyClawPluginsHub() {
           value="plaza"
           className="mt-0 min-h-0 flex-1 overflow-y-auto bg-[#e8f0fb]"
         >
-          <PluginsPlaza
-            plugins={plugins}
-            onPluginsChange={setPlugins}
-            marketAddSequence={marketAddSequence}
-            onMarketAddSequenceChange={setMarketAddSequence}
-            onAddedToMine={(kind) => {
-              setFocusRequest({ kind, token: Date.now() });
-              setActiveTab("mine");
-            }}
-          />
+          <PluginsPlaza plugins={plugins} onAddToMine={handleAddToMine} />
         </TabsContent>
       </Tabs>
     </div>

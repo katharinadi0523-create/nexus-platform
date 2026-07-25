@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
-  addMarketplaceItemToMine,
   filterPluginMarketplaceItems,
   getPluginMarketplaceCategoryLabel,
   getPluginMarketplaceKindLabel,
@@ -89,19 +88,10 @@ function FilterChip({
 
 export interface PluginsPlazaProps {
   plugins: MinePluginItem[];
-  onPluginsChange: (plugins: MinePluginItem[]) => void;
-  onAddedToMine?: (kind: PluginToolKind) => void;
-  marketAddSequence: number;
-  onMarketAddSequenceChange: (next: number) => void;
+  onAddToMine: (item: PluginMarketplaceItem) => { kind: PluginToolKind };
 }
 
-export function PluginsPlaza({
-  plugins,
-  onPluginsChange,
-  onAddedToMine,
-  marketAddSequence,
-  onMarketAddSequenceChange,
-}: PluginsPlazaProps) {
+export function PluginsPlaza({ plugins, onAddToMine }: PluginsPlazaProps) {
   const [query, setQuery] = useState("");
   const [source, setSource] = useState<PluginMarketSourceFilter>("all");
   const [category, setCategory] = useState<PluginMarketCategory>("all");
@@ -117,12 +107,10 @@ export function PluginsPlaza({
   );
 
   const handleAdd = (item: PluginMarketplaceItem) => {
-    const result = addMarketplaceItemToMine(plugins, item, marketAddSequence);
-    onPluginsChange(result.plugins);
-    onMarketAddSequenceChange(result.nextSequence);
-    onAddedToMine?.(result.added.kind);
+    const wasInMine = isMarketplaceItemInMine(plugins, item.id);
+    onAddToMine(item);
     toast.success(
-      result.replaced
+      wasInMine
         ? `已更新「${item.name}」到我的插件`
         : `已添加「${item.name}」到我的插件`
     );
