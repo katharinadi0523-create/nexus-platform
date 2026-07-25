@@ -86,7 +86,7 @@ const featuredApps: FeaturedApp[] = [
     },
     badge: "NEW",
     cardStyle: "tech",
-    externalLink: "https://claw-dialogue.vercel.app/",
+    externalLink: "/my-claw",
     specialTags: [{ label: "MVP版，升级迭代ing", style: "mvp" }],
   },
   {

@@ -26,7 +26,7 @@ import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 
 const CURRENT_OPERATOR = "RowanDI";
-const PERSONAL_CLAW_URL = "https://claw-dialogue.vercel.app/";
+const PERSONAL_CLAW_URL = "/my-claw";
 const STATIC_CLAW_IDS = new Set(clawHubList.map((item) => item.id));
 const STORAGE_VOLUME_OPTIONS = [
   { value: "s3://juicefs-vol-001", label: "GF专用存储卷" },
