@@ -47,6 +47,8 @@ export function AgentsPlaza() {
     summonAgent,
     summonedAgentIds,
     selectedAgentId,
+    favoriteOverrides,
+    setAgentFavorite,
   } = useMyClaw();
 
   const [query, setQuery] = useState("");
@@ -54,9 +56,6 @@ export function AgentsPlaza() {
     useState<EnterpriseAgentSourceScope>("all");
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState<EnterpriseAgentSort>("latest");
-  const [favoriteOverrides, setFavoriteOverrides] = useState<
-    Record<string, boolean>
-  >({});
 
   const agents = useMemo(
     () =>
@@ -75,7 +74,7 @@ export function AgentsPlaza() {
     if (!agent) return;
     const current = isEnterpriseAgentFavorite(agent, favoriteOverrides);
     const next = !current;
-    setFavoriteOverrides((prev) => ({ ...prev, [agentId]: next }));
+    setAgentFavorite(agentId, next);
     toast.success(next ? `已收藏「${agent.name}」` : `已取消收藏「${agent.name}」`);
   };
 

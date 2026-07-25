@@ -31,6 +31,8 @@ interface MyClawContextValue {
   activeSessionId: string | null;
   summonedAgentIds: string[];
   selectedAgentId: string | null;
+  /** Plaza favorite overrides; survives summon → chat → plaza navigation. */
+  favoriteOverrides: Record<string, boolean>;
   setActiveSession: (sessionId: string | null) => void;
   pinSession: (sessionId: string, pinned?: boolean) => void;
   renameSession: (sessionId: string, title: string) => void;
@@ -39,6 +41,7 @@ interface MyClawContextValue {
   dismissAgent: (agentId: string) => void;
   setSelectedAgentId: (agentId: string | null) => void;
   syncSummonedAgents: (agentIds: string[]) => void;
+  setAgentFavorite: (agentId: string, favorite: boolean) => void;
 }
 
 const MyClawContext = createContext<MyClawContextValue | null>(null);
@@ -54,6 +57,9 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
     "ui-designer",
   ]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [favoriteOverrides, setFavoriteOverrides] = useState<
+    Record<string, boolean>
+  >({});
 
   const setActiveSession = useCallback((sessionId: string | null) => {
     setActiveSessionId(sessionId);
@@ -157,12 +163,20 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setAgentFavorite = useCallback(
+    (agentId: string, favorite: boolean) => {
+      setFavoriteOverrides((prev) => ({ ...prev, [agentId]: favorite }));
+    },
+    []
+  );
+
   const value = useMemo<MyClawContextValue>(
     () => ({
       sessions,
       activeSessionId,
       summonedAgentIds,
       selectedAgentId,
+      favoriteOverrides,
       setActiveSession,
       pinSession,
       renameSession,
@@ -171,12 +185,14 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
       dismissAgent,
       setSelectedAgentId,
       syncSummonedAgents,
+      setAgentFavorite,
     }),
     [
       sessions,
       activeSessionId,
       summonedAgentIds,
       selectedAgentId,
+      favoriteOverrides,
       setActiveSession,
       pinSession,
       renameSession,
@@ -184,6 +200,7 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
       summonAgent,
       dismissAgent,
       syncSummonedAgents,
+      setAgentFavorite,
     ]
   );
 
