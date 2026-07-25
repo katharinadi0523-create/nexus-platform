@@ -149,6 +149,7 @@ export {
   getLastRunStatusLabel,
   deriveAutomationWorkspaceName,
   buildAutomationRunId,
+  resolveExecutionIdFromRunId,
   getAutomationSidebarTasks,
   createTaskId,
   buildTriggerSummary,

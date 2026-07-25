@@ -47,6 +47,7 @@ import {
   getLastRunStatusLabel,
   getTriggerTypeLabel,
   INITIAL_AUTOMATION_EXECUTIONS,
+  resolveExecutionIdFromRunId,
   type AutomationDeliveryChannel,
   type AutomationExecution,
   type AutomationTask,
@@ -134,12 +135,29 @@ export function MyClawAutomationWorkbench() {
   );
 
   const focusTaskId = searchParams.get("taskId");
+  const focusRunId = searchParams.get("runId");
+
+  const highlightedExecutionId = useMemo(() => {
+    if (!focusTaskId || !focusRunId) return null;
+    return resolveExecutionIdFromRunId(focusTaskId, focusRunId);
+  }, [focusTaskId, focusRunId]);
 
   useEffect(() => {
     if (!focusTaskId) return;
+
+    if (focusRunId) {
+      setActivePanel("execution-history");
+      setExecutionScope("specified");
+      setExecutionTaskId(focusTaskId);
+      setExecutionQuery("");
+      setExecutionStatus("all");
+      setExecutionChannel("all");
+      return;
+    }
+
     setActivePanel("task-list");
     setQuery("");
-  }, [focusTaskId]);
+  }, [focusTaskId, focusRunId]);
 
   const filteredTasks = useMemo(
     () => filterAutomationTasks(automationTasks, query),
@@ -662,9 +680,15 @@ export function MyClawAutomationWorkbench() {
                           />
                         ) : (
                           filteredExecutions.map((row) => (
-                            <ManagementRow key={row.id}>
+                            <ManagementRow
+                              key={row.id}
+                              selected={row.id === highlightedExecutionId}
+                            >
                               <ManagementCell>
-                                <div className="font-medium text-slate-900">
+                                <div
+                                  className="font-medium text-slate-900"
+                                  data-automation-execution-id={row.id}
+                                >
                                   {row.taskName}
                                 </div>
                                 <div className="mt-0.5 text-xs text-[#5a6779]">

@@ -600,6 +600,20 @@ export function buildAutomationRunId(taskId: string, index: number): string {
   return `${taskId}::run-${index + 1}`;
 }
 
+/** Map sidebar runId (`${taskId}::run-N`) to execution row id (`auto-exec-${taskId}-${N-1}`). */
+export function resolveExecutionIdFromRunId(
+  taskId: string,
+  runId: string
+): string | null {
+  const prefix = `${taskId}::run-`;
+  if (!runId.startsWith(prefix)) return null;
+  const runNumber = Number.parseInt(runId.slice(prefix.length), 10);
+  if (!Number.isFinite(runNumber) || runNumber < 1) return null;
+  const index = runNumber - 1;
+  if (buildAutomationRunId(taskId, index) !== runId) return null;
+  return `auto-exec-${taskId}-${index}`;
+}
+
 export function getAutomationSidebarTasks(
   tasks: AutomationTask[]
 ): AutomationSidebarTask[] {
