@@ -95,6 +95,31 @@ export type {
 } from "./research-multi-agent";
 
 export {
+  ENTERPRISE_FLOW_MAX_PHASE,
+  ENTERPRISE_FLOW_PRESETS,
+  ENTERPRISE_SESSION_PRESET_BY_ID,
+  getEnterpriseFlowPreset,
+  resolveEnterpriseFlowKey,
+  getEnterpriseSeedPhase,
+  buildEnterpriseConversationView,
+} from "./enterprise-flows";
+
+export type {
+  EnterpriseFlowKey,
+  EnterprisePlanItem,
+  EnterpriseArtifact,
+  EnterpriseStageIdentity,
+  EnterpriseSubagentTask,
+  EnterpriseSubagentGroup,
+  EnterpriseSecurityAlert,
+  EnterpriseFlowStage,
+  EnterpriseFlowPreset,
+  EnterpriseRenderNode,
+  EnterpriseInspectorModel,
+  EnterpriseConversationView,
+} from "./enterprise-flows";
+
+export {
   INITIAL_MINE_SKILLS,
   MINE_SKILL_ORIGIN_TABS,
   filterMineSkills,
