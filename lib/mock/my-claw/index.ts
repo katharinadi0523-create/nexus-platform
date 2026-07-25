@@ -174,3 +174,30 @@ export type {
   AutomationSidebarRun,
   AutomationSidebarTask,
 } from "./automation";
+
+export {
+  PRODUCT_DOC_TABS,
+  PRODUCT_DOC_STAGES,
+  PRODUCT_DOC_DEMOS,
+  createInitialProductDocFlows,
+  productDocReachIndex,
+  productDocCardState,
+  productDocKeyHint,
+  advanceProductDocFlow,
+  retreatProductDocFlow,
+  jumpProductDocPhase,
+  formatProductDocJson,
+  commandOutputForStage,
+} from "./product-doc";
+
+export type {
+  ProductDocTab,
+  ProductDocPhase,
+  ProductDocOutcome,
+  ProductDocCardState,
+  ProductDocTone,
+  ProductDocStage,
+  ProductDocTabItem,
+  ProductDocFlowState,
+  ProductDocDemo,
+} from "./product-doc";
