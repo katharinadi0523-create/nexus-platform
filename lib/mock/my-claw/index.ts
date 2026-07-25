@@ -7,6 +7,35 @@ export type {
 export { PERSONAL_CLAW_ID, getPersonalClawDetail } from "./personal-claw";
 
 export {
+  ENTERPRISE_AGENTS_RAW,
+  ENTERPRISE_AGENT_CATALOG,
+  ENTERPRISE_AGENTS,
+  ENTERPRISE_AGENT_SOURCE_SCOPE_TABS,
+  ENTERPRISE_AGENT_CATEGORY_TABS,
+  getEnterpriseAgentById,
+  getEnterpriseAgentOptions,
+  getEnterpriseAgentCategoryLabel,
+  formatEnterpriseMetric,
+  getAgentAvatarInitial,
+  isResearchClawAgent,
+  isEnterpriseAgentFavorite,
+  filterEnterpriseAgentList,
+  filterEnterpriseAgents,
+} from "./agents";
+
+export type {
+  EnterpriseAgent,
+  EnterpriseAgentRaw,
+  EnterpriseAgentSourceScope,
+  EnterpriseAgentSourceType,
+  EnterpriseAgentSort,
+  EnterpriseAgentSourceScopeTab,
+  EnterpriseAgentCategoryTab,
+  EnterpriseAgentTab,
+  FilterEnterpriseAgentsOptions,
+} from "./agents";
+
+export {
   MY_CLAW_SESSIONS,
   getMyClawSession,
   getPinnedMyClawSessions,

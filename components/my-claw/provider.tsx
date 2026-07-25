@@ -101,23 +101,45 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
         prev.includes(agentId) ? prev : [...prev, agentId]
       );
       setSelectedAgentId(agentId);
-      if (RESEARCH_SUMMON_IDS.has(agentId)) {
-        setSessions((prev) =>
-          prev.map((session) =>
-            session.id === RESEARCH_SESSION_ID
-              ? {
-                  ...session,
-                  kind: "research_multi_agent",
-                  updatedAt: new Date().toISOString(),
-                }
-              : session
-          )
-        );
+
+      // Research claw (and sub-agents) activate/create the research session.
+      if (RESEARCH_SUMMON_IDS.has(agentId) || agentId === RESEARCH_CLAW_ID) {
+        setSessions((prev) => {
+          const exists = prev.some(
+            (session) => session.id === RESEARCH_SESSION_ID
+          );
+          if (exists) {
+            return prev.map((session) =>
+              session.id === RESEARCH_SESSION_ID
+                ? {
+                    ...session,
+                    kind: "research_multi_agent",
+                    updatedAt: new Date().toISOString(),
+                  }
+                : session
+            );
+          }
+          return [
+            {
+              id: RESEARCH_SESSION_ID,
+              title: "科研多智能体协作",
+              kind: "research_multi_agent" as const,
+              pinned: true,
+              updatedAt: new Date().toISOString(),
+              preview: "多智能体科研协作会话",
+            },
+            ...prev,
+          ];
+        });
         setActiveSessionId(RESEARCH_SESSION_ID);
         router.push(
           `/my-claw/chat?sessionId=${encodeURIComponent(RESEARCH_SESSION_ID)}`
         );
+        return;
       }
+
+      // Non-research agents: summon into chat (blank / current draft host).
+      router.push("/my-claw/chat");
     },
     [router]
   );

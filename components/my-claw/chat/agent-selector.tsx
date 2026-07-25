@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { Bot, Plus, X } from "lucide-react";
 import { useMyClaw } from "@/components/my-claw/provider";
+import {
+  getEnterpriseAgentById,
+  getEnterpriseAgentOptions,
+} from "@/lib/mock/my-claw/agents";
 import { cn } from "@/lib/utils";
 
 export interface MyClawAgentOption {
@@ -11,28 +15,8 @@ export interface MyClawAgentOption {
   description?: string;
 }
 
-/** Minimal catalog for selector chips until Task agents plaza lands. */
-export const MY_CLAW_AGENT_CATALOG: MyClawAgentOption[] = [
-  {
-    id: "my-claw-personal",
-    name: "我的Claw",
-    description: "个人办公助手",
-  },
-  {
-    id: "prd-writer",
-    name: "PRD写手",
-    description: "整理可评审的 PRD",
-  },
-  {
-    id: "ui-designer",
-    name: "UI设计师",
-    description: "信息架构与界面表达",
-  },
-  {
-    id: "research-claw",
-    name: "科研智能体",
-    description: "多智能体科研协作",
-  },
+/** Research sub-agents (Task 5) — kept for summon chips, not plaza cards. */
+const RESEARCH_SUB_AGENT_OPTIONS: MyClawAgentOption[] = [
   {
     id: "research-claw-main",
     name: "科研智能体",
@@ -65,8 +49,33 @@ export const MY_CLAW_AGENT_CATALOG: MyClawAgentOption[] = [
   },
 ];
 
+const PERSONAL_OPTION: MyClawAgentOption = {
+  id: "my-claw-personal",
+  name: "我的Claw",
+  description: "个人办公助手",
+};
+
+/** Consolidated catalog: plaza agents + research sub-agents + personal claw. */
+export const MY_CLAW_AGENT_CATALOG: MyClawAgentOption[] = [
+  PERSONAL_OPTION,
+  ...getEnterpriseAgentOptions(),
+  ...RESEARCH_SUB_AGENT_OPTIONS,
+];
+
 function resolveAgent(id: string): MyClawAgentOption {
+  if (id === PERSONAL_OPTION.id) return PERSONAL_OPTION;
+
+  const fromPlaza = getEnterpriseAgentById(id);
+  if (fromPlaza) {
+    return {
+      id: fromPlaza.id,
+      name: fromPlaza.name,
+      description: fromPlaza.description,
+    };
+  }
+
   return (
+    RESEARCH_SUB_AGENT_OPTIONS.find((agent) => agent.id === id) ??
     MY_CLAW_AGENT_CATALOG.find((agent) => agent.id === id) ?? {
       id,
       name: id,
@@ -82,7 +91,7 @@ export function AgentSelector({ className }: { className?: string }) {
     dismissAgent,
   } = useMyClaw();
 
-  const personalId = "my-claw-personal";
+  const personalId = PERSONAL_OPTION.id;
   const effectiveSelected = selectedAgentId ?? personalId;
   const chips = [
     resolveAgent(personalId),
