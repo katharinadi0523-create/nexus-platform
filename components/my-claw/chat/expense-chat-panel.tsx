@@ -3,14 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Circle, FileText, Wrench } from "lucide-react";
 import {
-  buildExpenseConversationView,
+  ClarifyPager,
+  type ClarifyAnswers,
+} from "@/components/claw-hub-next/clarify-pager";
+import {
+  buildClarifySummaryEntries,
+  splitExpenseNodesForClarifyFlow,
   type ExpenseConversationView,
+  type ExpenseRenderNode,
 } from "@/lib/mock/my-claw/expense-adapter";
 import { getPersonalClawDetail } from "@/lib/mock/my-claw/personal-claw";
 import { ComposerWithAgents } from "./composer-with-agents";
 import { ExpenseNodeView } from "./expense-node-view";
 
-function ExpenseInspector({ view }: { view: ExpenseConversationView }) {
+function ExpenseInspector({ view }: { view: Pick<ExpenseConversationView, "inspector"> }) {
   return (
     <aside className="hidden min-h-0 w-[320px] shrink-0 border-l border-slate-200 bg-white lg:block">
       <div className="flex h-full min-h-0 flex-col">
@@ -102,12 +108,33 @@ function ExpenseInspector({ view }: { view: ExpenseConversationView }) {
 
 export function ExpenseChatPanel() {
   const detail = useMemo(() => getPersonalClawDetail(), []);
-  const view = useMemo(() => buildExpenseConversationView(), []);
+  const flow = useMemo(() => splitExpenseNodesForClarifyFlow(), []);
   const [draft, setDraft] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [phase, setPhase] = useState<"clarify" | "running">("clarify");
+  const [answers, setAnswers] = useState<ClarifyAnswers | null>(null);
+
+  const summaryNode: ExpenseRenderNode | null = useMemo(() => {
+    if (!answers) return null;
+    return {
+      key: "clarify-summary-live",
+      type: "clarify_summary",
+      entries: buildClarifySummaryEntries(answers),
+    };
+  }, [answers]);
+
+  const visibleNodes = useMemo(() => {
+    if (phase === "clarify") return flow.prefix;
+    return [
+      ...flow.prefix,
+      ...(summaryNode ? [summaryNode] : []),
+      ...flow.suffix,
+    ];
+  }, [flow.prefix, flow.suffix, phase, summaryNode]);
 
   useEffect(() => {
-    const actionKeys = view.nodes
+    if (phase !== "running") return;
+    const actionKeys = visibleNodes
       .filter(
         (node) =>
           node.type === "action" ||
@@ -119,7 +146,12 @@ export function ExpenseChatPanel() {
     const lastKey = actionKeys[actionKeys.length - 1];
     if (!lastKey) return;
     setExpanded({ [lastKey]: true });
-  }, [view.nodes]);
+  }, [phase, visibleNodes]);
+
+  function handleClarifyComplete(nextAnswers: ClarifyAnswers) {
+    setAnswers(nextAnswers);
+    setPhase("running");
+  }
 
   return (
     <div className="flex h-full min-h-0">
@@ -128,9 +160,15 @@ export function ExpenseChatPanel() {
           <div className="mx-auto w-full max-w-4xl space-y-4">
             <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
               <Circle className="h-3 w-3" />
-              <span>差旅报销演示 · {view.stepCount} 步完整流程</span>
+              <span>
+                差旅报销演示 ·{" "}
+                {phase === "clarify"
+                  ? `澄清 ${flow.clarifyQuestions.length} 题`
+                  : `${flow.stepCount} 步完整流程`}
+              </span>
             </div>
-            {view.nodes.map((node) => (
+
+            {visibleNodes.map((node) => (
               <ExpenseNodeView
                 key={node.key}
                 node={node}
@@ -143,6 +181,13 @@ export function ExpenseChatPanel() {
                 }
               />
             ))}
+
+            {phase === "clarify" ? (
+              <ClarifyPager
+                questions={flow.clarifyQuestions}
+                onComplete={handleClarifyComplete}
+              />
+            ) : null}
           </div>
         </div>
         <div className="shrink-0 px-4 py-4 lg:px-8 lg:py-5">
@@ -156,7 +201,7 @@ export function ExpenseChatPanel() {
           </div>
         </div>
       </div>
-      <ExpenseInspector view={view} />
+      <ExpenseInspector view={{ inspector: flow.inspector }} />
     </div>
   );
 }

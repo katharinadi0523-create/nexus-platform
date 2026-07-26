@@ -39,31 +39,27 @@ export function ExpenseNodeView({
   }
 
   if (node.type === "clarify") {
+    // Static fallback — interactive flow uses shared ClarifyPager (one slot, vertical options).
     return (
-      <div className="max-w-2xl space-y-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-        <p className="text-[15px] leading-6 text-slate-800">{node.question}</p>
-        <div className="flex flex-wrap gap-2">
+      <div className="w-full max-w-[760px] rounded-[14px] border border-[#c9daf8] bg-[#eef4ff] px-[18px] py-4">
+        <p className="text-sm font-semibold leading-[1.65] text-[#1e3a6e]">{node.question}</p>
+        <div className="mt-3.5 grid gap-2.5">
           {node.options.map((option) => {
             const selected = option.value === node.selectedValue;
             return (
-              <span
+              <div
                 key={option.value}
                 className={cn(
-                  "rounded-xl border px-3 py-2 text-sm",
+                  "flex min-h-[42px] w-full items-center rounded-[10px] border px-3.5 text-sm font-medium",
                   selected
-                    ? "border-[#2773ff]/40 bg-[#e8f0fb] font-medium text-[#2773ff]"
-                    : "border-slate-200 bg-slate-50 text-slate-600"
+                    ? "border-[rgba(45,95,255,0.28)] bg-[rgba(45,95,255,0.08)] text-[#1e3a6e]"
+                    : "border-[#c9daf8] bg-white text-[#1e3a6e]"
                 )}
               >
                 {option.label}
-              </span>
+              </div>
             );
           })}
-          {node.freeInputLabel ? (
-            <span className="rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
-              {node.freeInputLabel}
-            </span>
-          ) : null}
         </div>
       </div>
     );
@@ -71,13 +67,13 @@ export function ExpenseNodeView({
 
   if (node.type === "clarify_summary") {
     return (
-      <div className="max-w-2xl space-y-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <div className="w-full max-w-[880px] space-y-4 rounded-[14px] border border-slate-200 bg-white px-6 py-5">
         <p className="text-sm font-medium text-slate-800">已明确需求</p>
-        <div className="space-y-2">
+        <div className="grid gap-4">
           {node.entries.map((entry) => (
-            <div key={entry.answerKey} className="text-sm leading-6 text-slate-600">
-              <p className="text-slate-500">{entry.question}</p>
-              <p className="font-medium text-slate-800">→ {entry.answerLabel}</p>
+            <div key={entry.answerKey} className="grid gap-1.5 text-sm leading-6">
+              <p className="font-medium text-slate-800">{entry.question}</p>
+              <p className="text-slate-500">{entry.answerLabel}</p>
             </div>
           ))}
         </div>

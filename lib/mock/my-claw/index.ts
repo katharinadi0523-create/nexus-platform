@@ -59,12 +59,18 @@ export type {
   ExpenseItemKind,
 } from "./expense-demo";
 
-export { buildExpenseConversationView } from "./expense-adapter";
+export {
+  buildExpenseConversationView,
+  getExpenseClarifyQuestions,
+  splitExpenseNodesForClarifyFlow,
+  buildClarifySummaryEntries,
+} from "./expense-adapter";
 
 export type {
   ExpenseConversationView,
   ExpenseRenderNode,
   ExpenseInspectorModel,
+  ExpenseClarifyQuestion,
 } from "./expense-adapter";
 
 export {

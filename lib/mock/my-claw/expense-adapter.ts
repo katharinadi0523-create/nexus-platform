@@ -444,3 +444,104 @@ export function buildExpenseConversationView(
     inspector: buildInspector(),
   };
 }
+
+export interface ExpenseClarifyQuestion {
+  id: string;
+  questionKey: string;
+  question: string;
+  options: ExpenseClarifyOption[];
+  freeInputLabel?: string;
+}
+
+/** Ordered clarify questions for the interactive pager (one slot, flip pages). */
+export function getExpenseClarifyQuestions(
+  steps: ExpenseDemoStep[] = EXPENSE_DEMO_STEPS
+): ExpenseClarifyQuestion[] {
+  const questions: ExpenseClarifyQuestion[] = [];
+  for (const step of steps) {
+    for (const item of step.items) {
+      if (item.kind !== "clarify") continue;
+      questions.push({
+        id: item.id,
+        questionKey: item.questionKey,
+        question: item.question,
+        options: item.options,
+        freeInputLabel: item.freeInputLabel,
+      });
+    }
+  }
+  return questions;
+}
+
+/**
+ * Split the demo timeline around clarify HITL:
+ * - prefix: before first clarify (usually user message)
+ * - suffix: from clarify_summary onward (execution after answers)
+ */
+export function splitExpenseNodesForClarifyFlow(
+  steps: ExpenseDemoStep[] = EXPENSE_DEMO_STEPS
+): {
+  prefix: ExpenseRenderNode[];
+  suffix: ExpenseRenderNode[];
+  clarifyQuestions: ExpenseClarifyQuestion[];
+  stepCount: number;
+  inspector: ExpenseInspectorModel;
+} {
+  const clarifyQuestions = getExpenseClarifyQuestions(steps);
+  const prefix: ExpenseRenderNode[] = [];
+  const suffix: ExpenseRenderNode[] = [];
+  let seenClarify = false;
+  let inSuffix = false;
+
+  for (const step of steps) {
+    for (const [index, item] of step.items.entries()) {
+      if (item.kind === "clarify") {
+        seenClarify = true;
+        continue;
+      }
+      if (item.kind === "clarify_summary") {
+        inSuffix = true;
+        continue;
+      }
+      const node = mapItem(step, item, index);
+      if (!seenClarify && !inSuffix) {
+        prefix.push(node);
+      } else if (inSuffix) {
+        suffix.push(node);
+      }
+    }
+  }
+
+  return {
+    prefix,
+    suffix,
+    clarifyQuestions,
+    stepCount: steps.length,
+    inspector: buildInspector(),
+  };
+}
+
+export function buildClarifySummaryEntries(
+  answers: Record<string, string | { type: "custom"; text: string }>,
+  steps: ExpenseDemoStep[] = EXPENSE_DEMO_STEPS
+): Array<ExpenseClarifySummaryEntry & { answerLabel: string }> {
+  const summaryItem = steps
+    .flatMap((step) => step.items)
+    .find((item) => item.kind === "clarify_summary");
+  if (!summaryItem || summaryItem.kind !== "clarify_summary") return [];
+
+  return summaryItem.entries.map((entry) => {
+    const answer = answers[entry.answerKey];
+    let answerLabel = entry.customLabel;
+    if (answer && typeof answer === "object" && answer.type === "custom") {
+      answerLabel = answer.text || entry.customLabel;
+    } else {
+      const value = typeof answer === "string" ? answer : entry.fallbackValue;
+      answerLabel =
+        entry.options.find((option) => option.value === value)?.summary ||
+        entry.options.find((option) => option.value === value)?.label ||
+        value;
+    }
+    return { ...entry, answerLabel };
+  });
+}

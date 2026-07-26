@@ -94,11 +94,11 @@ function MainMessageView({
 
   if (message.kind === "clarify") {
     return (
-      <div className="max-w-2xl space-y-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-        <p className="text-[15px] leading-6 text-slate-800">
+      <div className="w-full max-w-[760px] rounded-[14px] border border-[#c9daf8] bg-[#eef4ff] px-[18px] py-4">
+        <p className="text-sm font-semibold leading-[1.65] text-[#1e3a6e]">
           {message.question ?? "请确认"}
         </p>
-        <div className="flex flex-wrap gap-2">
+        <div className="mt-3.5 grid gap-2.5">
           {(message.options ?? []).map((option) => {
             const selected = message.selected === option.value;
             return (
@@ -111,10 +111,10 @@ function MainMessageView({
                   onClarify(option.value);
                 }}
                 className={cn(
-                  "rounded-xl border px-3 py-2 text-sm transition",
+                  "flex min-h-[42px] w-full items-center justify-start rounded-[10px] border px-3.5 text-left text-sm font-medium transition",
                   selected
-                    ? "border-[#2773ff]/40 bg-[#e8f0fb] font-medium text-[#2773ff]"
-                    : "border-slate-200 bg-slate-50 text-slate-600 hover:border-[#2773ff]/30",
+                    ? "border-[rgba(45,95,255,0.28)] bg-[rgba(45,95,255,0.08)] text-[#1e3a6e]"
+                    : "border-[#c9daf8] bg-white text-[#1e3a6e] hover:border-[rgba(45,95,255,0.28)] hover:bg-[rgba(45,95,255,0.04)]",
                   message.selected && !selected && "opacity-50"
                 )}
               >
