@@ -1,7 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useMyClaw } from "@/components/my-claw/provider";
+import {
+  getMyClawOpeningGreeting,
+  MY_CLAW_BRAND_ICON_SRC,
+  MY_CLAW_BRAND_NAME,
+  MY_CLAW_USER_DISPLAY_NAME,
+} from "@/lib/mock/my-claw/branding";
 import { getPersonalClawDetail } from "@/lib/mock/my-claw/personal-claw";
 import { getMyClawSession } from "@/lib/mock/my-claw/sessions";
 import { ComposerWithAgents } from "./composer-with-agents";
@@ -16,14 +23,22 @@ interface ChatWorkspaceProps {
 function BlankChatPanel() {
   const detail = useMemo(() => getPersonalClawDetail(), []);
   const [draft, setDraft] = useState("");
+  const greeting = getMyClawOpeningGreeting(MY_CLAW_USER_DISPLAY_NAME);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
       <div className="flex min-h-0 flex-1 items-center justify-center px-6">
-        <div className="max-w-md text-center">
-          <h2 className="text-xl font-semibold text-slate-900">开始新会话</h2>
-          <p className="mt-2 text-sm leading-6 text-[#5a6779]">
-            在下方输入问题，或从左侧选择已有会话继续。
+        <div className="flex max-w-lg flex-col items-center text-center">
+          <Image
+            src={MY_CLAW_BRAND_ICON_SRC}
+            alt={MY_CLAW_BRAND_NAME}
+            width={112}
+            height={112}
+            className="h-28 w-28 object-contain drop-shadow-sm"
+            priority
+          />
+          <p className="mt-6 text-[17px] font-medium leading-8 tracking-[-0.01em] text-slate-800">
+            {greeting}
           </p>
         </div>
       </div>

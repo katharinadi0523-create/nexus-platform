@@ -1,10 +1,16 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Settings, Shrimp } from "lucide-react";
+import { Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMyClaw } from "@/components/my-claw/provider";
+import {
+  MY_CLAW_BRAND_ICON_SRC,
+  MY_CLAW_BRAND_NAME,
+  MY_CLAW_USER_DISPLAY_NAME,
+} from "@/lib/mock/my-claw/branding";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,12 +35,19 @@ export function MyClawSidebar() {
     <aside className="flex h-full w-[272px] shrink-0 flex-col border-r border-[#e2e8f0] bg-white">
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-4 pb-3 pt-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2773ff] text-white shadow-sm shadow-[#2773ff]/25">
-          <Shrimp className="h-4 w-4" />
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg">
+          <Image
+            src={MY_CLAW_BRAND_ICON_SRC}
+            alt={MY_CLAW_BRAND_NAME}
+            width={36}
+            height={36}
+            className="h-9 w-9 object-cover"
+            priority
+          />
         </div>
         <div className="min-w-0">
           <div className="truncate text-[15px] font-semibold text-slate-900">
-            我的Claw
+            {MY_CLAW_BRAND_NAME}
           </div>
           <div className="truncate text-[11px] text-[#5a6779]">
             个人智能工作台
@@ -96,7 +109,7 @@ export function MyClawSidebar() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-[13px] font-medium text-slate-800">
-              若楠
+              {MY_CLAW_USER_DISPLAY_NAME}
             </div>
             <div className="truncate text-[11px] text-[#5a6779]">个人空间</div>
           </div>

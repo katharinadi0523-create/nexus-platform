@@ -7,6 +7,14 @@ export type {
 export { PERSONAL_CLAW_ID, getPersonalClawDetail } from "./personal-claw";
 
 export {
+  MY_CLAW_BRAND_ICON_SRC,
+  MY_CLAW_BRAND_NAME,
+  MY_CLAW_PRODUCT_NAME,
+  MY_CLAW_USER_DISPLAY_NAME,
+  getMyClawOpeningGreeting,
+} from "./branding";
+
+export {
   ENTERPRISE_AGENTS_RAW,
   ENTERPRISE_AGENT_CATALOG,
   ENTERPRISE_AGENTS,
