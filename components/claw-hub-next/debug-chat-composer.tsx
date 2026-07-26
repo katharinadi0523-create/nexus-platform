@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowUp, BookOpen, ChevronDown, Mic, Paperclip } from "lucide-react";
 import {
   detectSkillSlashCommand,
@@ -18,9 +18,17 @@ type DebugChatComposerProps = {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
+  /** Optional controls after the skill picker (e.g. agent dropdown). Default undefined. */
+  footerLeadingExtra?: React.ReactNode;
 };
 
-export function DebugChatComposer({ detail, value, onChange, onSend }: DebugChatComposerProps) {
+export function DebugChatComposer({
+  detail,
+  value,
+  onChange,
+  onSend,
+  footerLeadingExtra,
+}: DebugChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [skillMenuOpen, setSkillMenuOpen] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState("");
@@ -132,6 +140,8 @@ export function DebugChatComposer({ detail, value, onChange, onSend }: DebugChat
             <SkillSlashPicker skills={configuredSkills} query="" activeIndex={0} onActiveIndexChange={() => undefined} onSelect={(skill) => selectSkill(skill, false)} />
           </PopoverContent>
         </Popover>
+
+        {footerLeadingExtra}
 
         <div className="ml-auto flex items-center gap-1">
           <button type="button" title="上传附件" className="flex h-9 w-9 items-center justify-center rounded-md text-slate-600 hover:bg-slate-50"><Paperclip className="h-4 w-4" /></button>

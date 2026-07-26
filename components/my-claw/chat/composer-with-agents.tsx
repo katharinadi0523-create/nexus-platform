@@ -12,8 +12,8 @@ interface ComposerWithAgentsProps {
 }
 
 /**
- * Composer stack: agent chips above Nexus DebugChatComposer.
- * Avoids editing DebugChatComposer; selector sits near the input.
+ * Wraps Nexus DebugChatComposer with an in-footer agent dropdown
+ * (aligned with 会话交互 composer-agent-button).
  */
 export function ComposerWithAgents({
   detail,
@@ -22,14 +22,12 @@ export function ComposerWithAgents({
   onSend,
 }: ComposerWithAgentsProps) {
   return (
-    <div className="space-y-3">
-      <AgentSelector />
-      <DebugChatComposer
-        detail={detail}
-        value={value}
-        onChange={onChange}
-        onSend={onSend}
-      />
-    </div>
+    <DebugChatComposer
+      detail={detail}
+      value={value}
+      onChange={onChange}
+      onSend={onSend}
+      footerLeadingExtra={<AgentSelector />}
+    />
   );
 }
