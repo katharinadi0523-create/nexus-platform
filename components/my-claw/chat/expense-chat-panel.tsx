@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Circle, FileText, Wrench } from "lucide-react";
+import { CheckCircle2, FileText, Wrench } from "lucide-react";
 import {
   ClarifyPager,
   type ClarifyAnswers,
@@ -113,6 +113,8 @@ export function ExpenseChatPanel() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [phase, setPhase] = useState<"clarify" | "running">("clarify");
   const [answers, setAnswers] = useState<ClarifyAnswers | null>(null);
+  /** How many post-clarify timeline nodes are revealed (summary + suffix). */
+  const [runCursor, setRunCursor] = useState(0);
 
   const summaryNode: ExpenseRenderNode | null = useMemo(() => {
     if (!answers) return null;
@@ -123,18 +125,20 @@ export function ExpenseChatPanel() {
     };
   }, [answers]);
 
+  const runNodes = useMemo(() => {
+    if (!summaryNode) return [];
+    return [summaryNode, ...flow.suffix];
+  }, [summaryNode, flow.suffix]);
+
   const visibleNodes = useMemo(() => {
     if (phase === "clarify") return flow.prefix;
-    return [
-      ...flow.prefix,
-      ...(summaryNode ? [summaryNode] : []),
-      ...flow.suffix,
-    ];
-  }, [flow.prefix, flow.suffix, phase, summaryNode]);
+    return [...flow.prefix, ...runNodes.slice(0, Math.max(runCursor, 0))];
+  }, [flow.prefix, phase, runNodes, runCursor]);
 
   useEffect(() => {
     if (phase !== "running") return;
-    const actionKeys = visibleNodes
+    const revealed = runNodes.slice(0, Math.max(runCursor, 0));
+    const actionKeys = revealed
       .filter(
         (node) =>
           node.type === "action" ||
@@ -146,28 +150,52 @@ export function ExpenseChatPanel() {
     const lastKey = actionKeys[actionKeys.length - 1];
     if (!lastKey) return;
     setExpanded({ [lastKey]: true });
-  }, [phase, visibleNodes]);
+  }, [phase, runCursor, runNodes]);
+
+  useEffect(() => {
+    if (phase !== "running") return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        setRunCursor((current) => Math.min(current + 1, runNodes.length));
+      }
+      if (event.key === "ArrowLeft") {
+        setRunCursor((current) => Math.max(current - 1, 1));
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [phase, runNodes.length]);
 
   function handleClarifyComplete(nextAnswers: ClarifyAnswers) {
     setAnswers(nextAnswers);
     setPhase("running");
+    // Reveal summary first; further nodes advance by click / →
+    setRunCursor(1);
+  }
+
+  function advanceRun() {
+    if (phase !== "running") return;
+    setRunCursor((current) => Math.min(current + 1, runNodes.length));
   }
 
   return (
     <div className="flex h-full min-h-0">
-      <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
+      <div
+        className="flex min-w-0 flex-1 cursor-pointer flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]"
+        onClick={() => advanceRun()}
+      >
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-4xl space-y-4">
-            <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
-              <Circle className="h-3 w-3" />
-              <span>
-                差旅报销演示 ·{" "}
-                {phase === "clarify"
-                  ? `澄清 ${flow.clarifyQuestions.length} 题`
-                  : `${flow.stepCount} 步完整流程`}
-              </span>
-            </div>
-
             {visibleNodes.map((node) => (
               <ExpenseNodeView
                 key={node.key}
@@ -183,20 +211,28 @@ export function ExpenseChatPanel() {
             ))}
 
             {phase === "clarify" ? (
-              <ClarifyPager
-                questions={flow.clarifyQuestions}
-                onComplete={handleClarifyComplete}
-              />
+              <div onClick={(event) => event.stopPropagation()}>
+                <ClarifyPager
+                  questions={flow.clarifyQuestions}
+                  onComplete={handleClarifyComplete}
+                />
+              </div>
             ) : null}
           </div>
         </div>
-        <div className="shrink-0 px-4 py-4 lg:px-8 lg:py-5">
+        <div
+          className="shrink-0 px-4 py-4 lg:px-8 lg:py-5"
+          onClick={(event) => event.stopPropagation()}
+        >
           <div className="mx-auto w-full max-w-4xl">
             <ComposerWithAgents
               detail={detail}
               value={draft}
               onChange={setDraft}
-              onSend={() => setDraft("")}
+              onSend={() => {
+                setDraft("");
+                advanceRun();
+              }}
             />
           </div>
         </div>

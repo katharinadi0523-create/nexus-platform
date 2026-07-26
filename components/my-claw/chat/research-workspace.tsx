@@ -29,7 +29,6 @@ import {
   RESEARCH_MAX_STEP,
   buildResearchSnapshot,
   getResearchAgentSummonIds,
-  getResearchStepCount,
   researchStatusLabel,
   type ResearchMessage,
   type ResearchSnapshot,
@@ -521,7 +520,6 @@ export function ResearchWorkspace() {
   const [draft, setDraft] = useState(RESEARCH_DEFAULT_QUERY);
 
   const snapshot = useMemo(() => buildResearchSnapshot(step), [step]);
-  const stepCount = getResearchStepCount();
 
   useEffect(() => {
     syncSummonedAgents([
@@ -608,22 +606,11 @@ export function ResearchWorkspace() {
       >
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-4xl space-y-4">
-            <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
-              <Circle className="h-3 w-3" />
-              <span>
-                科研多智能体演示 · {snapshot.stepLabel}（{step + 1}/{stepCount}
-                ）
-              </span>
-            </div>
-
             {idle ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white/80 px-6 py-10 text-center">
                 <h2 className="text-lg font-semibold text-slate-900">
                   科研智能体 · 多智能体协作
                 </h2>
-                <p className="mt-2 text-sm leading-6 text-[#5a6779]">
-                  已接管当前会话。点击会话区或按 → 推进演示；← 可回退。
-                </p>
                 <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-slate-700">
                   {RESEARCH_DEFAULT_QUERY}
                 </p>
@@ -639,10 +626,6 @@ export function ResearchWorkspace() {
                 />
               ))
             )}
-
-            <p className="pt-2 text-center text-xs text-slate-400">
-              ← 上一步 · 点击页面或按 → 进入下一步
-            </p>
           </div>
         </div>
 

@@ -23,7 +23,7 @@ function BlankChatPanel() {
         <div className="max-w-md text-center">
           <h2 className="text-xl font-semibold text-slate-900">开始新会话</h2>
           <p className="mt-2 text-sm leading-6 text-[#5a6779]">
-            在下方输入问题，或从左侧选择「上海出差报销」查看完整差旅演示。
+            在下方输入问题，或从左侧选择已有会话继续。
           </p>
         </div>
       </div>
