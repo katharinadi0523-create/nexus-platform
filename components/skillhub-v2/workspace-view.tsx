@@ -32,6 +32,11 @@ import {
   OPTIMIZE_TIMELINE_ITEMS,
   RESEARCH_OPTIMIZE_TIMELINE_ITEMS,
 } from "./claw-mock-flows";
+import {
+  CREATE_SKILL_FILES,
+  CREATE_SKILL_NAME,
+  CREATE_SKILL_SAMPLE,
+} from "./create-skill-mock";
 import { buildFileTree, FileGlyph } from "./shared";
 import type { SkillFile, SkillRecord, SkillWorkOrder, WorkOrderType } from "./types";
 import { getCurrentManagedVersion } from "./versioning";
@@ -49,64 +54,6 @@ interface SkillWorkspaceViewProps {
     evidence: string[];
   }) => void;
 }
-
-const CREATE_FILES: SkillFile[] = [
-  {
-    path: "SKILL.md",
-    content: `---
-name: rice-rna-analysis
-description: 分析水稻 RNA 表达矩阵并输出质控与差异摘要。
----
-
-# Inputs
-- expression matrix
-- sample metadata
-
-# Outputs
-- QC summary
-- differential expression brief
-`,
-    change: "added",
-  },
-  {
-    path: "skill.json",
-    content: `{
-  "name": "rice-rna-analysis",
-  "entry": "src/main.py",
-  "runtime": "python3.11",
-  "qualityGate": null
-}`,
-    change: "added",
-  },
-  {
-    path: "src/main.py",
-    content: `from analysis import run_qc
-
-def run(expression, metadata):
-    return run_qc(expression, metadata)
-`,
-    change: "added",
-  },
-  {
-    path: "src/analysis.py",
-    content: `import pandas as pd
-
-def run_qc(expression, metadata):
-    matrix = pd.read_csv(expression)
-    return {"samples": len(matrix.columns), "status": "ready"}
-`,
-    change: "added",
-  },
-  {
-    path: "tests/test_expression.py",
-    content: `def test_expression_fixture():
-    result = run("samples/rice_expression.csv", "samples/groups.csv")
-    assert result["status"] == "ready"
-`,
-    change: "added",
-  },
-];
-
 const OPTIMIZATION_ARTIFACTS: SkillFile[] = [
   {
     path: "src/parser.py",
@@ -169,7 +116,7 @@ export function SkillWorkspaceView({
   onBack,
   onSaveVersion,
 }: SkillWorkspaceViewProps) {
-  const baseFiles = (skill ? getCurrentManagedVersion(skill)?.files : undefined) ?? CREATE_FILES;
+  const baseFiles = (skill ? getCurrentManagedVersion(skill)?.files : undefined) ?? CREATE_SKILL_FILES;
   const isResearchOptimization = mode === "optimize" && skill?.id === "research-evidence-extractor";
   const evidenceOptions = isResearchOptimization
     ? [
@@ -184,20 +131,28 @@ export function SkillWorkspaceView({
             "文件：rice_drought_study.pdf\n页数：12\n实验章节：2\n检测结果：结论与实验段落存在多对一映射",
         },
       ]
-    : [
-        {
-          label: "失败运行 TASK-2087",
-          detail:
-            "运行状态：失败\n异常：KeyError: gene_id\n定位：src/parser.py:18\n输入：no_header.csv",
-        },
-        {
-          label: "样本 no_header.csv",
-          detail:
-            "文件：no_header.csv\n记录数：1,284\n列数：3\n检测结果：无表头\n推断字段：gene_id / sample_a / sample_b",
-        },
-      ];
+    : mode === "create"
+      ? [
+          {
+            label: CREATE_SKILL_SAMPLE,
+            detail:
+              "文件：genes.gff\n格式：GFF3\n特征数：3（gene / mRNA / CDS）\n检测：本地 Skill 库无 GFF 解析能力\n本体：命中 Object Type · GeneAnnotation",
+          },
+        ]
+      : [
+          {
+            label: "失败运行 TASK-2087",
+            detail:
+              "运行状态：失败\n异常：KeyError: gene_id\n定位：src/parser.py:18\n输入：no_header.csv",
+          },
+          {
+            label: "样本 no_header.csv",
+            detail:
+              "文件：no_header.csv\n记录数：1,284\n列数：3\n检测结果：无表头\n推断字段：gene_id / sample_a / sample_b",
+          },
+        ];
   const files = useMemo(() => {
-    if (mode === "create") return CREATE_FILES;
+    if (mode === "create") return CREATE_SKILL_FILES;
     if (isResearchOptimization) {
       const merged = [
         ...baseFiles,
@@ -234,7 +189,11 @@ export function SkillWorkspaceView({
   const [input, setInput] = useState("");
   const [evidence, setEvidence] = useState<string[]>(
     workOrder?.evidence ??
-      (mode === "optimize" ? evidenceOptions.map((item) => item.label) : [])
+      (mode === "optimize"
+        ? evidenceOptions.map((item) => item.label)
+        : mode === "create"
+          ? [CREATE_SKILL_SAMPLE]
+          : [])
   );
   const [isGenerating, setIsGenerating] = useState(false);
   const [evidenceDialogOpen, setEvidenceDialogOpen] = useState(false);
@@ -264,7 +223,7 @@ export function SkillWorkspaceView({
   const selectedFile = files.find((file) => file.path === selectedFilePath) ?? files[0];
   const request =
     timelineItems.find((item) => item.type === "user")?.message.content ?? input;
-  const draftName = mode === "create" ? "rice-rna-analysis" : skill?.name ?? "skill-draft";
+  const draftName = mode === "create" ? CREATE_SKILL_NAME : skill?.name ?? "skill-draft";
 
   function handleSend() {
     const next = input.trim();
@@ -322,7 +281,7 @@ export function SkillWorkspaceView({
             time: "刚刚",
             content:
               mode === "create"
-                ? "我补充了输入样例校验与输出契约，现在可以保存草稿并进入 AI 试运行。"
+                ? "我已按本体 Object Type「GeneAnnotation」补齐解析契约与样例校验，现在可以保存为 v1.0 草稿，新技能会出现在技能列表中。"
                 : "我补充了异常分支与回归测试，改动会作为同一 Skill ID 下的新版本草稿保存。",
             auditRecords: [],
           },
@@ -422,6 +381,24 @@ export function SkillWorkspaceView({
               对话
             </div>
             <div className="flex items-center gap-1.5">
+              {mode === "create" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEvidencePreview(evidenceOptions[0]?.detail ?? "");
+                    setEvidenceDialogOpen(true);
+                  }}
+                  className={cn(
+                    "rounded-full border px-2 py-1 text-[11px]",
+                    evidence.includes(CREATE_SKILL_SAMPLE)
+                      ? "border-blue-200 bg-blue-50 text-blue-700"
+                      : "border-slate-200 text-slate-500"
+                  )}
+                >
+                  <Paperclip className="mr-1 inline h-3 w-3" />
+                  上传样本 genes.gff
+                </button>
+              ) : null}
               {mode === "optimize" ? (
                 <>
                   <button
@@ -482,7 +459,11 @@ export function SkillWorkspaceView({
                     handleSend();
                   }
                 }}
-                placeholder={mode === "create" ? "描述你想创建的技能…" : "继续说明要优化的地方…"}
+                placeholder={
+                  mode === "create"
+                    ? "例如：上传了 genes.gff，本地还没有这种格式的解析技能…"
+                    : "继续说明要优化的地方…"
+                }
                 className="min-h-24 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
               />
               <div className="flex items-center justify-between px-3 pb-3">

@@ -44,6 +44,10 @@ interface ToolConfigDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (selections: ToolConfigSelection[]) => void;
+  /** 限制可见 Tab；默认展示全部类型 */
+  allowedKinds?: ToolConfigKind[];
+  title?: string;
+  confirmLabel?: string;
 }
 
 const TOOL_KIND_META: Record<
@@ -271,9 +275,17 @@ function shouldEllipsisBefore(page: number, prev: number | undefined): boolean {
   return prev !== undefined && page - prev > 1;
 }
 
-export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDialogProps) {
+export function ToolConfigDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  allowedKinds,
+  title = "添加工具",
+  confirmLabel,
+}: ToolConfigDialogProps) {
   const { entityLabel, configLabel } = useWorkbenchEntity();
-  const [activeKind, setActiveKind] = useState<ToolConfigKind>("mcp");
+  const visibleKinds = allowedKinds?.length ? allowedKinds : TOOL_TAB_ORDER;
+  const [activeKind, setActiveKind] = useState<ToolConfigKind>(visibleKinds[0] ?? "mcp");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -281,13 +293,15 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
   const [jumpInput, setJumpInput] = useState("");
 
   const filteredOptions = useMemo(() => {
-    const inTab = ALL_TOOL_OPTIONS.filter((item) => item.kind === activeKind);
+    const inTab = ALL_TOOL_OPTIONS.filter(
+      (item) => item.kind === activeKind && visibleKinds.includes(item.kind)
+    );
     const q = searchQuery.trim().toLowerCase();
     if (!q) {
       return inTab;
     }
     return inTab.filter((item) => item.name.toLowerCase().includes(q));
-  }, [searchQuery, activeKind]);
+  }, [searchQuery, activeKind, visibleKinds]);
 
   const total = filteredOptions.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -310,7 +324,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
   }
 
   function resetDialogState() {
-    setActiveKind("mcp");
+    setActiveKind(visibleKinds[0] ?? "mcp");
     setSearchQuery("");
     setSelectedIds([]);
     setCurrentPage(1);
@@ -319,7 +333,9 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
   }
 
   function handleSubmit() {
-    const selections = ALL_TOOL_OPTIONS.filter((item) => selectedIds.includes(item.id));
+    const selections = ALL_TOOL_OPTIONS.filter(
+      (item) => selectedIds.includes(item.id) && visibleKinds.includes(item.kind)
+    );
     resetDialogState();
     onConfirm(selections);
   }
@@ -349,11 +365,11 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
         className="max-w-[880px] gap-0 overflow-hidden rounded-lg border-[#eeeeee] p-0 shadow-lg sm:max-w-[880px]"
       >
         <DialogHeader className="border-b border-[#eeeeee] px-6 py-4 text-left">
-          <DialogTitle className="text-base font-semibold text-slate-950">添加工具</DialogTitle>
+          <DialogTitle className="text-base font-semibold text-slate-950">{title}</DialogTitle>
         </DialogHeader>
 
         <div className="flex border-b border-[#eeeeee] px-6">
-          {TOOL_TAB_ORDER.map((kind) => (
+          {visibleKinds.map((kind) => (
             <button
               key={kind}
               type="button"
@@ -561,7 +577,7 @@ export function ToolConfigDialog({ open, onOpenChange, onConfirm }: ToolConfigDi
                   disabled={!selectedIds.length}
                   onClick={handleSubmit}
                 >
-                  添加到{configLabel}
+                  {confirmLabel ?? `添加到${configLabel}`}
                 </Button>
               </div>
             </div>

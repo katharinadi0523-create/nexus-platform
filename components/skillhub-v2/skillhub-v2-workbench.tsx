@@ -22,6 +22,15 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { SkillDetailView } from "./detail-view";
 import { INITIAL_SKILLS, INITIAL_WORK_ORDERS } from "./mock-data";
+import {
+  CREATE_SKILL_DESCRIPTION,
+  CREATE_SKILL_DISPLAY_NAME,
+  CREATE_SKILL_FILES,
+  CREATE_SKILL_ID_PREFIX,
+  CREATE_SKILL_NAME,
+  CREATE_SKILL_SAMPLE,
+  CREATE_SKILL_USAGE,
+} from "./create-skill-mock";
 import type {
   SkillFile,
   SkillHubScreen,
@@ -56,6 +65,14 @@ interface SkillHubV2WorkbenchProps {
   initialScreen: SkillHubScreen;
   seedSkill?: SkillHubV2Seed;
   onExit: () => void;
+  /** AI 创建保存后同步到技能管理列表 */
+  onSkillCreated?: (skill: {
+    id: string;
+    name: string;
+    description: string;
+    usageInstructions: string;
+    files: SkillFile[];
+  }) => void;
 }
 
 function getNextVersionLabel(version = "v1.0") {
@@ -64,6 +81,105 @@ function getNextVersionLabel(version = "v1.0") {
     .split(".")
     .map((value) => Number.parseInt(value, 10));
   return `v${Number.isFinite(major) ? major : 1}.${(Number.isFinite(minor) ? minor : 0) + 1}`;
+}
+
+function getDefaultBoundDependencies(skillId: string): SkillRecord["dependencies"] {
+  if (skillId === "fastq-parser" || skillId.startsWith("fastq-parser")) {
+    return [
+      {
+        id: "biopython",
+        name: "biopython",
+        version: "1.83",
+        kind: "snapshot",
+        type: "runtime",
+        status: "ready",
+        note: "随发布版本锁定的运行时依赖",
+      },
+      {
+        id: "pysam",
+        name: "pysam",
+        version: "0.22.1",
+        kind: "snapshot",
+        type: "runtime",
+        status: "ready",
+        note: "随发布版本锁定的运行时依赖",
+      },
+    ];
+  }
+  if (skillId === "gff-parser" || skillId.startsWith("gff-parser")) {
+    return [
+      {
+        id: "gffutils",
+        name: "gffutils",
+        version: "0.12",
+        kind: "snapshot",
+        type: "runtime",
+        status: "ready",
+        note: "随发布版本锁定的运行时依赖",
+      },
+      {
+        id: "biopython",
+        name: "biopython",
+        version: "1.83",
+        kind: "snapshot",
+        type: "runtime",
+        status: "ready",
+        note: "随发布版本锁定的运行时依赖",
+      },
+    ];
+  }
+  if (skillId === "research-evidence-extractor") {
+    return [
+      {
+        id: "pypdf",
+        name: "pypdf",
+        version: "4.3.1",
+        kind: "snapshot",
+        type: "runtime",
+        status: "ready",
+        note: "随发布版本锁定的运行时依赖",
+      },
+      {
+        id: "httpx",
+        name: "httpx",
+        version: "0.27.2",
+        kind: "snapshot",
+        type: "runtime",
+        status: "ready",
+        note: "随发布版本锁定的运行时依赖",
+      },
+      {
+        id: "crossref",
+        name: "Crossref API",
+        kind: "platform",
+        type: "external-service",
+        status: "ready",
+        note: "平台引用可用",
+      },
+    ];
+  }
+  return [
+    {
+      id: "pandas",
+      name: "pandas",
+      version: "2.2.2",
+      kind: "snapshot",
+      type: "runtime",
+      status: "ready",
+      note: "随发布版本锁定的运行时依赖",
+    },
+  ];
+}
+
+function getDefaultTrialSample(skillId: string) {
+  if (skillId === "fastq-parser" || skillId.startsWith("fastq-parser")) {
+    return "samples/SRR000001.fastq";
+  }
+  if (skillId === "gff-parser" || skillId.startsWith("gff-parser")) {
+    return "samples/genes.gff";
+  }
+  if (skillId === "research-evidence-extractor") return "samples/rice_drought_study.pdf";
+  return "samples/rice_expression.csv";
 }
 
 function createSeedRecord(seed: SkillHubV2Seed): SkillRecord {
@@ -77,6 +193,9 @@ function createSeedRecord(seed: SkillHubV2Seed): SkillRecord {
   const publishedVersionId = publishedVersionLabel
     ? `${seed.id}-${publishedVersionLabel}`
     : undefined;
+  /** 发布版本 = 当前版本：线上已装配，试运行与依赖默认就绪，无需再走一遍 */
+  const isPublishedCurrent = Boolean(publishedVersionId) && publishedVersionId === currentVersionId;
+  const existingBaseline = INITIAL_SKILLS.find((item) => item.id === seed.id);
   const [major, minor] = currentVersionLabel
     .replace(/^v/i, "")
     .split(".")
@@ -150,12 +269,29 @@ function createSeedRecord(seed: SkillHubV2Seed): SkillRecord {
     sourceLabel: "现有技能管理",
     usageInstructions: seed.usageInstructions,
     versions: versionHistory,
-    dependencies: [],
-    runtimeSnapshot: {
-      id: `pending-${seed.id}-${currentVersionLabel}`,
-      boundVersion: currentVersionLabel,
-      status: "not-run",
-    },
+    dependencies: isPublishedCurrent
+      ? existingBaseline?.dependencies?.length
+        ? existingBaseline.dependencies.map((item) => ({ ...item }))
+        : getDefaultBoundDependencies(seed.id)
+      : [],
+    runtimeSnapshot: isPublishedCurrent
+      ? {
+          id:
+            existingBaseline?.runtimeSnapshot.status === "ready"
+              ? existingBaseline.runtimeSnapshot.id
+              : `rt-snap-${seed.id}-${currentVersionLabel}`,
+          boundVersion: currentVersionLabel,
+          status: "ready",
+          assembledAt:
+            existingBaseline?.runtimeSnapshot.assembledAt ?? seed.updatedAt ?? "2026-07-24 10:00",
+          sample:
+            existingBaseline?.runtimeSnapshot.sample ?? getDefaultTrialSample(seed.id),
+        }
+      : {
+          id: `pending-${seed.id}-${currentVersionLabel}`,
+          boundVersion: currentVersionLabel,
+          status: "not-run",
+        },
   };
 }
 
@@ -163,6 +299,7 @@ export function SkillHubV2Workbench({
   initialScreen,
   seedSkill,
   onExit,
+  onSkillCreated,
 }: SkillHubV2WorkbenchProps) {
   const [skills, setSkills] = useState<SkillRecord[]>(() => {
     if (!seedSkill) return INITIAL_SKILLS;
@@ -400,46 +537,43 @@ export function SkillHubV2Workbench({
   }) {
     const timestamp = Date.now();
     if (input.mode === "create") {
-      const files = [
-        {
-          path: "SKILL.md",
-          content:
-            "---\nname: rice-rna-analysis\ndescription: 分析水稻 RNA 表达矩阵。\n---\n",
-        },
-        { path: "src/main.py", content: "def run(expression, metadata):\n    return qc(expression)\n" },
-        { path: "tests/test_expression.py", content: "def test_expression_fixture():\n    assert True\n" },
-      ];
+      const skillId = `${CREATE_SKILL_ID_PREFIX}-${timestamp}`;
+      const files = CREATE_SKILL_FILES.map((file) => ({
+        path: file.path,
+        content: file.content,
+      }));
       const version: SkillVersion = {
-        id: `rice-v10-${timestamp}`,
+        id: `${CREATE_SKILL_ID_PREFIX}-v10-${timestamp}`,
         version: "v1.0",
-        createdAt: "2026-07-24 11:36",
+        createdAt: "2026-07-27 15:20",
         createdBy: "邸若楠",
         source: "ai-create",
         status: "draft",
-        releaseNotes: "AI 创建的首版草稿。",
+        releaseNotes: "AI 创建首版：本地无 GFF Skill，按本体 Object Type「GeneAnnotation」装配解析器。",
         conversationId: `CONV-${timestamp.toString().slice(-4)}`,
-        evidence: input.evidence,
+        evidence: input.evidence.length ? input.evidence : [CREATE_SKILL_SAMPLE],
         evaluationStatus: null,
         evaluationReport: null,
         files,
       };
       const skill: SkillRecord = {
-        id: `rice-rna-${timestamp}`,
-        name: input.name,
-        displayName: "水稻 RNA 表达分析",
-        description: "读取水稻 RNA 表达矩阵，完成质控、差异摘要和异常样本提示。",
+        id: skillId,
+        name: CREATE_SKILL_NAME,
+        displayName: CREATE_SKILL_DISPLAY_NAME,
+        description: CREATE_SKILL_DESCRIPTION,
         owner: "邸若楠",
-        updatedAt: "2026-07-24 11:36",
+        updatedAt: "2026-07-27 15:20",
         status: "draft",
         currentVersionId: version.id,
         sourceLabel: "AI 创建",
-        usageInstructions: "上传表达矩阵、样本分组和对照组信息。",
+        usageInstructions: CREATE_SKILL_USAGE,
         versions: [version],
         dependencies: [],
         runtimeSnapshot: {
-          id: "pending-rice-rna",
+          id: `pending-${CREATE_SKILL_ID_PREFIX}`,
           boundVersion: "v1.0",
           status: "not-run",
+          sample: CREATE_SKILL_SAMPLE,
         },
       };
       const order: SkillWorkOrder = {
@@ -451,11 +585,11 @@ export function SkillHubV2Workbench({
         status: "pending-confirmation",
         outputVersion: "v1.0 草稿",
         request: input.request,
-        createdAt: "2026-07-24 11:36",
-        evidence: input.evidence,
+        createdAt: "2026-07-27 15:20",
+        evidence: skill.versions[0]?.evidence ?? [CREATE_SKILL_SAMPLE],
         steps: [
-          { id: "create-skill", label: "调用 create skill 接管创建任务", status: "done" },
-          { id: "ontology", label: "检索本体并确定解析方法", status: "done" },
+          { id: "local-search", label: "检索本地 Skill 与工单池", status: "done" },
+          { id: "ontology", label: "检索本体对象类型并装配解析方法", status: "done" },
           { id: "generate", label: "生成标准 Skill 包与基础校验", status: "done" },
           { id: "confirm", label: "等待用户确认", status: "active" },
           { id: "publish", label: "进入发布链路（质量门默认直通）", status: "pending" },
@@ -463,8 +597,15 @@ export function SkillHubV2Workbench({
       };
       setSkills((current) => [skill, ...current]);
       setWorkOrders((current) => [order, ...current]);
-      toast.success("已保存为 v1.0 草稿，并生成创建工单");
-      setScreen({ kind: "detail", skillId: skill.id, tab: "dependencies" });
+      onSkillCreated?.({
+        id: skill.id,
+        name: skill.name,
+        description: skill.description,
+        usageInstructions: skill.usageInstructions,
+        files,
+      });
+      toast.success("已保存为 v1.0 草稿，新技能已加入技能列表");
+      setScreen({ kind: "detail", skillId: skill.id, tab: "overview" });
       return;
     }
 
@@ -579,36 +720,25 @@ export function SkillHubV2Workbench({
 
   function handleRunAssembly(skillId: string) {
     setSkills((current) =>
-      current.map((skill) =>
-        skill.id === skillId
-          ? {
-              ...skill,
-              dependencies:
-                skill.dependencies.length > 0
-                  ? skill.dependencies
-                  : [
-                      {
-                        id: "pandas",
-                        name: "pandas",
-                        version: "2.2.2",
-                        kind: "snapshot",
-                        type: "runtime",
-                        status: "ready",
-                        note: "由静态扫描识别并在 AI 试运行中锁定",
-                      },
-                    ],
-              runtimeSnapshot: {
-                id: `rt-snap-${skill.id}-${Date.now().toString().slice(-4)}`,
-                boundVersion: getCurrentManagedVersion(skill)?.version ?? "v1.0",
-                status: "ready",
-                assembledAt: "2026-07-24 11:42",
-                sample: skill.runtimeSnapshot.sample ?? "samples/rice_expression.csv",
-              },
-            }
-          : skill
-      )
+      current.map((skill) => {
+        if (skill.id !== skillId) return skill;
+        return {
+          ...skill,
+          dependencies:
+            skill.dependencies.length > 0
+              ? skill.dependencies
+              : getDefaultBoundDependencies(skill.id),
+          runtimeSnapshot: {
+            id: `rt-snap-${skill.id}-${Date.now().toString().slice(-4)}`,
+            boundVersion: getCurrentManagedVersion(skill)?.version ?? "v1.0",
+            status: "ready",
+            assembledAt: "2026-07-24 11:42",
+            sample: skill.runtimeSnapshot.sample ?? getDefaultTrialSample(skill.id),
+          },
+        };
+      })
     );
-    toast.success("AI 试运行成功：依赖已锁定并冻结为运行时快照");
+    toast.success("试运行成功：依赖已锁定并冻结为运行时快照");
   }
 
   function confirmDelete() {

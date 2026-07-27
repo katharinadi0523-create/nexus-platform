@@ -72,44 +72,52 @@ function output(
 }
 
 export const CREATE_TIMELINE_ITEMS: ConversationTimelineItem[] = [
-  user("create-user", "帮我建一个能分析水稻 RNA 表达数据的 Skill。"),
+  user(
+    "create-user",
+    "上传了一个 genes.gff，本地好像还没有能解析这种格式的技能。帮我创建一个 GFF 解析 Skill。",
+    ["samples/genes.gff"]
+  ),
   action("create-skill", "Skill · create skill", "skill", [
-    "已接管 Skill 创建任务并保留原始对话。",
-    "解析目标：水稻 RNA 表达数据；产物：确定性解析 Skill。",
+    "已接管 Skill 创建任务，并挂载上传样本 samples/genes.gff。",
+    "目标：确定性 GFF 解析 Skill（不调用大模型、运行时不联网）。",
   ]),
   thinking(
     "create-intent",
-    "create skill 正在确认数据类型、输入输出目标和运行环境，并检查是否已有同类能力。"
+    "先确认这是本地尚无的新格式，再按解析流水线检索本地能力与本体对象类型；命中 Object Type 就按其属性与规则装配解析器，未命中才走样本推断 + 补写本体对象。"
   ),
-  action("create-existing", "查询已有 Skill 与 AI-SKILL 工单池", "tool", [
-    "中心端未发现可复用的水稻 RNA 表达解析 Skill。",
-    "AI-SKILL 工单池无相同数据类型的待创建订单。",
+  action("create-local-skills", "检索本地 Skill 库", "tool", [
+    "已扫描租户技能管理：未找到 format=gff / gff3 的解析 Skill。",
+    "相近能力：FASTQ解析（测序读段）、RNA 表达分析（表达矩阵）——格式不匹配，不可复用。",
   ]),
-  action("create-ontology", "检索默认本体文件", "tool", [
-    "命中格式规则：RNA expression matrix。",
-    "结构规则：首列 gene_id，其余列为样本表达量。",
-    "元数据字段：物种、样本、实验条件、表达值。",
-    "解析规则：字段校验 → 矩阵标准化 → QC → 差异摘要。",
-    "对应预装工具：pandas、scipy；运行时不得直接访问外网。",
+  action("create-work-order-pool", "检索 AI-SKILL 工单池", "tool", [
+    "工单池无进行中的 GFF / 基因注释解析创建单。",
+    "历史失败单 WO-2071 为 AB1 峰图，与本次格式无关。",
   ]),
-  action("create-parser-method", "按本体规则确定解析方法", "tool", [
-    "依据本体的结构规则生成表头与数值类型校验。",
-    "依据本体的解析规则装配矩阵读取、缺失值检查和样本分组校验。",
-    "解析方法来源已记录为 default-ontology/rna-expression。",
+  action("create-ontology", "检索本体对象类型", "tool", [
+    "查询范围：本体 Object Type（非本体文件）。",
+    "命中对象类型：GeneAnnotation（基因注释）。",
+    "对象属性：seqid、source、type、start、end、strand、feature_count、species（可选）。",
+    "结构约束：对应 GFF3 九列制表符模型；缺 type / 坐标非法即 QC 失败。",
+    "解析规则与预装工具：gffutils、Bio.SeqIO；运行时禁止外网。",
+  ]),
+  action("create-parser-method", "按本体对象规则装配解析方法", "tool", [
+    "判定：本地无 Skill，但本体已有 Object Type「GeneAnnotation」→ 按其属性与约束装配解析器（非从字节流猜测）。",
+    "解析方法来源已记录为 ontology://object-type/GeneAnnotation。",
+    "输出契约对齐：decode / feature_count / metadata / qc / lineage / ingested。",
   ]),
   action("create-package", "create skill · 生成标准 Skill 包", "skill", [
-    "生成 skill.json / metadata.yaml。",
-    "生成 SKILL.md、src/main.py、src/parser.py。",
-    "生成 runtime/dependencies.txt 与 tests/evaluation_config.yaml。",
+    "生成 skill.json / SKILL.md。",
+    "生成 src/main.py、src/ontology.py、src/parse.py、src/metadata.py、src/lineage.py。",
+    "生成 runtime/dependencies.txt、tests/test_gff_pipeline.py、samples/genes.gff。",
   ]),
   action("create-tests", "运行基础生成校验", "tool", [
-    "标准用例 2 / 异常用例 1 / 边界用例 1。",
-    "结构校验通过；4/4 基础用例通过。",
+    "标准用例 1 / 边界用例 1 / 异常用例 1（缺 type 列应报错且不入库）。",
+    "确定性校验：同一输入两次输出一致；结构校验通过。",
   ]),
   output(
     "create-output",
-    "已由 create skill 完成首版草稿。本次解析方法不是从样本猜测，而是来自默认本体文件中的格式定义、结构规则、元数据字段、解析规则和对应工具。",
-    ["AI-SKILL-1048", "default-ontology/rna-expression"]
+    "已完成 GFF 解析 Skill 首版草稿。链路是：本地无现成 Skill → 本体命中 Object Type「GeneAnnotation」→ 按该对象类型的属性与预装工具装配解析器。可保存为 v1.0 草稿后进入试运行装配。",
+    ["samples/genes.gff", "ontology://object-type/GeneAnnotation"]
   ),
 ];
 
