@@ -82,7 +82,7 @@ export const PLUGIN_MARKETPLACE_SOURCE_FILTERS: Array<{
   value: PluginMarketSourceFilter;
   label: string;
 }> = [
-  { value: "all", label: "全部组件" },
+  { value: "all", label: "全部" },
   { value: "organization", label: "我的组织" },
 ];
 

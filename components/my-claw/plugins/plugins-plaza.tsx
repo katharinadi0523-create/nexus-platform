@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import {
   BookOpen,
   Boxes,
@@ -61,29 +61,13 @@ function isMarketplaceItemInMine(plugins: MinePluginItem[], marketId: string) {
   );
 }
 
-function FilterChip({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex h-8 shrink-0 items-center justify-center rounded-full px-4 text-sm font-medium transition",
-        active
-          ? "bg-[#2773ff] text-white shadow-sm"
-          : "border border-[#dbeafe] bg-white text-[#5a6779] hover:border-[#93c5fd] hover:text-[#2773ff]"
-      )}
-    >
-      {children}
-    </button>
-  );
+/** 与技能广场一致：轨道透明，仅选中项白底胶囊 */
+function getPluginsPlazaCapsuleFilterClass(active: boolean) {
+  if (!active) {
+    return "border-0 bg-transparent px-3 py-1 text-[13px] leading-6 text-[#6e7b8d] hover:text-[#334155]";
+  }
+
+  return "rounded-full border-0 bg-white px-3 py-1 text-[13px] font-medium leading-6 text-[#2773ff] shadow-[0_1px_2px_rgba(15,23,42,0.06)]";
 }
 
 export interface PluginsPlazaProps {
@@ -124,63 +108,80 @@ export function PluginsPlaza({ plugins, onAddToMine }: PluginsPlazaProps) {
           "linear-gradient(180deg, #f2f7fd 0%, #e8f0fb 38%, #e4edf8 100%)",
       }}
     >
-      <div className="skills-plaza-canvas flex-1 overflow-y-auto !min-h-0 px-4 py-5 md:px-6">
-        <header className="flex flex-wrap items-start justify-between gap-5">
-          <div>
-            <h1 className="skills-plaza-gradient-title inline-block text-[26px] font-semibold leading-tight">
+      <div className="skills-plaza-canvas relative flex-1 overflow-y-auto !min-h-0 px-4 py-5 md:px-6">
+        <div className="skills-plaza-filter-top flex flex-col gap-3 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <h1 className="skills-plaza-gradient-title skills-display inline-block text-[1.75rem] font-bold leading-tight tracking-tight">
               插件广场
             </h1>
-            <p className="mt-2 text-sm leading-6 text-[#5a6779]">
+            <p className="mt-1 max-w-xl text-[13px] leading-5 text-[#6e7b8d]">
               按来源与类型浏览可复用组件，一键添加到我的插件。
             </p>
           </div>
-
-          <label className="relative flex w-full min-w-[220px] max-w-[320px] items-center">
-            <Search className="pointer-events-none absolute left-3 h-4 w-4 text-[#2773ff]" />
+          <div className="relative w-full shrink-0 lg:w-[min(320px,100%)]">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6e7b8d]" />
             <Input
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="搜索插件名称、作者或描述"
               autoComplete="off"
-              className="h-10 rounded-xl border-[#dbeafe] bg-white pl-9 shadow-sm"
+              className="h-7 w-full rounded border border-[#e2e8f0] bg-white pl-8 pr-2.5 text-[13px] leading-7 text-[#1e293b] placeholder:text-[#6e7b8d] shadow-none focus-visible:border-[#2773ff]/40 focus-visible:ring-1 focus-visible:ring-[#2773ff]/20"
             />
-          </label>
-        </header>
-
-        <nav
-          className="mt-6 rounded-xl border border-[#dbeafe] bg-white p-2.5 shadow-sm"
-          aria-label="来源范围"
-        >
-          <div className="flex flex-wrap gap-2">
-            {PLUGIN_MARKETPLACE_SOURCE_FILTERS.map((tab) => (
-              <FilterChip
-                key={tab.value}
-                active={source === tab.value}
-                onClick={() => setSource(tab.value)}
-              >
-                {tab.label}
-              </FilterChip>
-            ))}
           </div>
-        </nav>
+        </div>
 
-        <nav
-          className="mt-4 rounded-xl border border-[#dbeafe] bg-[rgba(219,234,254,0.55)] p-2"
-          aria-label="插件类型"
-        >
-          <div className="flex flex-wrap items-center gap-1.5">
-            {PLUGIN_MARKETPLACE_CATEGORY_FILTERS.map((tab) => (
-              <FilterChip
-                key={tab.value}
-                active={category === tab.value}
-                onClick={() => setCategory(tab.value)}
-              >
-                {tab.label}
-              </FilterChip>
-            ))}
+        <div className="mt-4 space-y-2">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+            <div className="w-11 shrink-0 text-[12px] leading-6 text-[#6e7b8d]">
+              来源
+            </div>
+            <div
+              className="flex min-w-0 flex-1 flex-wrap gap-0.5"
+              role="group"
+              aria-label="来源范围"
+            >
+              {PLUGIN_MARKETPLACE_SOURCE_FILTERS.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setSource(tab.value)}
+                  className={cn(
+                    "shrink-0",
+                    getPluginsPlazaCapsuleFilterClass(source === tab.value)
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </nav>
+
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+            <div className="w-11 shrink-0 text-[12px] leading-6 text-[#6e7b8d]">
+              类目
+            </div>
+            <div
+              className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5"
+              role="group"
+              aria-label="插件类型"
+            >
+              {PLUGIN_MARKETPLACE_CATEGORY_FILTERS.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setCategory(tab.value)}
+                  className={cn(
+                    "shrink-0",
+                    getPluginsPlazaCapsuleFilterClass(category === tab.value)
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
         {items.length === 0 ? (
           <div className="mt-10 rounded-xl border border-dashed border-[#c7d7ef] bg-white/70 px-6 py-16 text-center">

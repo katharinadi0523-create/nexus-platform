@@ -17,6 +17,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { GlobalInboxNavItem } from "@/components/my-claw/collaboration/global-inbox-nav-item";
+import { OrganizationSidebarContent } from "@/components/my-claw/collaboration/organization-sidebar-content";
+import { WorkContextSwitcher } from "@/components/my-claw/collaboration/workspace-switcher";
 import { MY_CLAW_PRIMARY_NAV, MY_CLAW_SETTINGS_NAV } from "./nav-items";
 import { SessionList } from "./session-list";
 
@@ -27,9 +30,15 @@ function isNavActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function isOrganizationRoute(pathname: string) {
+  return pathname.startsWith("/my-claw/workspaces/");
+}
+
 export function MyClawSidebar() {
   const pathname = usePathname();
   const { setActiveSession } = useMyClaw();
+  const inOrganization = isOrganizationRoute(pathname);
+  const inInbox = pathname.startsWith("/my-claw/inbox");
 
   return (
     <aside className="flex h-full w-[272px] shrink-0 flex-col border-r border-[#e2e8f0] bg-white">
@@ -50,56 +59,69 @@ export function MyClawSidebar() {
             {MY_CLAW_BRAND_NAME}
           </div>
           <div className="truncate text-[11px] text-[#5a6779]">
-            个人智能工作台
+            {inOrganization ? "组织协作工作台" : "个人智能工作台"}
           </div>
         </div>
       </div>
 
-      {/* Search placeholder */}
-      <div className="px-3 pb-3">
-        <div className="flex h-9 items-center gap-2 rounded-lg border border-[#e7ecf0] bg-[#f8f9fb] px-3 text-sm text-[#5a6779]">
-          <Search className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">搜索会话、技能、插件…</span>
+      <WorkContextSwitcher />
+      <GlobalInboxNavItem />
+
+      {!inOrganization && !inInbox ? (
+        <>
+          {/* Search placeholder */}
+          <div className="px-3 pb-3">
+            <div className="flex h-9 items-center gap-2 rounded-lg border border-[#e7ecf0] bg-[#f8f9fb] px-3 text-sm text-[#5a6779]">
+              <Search className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">搜索会话、技能、插件…</span>
+            </div>
+          </div>
+
+          {/* Primary nav */}
+          <nav className="space-y-0.5 px-2 pb-3">
+            {MY_CLAW_PRIMARY_NAV.map((item) => {
+              const Icon = item.icon;
+              const active = isNavActive(pathname, item.href);
+              return (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  onClick={() => {
+                    if (item.key === "chat") {
+                      setActiveSession(null);
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
+                    active
+                      ? "bg-[#e8f0fb] text-[#2773ff]"
+                      : "text-slate-700 hover:bg-slate-50"
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "h-4 w-4 shrink-0",
+                      active ? "text-[#2773ff]" : "text-[#5a6779]"
+                    )}
+                  />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="mx-3 border-t border-[#eef2f6]" />
+
+          {/* Sessions */}
+          <SessionList />
+        </>
+      ) : inInbox ? (
+        <div className="min-h-0 flex-1 px-4 py-3 text-[12px] leading-5 text-[#5a6779]">
+          收件箱聚合个人空间与所有组织项目的通知，不随空间切换改变。
         </div>
-      </div>
-
-      {/* Primary nav */}
-      <nav className="space-y-0.5 px-2 pb-3">
-        {MY_CLAW_PRIMARY_NAV.map((item) => {
-          const Icon = item.icon;
-          const active = isNavActive(pathname, item.href);
-          return (
-            <Link
-              key={item.key}
-              href={item.href}
-              onClick={() => {
-                if (item.key === "chat") {
-                  setActiveSession(null);
-                }
-              }}
-              className={cn(
-                "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
-                active
-                  ? "bg-[#e8f0fb] text-[#2773ff]"
-                  : "text-slate-700 hover:bg-slate-50"
-              )}
-            >
-              <Icon
-                className={cn(
-                  "h-4 w-4 shrink-0",
-                  active ? "text-[#2773ff]" : "text-[#5a6779]"
-                )}
-              />
-              <span className="truncate">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="mx-3 border-t border-[#eef2f6]" />
-
-      {/* Sessions */}
-      <SessionList />
+      ) : (
+        <OrganizationSidebarContent />
+      )}
 
       {/* Footer: avatar + settings */}
       <div className="mt-auto border-t border-[#eef2f6] px-3 py-3">
@@ -111,7 +133,9 @@ export function MyClawSidebar() {
             <div className="truncate text-[13px] font-medium text-slate-800">
               {MY_CLAW_USER_DISPLAY_NAME}
             </div>
-            <div className="truncate text-[11px] text-[#5a6779]">个人空间</div>
+            <div className="truncate text-[11px] text-[#5a6779]">
+              {inOrganization ? "组织协作中" : "个人空间"}
+            </div>
           </div>
 
           <DropdownMenu>

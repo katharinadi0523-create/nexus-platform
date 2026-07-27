@@ -2,13 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useSyncExternalStore } from "react";
 import {
-  ChevronDown,
-  ChevronRight,
   Clock3,
-  Folder,
-  Loader2,
   MoreHorizontal,
   Pin,
   PinOff,
@@ -16,11 +12,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { useMyClaw } from "@/components/my-claw/provider";
-import {
-  getAutomationSidebarTasks,
-  type AutomationSidebarRun,
-  type AutomationSidebarTask,
-  type MyClawSessionListItem,
+import type {
+  AutomationTask,
+  MyClawSessionListItem,
 } from "@/lib/mock/my-claw";
 import { cn } from "@/lib/utils";
 import {
@@ -32,6 +26,18 @@ import {
 
 function sortByUpdatedAt(a: MyClawSessionListItem, b: MyClawSessionListItem) {
   return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+}
+
+const subscribeToHydration = () => () => {};
+const getClientHydrationSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
+
+/** Parse mock stamps like `2026-04-30 08:42` or ISO strings. */
+function toSortTime(value: string | undefined): number {
+  if (!value) return 0;
+  const normalized = value.includes("T") ? value : value.replace(" ", "T");
+  const ms = new Date(normalized).getTime();
+  return Number.isFinite(ms) ? ms : 0;
 }
 
 interface SessionRowProps {
@@ -79,9 +85,6 @@ function SessionRow({ session, isActive }: SessionRowProps) {
             {session.title}
           </span>
         </div>
-        <p className="mt-0.5 truncate text-xs text-[#5a6779]">
-          {session.preview}
-        </p>
       </Link>
 
       <DropdownMenu>
@@ -112,16 +115,54 @@ function SessionRow({ session, isActive }: SessionRowProps) {
             <Pencil className="h-3.5 w-3.5" />
             重命名
           </DropdownMenuItem>
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={handleDelete}
-          >
+          <DropdownMenuItem variant="destructive" onClick={handleDelete}>
             <Trash2 className="h-3.5 w-3.5" />
             删除
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  );
+}
+
+interface AutomationSessionRowProps {
+  task: AutomationTask;
+  isActive: boolean;
+}
+
+function AutomationSessionRow({ task, isActive }: AutomationSessionRowProps) {
+  const router = useRouter();
+  const title = task.name || "未命名自动化任务";
+
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        router.push(`/my-claw/automation?taskId=${encodeURIComponent(task.id)}`)
+      }
+      className={cn(
+        "flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-left transition-colors",
+        isActive ? "bg-[#e8f0fb]" : "hover:bg-slate-50"
+      )}
+      title={title}
+    >
+      <Clock3
+        className={cn(
+          "h-3.5 w-3.5 shrink-0",
+          isActive ? "text-[#2773ff]" : "text-[#94a3b8]"
+        )}
+        aria-hidden
+      />
+      <span
+        className={cn(
+          "min-w-0 flex-1 truncate text-[13px] leading-5",
+          isActive ? "font-medium text-slate-900" : "text-slate-700"
+        )}
+      >
+        {title}
+      </span>
+      <span className="sr-only">自动化任务</span>
+    </button>
   );
 }
 
@@ -152,203 +193,62 @@ function SessionGroup({ title, sessions, activeSessionId }: SessionGroupProps) {
   );
 }
 
-function RunStatusGlyph({ status }: { status: AutomationSidebarRun["status"] }) {
-  if (status === "running") {
-    return <Loader2 className="h-3 w-3 animate-spin text-amber-500" />;
-  }
-  if (status === "error") {
-    return <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />;
-  }
-  if (status === "awaiting") {
-    return <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />;
-  }
-  return <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />;
-}
+type RecentListItem =
+  | { kind: "session"; sortAt: number; session: MyClawSessionListItem }
+  | { kind: "automation"; sortAt: number; task: AutomationTask };
 
-interface AutomationTaskRowProps {
-  task: AutomationSidebarTask;
-  expanded: boolean;
-  activeTaskId: string | null;
-  activeRunId: string | null;
-  onToggle: (taskId: string) => void;
-  onOpenTask: (taskId: string) => void;
-  onOpenRun: (taskId: string, runId: string) => void;
-}
-
-function AutomationTaskRow({
-  task,
-  expanded,
+function RecentGroup({
+  sessions,
+  automationTasks,
+  activeSessionId,
   activeTaskId,
-  activeRunId,
-  onToggle,
-  onOpenTask,
-  onOpenRun,
-}: AutomationTaskRowProps) {
-  const isTaskActive = activeTaskId === task.id && !activeRunId;
-
-  return (
-    <article className="mb-0.5">
-      <button
-        type="button"
-        onClick={() => {
-          onToggle(task.id);
-          onOpenTask(task.id);
-        }}
-        className={cn(
-          "flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors",
-          isTaskActive ? "bg-[#e8f0fb]" : "hover:bg-slate-50"
-        )}
-        title={task.workspaceName}
-        aria-expanded={expanded}
-      >
-        {expanded ? (
-          <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" />
-        ) : (
-          <ChevronRight className="h-3 w-3 shrink-0 text-slate-400" />
-        )}
-        <Folder className="h-3.5 w-3.5 shrink-0 text-[#2773ff]" />
-        <span
-          className={cn(
-            "min-w-0 flex-1 truncate text-[13px] leading-5",
-            isTaskActive ? "font-medium text-slate-900" : "text-slate-700"
-          )}
-        >
-          {task.workspaceName}
-        </span>
-      </button>
-
-      {expanded ? (
-        task.runs.length === 0 ? (
-          <div className="ml-6 px-2 py-1.5 text-[11px] text-[#5a6779]">
-            暂无执行记录
-          </div>
-        ) : (
-          <div className="ml-5 space-y-0.5 border-l border-slate-100 pl-2">
-            {task.runs.map((run) => {
-              const active = activeTaskId === task.id && activeRunId === run.id;
-              return (
-                <button
-                  key={run.id}
-                  type="button"
-                  onClick={() => onOpenRun(task.id, run.id)}
-                  className={cn(
-                    "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors",
-                    active ? "bg-[#e8f0fb]" : "hover:bg-slate-50"
-                  )}
-                  title={run.summary || `${run.title} · ${run.timeLabel}`}
-                >
-                  <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
-                    <RunStatusGlyph status={run.status} />
-                  </span>
-                  <span
-                    className={cn(
-                      "min-w-0 flex-1 truncate text-[12px]",
-                      active ? "font-medium text-slate-900" : "text-slate-600"
-                    )}
-                  >
-                    {run.title}
-                  </span>
-                  <span className="shrink-0 text-[10px] text-[#5a6779]">
-                    {run.timeLabel}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )
-      ) : null}
-    </article>
-  );
-}
-
-function AutomationTaskGroup({
-  activeTaskId,
-  activeRunId,
 }: {
+  sessions: MyClawSessionListItem[];
+  automationTasks: AutomationTask[];
+  activeSessionId: string | null;
   activeTaskId: string | null;
-  activeRunId: string | null;
 }) {
-  const router = useRouter();
-  const { automationTasks } = useMyClaw();
+  const items = useMemo(() => {
+    const rows: RecentListItem[] = [
+      ...sessions.map((session) => ({
+        kind: "session" as const,
+        sortAt: toSortTime(session.updatedAt),
+        session,
+      })),
+      ...automationTasks.map((task) => ({
+        kind: "automation" as const,
+        sortAt: toSortTime(task.last_run_at),
+        task,
+      })),
+    ];
 
-  const sidebarTasks = useMemo(
-    () => getAutomationSidebarTasks(automationTasks),
-    [automationTasks]
-  );
+    return rows.sort((a, b) => b.sortAt - a.sortAt);
+  }, [sessions, automationTasks]);
 
-  const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>(() => {
-    const initial = getAutomationSidebarTasks(automationTasks);
-    const firstRunnable =
-      initial.find((task) => task.runs.length > 0) || initial[0];
-    return firstRunnable ? [firstRunnable.id] : [];
-  });
-
-  useEffect(() => {
-    const taskIds = new Set(sidebarTasks.map((task) => task.id));
-    setExpandedTaskIds((prev) => {
-      const kept = prev.filter((id) => taskIds.has(id));
-      if (kept.length > 0 || sidebarTasks.length === 0) return kept;
-      const firstRunnable =
-        sidebarTasks.find((task) => task.runs.length > 0) || sidebarTasks[0];
-      return firstRunnable ? [firstRunnable.id] : [];
-    });
-  }, [sidebarTasks]);
-
-  const handleToggle = (taskId: string) => {
-    setExpandedTaskIds((prev) =>
-      prev.includes(taskId)
-        ? prev.filter((id) => id !== taskId)
-        : [...prev, taskId]
-    );
-  };
-
-  const handleOpenTask = (taskId: string) => {
-    router.push(`/my-claw/automation?taskId=${encodeURIComponent(taskId)}`);
-  };
-
-  const handleOpenRun = (taskId: string, runId: string) => {
-    // Demo seed: first english-task run links to the expense session.
-    if (taskId === "auto-schedule-daily-english") {
-      router.push("/my-claw/chat?sessionId=task-001");
-      return;
-    }
-    router.push(
-      `/my-claw/automation?taskId=${encodeURIComponent(taskId)}&runId=${encodeURIComponent(runId)}`
-    );
-  };
+  if (items.length === 0) return null;
 
   return (
-    <div className="mb-2 mt-1">
-      <div className="mb-1 flex items-center justify-between px-2.5">
-        <div className="flex items-center gap-1 text-[11px] font-medium tracking-wide text-[#5a6779]">
-          <Clock3 className="h-3 w-3" />
-          <span>自动化任务</span>
-        </div>
-        {sidebarTasks.length > 0 ? (
-          <span className="text-[11px] text-[#5a6779]">{sidebarTasks.length}</span>
-        ) : null}
+    <div className="mb-3">
+      <div className="mb-1 px-2.5 text-[11px] font-medium tracking-wide text-[#5a6779]">
+        最近
       </div>
-
-      {sidebarTasks.length === 0 ? (
-        <div className="mx-2 rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-[#5a6779]">
-          暂无自动化任务
-        </div>
-      ) : (
-        <div className="px-1">
-          {sidebarTasks.map((task) => (
-            <AutomationTaskRow
-              key={task.id}
-              task={task}
-              expanded={expandedTaskIds.includes(task.id)}
-              activeTaskId={activeTaskId}
-              activeRunId={activeRunId}
-              onToggle={handleToggle}
-              onOpenTask={handleOpenTask}
-              onOpenRun={handleOpenRun}
+      <div className="space-y-0.5">
+        {items.map((item) =>
+          item.kind === "session" ? (
+            <SessionRow
+              key={item.session.id}
+              session={item.session}
+              isActive={activeSessionId === item.session.id}
             />
-          ))}
-        </div>
-      )}
+          ) : (
+            <AutomationSessionRow
+              key={item.task.id}
+              task={item.task}
+              isActive={activeTaskId === item.task.id}
+            />
+          )
+        )}
+      </div>
     </div>
   );
 }
@@ -356,13 +256,11 @@ function AutomationTaskGroup({
 function SessionListBody({
   highlightedSessionId,
   activeTaskId,
-  activeRunId,
 }: {
   highlightedSessionId: string | null;
   activeTaskId: string | null;
-  activeRunId: string | null;
 }) {
-  const { sessions } = useMyClaw();
+  const { sessions, automationTasks } = useMyClaw();
   const pinned = sessions.filter((s) => s.pinned).sort(sortByUpdatedAt);
   const recent = sessions.filter((s) => !s.pinned).sort(sortByUpdatedAt);
 
@@ -374,14 +272,11 @@ function SessionListBody({
           sessions={pinned}
           activeSessionId={highlightedSessionId}
         />
-        <SessionGroup
-          title="最近"
+        <RecentGroup
           sessions={recent}
+          automationTasks={automationTasks}
           activeSessionId={highlightedSessionId}
-        />
-        <AutomationTaskGroup
           activeTaskId={activeTaskId}
-          activeRunId={activeRunId}
         />
       </div>
     </div>
@@ -394,7 +289,6 @@ function SessionListWithSearchParams() {
   const searchParams = useSearchParams();
   const querySessionId = searchParams.get("sessionId");
   const focusTaskId = searchParams.get("taskId");
-  const focusRunId = searchParams.get("runId");
 
   useEffect(() => {
     const nextId =
@@ -414,15 +308,11 @@ function SessionListWithSearchParams() {
   const activeTaskId = pathname.startsWith("/my-claw/automation")
     ? focusTaskId
     : null;
-  const activeRunId = pathname.startsWith("/my-claw/automation")
-    ? focusRunId
-    : null;
 
   return (
     <SessionListBody
       highlightedSessionId={highlightedSessionId}
       activeTaskId={activeTaskId}
-      activeRunId={activeRunId}
     />
   );
 }
@@ -432,30 +322,22 @@ function SessionListWithSearchParams() {
  * then attach URL focus via `useSearchParams` to avoid hydration mismatch.
  */
 export function SessionList() {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    subscribeToHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot
+  );
 
   if (!mounted) {
     return (
-      <SessionListBody
-        highlightedSessionId={null}
-        activeTaskId={null}
-        activeRunId={null}
-      />
+      <SessionListBody highlightedSessionId={null} activeTaskId={null} />
     );
   }
 
   return (
     <Suspense
       fallback={
-        <SessionListBody
-          highlightedSessionId={null}
-          activeTaskId={null}
-          activeRunId={null}
-        />
+        <SessionListBody highlightedSessionId={null} activeTaskId={null} />
       }
     >
       <SessionListWithSearchParams />

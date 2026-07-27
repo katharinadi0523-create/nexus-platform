@@ -18,6 +18,8 @@ export const SPACE_OPERATIONS_TABS: SpaceOperationsTab[] = [
   { segment: "run-config", label: "运行配置" },
   { segment: "approvals", label: "审批" },
   { segment: "logs", label: "日志" },
+  { segment: "agents", label: "Agent 看板" },
+  { segment: "squads", label: "Squad 看板" },
 ];
 
 /** 从侧栏进入「空间运营」时的默认子页（与 Tab 顺序无关） */
