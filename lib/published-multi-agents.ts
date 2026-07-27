@@ -20,12 +20,25 @@ export type ShelvedMultiAgentItem = {
 
 const STORAGE_KEY = "nexus-published-multi-agents";
 const SHELVED_STORAGE_KEY = "nexus-shelved-multi-agents";
+const REMOVED_SEED_STORAGE_KEY = "nexus-published-multi-agents-removed-seeds";
+
+/** 内置已发布多智能体（写入代码，所有环境默认可见） */
+export const SEED_PUBLISHED_MULTI_AGENTS: PublishedMultiAgentItem[] = [
+  {
+    id: "multi-agent-scientific-research",
+    name: "科研多智能体",
+    type: "多智能体",
+    status: "已发布",
+    desc: "面向科研全流程，协同完成假设生成、文献检索、科研绘图、论文生成与论文审核。",
+    updatedAt: "2026-07-11 10:30",
+  },
+];
 
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
-export function getPublishedMultiAgents(): PublishedMultiAgentItem[] {
+function getStoredPublishedMultiAgents(): PublishedMultiAgentItem[] {
   if (!canUseStorage()) {
     return [];
   }
@@ -40,6 +53,52 @@ export function getPublishedMultiAgents(): PublishedMultiAgentItem[] {
   } catch {
     return [];
   }
+}
+
+function getRemovedSeedIds(): Set<string> {
+  if (!canUseStorage()) {
+    return new Set();
+  }
+  try {
+    const raw = window.localStorage.getItem(REMOVED_SEED_STORAGE_KEY);
+    if (!raw) {
+      return new Set();
+    }
+    const parsed = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function setRemovedSeedIds(ids: Set<string>) {
+  if (!canUseStorage()) {
+    return;
+  }
+  window.localStorage.setItem(
+    REMOVED_SEED_STORAGE_KEY,
+    JSON.stringify([...ids])
+  );
+}
+
+export function getPublishedMultiAgents(): PublishedMultiAgentItem[] {
+  const stored = getStoredPublishedMultiAgents();
+  const removedSeeds = getRemovedSeedIds();
+  const byId = new Map<string, PublishedMultiAgentItem>();
+
+  for (const seed of SEED_PUBLISHED_MULTI_AGENTS) {
+    if (!removedSeeds.has(seed.id)) {
+      byId.set(seed.id, seed);
+    }
+  }
+  // 本地发布/编辑覆盖同名 id，并保留其余本地项
+  for (const item of stored) {
+    byId.set(item.id, item);
+  }
+
+  return Array.from(byId.values()).sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt)
+  );
 }
 
 export function getPublishedMultiAgentById(id: string): PublishedMultiAgentItem | null {
@@ -62,7 +121,7 @@ export function upsertPublishedMultiAgent(
     updatedAt: item.updatedAt,
   };
 
-  const current = getPublishedMultiAgents();
+  const current = getStoredPublishedMultiAgents();
   const index = current.findIndex((row) => row.id === nextItem.id);
   const next =
     index >= 0
@@ -71,6 +130,11 @@ export function upsertPublishedMultiAgent(
 
   if (canUseStorage()) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    // 重新发布内置项时，取消「已删除种子」标记
+    const removed = getRemovedSeedIds();
+    if (removed.delete(nextItem.id)) {
+      setRemovedSeedIds(removed);
+    }
   }
 
   return nextItem;
@@ -80,8 +144,14 @@ export function removePublishedMultiAgent(id: string) {
   if (!canUseStorage()) {
     return;
   }
-  const next = getPublishedMultiAgents().filter((row) => row.id !== id);
+  const next = getStoredPublishedMultiAgents().filter((row) => row.id !== id);
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+
+  if (SEED_PUBLISHED_MULTI_AGENTS.some((seed) => seed.id === id)) {
+    const removed = getRemovedSeedIds();
+    removed.add(id);
+    setRemovedSeedIds(removed);
+  }
 }
 
 export function getShelvedMultiAgents(): ShelvedMultiAgentItem[] {
