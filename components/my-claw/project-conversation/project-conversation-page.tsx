@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ProjectMessage } from "@/lib/mock/my-claw/project-conversation";
 import { useProjectConversation } from "./project-conversation-provider";
 import { ProjectConversationHeader } from "./project-conversation-header";
@@ -11,17 +12,25 @@ import { ProjectMembersDrawer } from "./drawers/project-members-drawer";
 import { ProjectFilesDrawer } from "./drawers/project-files-drawer";
 import { AddMemberDrawer } from "./drawers/add-member-drawer";
 import { ExecutionDetailDrawer } from "./execution/execution-detail-drawer";
+import { ProjectIssueBoard } from "@/components/my-claw/project-issues/project-issue-board";
+import { ProjectIssueDetailDrawer } from "@/components/my-claw/project-issues/project-issue-detail-drawer";
+
+export type ProjectPageView = "conversation" | "issues";
 
 interface ProjectConversationPageProps {
-  workspaceId: string;
+  workspaceId?: string;
   projectId: string;
   messageId?: string | null;
+  issueId?: string | null;
+  view?: ProjectPageView;
 }
 
 export function ProjectConversationPage({
   workspaceId,
   projectId,
   messageId,
+  issueId,
+  view = "conversation",
 }: ProjectConversationPageProps) {
   const {
     getProject,
@@ -29,7 +38,12 @@ export function ProjectConversationPage({
     state,
     setHighlightedMessage,
     closeDrawer,
+    openIssueDrawer,
   } = useProjectConversation();
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [quotedMessage, setQuotedMessage] = useState<ProjectMessage | null>(
     null
@@ -37,6 +51,10 @@ export function ProjectConversationPage({
   const listRef = useRef<MessageListHandle>(null);
   const project = getProject(projectId);
   const messages = getMessages(projectId);
+  const activeView: ProjectPageView =
+    view === "issues" || searchParams.get("view") === "issues"
+      ? "issues"
+      : "conversation";
 
   useEffect(() => {
     if (messageId) {
@@ -45,10 +63,17 @@ export function ProjectConversationPage({
   }, [messageId, setHighlightedMessage]);
 
   useEffect(() => {
+    if (issueId) {
+      openIssueDrawer(issueId);
+    }
+  }, [issueId, openIssueDrawer]);
+
+  useEffect(() => {
     if (
       !state.activeDrawer &&
       state.scrollAnchorMessageId &&
-      listRef.current
+      listRef.current &&
+      activeView === "conversation"
     ) {
       const timer = window.setTimeout(() => {
         listRef.current?.scrollToMessage(state.scrollAnchorMessageId!);
@@ -56,7 +81,26 @@ export function ProjectConversationPage({
       return () => window.clearTimeout(timer);
     }
     return undefined;
-  }, [state.activeDrawer, state.scrollAnchorMessageId]);
+  }, [state.activeDrawer, state.scrollAnchorMessageId, activeView]);
+
+  const setView = (next: ProjectPageView) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "issues") {
+      params.set("view", "issues");
+    } else {
+      params.delete("view");
+    }
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const openIssue = (id: string) => {
+    openIssueDrawer(id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", "issues");
+    params.set("issue", id);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   if (!project) {
     return (
@@ -85,6 +129,7 @@ export function ProjectConversationPage({
             onClose={closeDrawer}
             onJumpToMessage={(id) => {
               setHighlightedMessage(id);
+              setView("conversation");
               listRef.current?.scrollToMessage(id);
             }}
           />
@@ -100,6 +145,28 @@ export function ProjectConversationPage({
             onClose={closeDrawer}
           />
         ) : null;
+      case "issue":
+        return state.activeIssueId ? (
+          <ProjectIssueDetailDrawer
+            issueId={state.activeIssueId}
+            onClose={() => {
+              closeDrawer();
+              const params = new URLSearchParams(searchParams.toString());
+              params.delete("issue");
+              const qs = params.toString();
+              router.replace(qs ? `${pathname}?${qs}` : pathname, {
+                scroll: false,
+              });
+            }}
+            onJumpToMessage={(id) => {
+              setHighlightedMessage(id);
+              setView("conversation");
+              window.setTimeout(() => {
+                listRef.current?.scrollToMessage(id);
+              }, 80);
+            }}
+          />
+        ) : null;
       default:
         return null;
     }
@@ -109,20 +176,42 @@ export function ProjectConversationPage({
     <div className="relative flex h-full min-h-0 w-full overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f8f9fb]">
         <ProjectConversationHeader
-          workspaceId={workspaceId}
+          workspaceId={workspaceId ?? project.workspaceId}
           projectId={projectId}
+          activeView={activeView}
+          onChangeView={setView}
         />
-        <MessageList
-          ref={listRef}
-          messages={messages}
-          highlightedMessageId={state.highlightedMessageId}
-          onQuote={setQuotedMessage}
-        />
-        <ProjectComposer
-          projectId={projectId}
-          quotedMessage={quotedMessage}
-          onClearQuote={() => setQuotedMessage(null)}
-        />
+
+        {/* Keep both views mounted; hide inactive with CSS so conversation state survives. */}
+        <div
+          className={
+            activeView === "conversation"
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+              : "hidden"
+          }
+        >
+          <MessageList
+            ref={listRef}
+            messages={messages}
+            highlightedMessageId={state.highlightedMessageId}
+            onQuote={setQuotedMessage}
+          />
+          <ProjectComposer
+            projectId={projectId}
+            quotedMessage={quotedMessage}
+            onClearQuote={() => setQuotedMessage(null)}
+          />
+        </div>
+
+        <div
+          className={
+            activeView === "issues"
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+              : "hidden"
+          }
+        >
+          <ProjectIssueBoard projectId={projectId} onOpenIssue={openIssue} />
+        </div>
       </div>
 
       {drawerOpen ? (

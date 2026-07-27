@@ -3,10 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Search, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useMyClaw } from "@/components/my-claw/provider";
 import {
   MY_CLAW_BRAND_ICON_SRC,
   MY_CLAW_BRAND_NAME,
@@ -18,15 +16,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  WorkContextSwitcher,
-  getLastWorkspaceId,
-  setLastWorkspaceId,
-} from "@/components/my-claw/project-conversation/work-context-switcher";
 import { GlobalInboxNavItem } from "@/components/my-claw/project-conversation/global-inbox-nav-item";
-import { WorkspaceProjectList } from "@/components/my-claw/project-conversation/project-conversation-sidebar-nav";
-import { MY_CLAW_PRIMARY_NAV, MY_CLAW_SETTINGS_NAV } from "./nav-items";
+import { MY_CLAW_SETTINGS_NAV } from "./nav-items";
 import { SessionList } from "./session-list";
+import { MyWorkNavItem } from "./my-work-nav-item";
+import { ProjectChatList } from "./project-chat-list";
 
 function isNavActive(pathname: string, href: string) {
   if (href === "/my-claw") {
@@ -37,36 +31,9 @@ function isNavActive(pathname: string, href: string) {
 
 export function MyClawSidebar() {
   const pathname = usePathname();
-  const { setActiveSession } = useMyClaw();
-  const [rememberedWorkspaceId, setRememberedWorkspaceId] = useState<
-    string | null
-  >(null);
-
-  const projectMatch = pathname.match(
-    /^\/my-claw\/workspaces\/([^/]+)\/projects\/([^/]+)/
-  );
-  const workspaceIdFromRoute = projectMatch?.[1] ?? null;
-  const activeProjectId = projectMatch?.[2] ?? null;
-  const isWorkspaceMode = Boolean(workspaceIdFromRoute);
-  const isInboxMode =
-    pathname === "/my-claw/inbox" || pathname.startsWith("/my-claw/inbox/");
-  const isOrgMode = isWorkspaceMode || isInboxMode;
-  const listWorkspaceId = workspaceIdFromRoute ?? rememberedWorkspaceId;
-
-  useEffect(() => {
-    if (workspaceIdFromRoute) {
-      setRememberedWorkspaceId(workspaceIdFromRoute);
-      setLastWorkspaceId(workspaceIdFromRoute);
-      return;
-    }
-    if (isInboxMode) {
-      setRememberedWorkspaceId(getLastWorkspaceId());
-    }
-  }, [isInboxMode, workspaceIdFromRoute]);
 
   return (
     <aside className="flex h-full w-[272px] shrink-0 flex-col border-r border-[#e2e8f0] bg-white">
-      {/* Brand */}
       <div className="flex items-center gap-2.5 px-4 pb-3 pt-4">
         <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg">
           <Image
@@ -82,83 +49,34 @@ export function MyClawSidebar() {
           <div className="truncate text-[15px] font-semibold text-slate-900">
             {MY_CLAW_BRAND_NAME}
           </div>
-          <div className="truncate text-[11px] text-[#5a6779]">
-            {isOrgMode ? "组织协作工作台" : "个人智能工作台"}
-          </div>
+          <div className="truncate text-[11px] text-[#5a6779]">我的空间</div>
         </div>
       </div>
 
-      {/* Space selector: 个人空间 / Workspace */}
-      <div className="px-3 pb-2">
-        <WorkContextSwitcher />
-      </div>
-
-      {/* Inbox */}
-      <div className="px-2 pb-2">
+      <div className="space-y-0.5 px-2 pb-2">
         <GlobalInboxNavItem />
+        <MyWorkNavItem />
       </div>
 
       <div className="mx-3 border-t border-[#eef2f6]" />
 
-      {isWorkspaceMode && listWorkspaceId ? (
-        <WorkspaceProjectList
-          workspaceId={listWorkspaceId}
-          activeProjectId={activeProjectId}
-        />
-      ) : isInboxMode && listWorkspaceId ? (
-        <WorkspaceProjectList
-          workspaceId={listWorkspaceId}
-          activeProjectId={null}
-        />
-      ) : isInboxMode ? (
-        <div className="px-4 py-4 text-[12px] leading-5 text-[#5a6779]">
-          从 Inbox 进入项目会话。也可通过上方空间选择器进入组织空间。
-        </div>
-      ) : (
-        <>
-          <div className="px-3 pt-3">
-            <div className="flex h-9 items-center gap-2 rounded-lg border border-[#e7ecf0] bg-[#f8f9fb] px-3 text-sm text-[#5a6779]">
-              <Search className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">搜索会话、技能、插件…</span>
-            </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="px-3 pb-1 pt-3">
+          <div className="px-0.5 text-[11px] font-medium text-[#5a6779]">
+            个人 Chat
           </div>
-
-          <nav className="space-y-0.5 px-2 py-3">
-            {MY_CLAW_PRIMARY_NAV.map((item) => {
-              const Icon = item.icon;
-              const active = isNavActive(pathname, item.href);
-              return (
-                <Link
-                  key={item.key}
-                  href={item.href}
-                  onClick={() => {
-                    if (item.key === "chat") {
-                      setActiveSession(null);
-                    }
-                  }}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
-                    active
-                      ? "bg-[#e8f0fb] text-[#2773ff]"
-                      : "text-slate-700 hover:bg-slate-50"
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "h-4 w-4 shrink-0",
-                      active ? "text-[#2773ff]" : "text-[#5a6779]"
-                    )}
-                  />
-                  <span className="truncate">{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="mx-3 border-t border-[#eef2f6]" />
+        </div>
+        <div className="max-h-[42%] min-h-0 overflow-hidden border-b border-[#eef2f6]">
           <SessionList />
-        </>
-      )}
+        </div>
+
+        <div className="px-3 pb-1 pt-3">
+          <div className="px-0.5 text-[11px] font-medium text-[#5a6779]">
+            Project Chat
+          </div>
+        </div>
+        <ProjectChatList />
+      </div>
 
       <div className="mt-auto border-t border-[#eef2f6] px-3 py-3">
         <div className="flex items-center gap-2.5">
@@ -169,9 +87,7 @@ export function MyClawSidebar() {
             <div className="truncate text-[13px] font-medium text-slate-800">
               {MY_CLAW_USER_DISPLAY_NAME}
             </div>
-            <div className="truncate text-[11px] text-[#5a6779]">
-              {isOrgMode ? "组织协作" : "个人空间"}
-            </div>
+            <div className="truncate text-[11px] text-[#5a6779]">我的空间</div>
           </div>
 
           <DropdownMenu>

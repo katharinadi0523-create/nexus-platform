@@ -5,9 +5,11 @@ import {
   AlertTriangle,
   AtSign,
   Bot,
+  ClipboardCheck,
   Inbox,
   ShieldAlert,
   UserPlus,
+  Wrench,
 } from "lucide-react";
 import type { InboxEventType } from "@/lib/mock/my-claw/project-conversation";
 import { useProjectConversation } from "../project-conversation-provider";
@@ -27,6 +29,14 @@ function inboxIcon(type: InboxEventType) {
       return UserPlus;
     case "session_degraded":
       return AlertTriangle;
+    case "issue_review_ready":
+    case "issue_assigned":
+    case "issue_waiting_for_human":
+    case "issue_needs_confirmation":
+      return ClipboardCheck;
+    case "project_tool_authorization_required":
+    case "project_tool_degraded":
+      return Wrench;
     default:
       return Inbox;
   }
@@ -41,13 +51,40 @@ function formatTime(iso: string) {
   });
 }
 
+function buildProjectHref(item: {
+  projectId?: string;
+  messageId?: string;
+  issueId?: string;
+  type: InboxEventType;
+}) {
+  if (!item.projectId) return null;
+  const params = new URLSearchParams();
+  const issueTypes: InboxEventType[] = [
+    "issue_created",
+    "issue_assigned",
+    "issue_needs_confirmation",
+    "issue_waiting_for_human",
+    "issue_review_ready",
+    "issue_changes_requested",
+    "issue_completed",
+  ];
+  if (item.issueId || issueTypes.includes(item.type)) {
+    params.set("view", "issues");
+  }
+  if (item.messageId) params.set("message", item.messageId);
+  if (item.issueId) params.set("issue", item.issueId);
+  const qs = params.toString();
+  return qs
+    ? `/my-claw/projects/${item.projectId}?${qs}`
+    : `/my-claw/projects/${item.projectId}`;
+}
+
 export function ProjectInboxPage() {
   const router = useRouter();
   const {
     state,
     markInboxRead,
     getProject,
-    getWorkspace,
     openExecution,
   } = useProjectConversation();
 
@@ -60,14 +97,15 @@ export function ProjectInboxPage() {
     if (!item) return;
     markInboxRead(item.id);
 
+    const href = buildProjectHref(item);
     if (
       item.type === "agent_execution_failed" &&
       item.invocationId &&
-      item.workspaceId &&
       item.projectId
     ) {
       router.push(
-        `/my-claw/workspaces/${item.workspaceId}/projects/${item.projectId}?message=${item.messageId ?? ""}`
+        href ??
+          `/my-claw/projects/${item.projectId}?message=${item.messageId ?? ""}`
       );
       window.setTimeout(() => {
         if (item.invocationId) openExecution(item.invocationId);
@@ -75,10 +113,7 @@ export function ProjectInboxPage() {
       return;
     }
 
-    if (item.workspaceId && item.projectId) {
-      const href = item.messageId
-        ? `/my-claw/workspaces/${item.workspaceId}/projects/${item.projectId}?message=${item.messageId}`
-        : `/my-claw/workspaces/${item.workspaceId}/projects/${item.projectId}`;
+    if (href) {
       router.push(href);
     }
   };
@@ -88,7 +123,7 @@ export function ProjectInboxPage() {
       <header className="shrink-0 border-b border-[#eef2f6] bg-white px-6 py-4">
         <h1 className="text-[18px] font-semibold text-slate-900">Inbox</h1>
         <p className="mt-0.5 text-[13px] text-[#5a6779]">
-          提及、Agent 回复、执行失败与授权提醒
+          提及、事项、Agent 回复、执行失败与工具授权提醒
         </p>
       </header>
 
@@ -104,9 +139,6 @@ export function ProjectInboxPage() {
               const Icon = inboxIcon(item.type);
               const project = item.projectId
                 ? getProject(item.projectId)
-                : undefined;
-              const workspace = item.workspaceId
-                ? getWorkspace(item.workspaceId)
                 : undefined;
 
               return (
@@ -144,13 +176,7 @@ export function ProjectInboxPage() {
                         {item.body}
                       </p>
                       <div className="mt-1.5 flex items-center gap-2 text-[11px] text-[#5a6779]">
-                        {workspace ? <span>{workspace.name}</span> : null}
-                        {project ? (
-                          <>
-                            <span>·</span>
-                            <span>{project.name}</span>
-                          </>
-                        ) : null}
+                        {project ? <span>{project.name}</span> : null}
                         {!item.read ? (
                           <span className="ml-auto rounded bg-[#2773ff] px-1.5 py-0.5 text-[10px] font-medium text-white">
                             未读

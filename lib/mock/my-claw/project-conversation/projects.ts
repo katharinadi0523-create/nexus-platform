@@ -10,10 +10,13 @@ export const PROJECT_CLAW_COLLAB_ID = "proj-claw-collab";
 export const PROJECT_KB_ID = "proj-kb-2";
 export const PROJECT_RESEARCH_ID = "proj-research-agent";
 
+export const PROJECT_ARCHIVED_DEMO_ID = "proj-archived-demo";
+
 export const PROJECT_CONVERSATION_PROJECTS: CollaborationProject[] = [
   {
     id: PROJECT_CLAW_COLLAB_ID,
     workspaceId: "ws-agentfoundry",
+    originWorkspaceId: "ws-agentfoundry",
     name: "Claw 组织协作机制",
     description: "订单导出功能的跨角色 Agent 协作示例",
     status: "active",
@@ -21,6 +24,8 @@ export const PROJECT_CONVERSATION_PROJECTS: CollaborationProject[] = [
     threadId: "thread-claw-collab",
     brief:
       "目标：完成「订单导出」功能从需求拆解、PRD、开发到测试的端到端协作。",
+    instructions:
+      "优先通过顶层会话 @Agent 推进；事项看板只跟踪需验收的长期工作。",
     humanMemberIds: [
       CURRENT_USER_ID,
       "user-linxiao",
@@ -35,37 +40,79 @@ export const PROJECT_CONVERSATION_PROJECTS: CollaborationProject[] = [
       "actor-ruonan-claw",
     ],
     workSourceIds: ["ws-github-collab", "ws-local-collab"],
+    sharedToolBindingIds: [
+      "stb-workflow-req",
+      "stb-github-mcp",
+      "stb-web-search",
+      "stb-approval",
+    ],
+    issueIds: [
+      "issue-review-collab",
+      "issue-prd-order-export",
+      "issue-coding-export",
+      "issue-clarify-scope",
+      "issue-wait-auth",
+      "issue-test-failed",
+    ],
+    pinned: true,
     createdAt: "2026-07-20T10:00:00+08:00",
     updatedAt: "2026-07-27T16:40:00+08:00",
-  },  {
+  },
+  {
     id: PROJECT_KB_ID,
     workspaceId: "ws-agentfoundry",
+    originWorkspaceId: "ws-agentfoundry",
     name: "知识库 2.0",
     description: "知识库检索与写作协作",
     status: "active",
     ownerUserId: "user-litao",
     threadId: "thread-kb-2",
     brief: "建设可引用的企业知识库能力。",
+    instructions: "知识库变更需留下可引用 Artifact。",
     humanMemberIds: [CURRENT_USER_ID, "user-litao"],
     agentMemberIds: ["actor-ruonan-claw", "actor-req-analysis"],
     workSourceIds: ["ws-github-kb"],
+    sharedToolBindingIds: [],
+    issueIds: ["issue-kb-index", "issue-kb-done"],
     createdAt: "2026-07-18T09:00:00+08:00",
     updatedAt: "2026-07-26T16:00:00+08:00",
   },
   {
     id: PROJECT_RESEARCH_ID,
     workspaceId: "ws-research",
-    name: "科研 Agent 协作",
+    originWorkspaceId: "ws-research",
+    name: "科研项目协同",
     description: "跨学科科研 Agent 协同验证",
     status: "active",
     ownerUserId: "user-zhouning",
     threadId: "thread-research",
     brief: "验证科研多智能体在公开会话中的协作体验。",
+    instructions: "科研结论需标注数据来源。",
     humanMemberIds: [CURRENT_USER_ID, "user-zhouning", "user-linxiao"],
     agentMemberIds: ["actor-research-group", "actor-ruonan-claw"],
     workSourceIds: [],
+    sharedToolBindingIds: [],
+    issueIds: ["issue-research-survey"],
     createdAt: "2026-07-15T11:00:00+08:00",
     updatedAt: "2026-07-25T14:00:00+08:00",
+  },
+  {
+    id: PROJECT_ARCHIVED_DEMO_ID,
+    workspaceId: "ws-agentfoundry",
+    originWorkspaceId: "ws-agentfoundry",
+    name: "历史归档示例",
+    description: "已归档项目，默认不出现在 Project Chat 列表",
+    status: "archived",
+    ownerUserId: CURRENT_USER_ID,
+    threadId: "thread-archived",
+    brief: "归档示例。",
+    humanMemberIds: [CURRENT_USER_ID],
+    agentMemberIds: [],
+    workSourceIds: [],
+    sharedToolBindingIds: [],
+    issueIds: [],
+    createdAt: "2026-06-01T10:00:00+08:00",
+    updatedAt: "2026-07-01T10:00:00+08:00",
   },
 ];
 
@@ -93,6 +140,14 @@ export const PROJECT_CONVERSATION_THREADS: ProjectThread[] = [
     messageIds: [],
     createdAt: "2026-07-15T11:00:00+08:00",
     updatedAt: "2026-07-25T14:00:00+08:00",
+  },
+  {
+    id: "thread-archived",
+    workspaceId: "ws-agentfoundry",
+    projectId: PROJECT_ARCHIVED_DEMO_ID,
+    messageIds: [],
+    createdAt: "2026-06-01T10:00:00+08:00",
+    updatedAt: "2026-07-01T10:00:00+08:00",
   },
 ];
 

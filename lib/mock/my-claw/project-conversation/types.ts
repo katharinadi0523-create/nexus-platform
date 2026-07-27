@@ -37,7 +37,19 @@ export type InboxEventType =
   | "agent_execution_failed"
   | "personal_claw_consent"
   | "project_invitation"
-  | "session_degraded";
+  | "session_degraded"
+  | "personal_chat_reply"
+  | "project_member_changed"
+  | "issue_created"
+  | "issue_assigned"
+  | "issue_needs_confirmation"
+  | "issue_waiting_for_human"
+  | "issue_review_ready"
+  | "issue_changes_requested"
+  | "issue_completed"
+  | "project_tool_authorization_required"
+  | "project_tool_degraded"
+  | "artifact_published";
 
 export type ProjectDrawerKind =
   | "info"
@@ -45,6 +57,8 @@ export type ProjectDrawerKind =
   | "files"
   | "execution"
   | "add_member"
+  | "issue"
+  | "shared_tools"
   | null;
 
 export interface AgentReplyReview {
@@ -63,16 +77,22 @@ export interface CollaborationWorkspace {
 
 export interface CollaborationProject {
   id: string;
+  /** @deprecated use-end must not navigate by workspace; keep for origin/migration */
   workspaceId: string;
+  originWorkspaceId?: string;
   name: string;
   description: string;
   status: "active" | "archived";
   ownerUserId: string;
   threadId: string;
   brief: string;
+  instructions?: string;
   humanMemberIds: string[];
   agentMemberIds: string[];
   workSourceIds: string[];
+  sharedToolBindingIds: string[];
+  issueIds: string[];
+  pinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -299,6 +319,11 @@ export interface ProjectInboxItem {
   messageId?: string;
   invocationId?: string;
   actorId?: string;
+  issueId?: string;
+  artifactId?: string;
+  projectToolBindingId?: string;
+  href?: string;
+  sourceType?: "personal_chat" | "project" | "issue" | "agent" | "tool";
 }
 
 export interface InlineExecutionViewModel {

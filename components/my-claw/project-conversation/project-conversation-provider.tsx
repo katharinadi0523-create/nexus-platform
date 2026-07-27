@@ -49,8 +49,25 @@ import {
   type ProjectThread,
   type ProjectWorkSource,
 } from "@/lib/mock/my-claw/project-conversation";
+import {
+  SEED_ISSUE_PROPOSALS,
+  SEED_PROJECT_ISSUES,
+  type IssueMutationProposal,
+  type ProjectIssue,
+  type ProjectIssueStatus,
+} from "@/lib/mock/my-claw/project-issues";
+import {
+  PUBLISHED_TOOL_CATALOG,
+  SEED_SHARED_TOOL_BINDINGS,
+  type ProjectSharedToolBinding,
+  type PublishedToolResource,
+} from "@/lib/mock/my-claw/project-tools";
+import {
+  SEED_MY_WORK,
+  type MyWorkProjection,
+} from "@/lib/mock/my-claw/my-work";
 
-const STORAGE_KEY = "my-claw-project-conversation-v2";
+const STORAGE_KEY = "my-claw-project-conversation-v3";
 
 interface ProjectConversationState {
   workspaces: CollaborationWorkspace[];
@@ -68,10 +85,21 @@ interface ProjectConversationState {
   artifacts: ProjectArtifact[];
   workSources: ProjectWorkSource[];
   inbox: ProjectInboxItem[];
+  issues: ProjectIssue[];
+  issueProposals: IssueMutationProposal[];
+  sharedToolBindings: ProjectSharedToolBinding[];
+  publishedTools: PublishedToolResource[];
   activeDrawer: ProjectDrawerKind;
   activeInvocationId: string | null;
+  activeIssueId: string | null;
   highlightedMessageId: string | null;
   scrollAnchorMessageId: string | null;
+  /** Snapshot used by undoIssueProposal */
+  lastAppliedProposalSnapshot?: {
+    proposalId: string;
+    issues: ProjectIssue[];
+    projects: CollaborationProject[];
+  } | null;
 }
 
 interface SendMessagePayload {
@@ -81,6 +109,35 @@ interface SendMessagePayload {
   mentionedActorIds: string[];
   quotedMessageIds: string[];
   fileIds: string[];
+}
+
+interface CreateIssuePayload {
+  projectId: string;
+  sourceMessageId?: string;
+  title: string;
+  summary?: string;
+  humanAssigneeIds: string[];
+  agentAssigneeIds: string[];
+  acceptanceCriteria?: string[];
+}
+
+type IssueUpdatePatch = Partial<
+  Pick<
+    ProjectIssue,
+    | "title"
+    | "summary"
+    | "status"
+    | "humanAssigneeIds"
+    | "agentAssigneeIds"
+    | "acceptanceCriteria"
+  >
+>;
+
+interface BindSharedToolPayload {
+  projectId: string;
+  publishedResourceVersionId: string;
+  permission: "read" | "execute" | "write";
+  credentialRef?: string;
 }
 
 interface ProjectConversationContextValue {
@@ -101,6 +158,10 @@ interface ProjectConversationContextValue {
   getArtifacts: (ids: string[]) => ProjectArtifact[];
   getFiles: (projectId: string) => ProjectFileNode[];
   getWorkSources: (projectId: string) => ProjectWorkSource[];
+  getIssues: (projectId: string) => ProjectIssue[];
+  getIssue: (issueId: string) => ProjectIssue | undefined;
+  getSharedTools: (projectId: string) => ProjectSharedToolBinding[];
+  getMyWorkProjection: () => MyWorkProjection;
   sendMessage: (payload: SendMessagePayload) => { ok: true } | { ok: false; error: string };
   cancelInvocation: (invocationId: string) => void;
   retryInvocation: (
@@ -109,7 +170,11 @@ interface ProjectConversationContextValue {
   ) => void;
   acceptAgentReply: (messageId: string) => void;
   requestAgentChanges: (messageId: string, feedback: string) => void;
-  openDrawer: (kind: Exclude<ProjectDrawerKind, null>, invocationId?: string) => void;
+  openDrawer: (
+    kind: Exclude<ProjectDrawerKind, null>,
+    invocationId?: string
+  ) => void;
+  openIssueDrawer: (issueId: string) => void;
   closeDrawer: () => void;
   openExecution: (invocationId: string) => void;
   setHighlightedMessage: (messageId: string | null) => void;
@@ -135,6 +200,17 @@ interface ProjectConversationContextValue {
     localPath: string
   ) => { ok: true } | { ok: false; error: string };
   removeWorkSource: (projectId: string, sourceId: string) => void;
+  createIssue: (payload: CreateIssuePayload) => string | null;
+  updateIssue: (issueId: string, patch: IssueUpdatePatch) => void;
+  acceptIssue: (issueId: string) => void;
+  requestIssueChanges: (issueId: string, feedback: string) => void;
+  cancelIssue: (issueId: string) => void;
+  archiveIssue: (issueId: string) => void;
+  bindSharedTool: (payload: BindSharedToolPayload) => void;
+  unbindSharedTool: (bindingId: string) => void;
+  applyIssueProposal: (proposalId: string) => void;
+  dismissIssueProposal: (proposalId: string) => void;
+  undoIssueProposal: (proposalId: string) => void;
 }
 
 const ProjectConversationContext =
@@ -164,11 +240,32 @@ function buildInitialState(): ProjectConversationState {
     artifacts: SEED_ARTIFACTS,
     workSources: PROJECT_WORK_SOURCES,
     inbox: SEED_INBOX,
+    issues: structuredClone(SEED_PROJECT_ISSUES),
+    issueProposals: structuredClone(SEED_ISSUE_PROPOSALS),
+    sharedToolBindings: structuredClone(SEED_SHARED_TOOL_BINDINGS),
+    publishedTools: structuredClone(PUBLISHED_TOOL_CATALOG),
     activeDrawer: null,
     activeInvocationId: null,
+    activeIssueId: null,
     highlightedMessageId: null,
     scrollAnchorMessageId: null,
+    lastAppliedProposalSnapshot: null,
   };
+}
+
+function mergeMissingById<T extends { id: string }>(
+  current: T[] | undefined,
+  seed: T[]
+): T[] {
+  const list = Array.isArray(current) ? [...current] : [];
+  const existing = new Set(list.map((item) => item.id));
+  for (const item of seed) {
+    if (!existing.has(item.id)) {
+      list.push(structuredClone(item));
+      existing.add(item.id);
+    }
+  }
+  return list;
 }
 
 function readPersistedState(): ProjectConversationState | null {
@@ -183,11 +280,34 @@ function readPersistedState(): ProjectConversationState | null {
       ...parsed,
       activeDrawer: null,
       activeInvocationId: null,
+      activeIssueId: null,
       highlightedMessageId: null,
       scrollAnchorMessageId: null,
+      lastAppliedProposalSnapshot: null,
       workspaces: base.workspaces,
       users: base.users,
       actors: base.actors,
+      publishedTools: base.publishedTools,
+      // Force-merge catalog entities so prototype seeds stay available after hydrate.
+      issues: mergeMissingById(parsed.issues, base.issues),
+      issueProposals: mergeMissingById(parsed.issueProposals, base.issueProposals),
+      sharedToolBindings: mergeMissingById(
+        parsed.sharedToolBindings,
+        base.sharedToolBindings
+      ),
+      projects: mergeMissingById(parsed.projects, base.projects).map((project) => {
+        const seed = base.projects.find((item) => item.id === project.id);
+        if (!seed) return project;
+        return {
+          ...seed,
+          ...project,
+          sharedToolBindingIds:
+            project.sharedToolBindingIds?.length
+              ? project.sharedToolBindingIds
+              : seed.sharedToolBindingIds,
+          issueIds: project.issueIds?.length ? project.issueIds : seed.issueIds,
+        };
+      }),
     };
   } catch {
     return null;
@@ -207,6 +327,9 @@ export function ProjectConversationProvider({
   const [state, setState] = useState<ProjectConversationState>(buildInitialState);
   const [readyToPersist, setReadyToPersist] = useState(false);
   const timersRef = useRef<Record<string, number>>({});
+  const scheduleInvocationProgressRef = useRef<
+    (invocationId: string, actorId: string, withDelegation: boolean) => void
+  >(() => {});
 
   useEffect(() => {
     // Defer restore so SSR HTML matches the first client paint (seed).
@@ -238,6 +361,10 @@ export function ProjectConversationProvider({
       artifacts: state.artifacts,
       workSources: state.workSources,
       inbox: state.inbox,
+      issues: state.issues,
+      issueProposals: state.issueProposals,
+      sharedToolBindings: state.sharedToolBindings,
+      publishedTools: state.publishedTools,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
   }, [readyToPersist, state]);
@@ -321,6 +448,77 @@ export function ProjectConversationProvider({
       state.workSources.filter((item) => item.projectId === projectId),
     [state.workSources]
   );
+  const getIssues = useCallback(
+    (projectId: string) =>
+      state.issues
+        .filter((item) => item.projectId === projectId)
+        .sort(
+          (a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        ),
+    [state.issues]
+  );
+  const getIssue = useCallback(
+    (issueId: string) => state.issues.find((item) => item.id === issueId),
+    [state.issues]
+  );
+  const getSharedTools = useCallback(
+    (projectId: string) =>
+      state.sharedToolBindings.filter((item) => item.projectId === projectId),
+    [state.sharedToolBindings]
+  );
+  const getMyWorkProjection = useCallback((): MyWorkProjection => {
+    const attention = state.issues
+      .filter(
+        (issue) =>
+          issue.waitingForCurrentUser ||
+          issue.status === "in_review" ||
+          issue.executionFailed
+      )
+      .map((issue) => issue.id);
+    const running = state.issues
+      .filter(
+        (issue) =>
+          issue.status === "in_progress" || issue.status === "changes_requested"
+      )
+      .map((issue) => issue.id);
+    const recent = state.issues
+      .filter((issue) => issue.status === "done")
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      )
+      .slice(0, 5)
+      .map((issue) => issue.id);
+    const projectIds = state.projects
+      .filter(
+        (project) =>
+          project.status === "active" &&
+          project.humanMemberIds.includes(CURRENT_USER_ID)
+      )
+      .map((project) => project.id);
+
+    if (
+      attention.length === 0 &&
+      running.length === 0 &&
+      recent.length === 0
+    ) {
+      return SEED_MY_WORK;
+    }
+
+    return {
+      userId: CURRENT_USER_ID,
+      attentionIssueIds: attention.length
+        ? attention
+        : SEED_MY_WORK.attentionIssueIds,
+      runningIssueIds: running.length ? running : SEED_MY_WORK.runningIssueIds,
+      recentDeliveryIssueIds: recent.length
+        ? recent
+        : SEED_MY_WORK.recentDeliveryIssueIds,
+      projectIds: projectIds.length ? projectIds : SEED_MY_WORK.projectIds,
+      updatedAt: nowIso(),
+    };
+  }, [state.issues, state.projects]);
 
   const openDrawer = useCallback(
     (kind: Exclude<ProjectDrawerKind, null>, invocationId?: string) => {
@@ -328,18 +526,33 @@ export function ProjectConversationProvider({
         ...prev,
         activeDrawer: kind,
         activeInvocationId:
-          kind === "execution" ? invocationId ?? prev.activeInvocationId : prev.activeInvocationId,
-        scrollAnchorMessageId: prev.highlightedMessageId ?? prev.scrollAnchorMessageId,
+          kind === "execution"
+            ? invocationId ?? prev.activeInvocationId
+            : prev.activeInvocationId,
+        activeIssueId: kind === "issue" ? prev.activeIssueId : prev.activeIssueId,
+        scrollAnchorMessageId:
+          prev.highlightedMessageId ?? prev.scrollAnchorMessageId,
       }));
     },
     []
   );
+
+  const openIssueDrawer = useCallback((issueId: string) => {
+    setState((prev) => ({
+      ...prev,
+      activeDrawer: "issue",
+      activeIssueId: issueId,
+      scrollAnchorMessageId:
+        prev.highlightedMessageId ?? prev.scrollAnchorMessageId,
+    }));
+  }, []);
 
   const closeDrawer = useCallback(() => {
     setState((prev) => ({
       ...prev,
       activeDrawer: null,
       activeInvocationId: null,
+      activeIssueId: null,
     }));
   }, []);
 
@@ -770,6 +983,30 @@ export function ProjectConversationProvider({
             },
             ...next.inbox,
           ];
+
+          const nextQueued = next.invocations
+            .filter(
+              (item) =>
+                item.projectId === inv.projectId &&
+                item.actorId === actorId &&
+                !item.parentInvocationId &&
+                item.status === "queued"
+            )
+            .sort(
+              (a, b) =>
+                new Date(a.startedAt ?? a.id).getTime() -
+                new Date(b.startedAt ?? b.id).getTime()
+            )[0];
+          if (nextQueued) {
+            window.setTimeout(() => {
+              scheduleInvocationProgressRef.current(
+                nextQueued.id,
+                actorId,
+                false
+              );
+            }, 120);
+          }
+
           return next;
         });
       }, withDelegation ? 4200 : 2800);
@@ -777,6 +1014,10 @@ export function ProjectConversationProvider({
     },
     []
   );
+
+  useEffect(() => {
+    scheduleInvocationProgressRef.current = scheduleInvocationProgress;
+  }, [scheduleInvocationProgress]);
 
   const createInvocationForAgent = useCallback(
     (
@@ -814,6 +1055,13 @@ export function ProjectConversationProvider({
       }
 
       const invocationId = createId("inv");
+      const hasRunningForActor = draft.invocations.some(
+        (item) =>
+          item.projectId === project.id &&
+          item.actorId === actorId &&
+          !item.parentInvocationId &&
+          (item.status === "running" || item.status === "queued")
+      );
       const invocation: AgentInvocation = {
         id: invocationId,
         workspaceId: project.workspaceId,
@@ -822,12 +1070,12 @@ export function ProjectConversationProvider({
         sourceMessageId: sourceMessage.id,
         sessionId: session.id,
         actorId,
-        status: actor.runtimeStatus === "offline" ? "queued" : "queued",
+        status: "queued",
         inputRefs: [sourceMessage.id, ...sourceMessage.quotedMessageIds],
         delegationIds: [],
         artifactIds: [],
         eventIds: [],
-        summary: "等待执行",
+        summary: hasRunningForActor ? "排队等待同 Session 执行" : "等待执行",
         startedAt: nowIso(),
         attemptNumber,
       };
@@ -843,7 +1091,7 @@ export function ProjectConversationProvider({
           : item
       );
 
-      return invocationId;
+      return { invocationId, deferred: hasRunningForActor };
     },
     []
   );
@@ -924,9 +1172,13 @@ export function ProjectConversationProvider({
         ];
       }
 
-      const created: Array<{ invocationId: string; actorId: string }> = [];
+      const created: Array<{
+        invocationId: string;
+        actorId: string;
+        deferred: boolean;
+      }> = [];
       for (const actorId of payload.mentionedActorIds) {
-        const invocationId = createInvocationForAgent(
+        const createdInv = createInvocationForAgent(
           draft,
           project,
           message,
@@ -934,7 +1186,13 @@ export function ProjectConversationProvider({
           "continue",
           1
         );
-        if (invocationId) created.push({ invocationId, actorId });
+        if (createdInv) {
+          created.push({
+            invocationId: createdInv.invocationId,
+            actorId,
+            deferred: createdInv.deferred,
+          });
+        }
       }
 
       if (created.length > 0) {
@@ -945,15 +1203,117 @@ export function ProjectConversationProvider({
         );
       }
 
+      // Issue Steward (prototype): propose / auto-create work items; greetings stay chat-only.
+      if (payload.mentionedActorIds.length > 0) {
+        const stripped = payload.content
+          .replace(/@[^\s]+/g, "")
+          .trim();
+        const isGreetingOnly =
+          /^(hi|hello|你好|嗨)[!！.。\s]*$/i.test(stripped) ||
+          stripped.length === 0;
+        if (!isGreetingOnly) {
+          const confidence =
+            /审阅|调研|PRD|报告|怎么看|帮我|实现|输出/.test(payload.content)
+              ? 0.9
+              : 0.6;
+          const proposalId = createId("proposal");
+          const proposedTitle =
+            stripped.length > 28 ? `${stripped.slice(0, 28)}…` : stripped || "跟进事项";
+          const proposal: IssueMutationProposal = {
+            id: proposalId,
+            projectId: project.id,
+            action: "create",
+            proposedTitle,
+            proposedSummary: payload.content.slice(0, 120),
+            proposedStatus: "clarifying",
+            proposedHumanAssigneeIds: [CURRENT_USER_ID],
+            proposedAgentAssigneeIds: payload.mentionedActorIds.slice(0, 1),
+            evidenceMessageIds: [messageId],
+            confidence,
+            reason: "消息包含可跟踪的工作对象或预期结果",
+            requiresConfirmation: confidence < 0.85,
+            createdAt: nowIso(),
+          };
+          draft.issueProposals = [proposal, ...draft.issueProposals];
+
+          if (confidence >= 0.85) {
+            const issueId = createId("issue");
+            const issueCount = draft.issues.filter(
+              (item) => item.projectId === project.id
+            ).length;
+            draft.lastAppliedProposalSnapshot = {
+              proposalId,
+              issues: structuredClone(draft.issues),
+              projects: structuredClone(draft.projects),
+            };
+            draft.issues = [
+              ...draft.issues,
+              {
+                id: issueId,
+                projectId: project.id,
+                key: `AUTO-${issueCount + 1}`,
+                title: proposedTitle,
+                summary: payload.content.slice(0, 120),
+                status: "clarifying",
+                sourceMessageId: messageId,
+                relatedMessageIds: [messageId],
+                humanAssigneeIds: [CURRENT_USER_ID],
+                agentAssigneeIds: payload.mentionedActorIds.slice(0, 1),
+                invocationIds: created.map((c) => c.invocationId),
+                artifactIds: [],
+                acceptanceCriteria: [],
+                latestProgress: "事项管家已自动创建，可撤销",
+                createdBy: { kind: "issue_steward", id: "steward" },
+                createdAt: nowIso(),
+                updatedAt: nowIso(),
+                revision: 1,
+              },
+            ];
+            draft.projects = draft.projects.map((item) =>
+              item.id === project.id
+                ? {
+                    ...item,
+                    issueIds: [...(item.issueIds ?? []), issueId],
+                    updatedAt: nowIso(),
+                  }
+                : item
+            );
+            draft.issueProposals = draft.issueProposals.map((item) =>
+              item.id === proposalId
+                ? { ...item, dismissed: true, targetIssueId: issueId }
+                : item
+            );
+            draft.inbox = [
+              {
+                id: createId("inbox"),
+                type: "issue_created",
+                title: `已创建事项：${proposedTitle}`,
+                body: "事项管家自动识别，可在事项看板查看或撤销",
+                createdAt: nowIso(),
+                read: false,
+                projectId: project.id,
+                messageId,
+                issueId,
+                sourceType: "issue",
+                href: `/my-claw/projects/${project.id}?view=issues&issue=${issueId}`,
+              },
+              ...draft.inbox,
+            ];
+          }
+        }
+      }
+
       // Preserve UI-only fields
       draft.activeDrawer = state.activeDrawer;
       draft.activeInvocationId = state.activeInvocationId;
+      draft.activeIssueId = state.activeIssueId;
       draft.highlightedMessageId = state.highlightedMessageId;
       draft.scrollAnchorMessageId = state.scrollAnchorMessageId;
 
       setState(draft);
 
       for (const item of created) {
+        if (item.deferred) continue;
         const shouldDelegate =
           item.actorId === "actor-req-analysis" || payload.content.includes("委派");
         scheduleInvocationProgress(item.invocationId, item.actorId, shouldDelegate);
@@ -975,15 +1335,43 @@ export function ProjectConversationProvider({
         delete timersRef.current[key];
       }
     });
-    setState((prev) => ({
-      ...prev,
-      invocations: prev.invocations.map((item) =>
-        item.id === invocationId &&
-        (item.status === "queued" || item.status === "running")
-          ? { ...item, status: "cancelled", completedAt: nowIso() }
-          : item
-      ),
-    }));
+    setState((prev) => {
+      const target = prev.invocations.find((item) => item.id === invocationId);
+      const next: ProjectConversationState = {
+        ...prev,
+        invocations: prev.invocations.map((item) =>
+          item.id === invocationId &&
+          (item.status === "queued" || item.status === "running")
+            ? { ...item, status: "cancelled", completedAt: nowIso() }
+            : item
+        ),
+      };
+      if (target) {
+        const queued = next.invocations
+          .filter(
+            (item) =>
+              item.projectId === target.projectId &&
+              item.actorId === target.actorId &&
+              !item.parentInvocationId &&
+              item.status === "queued"
+          )
+          .sort(
+            (a, b) =>
+              new Date(a.startedAt ?? a.id).getTime() -
+              new Date(b.startedAt ?? b.id).getTime()
+          )[0];
+        if (queued) {
+          window.setTimeout(() => {
+            scheduleInvocationProgressRef.current(
+              queued.id,
+              target.actorId,
+              false
+            );
+          }, 80);
+        }
+      }
+      return next;
+    });
   }, []);
 
   const retryInvocation = useCallback(
@@ -1010,7 +1398,7 @@ export function ProjectConversationProvider({
           0
         ) + 1;
 
-      const newId = createInvocationForAgent(
+      const newInv = createInvocationForAgent(
         draft,
         project,
         sourceMessage,
@@ -1018,22 +1406,25 @@ export function ProjectConversationProvider({
         sessionPolicy,
         attemptNumber
       );
-      if (!newId) return;
+      if (!newInv) return;
 
       draft.messages = draft.messages.map((item) =>
         item.id === sourceMessage.id
           ? {
               ...item,
-              invocationIds: [...item.invocationIds, newId],
+              invocationIds: [...item.invocationIds, newInv.invocationId],
             }
           : item
       );
       draft.activeDrawer = state.activeDrawer;
-      draft.activeInvocationId = newId;
+      draft.activeInvocationId = newInv.invocationId;
+      draft.activeIssueId = state.activeIssueId;
       draft.highlightedMessageId = state.highlightedMessageId;
       draft.scrollAnchorMessageId = state.scrollAnchorMessageId;
       setState(draft);
-      scheduleInvocationProgress(newId, current.actorId, false);
+      if (!newInv.deferred) {
+        scheduleInvocationProgress(newInv.invocationId, current.actorId, false);
+      }
     },
     [createInvocationForAgent, scheduleInvocationProgress, state]
   );
@@ -1138,7 +1529,7 @@ export function ProjectConversationProvider({
           0
         ) + 1;
 
-      const invocationId = createInvocationForAgent(
+      const createdInv = createInvocationForAgent(
         draft,
         project,
         feedbackMessage,
@@ -1146,21 +1537,26 @@ export function ProjectConversationProvider({
         "continue",
         attemptNumber
       );
-      if (invocationId) {
+      if (createdInv) {
         draft.messages = draft.messages.map((item) =>
           item.id === feedbackId
-            ? { ...item, invocationIds: [invocationId] }
+            ? { ...item, invocationIds: [createdInv.invocationId] }
             : item
         );
       }
 
       draft.activeDrawer = state.activeDrawer;
       draft.activeInvocationId = state.activeInvocationId;
+      draft.activeIssueId = state.activeIssueId;
       draft.highlightedMessageId = state.highlightedMessageId;
       draft.scrollAnchorMessageId = state.scrollAnchorMessageId;
       setState(draft);
-      if (invocationId) {
-        scheduleInvocationProgress(invocationId, message.author.id, false);
+      if (createdInv && !createdInv.deferred) {
+        scheduleInvocationProgress(
+          createdInv.invocationId,
+          message.author.id,
+          false
+        );
       }
     },
     [createInvocationForAgent, scheduleInvocationProgress, state]
@@ -1488,6 +1884,344 @@ export function ProjectConversationProvider({
     []
   );
 
+  const createIssue = useCallback((payload: CreateIssuePayload) => {
+    const project = state.projects.find((item) => item.id === payload.projectId);
+    if (!project) return null;
+    const issueId = createId("issue");
+    const key = `${project.name.slice(0, 4).toUpperCase()}-${
+      state.issues.filter((item) => item.projectId === project.id).length + 1
+    }`;
+    const issue: ProjectIssue = {
+      id: issueId,
+      projectId: project.id,
+      key,
+      title: payload.title,
+      summary: payload.summary ?? "",
+      status: "clarifying",
+      sourceMessageId: payload.sourceMessageId,
+      relatedMessageIds: payload.sourceMessageId ? [payload.sourceMessageId] : [],
+      humanAssigneeIds: payload.humanAssigneeIds,
+      agentAssigneeIds: payload.agentAssigneeIds,
+      invocationIds: [],
+      artifactIds: [],
+      acceptanceCriteria: payload.acceptanceCriteria ?? [],
+      createdBy: { kind: "human", id: CURRENT_USER_ID },
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      revision: 1,
+    };
+    setState((prev) => ({
+      ...prev,
+      issues: [issue, ...prev.issues],
+      projects: prev.projects.map((item) =>
+        item.id === project.id
+          ? {
+              ...item,
+              issueIds: [...item.issueIds, issueId],
+              updatedAt: nowIso(),
+            }
+          : item
+      ),
+    }));
+    return issueId;
+  }, [state.issues, state.projects]);
+
+  const updateIssue = useCallback((issueId: string, patch: IssueUpdatePatch) => {
+    setState((prev) => ({
+      ...prev,
+      issues: prev.issues.map((item) =>
+        item.id === issueId
+          ? {
+              ...item,
+              ...patch,
+              updatedAt: nowIso(),
+              revision: item.revision + 1,
+              completedAt:
+                patch.status === "done" ? nowIso() : item.completedAt,
+              archivedAt:
+                patch.status === "archived" ? nowIso() : item.archivedAt,
+              waitingForCurrentUser:
+                patch.status === "waiting_for_human" ||
+                patch.status === "in_review"
+                  ? item.humanAssigneeIds.includes(CURRENT_USER_ID)
+                  : patch.status
+                    ? false
+                    : item.waitingForCurrentUser,
+            }
+          : item
+      ),
+    }));
+  }, []);
+
+  const acceptIssue = useCallback((issueId: string) => {
+    setState((prev) => ({
+      ...prev,
+      issues: prev.issues.map((item) =>
+        item.id === issueId
+          ? {
+              ...item,
+              status: "done" as ProjectIssueStatus,
+              waitingForCurrentUser: false,
+              latestProgress: "Human 已接受交付",
+              completedAt: nowIso(),
+              updatedAt: nowIso(),
+              revision: item.revision + 1,
+            }
+          : item
+      ),
+    }));
+  }, []);
+
+  const requestIssueChanges = useCallback(
+    (issueId: string, feedback: string) => {
+      setState((prev) => ({
+        ...prev,
+        issues: prev.issues.map((item) =>
+          item.id === issueId
+            ? {
+                ...item,
+                status: "changes_requested" as ProjectIssueStatus,
+                waitingForCurrentUser: false,
+                latestProgress: feedback,
+                updatedAt: nowIso(),
+                revision: item.revision + 1,
+              }
+            : item
+        ),
+      }));
+    },
+    []
+  );
+
+  const cancelIssue = useCallback((issueId: string) => {
+    setState((prev) => ({
+      ...prev,
+      issues: prev.issues.map((item) =>
+        item.id === issueId
+          ? {
+              ...item,
+              status: "cancelled" as ProjectIssueStatus,
+              waitingForCurrentUser: false,
+              updatedAt: nowIso(),
+              revision: item.revision + 1,
+            }
+          : item
+      ),
+    }));
+  }, []);
+
+  const archiveIssue = useCallback((issueId: string) => {
+    setState((prev) => ({
+      ...prev,
+      issues: prev.issues.map((item) =>
+        item.id === issueId
+          ? {
+              ...item,
+              status: "archived" as ProjectIssueStatus,
+              waitingForCurrentUser: false,
+              archivedAt: nowIso(),
+              updatedAt: nowIso(),
+              revision: item.revision + 1,
+            }
+          : item
+      ),
+    }));
+  }, []);
+
+  const bindSharedTool = useCallback((payload: BindSharedToolPayload) => {
+    setState((prev) => {
+      const catalog = prev.publishedTools.find(
+        (item) => item.versionId === payload.publishedResourceVersionId
+      );
+      if (!catalog) return prev;
+      const bindingId = createId("stb");
+      const binding: ProjectSharedToolBinding = {
+        id: bindingId,
+        projectId: payload.projectId,
+        publishedResourceVersionId: payload.publishedResourceVersionId,
+        kind: catalog.kind,
+        displayName: catalog.name,
+        permission: payload.permission,
+        credentialRef: payload.credentialRef,
+        compatibleActorIds: catalog.compatibleActorIds,
+        status: catalog.requiresCredential
+          ? "authorization_required"
+          : "active",
+        addedByUserId: CURRENT_USER_ID,
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+      };
+      return {
+        ...prev,
+        sharedToolBindings: [...prev.sharedToolBindings, binding],
+        projects: prev.projects.map((item) =>
+          item.id === payload.projectId
+            ? {
+                ...item,
+                sharedToolBindingIds: [
+                  ...item.sharedToolBindingIds,
+                  bindingId,
+                ],
+                updatedAt: nowIso(),
+              }
+            : item
+        ),
+      };
+    });
+  }, []);
+
+  const unbindSharedTool = useCallback((bindingId: string) => {
+    setState((prev) => {
+      const binding = prev.sharedToolBindings.find(
+        (item) => item.id === bindingId
+      );
+      if (!binding) return prev;
+      return {
+        ...prev,
+        sharedToolBindings: prev.sharedToolBindings.filter(
+          (item) => item.id !== bindingId
+        ),
+        projects: prev.projects.map((item) =>
+          item.id === binding.projectId
+            ? {
+                ...item,
+                sharedToolBindingIds: item.sharedToolBindingIds.filter(
+                  (id) => id !== bindingId
+                ),
+                updatedAt: nowIso(),
+              }
+            : item
+        ),
+      };
+    });
+  }, []);
+
+  const applyIssueProposal = useCallback((proposalId: string) => {
+    setState((prev) => {
+      const proposal = prev.issueProposals.find((item) => item.id === proposalId);
+      if (!proposal || proposal.dismissed) return prev;
+      const snapshot = {
+        proposalId,
+        issues: structuredClone(prev.issues),
+        projects: structuredClone(prev.projects),
+      };
+      const next = structuredClone(prev);
+      next.lastAppliedProposalSnapshot = snapshot;
+      next.issueProposals = next.issueProposals.map((item) =>
+        item.id === proposalId ? { ...item, dismissed: true } : item
+      );
+
+      if (proposal.action === "create") {
+        const issueId = createId("issue");
+        const project = next.projects.find(
+          (item) => item.id === proposal.projectId
+        );
+        if (!project) return prev;
+        const issue: ProjectIssue = {
+          id: issueId,
+          projectId: proposal.projectId,
+          key: `NEW-${next.issues.filter((i) => i.projectId === proposal.projectId).length + 1}`,
+          title: proposal.proposedTitle ?? "新事项",
+          summary: proposal.proposedSummary ?? "",
+          status: proposal.proposedStatus ?? "clarifying",
+          relatedMessageIds: proposal.evidenceMessageIds,
+          sourceMessageId: proposal.evidenceMessageIds[0],
+          humanAssigneeIds: proposal.proposedHumanAssigneeIds ?? [],
+          agentAssigneeIds: proposal.proposedAgentAssigneeIds ?? [],
+          invocationIds: [],
+          artifactIds: [],
+          acceptanceCriteria: [],
+          createdBy: { kind: "issue_steward", id: "steward" },
+          createdAt: nowIso(),
+          updatedAt: nowIso(),
+          revision: 1,
+        };
+        next.issues = [issue, ...next.issues];
+        next.projects = next.projects.map((item) =>
+          item.id === proposal.projectId
+            ? {
+                ...item,
+                issueIds: [...item.issueIds, issueId],
+                updatedAt: nowIso(),
+              }
+            : item
+        );
+      } else if (
+        (proposal.action === "update" ||
+          proposal.action === "complete" ||
+          proposal.action === "cancel" ||
+          proposal.action === "archive") &&
+        proposal.targetIssueId
+      ) {
+        next.issues = next.issues.map((item) => {
+          if (item.id !== proposal.targetIssueId) return item;
+          let status = item.status;
+          if (proposal.proposedStatus) status = proposal.proposedStatus;
+          if (proposal.action === "complete") status = "done";
+          if (proposal.action === "cancel") status = "cancelled";
+          if (proposal.action === "archive") status = "archived";
+          return {
+            ...item,
+            status,
+            title: proposal.proposedTitle ?? item.title,
+            summary: proposal.proposedSummary ?? item.summary,
+            humanAssigneeIds:
+              proposal.proposedHumanAssigneeIds ?? item.humanAssigneeIds,
+            agentAssigneeIds:
+              proposal.proposedAgentAssigneeIds ?? item.agentAssigneeIds,
+            updatedAt: nowIso(),
+            revision: item.revision + 1,
+            completedAt: status === "done" ? nowIso() : item.completedAt,
+            archivedAt: status === "archived" ? nowIso() : item.archivedAt,
+          };
+        });
+      } else if (proposal.action === "append" && proposal.targetIssueId) {
+        next.issues = next.issues.map((item) =>
+          item.id === proposal.targetIssueId
+            ? {
+                ...item,
+                relatedMessageIds: Array.from(
+                  new Set([
+                    ...item.relatedMessageIds,
+                    ...proposal.evidenceMessageIds,
+                  ])
+                ),
+                updatedAt: nowIso(),
+                revision: item.revision + 1,
+              }
+            : item
+        );
+      }
+
+      return next;
+    });
+  }, []);
+
+  const dismissIssueProposal = useCallback((proposalId: string) => {
+    setState((prev) => ({
+      ...prev,
+      issueProposals: prev.issueProposals.map((item) =>
+        item.id === proposalId ? { ...item, dismissed: true } : item
+      ),
+    }));
+  }, []);
+
+  const undoIssueProposal = useCallback((proposalId: string) => {
+    setState((prev) => {
+      const snapshot = prev.lastAppliedProposalSnapshot;
+      if (!snapshot || snapshot.proposalId !== proposalId) return prev;
+      return {
+        ...prev,
+        issues: snapshot.issues,
+        projects: snapshot.projects,
+        issueProposals: prev.issueProposals.map((item) =>
+          item.id === proposalId ? { ...item, dismissed: false } : item
+        ),
+        lastAppliedProposalSnapshot: null,
+      };
+    });
+  }, []);
+
   const value = useMemo<ProjectConversationContextValue>(
     () => ({
       state,
@@ -1507,12 +2241,17 @@ export function ProjectConversationProvider({
       getArtifacts,
       getFiles,
       getWorkSources,
+      getIssues,
+      getIssue,
+      getSharedTools,
+      getMyWorkProjection,
       sendMessage,
       cancelInvocation,
       retryInvocation,
       acceptAgentReply,
       requestAgentChanges,
       openDrawer,
+      openIssueDrawer,
       closeDrawer,
       openExecution,
       setHighlightedMessage,
@@ -1527,6 +2266,17 @@ export function ProjectConversationProvider({
       addGitHubWorkSource,
       addLocalWorkSource,
       removeWorkSource,
+      createIssue,
+      updateIssue,
+      acceptIssue,
+      requestIssueChanges,
+      cancelIssue,
+      archiveIssue,
+      bindSharedTool,
+      unbindSharedTool,
+      applyIssueProposal,
+      dismissIssueProposal,
+      undoIssueProposal,
     }),
     [
       state,
@@ -1545,12 +2295,17 @@ export function ProjectConversationProvider({
       getArtifacts,
       getFiles,
       getWorkSources,
+      getIssues,
+      getIssue,
+      getSharedTools,
+      getMyWorkProjection,
       sendMessage,
       cancelInvocation,
       retryInvocation,
       acceptAgentReply,
       requestAgentChanges,
       openDrawer,
+      openIssueDrawer,
       closeDrawer,
       openExecution,
       setHighlightedMessage,
@@ -1565,6 +2320,17 @@ export function ProjectConversationProvider({
       addGitHubWorkSource,
       addLocalWorkSource,
       removeWorkSource,
+      createIssue,
+      updateIssue,
+      acceptIssue,
+      requestIssueChanges,
+      cancelIssue,
+      archiveIssue,
+      bindSharedTool,
+      unbindSharedTool,
+      applyIssueProposal,
+      dismissIssueProposal,
+      undoIssueProposal,
     ]
   );
 
