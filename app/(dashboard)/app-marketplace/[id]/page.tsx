@@ -493,7 +493,7 @@ export default function AppDetailPage() {
 
   if (!app) {
     return (
-      <div className="flex h-[calc(100vh-64px)] items-center justify-center">
+      <div className="flex h-full min-h-0 items-center justify-center">
         <div className="text-gray-500">加载中...</div>
       </div>
     );
@@ -503,7 +503,7 @@ export default function AppDetailPage() {
   const showEmptyState = messages.length === 0 || (messages.length === 1 && messages[0].role === "assistant");
 
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-white">
+    <div className="flex h-full min-h-0 bg-white">
       {/* Left Sidebar - History */}
       <div className="w-64 border-r border-gray-200 flex flex-col">
         {/* Header */}

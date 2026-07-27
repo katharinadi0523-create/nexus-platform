@@ -17,6 +17,7 @@ import {
   Expand,
   Filter,
   HelpCircle,
+  Merge,
   Pencil,
   Plus,
   Search,
@@ -32,14 +33,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { MultiSelect } from "@/components/knowledge-base/MultiSelect";
 import { cn } from "@/lib/utils";
 
-export type BusinessNodeKind = "filter" | "retriever" | "ranker";
+export type BusinessNodeKind = "filter" | "retriever" | "merger" | "ranker";
+
+export type GraphSearchStrategy = "BFS" | "DFS" | "Weighted";
+export type GraphEntitySort =
+  | "GraphDistance"
+  | "PageRank"
+  | "EmbeddingScore"
+  | "Hybrid";
+export type ChunkMergeStrategy =
+  | "Union"
+  | "Intersection"
+  | "WeightedMerge"
+  | "RRF";
+
+/** 第二步自定义实体/关系，供图谱检索节点过滤多选 */
+export interface GraphFilterOption {
+  id: string;
+  name: string;
+}
 
 export interface StrategyBusinessNode {
   id: string;
@@ -51,10 +72,40 @@ export interface StrategyBusinessNode {
     semanticMatch?: boolean;
     engine?: string;
     topK?: number;
+    /** 图谱检索：最大跳数 1~10，默认 3 */
+    maxHops?: number;
+    /** 图谱检索：检索策略 */
+    searchStrategy?: GraphSearchStrategy;
+    /** 图谱检索：实体过滤（第二步自定义实体 id） */
+    entityFilter?: string[];
+    /** 图谱检索：关系过滤（第二步自定义关系 id） */
+    relationFilter?: string[];
+    /** 图谱检索：实体排序 */
+    entitySort?: GraphEntitySort;
+    /** 图谱检索：Score 阈值 0~1，默认 0.3，低于阈值的切片不会被选取 */
+    score?: number;
+    /** 内容合并器：合并策略 */
+    mergeStrategy?: ChunkMergeStrategy;
+    /** Weighted Merge 时 graph 权重 0~1，默认 0.7（vector 为 1-ratio） */
+    weightedMergeGraphRatio?: number;
     rankModel?: string;
     rankTopK?: number;
   };
 }
+
+export const defaultGraphRetrieverConfig = {
+  maxHops: 3,
+  searchStrategy: "BFS" as GraphSearchStrategy,
+  entityFilter: [] as string[],
+  relationFilter: [] as string[],
+  entitySort: "Hybrid" as GraphEntitySort,
+  score: 0.3,
+};
+
+export const defaultMergerConfig = {
+  mergeStrategy: "RRF" as ChunkMergeStrategy,
+  weightedMergeGraphRatio: 0.7,
+};
 
 /** 流水线中的一层：同层多个节点为并列关系 */
 export interface PipelineStage {
@@ -96,6 +147,14 @@ const NODE_META: Record<
     bg: "bg-blue-50",
     border: "border-blue-200",
     Icon: Search,
+  },
+  merger: {
+    label: "内容合并器",
+    description: "将多个切片按策略合并",
+    color: "text-teal-600",
+    bg: "bg-teal-50",
+    border: "border-teal-200",
+    Icon: Merge,
   },
   ranker: {
     label: "内容排序器",
@@ -161,6 +220,8 @@ function createBusinessNode(
       engine: "fulltext",
       topK: 10,
     };
+  } else if (kind === "merger") {
+    base.config = { ...defaultMergerConfig };
   } else {
     base.config = {
       rankModel: "bge-reranker-v2",
@@ -429,7 +490,7 @@ function EmptyCanvasGuide({
             悬停连线加号可按流水线顺序插入；选中节点后左右加号可添加并列节点
           </li>
           <li>
-            建议按照【文档过滤 -&gt; 内容检索 -&gt; 内容排序】的顺序编排检索策略
+            建议按照【文档过滤 -&gt; 内容检索 -&gt; 内容合并 -&gt; 内容排序】的顺序编排检索策略
           </li>
         </ol>
         <div className="mb-1 flex items-center justify-center gap-2">
@@ -437,6 +498,7 @@ function EmptyCanvasGuide({
             [
               ["filter", "文档过滤器"],
               ["retriever", "内容检索器"],
+              ["merger", "内容合并器"],
               ["ranker", "内容排序器"],
             ] as const
           ).map(([kind, label], index) => {
@@ -674,9 +736,13 @@ function StageBlock({
 function StrategyPipelineCanvas({
   strategy,
   onChange,
+  graphEntityOptions = [],
+  graphRelationOptions = [],
 }: {
   strategy: RetrievalStrategy;
   onChange: (next: RetrievalStrategy) => void;
+  graphEntityOptions?: GraphFilterOption[];
+  graphRelationOptions?: GraphFilterOption[];
 }) {
   const [zoom, setZoom] = useState(100);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -926,7 +992,13 @@ function StrategyPipelineCanvas({
 
       {selected && (
         <aside
-          className="flex w-[280px] shrink-0 flex-col border-l border-slate-200 bg-white"
+          className={cn(
+            "flex shrink-0 flex-col border-l border-slate-200 bg-white",
+            selected.node.kind === "retriever" &&
+              selected.node.config.engine === "graph"
+              ? "w-[320px]"
+              : "w-[280px]"
+          )}
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
@@ -1017,9 +1089,33 @@ function StrategyPipelineCanvas({
                   <Label className="text-sm text-slate-700">检索引擎</Label>
                   <Select
                     value={selected.node.config.engine || "fulltext"}
-                    onValueChange={(engine) =>
-                      updateSelectedConfig({ engine })
-                    }
+                    onValueChange={(engine) => {
+                      if (engine === "graph") {
+                        updateSelectedConfig({
+                          engine,
+                          maxHops:
+                            selected.node.config.maxHops ??
+                            defaultGraphRetrieverConfig.maxHops,
+                          searchStrategy:
+                            selected.node.config.searchStrategy ??
+                            defaultGraphRetrieverConfig.searchStrategy,
+                          entityFilter:
+                            selected.node.config.entityFilter ??
+                            defaultGraphRetrieverConfig.entityFilter,
+                          relationFilter:
+                            selected.node.config.relationFilter ??
+                            defaultGraphRetrieverConfig.relationFilter,
+                          entitySort:
+                            selected.node.config.entitySort ??
+                            defaultGraphRetrieverConfig.entitySort,
+                          score:
+                            selected.node.config.score ??
+                            defaultGraphRetrieverConfig.score,
+                        });
+                        return;
+                      }
+                      updateSelectedConfig({ engine });
+                    }}
                     options={[
                       { value: "fulltext", label: "全文检索" },
                       { value: "semantic", label: "语义检索" },
@@ -1028,8 +1124,152 @@ function StrategyPipelineCanvas({
                     ]}
                   />
                 </div>
+
+                {(selected.node.config.engine || "fulltext") === "graph" && (
+                  <>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1">
+                        <Label className="text-sm text-slate-700">最大跳数</Label>
+                        <HelpTip content="最大可根据图谱多跳查询的步数，范围 1~10。" />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Slider
+                          value={[selected.node.config.maxHops ?? 3]}
+                          min={1}
+                          max={10}
+                          step={1}
+                          onValueChange={(vals) =>
+                            updateSelectedConfig({
+                              maxHops: vals[0] ?? 3,
+                            })
+                          }
+                          className="flex-1 [&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
+                        />
+                        <Input
+                          type="number"
+                          min={1}
+                          max={10}
+                          className="h-8 w-14"
+                          value={selected.node.config.maxHops ?? 3}
+                          onChange={(e) => {
+                            const raw = Number(e.target.value);
+                            if (Number.isNaN(raw)) return;
+                            updateSelectedConfig({
+                              maxHops: Math.min(10, Math.max(1, raw)),
+                            });
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1">
+                        <Label className="text-sm text-slate-700">检索策略</Label>
+                        <HelpTip content="图谱遍历策略：BFS、DFS 或 Weighted。" />
+                      </div>
+                      <Select
+                        value={selected.node.config.searchStrategy || "BFS"}
+                        onValueChange={(searchStrategy) =>
+                          updateSelectedConfig({
+                            searchStrategy:
+                              searchStrategy as GraphSearchStrategy,
+                          })
+                        }
+                        options={[
+                          { value: "BFS", label: "BFS" },
+                          { value: "DFS", label: "DFS" },
+                          { value: "Weighted", label: "Weighted" },
+                        ]}
+                      />
+                    </div>
+
+                    {graphEntityOptions.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1">
+                          <Label className="text-sm text-slate-700">
+                            实体过滤
+                          </Label>
+                          <HelpTip content="依据第二步自定义实体进行多选过滤。" />
+                        </div>
+                        <MultiSelect
+                          value={
+                            selected.node.config.entityFilter?.filter((id) =>
+                              graphEntityOptions.some((o) => o.id === id)
+                            ) ?? []
+                          }
+                          onChange={(entityFilter) =>
+                            updateSelectedConfig({ entityFilter })
+                          }
+                          options={graphEntityOptions.map((item) => ({
+                            value: item.id,
+                            label: item.name,
+                          }))}
+                          placeholder="请选择实体"
+                        />
+                      </div>
+                    )}
+
+                    {graphRelationOptions.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-1">
+                          <Label className="text-sm text-slate-700">
+                            关系过滤
+                          </Label>
+                          <HelpTip content="依据第二步自定义关系进行多选过滤。" />
+                        </div>
+                        <MultiSelect
+                          value={
+                            selected.node.config.relationFilter?.filter((id) =>
+                              graphRelationOptions.some((o) => o.id === id)
+                            ) ?? []
+                          }
+                          onChange={(relationFilter) =>
+                            updateSelectedConfig({ relationFilter })
+                          }
+                          options={graphRelationOptions.map((item) => ({
+                            value: item.id,
+                            label: item.name,
+                          }))}
+                          placeholder="请选择关系"
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-1">
+                        <Label className="text-sm text-slate-700">实体排序</Label>
+                        <HelpTip content="对图谱召回实体的排序方式。" />
+                      </div>
+                      <Select
+                        value={selected.node.config.entitySort || "Hybrid"}
+                        onValueChange={(entitySort) =>
+                          updateSelectedConfig({
+                            entitySort: entitySort as GraphEntitySort,
+                          })
+                        }
+                        options={[
+                          {
+                            value: "GraphDistance",
+                            label: "Graph Distance",
+                          },
+                          { value: "PageRank", label: "PageRank" },
+                          {
+                            value: "EmbeddingScore",
+                            label: "Embedding Score",
+                          },
+                          { value: "Hybrid", label: "Hybrid" },
+                        ]}
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div className="space-y-2">
-                  <Label className="text-sm text-slate-700">召回数量 TopK</Label>
+                  <Label className="text-sm text-slate-700">
+                    {(selected.node.config.engine || "fulltext") === "graph"
+                      ? "Top K"
+                      : "召回数量 TopK"}
+                  </Label>
                   <Input
                     type="number"
                     min={1}
@@ -1042,6 +1282,128 @@ function StrategyPipelineCanvas({
                     }
                   />
                 </div>
+
+                {(selected.node.config.engine || "fulltext") === "graph" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label className="text-sm text-slate-700">Score</Label>
+                      <HelpTip content="低于阈值的切片将不会被选取，范围 0~1.0，步长 0.1。" />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Slider
+                        value={[selected.node.config.score ?? 0.3]}
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        onValueChange={(vals) =>
+                          updateSelectedConfig({
+                            score: vals[0] ?? 0.3,
+                          })
+                        }
+                        className="flex-1 [&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        className="h-8 w-14"
+                        value={selected.node.config.score ?? 0.3}
+                        onChange={(e) => {
+                          const raw = Number(e.target.value);
+                          if (Number.isNaN(raw)) return;
+                          const clamped = Math.min(1, Math.max(0, raw));
+                          updateSelectedConfig({
+                            score: Math.round(clamped * 10) / 10,
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {selected.node.kind === "merger" && (
+              <>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1">
+                    <Label className="text-sm text-slate-700">合并策略</Label>
+                    <HelpTip content="将多个切片按照策略进行合并。" />
+                  </div>
+                  <Select
+                    value={selected.node.config.mergeStrategy || "RRF"}
+                    onValueChange={(mergeStrategy) =>
+                      updateSelectedConfig({
+                        mergeStrategy: mergeStrategy as ChunkMergeStrategy,
+                        weightedMergeGraphRatio:
+                          selected.node.config.weightedMergeGraphRatio ??
+                          defaultMergerConfig.weightedMergeGraphRatio,
+                      })
+                    }
+                    options={[
+                      { value: "Union", label: "Union" },
+                      { value: "Intersection", label: "Intersection" },
+                      { value: "WeightedMerge", label: "Weighted Merge" },
+                      { value: "RRF", label: "RRF" },
+                    ]}
+                  />
+                </div>
+
+                {(selected.node.config.mergeStrategy || "RRF") ===
+                  "WeightedMerge" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label className="text-sm text-slate-700">
+                        Merge 比例
+                      </Label>
+                      <HelpTip content="Weighted Merge 中 vector 与 graph 的权重比例。" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <span>
+                          vector{" "}
+                          {Math.round(
+                            (1 -
+                              (selected.node.config.weightedMergeGraphRatio ??
+                                0.7)) *
+                              100
+                          )}
+                          %
+                        </span>
+                        <span>
+                          graph{" "}
+                          {Math.round(
+                            (selected.node.config.weightedMergeGraphRatio ??
+                              0.7) * 100
+                          )}
+                          %
+                        </span>
+                      </div>
+                      <Slider
+                        value={[
+                          Math.round(
+                            (selected.node.config.weightedMergeGraphRatio ??
+                              0.7) * 100
+                          ),
+                        ]}
+                        min={0}
+                        max={100}
+                        step={1}
+                        onValueChange={(vals) =>
+                          updateSelectedConfig({
+                            weightedMergeGraphRatio: (vals[0] ?? 70) / 100,
+                          })
+                        }
+                        className="[&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>vector</span>
+                        <span>graph</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -1097,11 +1459,17 @@ function StrategyPipelineCanvas({
 interface HybridStrategyStepProps {
   value: RetrievalStrategy[];
   onChange: (value: RetrievalStrategy[]) => void;
+  /** 第二步自定义实体（有名称的项），用于图谱检索实体过滤 */
+  graphEntityOptions?: GraphFilterOption[];
+  /** 第二步自定义关系（有名称的项），用于图谱检索关系过滤 */
+  graphRelationOptions?: GraphFilterOption[];
 }
 
 export function HybridStrategyStep({
   value,
   onChange,
+  graphEntityOptions = [],
+  graphRelationOptions = [],
 }: HybridStrategyStepProps) {
   const configuredCount = useMemo(
     () => value.filter((s) => s.stages.length > 0).length,
@@ -1213,6 +1581,8 @@ export function HybridStrategyStep({
               <StrategyPipelineCanvas
                 strategy={strategy}
                 onChange={(next) => updateStrategy(strategy.id, next)}
+                graphEntityOptions={graphEntityOptions}
+                graphRelationOptions={graphRelationOptions}
               />
             )}
           </div>

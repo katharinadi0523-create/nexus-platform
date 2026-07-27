@@ -2,7 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import { ChevronRight, FileStack, Plus, Sparkles, Trash2, Wrench } from "lucide-react";
+import { toast } from "sonner";
 import { ModelSelector, type ModelParams } from "@/components/agent-editor/ModelSelector";
+import { AgentMdEditor } from "@/components/claw-hub-next/detail/agent-md-editor";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
 import { ClawKnowledgeAssetsSection } from "@/components/claw-hub-next/detail/claw-knowledge-assets-section";
 import { SectionCard } from "@/components/claw-hub-next/detail/section-card";
@@ -14,12 +16,12 @@ import type {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import type {
   CapabilityScope,
   ClawCapabilityConfig,
   ClawKnowledgeAssets,
 } from "@/lib/mock/claw-hub-next";
+import { CLAW_AGENT_MD_PLACEHOLDER } from "@/lib/mock/claw-hub-next";
 import type { ModelParamKey } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 import { useWorkbenchEntity } from "@/components/claw-hub-next/workbench-entity-context";
@@ -109,7 +111,7 @@ export type MultiAgentMainAgentConfigProps = {
 };
 
 /**
- * 选中「主智能体」后的右侧配置：名称 + 模型 + 提示词 + 可折叠资源。
+ * 选中「主智能体」后的右侧配置：名称 + 模型 + Agent.md + 可折叠资源。
  */
 export function MultiAgentMainAgentConfig({
   agentName,
@@ -291,20 +293,26 @@ export function MultiAgentMainAgentConfig({
         </div>
       </SectionCard>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-100/60">
-        <div className="space-y-2">
-          <Label htmlFor="multi-agent-main-prompt" className="text-sm font-medium text-slate-800">
-            提示词
-          </Label>
-          <Textarea
-            id="multi-agent-main-prompt"
-            value={prompt}
-            onChange={(event) => onPromptChange(event.target.value)}
-            placeholder="请输入智能体提示词..."
-            className="min-h-[180px] rounded-lg border-slate-200 bg-slate-50/40"
-          />
-        </div>
-      </div>
+      <SectionCard
+        title="Agent.md"
+        description="定义主智能体的身份、目标与行为边界"
+        action={
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => toast.success("Agent.md 已保存。")}
+          >
+            保存
+          </Button>
+        }
+      >
+        <AgentMdEditor
+          value={prompt}
+          onChange={onPromptChange}
+          placeholder={CLAW_AGENT_MD_PLACEHOLDER}
+          minHeightClassName="min-h-[320px]"
+        />
+      </SectionCard>
 
       <div className="space-y-3">
         <div className="text-sm font-semibold text-slate-900">资源</div>

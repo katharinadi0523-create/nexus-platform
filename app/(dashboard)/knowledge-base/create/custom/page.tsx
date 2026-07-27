@@ -101,6 +101,22 @@ export default function CreateCustomKnowledgeBasePage() {
   const [hybridStrategies, setHybridStrategies] = useState<RetrievalStrategy[]>(
     defaultHybridStrategies
   );
+
+  const graphEntityOptions = useMemo(() => {
+    const { entity } = retrievalConfig.graph;
+    if (entity.categoryMode !== "custom") return [];
+    return entity.customItems
+      .filter((item) => item.name.trim())
+      .map((item) => ({ id: item.id, name: item.name.trim() }));
+  }, [retrievalConfig.graph]);
+
+  const graphRelationOptions = useMemo(() => {
+    const { relation } = retrievalConfig.graph;
+    if (relation.categoryMode !== "custom") return [];
+    return relation.customItems
+      .filter((item) => item.name.trim())
+      .map((item) => ({ id: item.id, name: item.name.trim() }));
+  }, [retrievalConfig.graph]);
   const [showEngineError, setShowEngineError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -142,12 +158,22 @@ export default function CreateCustomKnowledgeBasePage() {
       toast.error("请至少选择一种核心检索引擎");
       return false;
     }
-    if (
-      retrievalConfig.engines.includes("graph") &&
-      !retrievalConfig.graph.prompt.trim()
-    ) {
-      toast.error("请填写图谱检索提示词");
-      return false;
+    if (retrievalConfig.engines.includes("graph")) {
+      const { entity, relation } = retrievalConfig.graph;
+      if (
+        entity.categoryMode === "custom" &&
+        !entity.customItems.some((item) => item.name.trim())
+      ) {
+        toast.error("请至少添加一个自定义实体");
+        return false;
+      }
+      if (
+        relation.categoryMode === "custom" &&
+        !relation.customItems.some((item) => item.name.trim())
+      ) {
+        toast.error("请至少添加一个自定义关系");
+        return false;
+      }
     }
     setShowEngineError(false);
     return true;
@@ -308,6 +334,8 @@ export default function CreateCustomKnowledgeBasePage() {
           <HybridStrategyStep
             value={hybridStrategies}
             onChange={setHybridStrategies}
+            graphEntityOptions={graphEntityOptions}
+            graphRelationOptions={graphRelationOptions}
           />
         )}
       </div>

@@ -82,6 +82,12 @@ const menuGroups: MenuGroup[] = [
         icon: Bot,
         href: "/agent",
       },
+      {
+        key: "MultiAgent",
+        label: "多智能体",
+        icon: Network,
+        href: "/multi-agent",
+      },
     ],
   },
   {
@@ -269,8 +275,11 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const isClawDetailPage = pathname.startsWith("/claw-hub-next/claws/");
-  const isMultiAgentCreatePage = pathname.startsWith("/agent/multi-agent");
+  const isMultiAgentCreatePage = pathname.startsWith("/multi-agent/create");
   const isSpaceOperationsPage = pathname.startsWith("/space-operations");
+  /** 应用广场「使用」页：保留顶栏，隐藏左侧目录，接近全屏 */
+  const isAppMarketplaceUsagePage =
+    pathname.startsWith("/app-marketplace/") && pathname !== "/app-marketplace";
   /** 仅技能广场（/skills-hub、/skills）：灰蓝渐变壳底；其它路由不套广场背景 */
   const isSkillsPlazaPage =
     pathname.startsWith("/skills-hub") || pathname === "/skills";
@@ -298,27 +307,45 @@ export default function DashboardLayout({
               : "bg-slate-50"
         )}
       >
-        {/* 左侧侧边栏: 固定宽度 220px, z-50 */}
-        <aside className="w-[220px] flex-none z-50 border-r bg-white h-[calc(100vh-60px)] hidden md:block">
-          <Sidebar />
-        </aside>
+        {/* 左侧侧边栏: 固定宽度 220px, z-50；应用使用页隐藏 */}
+        {!isAppMarketplaceUsagePage ? (
+          <aside className="z-50 hidden h-[calc(100vh-60px)] w-[220px] flex-none border-r bg-white md:block">
+            <Sidebar />
+          </aside>
+        ) : null}
         {/* 右侧主体: 自动填满剩余空间 */}
         <main
           className={cn(
             "relative flex h-[calc(100vh-60px)] min-h-0 flex-1 flex-col overflow-hidden",
             isSkillsPlazaPage && "bg-[#e8f0fb]",
-            (isSkillsManagementPage || isOpenApiManagementPage || isSpaceOperationsPage) && "bg-white"
+            (isSkillsManagementPage ||
+              isOpenApiManagementPage ||
+              isSpaceOperationsPage ||
+              isAppMarketplaceUsagePage) &&
+              "bg-white"
           )}
         >
           {/* 页面内容滚动区：广场页用渐变；skills 管理用白底 */}
           <div
             className={cn(
               "flex-1",
-              isClawDetailPage ? "px-6 pt-6 pb-0" : "p-6",
+              isClawDetailPage
+                ? "px-6 pt-6 pb-0"
+                : isAppMarketplaceUsagePage
+                  ? "min-h-0 overflow-hidden p-0"
+                  : "p-6",
               isSkillsPlazaPage &&
                 "bg-[linear-gradient(180deg,#f2f7fd_0%,#e8f0fb_38%,#e4edf8_100%)]",
-              (isSkillsManagementPage || isOpenApiManagementPage || isSpaceOperationsPage) && "bg-white",
-              isClawDetailPage || isSpaceOperationsPage ? "min-h-0 overflow-hidden" : "overflow-y-auto"
+              (isSkillsManagementPage ||
+                isOpenApiManagementPage ||
+                isSpaceOperationsPage ||
+                isAppMarketplaceUsagePage) &&
+                "bg-white",
+              isClawDetailPage ||
+                isSpaceOperationsPage ||
+                isAppMarketplaceUsagePage
+                ? "min-h-0 overflow-hidden"
+                : "overflow-y-auto"
             )}
           >
             {children}

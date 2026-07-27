@@ -4,10 +4,11 @@ import { useState } from "react";
 import { CirclePlay } from "lucide-react";
 import { toast } from "sonner";
 import { SingleAgentDebugDialog } from "@/components/claw-hub-next/single-agent-debug-dialog";
+import { AgentMdEditor } from "@/components/claw-hub-next/detail/agent-md-editor";
+import { SectionCard } from "@/components/claw-hub-next/detail/section-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -15,6 +16,7 @@ import {
   MultiAgentAgentResources,
 } from "@/components/agent/multi-agent-agent-resources";
 import type { CapabilityAgentItem, ClawDetailData } from "@/lib/mock/claw-hub-next";
+import { CLAW_AGENT_MD_PLACEHOLDER } from "@/lib/mock/claw-hub-next";
 import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
 
 const MODEL_OPTIONS = PRESET_MODEL_IDS.map((id) => ({ value: id, label: id }));
@@ -26,7 +28,7 @@ export type MultiAgentSubAgentConfigProps = {
 };
 
 /**
- * 子智能体右侧配置：名称、模型、提示词、资源，以及复用「智能体」页的单智能体调试。
+ * 子智能体右侧配置：名称、模型、Agent.md、资源，以及复用「智能体」页的单智能体调试。
  */
 export function MultiAgentSubAgentConfig({
   agent,
@@ -99,16 +101,28 @@ export function MultiAgentSubAgentConfig({
             </div>
           </div>
         </div>
-        <div className="space-y-2">
-          <Label className="text-sm font-medium text-slate-800">提示词</Label>
-          <Textarea
-            value={agent.prompt ?? ""}
-            onChange={(event) => onChange({ prompt: event.target.value })}
-            placeholder="请输入智能体提示词..."
-            className="min-h-[180px] rounded-lg border-slate-200 bg-slate-50/40"
-          />
-        </div>
       </div>
+
+      <SectionCard
+        title="Agent.md"
+        description="定义子智能体的身份、目标与行为边界"
+        action={
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => toast.success("Agent.md 已保存。")}
+          >
+            保存
+          </Button>
+        }
+      >
+        <AgentMdEditor
+          value={agent.prompt ?? ""}
+          onChange={(prompt) => onChange({ prompt })}
+          placeholder={CLAW_AGENT_MD_PLACEHOLDER}
+          minHeightClassName="min-h-[280px]"
+        />
+      </SectionCard>
 
       <MultiAgentAgentResources
         resources={agent.resources ?? EMPTY_AGENT_RESOURCES}

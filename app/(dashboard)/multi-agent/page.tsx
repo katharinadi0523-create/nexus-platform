@@ -2,16 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
-  Bot,
   ChevronLeft,
   ChevronRight,
+  Network,
   Plus,
   RefreshCw,
   Search,
-  Sparkles,
-  Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -30,72 +27,54 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { getAllAgents } from "@/lib/agent-data";
-
-interface Agent {
-  id: string;
-  name: string;
-  type: string;
-  status: string;
-  desc: string;
-  updatedAt: string;
-}
-
-function convertAgentProfileToAgent(profile: ReturnType<typeof getAllAgents>[0]): Agent {
-  return {
-    id: profile.id,
-    name: profile.name,
-    type: profile.type === "autonomous" ? "自主规划智能体" : "工作流智能体",
-    status: "未发布",
-    desc: profile.description,
-    updatedAt: profile.updatedAt,
-  };
-}
-
-const AGENTS_STATUS_MAP: Record<string, string> = {
-  "agent-situational": "已发布",
-  "agent-intent-analysis": "已发布",
-  "device-03": "已发布",
-  "anti-fl-07": "已发布",
-};
+import {
+  getPublishedMultiAgents,
+  removePublishedMultiAgent,
+  type PublishedMultiAgentItem,
+} from "@/lib/published-multi-agents";
 
 const ITEMS_PER_PAGE = 20;
 
-export default function AgentPage() {
-  const router = useRouter();
+export default function MultiAgentListPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
+  const [publishedMultiAgents, setPublishedMultiAgents] = useState<
+    PublishedMultiAgentItem[]
+  >([]);
 
-  const agents = useMemo(() => {
-    return getAllAgents().map((profile) => {
-      const agent = convertAgentProfileToAgent(profile);
-      if (AGENTS_STATUS_MAP[agent.id]) {
-        agent.status = AGENTS_STATUS_MAP[agent.id];
-      }
-      return agent;
-    });
+  useEffect(() => {
+    setPublishedMultiAgents(getPublishedMultiAgents());
   }, []);
 
-  const filteredAgents = agents.filter(
-    (agent) =>
-      agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      agent.desc.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredAgents = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return publishedMultiAgents.filter(
+      (agent) =>
+        agent.name.toLowerCase().includes(query) ||
+        agent.desc.toLowerCase().includes(query)
+    );
+  }, [publishedMultiAgents, searchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAgents.length / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedAgents = filteredAgents.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedAgents = filteredAgents.slice(
+    startIndex,
+    startIndex + itemsPerPage
+  );
 
   const handleRefresh = () => {
+    setPublishedMultiAgents(getPublishedMultiAgents());
     toast.success("刷新成功");
   };
 
-  const handleCopy = (agent: Agent) => {
+  const handleCopy = (agent: PublishedMultiAgentItem) => {
     toast.success(`已复制：${agent.name}`);
   };
 
-  const handleDelete = (agent: Agent) => {
+  const handleDelete = (agent: PublishedMultiAgentItem) => {
+    removePublishedMultiAgent(agent.id);
+    setPublishedMultiAgents(getPublishedMultiAgents());
     toast.success(`已删除：${agent.name}`);
   };
 
@@ -114,22 +93,27 @@ export default function AgentPage() {
     }
   };
 
-  const visiblePages = Array.from({ length: Math.min(4, totalPages) }, (_, index) => {
-    if (totalPages <= 4) return index + 1;
-    if (currentPage <= 2) return index + 1;
-    if (currentPage >= totalPages - 1) return totalPages - 3 + index;
-    return currentPage - 1 + index;
-  });
+  const visiblePages = Array.from(
+    { length: Math.min(4, totalPages) },
+    (_, index) => {
+      if (totalPages <= 4) return index + 1;
+      if (currentPage <= 2) return index + 1;
+      if (currentPage >= totalPages - 1) return totalPages - 3 + index;
+      return currentPage - 1 + index;
+    }
+  );
 
   return (
     <div className="space-y-4">
       <div className="space-y-4">
-        <h1 className="text-[30px] font-semibold leading-none text-slate-950">智能体</h1>
+        <h1 className="text-[30px] font-semibold leading-none text-slate-950">
+          多智能体
+        </h1>
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full max-w-[360px]">
             <Input
-              placeholder="搜索智能体名称"
+              placeholder="搜索多智能体名称"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -150,29 +134,15 @@ export default function AgentPage() {
               <RefreshCw className="h-4 w-4" />
             </Button>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700">
-                  <Plus className="h-4 w-4" />
-                  创建智能体
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 rounded-[6px] border-slate-200 p-1">
-                <DropdownMenuItem asChild className="rounded-[4px] px-3 py-2">
-                  <Link href="/agent-editor" className="flex cursor-pointer items-center gap-2">
-                    <Bot className="h-4 w-4 text-slate-500" />
-                    自主规划智能体
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => router.push("/agent/flow-01")}
-                  className="rounded-[4px] px-3 py-2"
-                >
-                  <Workflow className="h-4 w-4 text-slate-500" />
-                  工作流智能体
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              asChild
+              className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700"
+            >
+              <Link href="/multi-agent/create">
+                <Plus className="h-4 w-4" />
+                新建多智能体
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
@@ -181,12 +151,24 @@ export default function AgentPage() {
         <Table className="min-w-[1080px]">
           <TableHeader className="bg-slate-50">
             <TableRow className="border-slate-200 hover:bg-slate-50">
-              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">名称</TableHead>
-              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">类型</TableHead>
-              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">发布状态</TableHead>
-              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">描述</TableHead>
-              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">更新时间</TableHead>
-              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">操作</TableHead>
+              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">
+                名称
+              </TableHead>
+              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">
+                类型
+              </TableHead>
+              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">
+                发布状态
+              </TableHead>
+              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">
+                描述
+              </TableHead>
+              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">
+                更新时间
+              </TableHead>
+              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">
+                操作
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -195,33 +177,33 @@ export default function AgentPage() {
                 <TableCell colSpan={6} className="px-6 py-16 text-center">
                   <div className="mx-auto max-w-md space-y-3">
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[6px] border border-slate-200 bg-slate-50 text-slate-500">
-                      <Search className="h-5 w-5" />
+                      <Network className="h-5 w-5" />
                     </div>
-                    <div className="text-lg font-semibold text-slate-900">暂无匹配结果</div>
+                    <div className="text-lg font-semibold text-slate-900">
+                      {searchQuery ? "暂无匹配结果" : "暂无多智能体"}
+                    </div>
                     <p className="text-sm leading-6 text-slate-500">
                       {searchQuery
                         ? "试试缩短关键词，或改用描述中的核心能力进行检索。"
-                        : "当前没有可展示的智能体。"}
+                        : "点击右上角「新建多智能体」开始创建。"}
                     </p>
                   </div>
                 </TableCell>
               </TableRow>
             ) : (
               paginatedAgents.map((agent) => {
-                const isAutonomous = agent.type === "自主规划智能体";
+                const editHref = `/multi-agent/create?id=${encodeURIComponent(agent.id)}`;
                 const isPublished = agent.status === "已发布";
-                const editHref = `/agent/${agent.id}`;
 
                 return (
-                  <TableRow key={agent.id} className="border-slate-200 bg-white hover:bg-slate-50/40">
+                  <TableRow
+                    key={agent.id}
+                    className="border-slate-200 bg-white hover:bg-slate-50/40"
+                  >
                     <TableCell className="px-4 py-3 align-middle">
                       <div className="flex items-center gap-4">
-                        <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-[8px] ${
-                            isAutonomous ? "bg-indigo-500 text-white" : "bg-blue-500 text-white"
-                          }`}
-                        >
-                          <Bot className="h-4 w-4" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-cyan-500 text-white">
+                          <Network className="h-4 w-4" />
                         </div>
                         <Link
                           href={editHref}
@@ -233,18 +215,8 @@ export default function AgentPage() {
                     </TableCell>
 
                     <TableCell className="px-4 py-3 align-middle">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-[4px] px-2 py-1 text-xs font-medium ${
-                          isAutonomous
-                            ? "bg-indigo-50 text-indigo-600"
-                            : "bg-blue-50 text-blue-600"
-                        }`}
-                      >
-                        {isAutonomous ? (
-                          <Sparkles className="h-3 w-3" />
-                        ) : (
-                          <Workflow className="h-3 w-3" />
-                        )}
+                      <span className="inline-flex items-center gap-1.5 rounded-[4px] bg-cyan-50 px-2 py-1 text-xs font-medium text-cyan-700">
+                        <Network className="h-3 w-3" />
                         {agent.type}
                       </span>
                     </TableCell>
@@ -252,11 +224,15 @@ export default function AgentPage() {
                     <TableCell className="px-4 py-3 align-middle">
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-[4px] px-2 py-1 text-xs font-medium ${
-                          isPublished ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"
+                          isPublished
+                            ? "bg-emerald-50 text-emerald-600"
+                            : "bg-slate-100 text-slate-500"
                         }`}
                       >
                         <span
-                          className={`h-1.5 w-1.5 rounded-full ${isPublished ? "bg-emerald-500" : "bg-slate-400"}`}
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            isPublished ? "bg-emerald-500" : "bg-slate-400"
+                          }`}
                         />
                         {agent.status}
                       </span>
@@ -279,7 +255,10 @@ export default function AgentPage() {
                         >
                           复制
                         </button>
-                        <Link href={editHref} className="text-blue-600 hover:text-blue-700">
+                        <Link
+                          href={editHref}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
                           编辑
                         </Link>
                         <button
@@ -301,7 +280,9 @@ export default function AgentPage() {
 
       {filteredAgents.length > 0 && (
         <div className="flex flex-col gap-3 border-t border-slate-200 pt-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="text-sm text-slate-500">共 {filteredAgents.length} 条记录</div>
+          <div className="text-sm text-slate-500">
+            共 {filteredAgents.length} 条记录
+          </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1">
@@ -352,20 +333,35 @@ export default function AgentPage() {
                   {itemsPerPage} 条/页
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="rounded-[6px] border-slate-200 p-1">
-                <DropdownMenuItem onClick={() => setItemsPerPage(10)} className="rounded-[4px] px-3 py-2">
+              <DropdownMenuContent
+                align="end"
+                className="rounded-[6px] border-slate-200 p-1"
+              >
+                <DropdownMenuItem
+                  onClick={() => setItemsPerPage(10)}
+                  className="rounded-[4px] px-3 py-2"
+                >
                   10 条/页
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setItemsPerPage(20)} className="rounded-[4px] px-3 py-2">
+                <DropdownMenuItem
+                  onClick={() => setItemsPerPage(20)}
+                  className="rounded-[4px] px-3 py-2"
+                >
                   20 条/页
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setItemsPerPage(50)} className="rounded-[4px] px-3 py-2">
+                <DropdownMenuItem
+                  onClick={() => setItemsPerPage(50)}
+                  className="rounded-[4px] px-3 py-2"
+                >
                   50 条/页
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <form onSubmit={handleGoToPage} className="flex items-center gap-2 text-sm text-slate-500">
+            <form
+              onSubmit={handleGoToPage}
+              className="flex items-center gap-2 text-sm text-slate-500"
+            >
               <span>前往</span>
               <Input
                 name="page"

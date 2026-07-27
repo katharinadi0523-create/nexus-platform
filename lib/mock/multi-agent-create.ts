@@ -58,9 +58,8 @@ function mapAgent(agent: CapabilityAgentItem): CapabilityAgentItem {
 }
 
 /**
- * 多智能体创建页的初始配置数据。
- * 以科研 Claw（claw-scientific-research）为模板，但使用独立 id，
- * 并将面向用户的 Claw 文案替换为「多智能体」。
+ * 多智能体「科研模板」完整配置（含子智能体与主智能体提示词）。
+ * 用于打开列表中已有（如已发布的科研）多智能体时回显。
  */
 export function getMultiAgentCreateDetail(): ClawDetailData {
   const template = getClawDetail("claw-scientific-research");
@@ -109,3 +108,34 @@ export function getMultiAgentCreateDetail(): ClawDetailData {
     capabilityConfig,
   };
 }
+
+/**
+ * 新建多智能体的空白初始态：无子智能体、主智能体提示词为空。
+ * 不影响列表中已有科研多智能体的模板回显。
+ */
+export function getMultiAgentBlankCreateDetail(): ClawDetailData {
+  const base = getMultiAgentCreateDetail();
+
+  return {
+    ...base,
+    overview: {
+      ...base.overview,
+      name: "未命名多智能体",
+      summary:
+        "主智能体统筹多个子智能体协作完成复杂任务，支持技能、插件、知识与调试预览。",
+      publishStatus: "未发布",
+      version: "草稿",
+    },
+    capabilityConfig: {
+      ...base.capabilityConfig,
+      agents: {
+        ...base.capabilityConfig.agents,
+        claw: [],
+      },
+    },
+    coreFiles: base.coreFiles.map((file) =>
+      file.key === "agent" ? { ...file, content: "" } : file
+    ),
+  };
+}
+

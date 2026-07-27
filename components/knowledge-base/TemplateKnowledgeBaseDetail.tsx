@@ -4,15 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
-  CalendarClock,
+  Calendar,
   ChevronDown,
-  Filter,
-  FolderOpen,
+  FileText,
   Loader2,
   Pencil,
-  RefreshCw,
   Search,
-  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,13 +28,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   loadKnowledgeBaseDocuments,
@@ -45,9 +35,10 @@ import {
   type KnowledgeBaseListItem,
   type StoredKbDocument,
 } from "@/lib/mock/knowledge-base-list";
+import { type KnowledgeDocumentRow } from "@/lib/mock-knowledge-base-v2";
 import { HitTestingView } from "@/components/knowledge-base/HitTestingView";
 import { GraphRetrievalDrawer } from "@/components/knowledge-base/GraphRetrievalDrawer";
-import { FileUpload } from "@/components/knowledge-base/FileUpload";
+import { ImportDocumentDrawer } from "@/components/knowledge-base/ImportDocumentDrawer";
 
 type ProcessStatus =
   | "解析中"
@@ -55,10 +46,12 @@ type ProcessStatus =
   | "已解析"
   | "解析失败"
   | "已完成"
-  | "切片失败";
+  | "切片失败"
+  | "已启用"
+  | "已停用";
 type UsageStatus = "已启用" | "已停用";
-type QualityLevel = "高" | "中" | "低" | "-";
-type DocType = "PDF" | "DOC" | "DOCX" | "TXT";
+type QualityLevel = "高" | "中" | "低" | "-" | "--" | "分析中";
+type DocType = "PDF" | "DOC" | "DOCX" | "TXT" | string;
 type TimePreset = "1h" | "1d" | "1w" | null;
 
 interface KbDocument {
@@ -72,6 +65,13 @@ interface KbDocument {
   size: string;
   uploader: string;
   uploadedAt: string;
+  documentTags?: string[];
+  contentTags?: string[];
+  metadataFields?: Array<{
+    name: string;
+    description: string;
+    matchModes: string[];
+  }>;
 }
 
 interface KnowledgeBaseDetailWorkbenchProps {
@@ -183,14 +183,15 @@ const templateRetrievalItems = [
   { label: "混合检索策略 (1)", configured: true, clickable: false },
 ];
 
-function FileTypeIcon({ type }: { type: DocType }) {
-  const styles: Record<DocType, string> = {
+function FileTypeIcon({ type }: { type: string }) {
+  const normalized = type.toUpperCase();
+  const styles: Record<string, string> = {
     PDF: "bg-red-500",
     DOC: "bg-blue-600",
     DOCX: "bg-blue-600",
     TXT: "bg-slate-500",
   };
-  const labels: Record<DocType, string> = {
+  const labels: Record<string, string> = {
     PDF: "PDF",
     DOC: "W",
     DOCX: "W",
@@ -201,10 +202,10 @@ function FileTypeIcon({ type }: { type: DocType }) {
     <div
       className={cn(
         "flex h-6 w-6 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white",
-        styles[type]
+        styles[normalized] ?? "bg-slate-400"
       )}
     >
-      {labels[type]}
+      {labels[normalized] ?? normalized.slice(0, 3)}
     </div>
   );
 }
@@ -242,23 +243,36 @@ function ProcessStatusCell({ status }: { status: ProcessStatus }) {
     );
   }
 
-  if (status === "已解析" || status === "已完成") {
+  if (status === "已解析" || status === "已完成" || status === "已启用") {
     return <StatusDot color="green" label={status} />;
   }
 
-  if (status === "解析失败") {
+  if (status === "解析失败" || status === "切片失败") {
     return <StatusDot color="red" label={status} />;
+  }
+
+  if (status === "已停用") {
+    return <StatusDot color="gray" label={status} />;
   }
 
   return <StatusDot color="orange" label={status} />;
 }
 
 function QualityBadge({ level }: { level: QualityLevel }) {
-  if (level === "-") {
+  if (level === "-" || level === "--") {
     return <span className="text-slate-400">-</span>;
   }
 
-  const styles: Record<Exclude<QualityLevel, "-">, string> = {
+  if (level === "分析中") {
+    return (
+      <span className="inline-flex items-center gap-1 text-sm text-blue-600">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        分析中
+      </span>
+    );
+  }
+
+  const styles: Record<"高" | "中" | "低", string> = {
     高: "border-emerald-300 text-emerald-600 bg-emerald-50",
     中: "border-orange-300 text-orange-600 bg-orange-50",
     低: "border-red-300 text-red-600 bg-red-50",
@@ -346,308 +360,237 @@ function TagChips({
 }
 
 function KnowledgeBaseDocumentList({
+  knowledgeBaseId,
   documents,
   onToggleUsage,
   onDelete,
   onImport,
+  onUpdateDocument,
 }: {
+  knowledgeBaseId: string;
   documents: KbDocument[];
   onToggleUsage: (id: string) => void;
   onDelete: (id: string) => void;
-  onImport: (files: File[]) => void;
+  onImport: (documents: KnowledgeDocumentRow[]) => void;
+  onUpdateDocument: (id: string, patch: Partial<KbDocument>) => void;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [timePreset, setTimePreset] = useState<TimePreset>(null);
   const [importOpen, setImportOpen] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   const filteredDocuments = documents.filter((doc) =>
     doc.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const openImport = () => {
-    setPendingFiles([]);
-    setImportOpen(true);
-  };
-
-  const confirmImport = () => {
-    if (pendingFiles.length === 0) {
-      toast.error("请先选择要上传的文档");
-      return;
-    }
-    onImport(pendingFiles);
-    setImportOpen(false);
-    setPendingFiles([]);
-  };
-
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
-      <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
-        <h2 className="text-base font-semibold text-slate-900">
-          文档列表（{filteredDocuments.length}）
+      <div className="border-b border-slate-200 px-5 py-4">
+        <h2 className="mb-4 text-base font-semibold text-slate-900">
+          文档列表（{documents.length}）
         </h2>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-52">
+          <div className="relative w-60">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
               placeholder="搜索文档名称"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="h-9 rounded pl-9"
             />
           </div>
-          {(
-            [
-              { key: "1h", label: "近1小时" },
-              { key: "1d", label: "近1天" },
-              { key: "1w", label: "近1周" },
-            ] as const
-          ).map((item) => (
-            <Button
-              key={item.key}
-              variant="outline"
-              size="sm"
-              className={cn(
-                timePreset === item.key &&
-                  "border-[#2773ff] bg-blue-50 text-[#2773ff]"
-              )}
-              onClick={() =>
-                setTimePreset((prev) => (prev === item.key ? null : item.key))
-              }
-            >
-              {item.label}
-            </Button>
-          ))}
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-slate-600"
+          <div className="flex h-9 overflow-hidden border border-slate-200">
+            {(
+              [
+                { key: "1h", label: "近1小时" },
+                { key: "1d", label: "近1天" },
+                { key: "1w", label: "近1周" },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={cn(
+                  "border-r border-slate-200 px-4 text-sm last:border-r-0 hover:bg-slate-50",
+                  timePreset === item.key && "bg-blue-50 text-[#2773ff]"
+                )}
+                onClick={() =>
+                  setTimePreset((prev) =>
+                    prev === item.key ? null : item.key
+                  )
+                }
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="flex h-9 w-80 items-center justify-between border border-slate-200 px-3 text-sm text-slate-400"
           >
-            <CalendarClock className="h-3.5 w-3.5" />
-            开始时间 - 结束时间
+            <span>开始时间</span>
+            <span>-</span>
+            <span>结束时间</span>
+            <Calendar className="h-4 w-4" />
+          </button>
+          <Button variant="outline" size="icon" className="h-9 w-9 rounded">
+            <Search className="h-4 w-4" />
           </Button>
           <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            onClick={() => toast.success("已刷新文档列表")}
+            className="ml-auto rounded bg-blue-600 hover:bg-blue-700"
+            onClick={() => setImportOpen(true)}
           >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          <Button
-            className="bg-[#2773ff] text-white hover:bg-[#1f63e0]"
-            onClick={openImport}
-          >
-            <Upload className="mr-1.5 h-4 w-4" />
             导入文档
           </Button>
         </div>
       </div>
 
-      {filteredDocuments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-          <FolderOpen className="mb-3 h-12 w-12 text-slate-300" />
-          <p className="mb-1 text-sm text-slate-500">暂无文档</p>
-          <p className="mb-3 text-xs text-slate-400">
-            请上传文档以进行 RAG 解析与切片
-          </p>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 text-sm text-[#2773ff] hover:underline"
-            onClick={openImport}
-          >
-            <Upload className="h-3.5 w-3.5" />
-            立即上传
-          </button>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50 hover:bg-slate-50">
-                <TableHead>
-                  <span className="inline-flex items-center gap-1">
-                    文档名称 <Filter className="h-3 w-3 text-slate-400" />
-                  </span>
-                </TableHead>
-                <TableHead>
-                  <span className="inline-flex items-center gap-1">
-                    文档类型 <Filter className="h-3 w-3 text-slate-400" />
-                  </span>
-                </TableHead>
-                <TableHead>
-                  <span className="inline-flex items-center gap-1">
-                    处理状态 <Filter className="h-3 w-3 text-slate-400" />
-                  </span>
-                </TableHead>
-                <TableHead>
-                  <span className="inline-flex items-center gap-1">
-                    使用状态 <Filter className="h-3 w-3 text-slate-400" />
-                  </span>
-                </TableHead>
-                <TableHead>
-                  <span className="inline-flex items-center gap-1">
-                    文档质量 <Filter className="h-3 w-3 text-slate-400" />
-                  </span>
-                </TableHead>
-                <TableHead>
-                  <span className="inline-flex items-center gap-1">
-                    排版复杂度 <Filter className="h-3 w-3 text-slate-400" />
-                  </span>
-                </TableHead>
-                <TableHead>
-                  <span className="inline-flex items-center gap-1">
-                    文档大小 <Filter className="h-3 w-3 text-slate-400" />
-                  </span>
-                </TableHead>
-                <TableHead>
-                  <span className="inline-flex items-center gap-1">
-                    上传人 <Filter className="h-3 w-3 text-slate-400" />
-                  </span>
-                </TableHead>
-                <TableHead className="min-w-[180px]">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredDocuments.map((doc) => (
-                <TableRow key={doc.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <FileTypeIcon type={doc.type} />
-                      <span className="text-sm text-slate-800">{doc.name}</span>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-slate-50 hover:bg-slate-50">
+              <TableHead>文档名称</TableHead>
+              <TableHead>文档类型</TableHead>
+              <TableHead>处理状态</TableHead>
+              <TableHead>使用状态</TableHead>
+              <TableHead>文档质量</TableHead>
+              <TableHead>排版复杂度</TableHead>
+              <TableHead>文档大小</TableHead>
+              <TableHead>上传人</TableHead>
+              <TableHead>上传时间</TableHead>
+              <TableHead>操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredDocuments.map((doc) => (
+              <TableRow key={doc.id}>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <FileTypeIcon type={String(doc.type)} />
+                    <Link
+                      href={`/knowledge-base/${knowledgeBaseId}/document/${doc.id}?name=${encodeURIComponent(doc.name)}`}
+                      className="text-sm text-[#2773ff] hover:underline"
+                    >
+                      {doc.name}
+                    </Link>
+                  </div>
+                  {(doc.documentTags?.length ||
+                    doc.contentTags?.length ||
+                    doc.metadataFields?.length) ? (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {doc.documentTags?.map((tag) => (
+                        <span
+                          key={`doc-${tag}`}
+                          className="rounded bg-blue-50 px-1.5 py-0.5 text-xs font-normal text-blue-700"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                      {doc.contentTags?.map((tag) => (
+                        <span
+                          key={`content-${tag}`}
+                          className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs font-normal text-emerald-700"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                      {Boolean(doc.metadataFields?.length) && (
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
+                          元数据 {doc.metadataFields?.length}
+                        </span>
+                      )}
                     </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-slate-700">
-                    {doc.type}
-                  </TableCell>
-                  <TableCell>
-                    <ProcessStatusCell status={doc.processStatus} />
-                  </TableCell>
-                  <TableCell>
-                    <StatusDot
-                      color={doc.usageStatus === "已启用" ? "green" : "gray"}
-                      label={doc.usageStatus}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <QualityBadge level={doc.quality} />
-                  </TableCell>
-                  <TableCell>
-                    <QualityBadge level={doc.layoutComplexity} />
-                  </TableCell>
-                  <TableCell className="text-sm text-slate-700">
-                    {doc.size}
-                  </TableCell>
-                  <TableCell className="text-sm text-slate-700">
-                    {doc.uploader}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-3 text-sm">
+                  ) : null}
+                </TableCell>
+                <TableCell>{doc.type}</TableCell>
+                <TableCell>
+                  <ProcessStatusCell status={doc.processStatus} />
+                </TableCell>
+                <TableCell>
+                  <StatusDot
+                    color={doc.usageStatus === "已启用" ? "green" : "gray"}
+                    label={doc.usageStatus}
+                  />
+                </TableCell>
+                <TableCell>
+                  <QualityBadge level={doc.quality} />
+                </TableCell>
+                <TableCell>
+                  <QualityBadge level={doc.layoutComplexity} />
+                </TableCell>
+                <TableCell>{doc.size}</TableCell>
+                <TableCell>{doc.uploader}</TableCell>
+                <TableCell>{doc.uploadedAt}</TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                       <button
                         type="button"
-                        className="text-[#2773ff] hover:text-[#1f63e0]"
-                        onClick={() => toast.message(`编辑文档：${doc.name}`)}
+                        className="text-sm text-blue-600"
                       >
-                        编辑
+                        更多 <ChevronDown className="inline h-3.5 w-3.5" />
                       </button>
-                      {doc.usageStatus === "已停用" ? (
-                        <button
-                          type="button"
-                          className="text-[#2773ff] hover:text-[#1f63e0]"
-                          onClick={() => onToggleUsage(doc.id)}
-                        >
-                          启用
-                        </button>
-                      ) : doc.processStatus === "已解析" ||
-                        doc.processStatus === "已完成" ? (
-                        <button
-                          type="button"
-                          className="text-[#2773ff] hover:text-[#1f63e0]"
-                          onClick={() =>
-                            toast.message(`开始切片：${doc.name}`)
-                          }
-                        >
-                          切片
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="text-[#2773ff] hover:text-[#1f63e0]"
-                          onClick={() => onToggleUsage(doc.id)}
-                        >
-                          停用
-                        </button>
-                      )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-0.5 text-[#2773ff] hover:text-[#1f63e0]"
-                          >
-                            更多
-                            <ChevronDown className="h-3.5 w-3.5" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() =>
-                              toast.message(`下载文档：${doc.name}`)
-                            }
-                          >
-                            下载
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => onToggleUsage(doc.id)}
-                          >
-                            {doc.usageStatus === "已启用" ? "停用" : "启用"}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-red-600"
-                            onClick={() => onDelete(doc.id)}
-                          >
-                            删除
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-32">
+                      <DropdownMenuItem
+                        onSelect={() => onToggleUsage(doc.id)}
+                      >
+                        {doc.usageStatus === "已启用" ? "停用" : "启用"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          onUpdateDocument(doc.id, {
+                            processStatus: "已解析",
+                          })
+                        }
+                      >
+                        重新解析
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() =>
+                          toast.message(`开始切片：${doc.name}`)
+                        }
+                      >
+                        重新切片
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-red-600"
+                        onSelect={() => onDelete(doc.id)}
+                      >
+                        删除
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))}
+            {filteredDocuments.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={10} className="h-56 text-center">
+                  <div className="flex flex-col items-center justify-center text-slate-400">
+                    <FileText className="mb-4 h-16 w-16 text-blue-200" />
+                    <p className="text-base font-medium text-slate-700">
+                      您还没有导入任何文档
+                    </p>
+                    <button
+                      type="button"
+                      className="mt-4 text-sm text-blue-600"
+                      onClick={() => setImportOpen(true)}
+                    >
+                      + 导入文档
+                    </button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>导入文档</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <p className="text-xs text-slate-500">
-              支持 PDF / DOC / DOCX / TXT，上传后将自动进入 RAG 解析与切片流程。
-            </p>
-            <FileUpload
-              value={pendingFiles}
-              onChange={setPendingFiles}
-              accept=".doc,.docx,.pdf,.txt"
-              maxFiles={20}
-              maxSize={200}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setImportOpen(false)}>
-              取消
-            </Button>
-            <Button
-              className="bg-[#2773ff] text-white hover:bg-[#1f63e0]"
-              onClick={confirmImport}
-            >
-              开始解析
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ImportDocumentDrawer
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImport={onImport}
+      />
     </div>
   );
 }
@@ -663,29 +606,8 @@ function toKbDocuments(docs: StoredKbDocument[]): KbDocument[] {
   }));
 }
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-}
-
-function formatNowLocal() {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
-function normalizeDocType(value: string): DocType {
-  const normalized = value.toUpperCase();
-  if (["PDF", "DOC", "DOCX", "TXT"].includes(normalized)) {
-    return normalized as DocType;
-  }
-  return "TXT";
-}
-
-function resolveFileType(fileName: string): DocType {
-  const ext = fileName.split(".").pop()?.toUpperCase();
-  return normalizeDocType(ext ?? "TXT");
+function normalizeDocType(value: string): string {
+  return value || "--";
 }
 
 export function TemplateKnowledgeBaseDetail({
@@ -779,36 +701,52 @@ export function TemplateKnowledgeBaseDetail({
     toast.success("文档已删除");
   };
 
-  const handleImportDocs = (files: File[]) => {
-    const now = formatNowLocal();
-    const newDocs: KbDocument[] = files.map((file, index) => ({
-      id: `doc_${Date.now()}_${index}`,
-      name: file.name,
-      type: resolveFileType(file.name),
+  const handleUpdateDoc = (id: string, patch: Partial<KbDocument>) => {
+    setDocuments((prev) =>
+      prev.map((doc) => (doc.id === id ? { ...doc, ...patch } : doc))
+    );
+  };
+
+  const handleImportDocs = (rows: KnowledgeDocumentRow[]) => {
+    const newDocs: KbDocument[] = rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      type: row.type,
       processStatus: "解析中",
-      usageStatus: "已停用",
-      quality: "-",
-      layoutComplexity: "-",
-      size: formatFileSize(file.size),
-      uploader: meta.creator || "当前用户",
-      uploadedAt: now,
+      usageStatus: row.usageStatus,
+      quality: (row.quality as QualityLevel) || "-",
+      layoutComplexity: (row.complexity as QualityLevel) || "-",
+      size: row.size,
+      uploader: row.uploader || meta.creator || "当前用户",
+      uploadedAt: row.uploadedAt,
+      documentTags: row.documentTags,
+      contentTags: row.contentTags,
+      metadataFields: row.metadataFields,
     }));
 
     setDocuments((prev) => [...newDocs, ...prev]);
     toast.success(
-      `已上传 ${files.length} 个文档，正在进行 RAG 解析切片`
+      `已导入 ${rows.length} 个文档，正在进行 RAG 解析切片`
     );
 
-    // 模拟解析完成
     window.setTimeout(() => {
       setDocuments((prev) =>
         prev.map((doc) =>
           newDocs.some((n) => n.id === doc.id)
-            ? { ...doc, processStatus: "已解析", quality: "中", layoutComplexity: "中" }
+            ? {
+                ...doc,
+                processStatus: "已启用",
+                quality:
+                  doc.quality === "分析中" ? "中" : doc.quality,
+                layoutComplexity:
+                  doc.layoutComplexity === "-" || doc.layoutComplexity === "--"
+                    ? "中"
+                    : doc.layoutComplexity,
+              }
             : doc
         )
       );
-      toast.message("部分文档解析完成，可继续执行切片");
+      toast.message("文档解析完成");
     }, 2500);
   };
 
@@ -1079,10 +1017,12 @@ export function TemplateKnowledgeBaseDetail({
 
         {/* Shared document list */}
         <KnowledgeBaseDocumentList
+          knowledgeBaseId={meta.id}
           documents={documents}
           onToggleUsage={handleToggleDocUsage}
           onDelete={handleDeleteDoc}
           onImport={handleImportDocs}
+          onUpdateDocument={handleUpdateDoc}
         />
       </div>
 

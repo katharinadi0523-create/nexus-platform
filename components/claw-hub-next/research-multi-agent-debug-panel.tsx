@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -222,28 +231,64 @@ function ToolLayer({ name, items }: { name: string; items: Array<{ label: string
   );
 }
 
-export function ResearchMultiAgentDebugPanel({ detail, inspectorMode = "auto" }: { detail: ClawDetailData; inspectorMode?: "auto" | "open" | "closed" }) {
-  const mainSender = detail.overview.name;
+type ResearchMultiAgentSessionValue = {
+  detail: ClawDetailData;
+  stage: number;
+  selectedAgent: string | null;
+  composerText: string;
+  tasks: ResearchTask[];
+  artifacts: Artifact[];
+  advanceStage: () => void;
+  setSelectedAgent: (agent: string | null) => void;
+  setComposerText: (value: string) => void;
+};
+
+const ResearchMultiAgentSessionContext = createContext<ResearchMultiAgentSessionValue | null>(null);
+
+function useResearchMultiAgentSession() {
+  const value = useContext(ResearchMultiAgentSessionContext);
+  if (!value) {
+    throw new Error("ResearchMultiAgentSessionProvider is required");
+  }
+  return value;
+}
+
+export function ResearchMultiAgentSessionProvider({
+  detail,
+  children,
+}: {
+  detail: ClawDetailData;
+  children: ReactNode;
+}) {
   const [stage, setStage] = useState(0);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [composerText, setComposerText] = useState("");
-  const [rightPanelWidth, setRightPanelWidth] = useState(RIGHT_PANEL_DEFAULT_WIDTH);
-  const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const showInspector = inspectorMode !== "closed";
-  const showRightPanel = showInspector || Boolean(selectedAgent);
-  const tasks = useMemo<ResearchTask[]>(() => [
-    { id: "hypothesis", title: "生成可验证研究假设", status: taskStatus(stage, 5, 6) },
-    { id: "literature", title: "检索文献并建立证据矩阵", status: taskStatus(stage, 7, 8) },
-    { id: "chart", title: "生成科研图表", status: taskStatus(stage, 9, 10) },
-    { id: "paper", title: "生成并修订论文初稿", status: taskStatus(stage, 9, 11) },
-    { id: "review", title: "审核论文质量", status: taskStatus(stage, 11, 12) },
-  ], [stage]);
+
+  const advanceStage = useCallback(() => {
+    setStage((current) => Math.min(current + 1, MAX_STAGE));
+  }, []);
+
+  const tasks = useMemo<ResearchTask[]>(
+    () => [
+      { id: "hypothesis", title: "生成可验证研究假设", status: taskStatus(stage, 5, 6) },
+      { id: "literature", title: "检索文献并建立证据矩阵", status: taskStatus(stage, 7, 8) },
+      { id: "chart", title: "生成科研图表", status: taskStatus(stage, 9, 10) },
+      { id: "paper", title: "生成并修订论文初稿", status: taskStatus(stage, 9, 11) },
+      { id: "review", title: "审核论文质量", status: taskStatus(stage, 11, 12) },
+    ],
+    [stage]
+  );
+
   const artifacts = useMemo<Artifact[]>(() => {
     const items: Artifact[] = [];
     if (stage >= 6) items.push({ id: "hypothesis-report", name: "可验证假设报告.md" });
     if (stage >= 8) items.push({ id: "evidence-matrix", name: "核心文献证据矩阵.xlsx" });
-    if (stage >= 10) items.push({ id: "chart-package", name: "科研图表包.zip" }, { id: "paper-draft", name: stage >= 11 ? "研究论文修订稿.docx" : "研究论文初稿（待修订）.docx" });
+    if (stage >= 10) {
+      items.push(
+        { id: "chart-package", name: "科研图表包.zip" },
+        { id: "paper-draft", name: stage >= 11 ? "研究论文修订稿.docx" : "研究论文初稿（待修订）.docx" }
+      );
+    }
     if (stage >= 12) items.push({ id: "review-report", name: "论文审核报告.md" });
     return items;
   }, [stage]);
@@ -251,13 +296,429 @@ export function ResearchMultiAgentDebugPanel({ detail, inspectorMode = "auto" }:
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
       if (event.key === "ArrowRight") setStage((current) => Math.min(current + 1, MAX_STAGE));
       if (event.key === "ArrowLeft") setStage((current) => Math.max(current - 1, 0));
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  const value = useMemo<ResearchMultiAgentSessionValue>(
+    () => ({
+      detail,
+      stage,
+      selectedAgent,
+      composerText,
+      tasks,
+      artifacts,
+      advanceStage,
+      setSelectedAgent,
+      setComposerText,
+    }),
+    [
+      detail,
+      stage,
+      selectedAgent,
+      composerText,
+      tasks,
+      artifacts,
+      advanceStage,
+    ]
+  );
+
+  return (
+    <ResearchMultiAgentSessionContext.Provider value={value}>
+      {children}
+    </ResearchMultiAgentSessionContext.Provider>
+  );
+}
+
+/** 对话区（主会话） */
+export function ResearchMultiAgentChatPane() {
+  const {
+    detail,
+    stage,
+    composerText,
+    advanceStage,
+    setSelectedAgent,
+    setComposerText,
+  } = useResearchMultiAgentSession();
+  const mainSender = detail.overview.name;
+
+  return (
+    <div
+      className="flex h-full min-h-0 cursor-pointer flex-col bg-slate-50"
+      onClick={advanceStage}
+    >
+      <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+        <div className="mx-auto max-w-4xl space-y-5">
+          <div className="flex justify-end">
+            <div className="max-w-2xl rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
+              请帮我研究生成式 AI 对科研协作效率的影响，并形成一篇带图表的研究论文。
+            </div>
+          </div>
+          {stage >= 1 ? (
+            <ClawAgentAction
+              item={{
+                key: "insight-skill",
+                type: "action",
+                title: "调用需求洞察 skill",
+                kind: "skill",
+                status: "done",
+                logs: ["识别研究对象、成果形态、证据要求与时间范围。"],
+                source: "audit",
+              }}
+              expanded={false}
+              onToggle={() => undefined}
+            />
+          ) : null}
+          {stage >= 2 ? (
+            <ClawAgentAction
+              item={{
+                key: "clarify",
+                type: "action",
+                title: "澄清研究范围",
+                kind: "user",
+                status: stage === 2 ? "running" : "done",
+                logs: [],
+                source: "audit",
+              }}
+              expanded
+              onToggle={() => undefined}
+            >
+              <div className="space-y-3 text-sm text-slate-600">
+                <p>
+                  为了让研究可验证，请确认：聚焦高校科研团队，并以近五年公开研究和模拟实验数据为依据，可以吗？
+                </p>
+                <div className="flex gap-2">
+                  <span className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-blue-700">
+                    确认，按此范围继续
+                  </span>
+                  <span className="rounded-md border border-slate-200 px-3 py-1.5">
+                    调整范围
+                  </span>
+                </div>
+              </div>
+            </ClawAgentAction>
+          ) : null}
+          {stage >= 3 ? (
+            <div className="flex justify-end">
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                确认，按高校科研团队、近五年公开研究继续。
+              </div>
+            </div>
+          ) : null}
+          {stage >= 4 ? (
+            <AssistantText sender={mainSender}>{`已完成任务规划，将按照以下步骤推进研究：
+
+1. 生成可验证研究假设，明确关键变量与验证方法
+2. 检索近五年高质量文献，建立核心文献证据矩阵
+3. 基于实验数据生成研究框架图与核心科研图表
+4. 整合假设、证据和图表，生成并修订论文初稿
+5. 按同行评审标准审核论文，汇总最终研究成果`}</AssistantText>
+          ) : null}
+          {stage >= 5 ? (
+            <ClawSubAgentSummonedEvent
+              agentName="假设生成智能体"
+              running={stage < 6}
+              onOpen={() => setSelectedAgent("假设生成智能体")}
+            />
+          ) : null}
+          {stage >= 6 ? (
+            <AssistantText sender={mainSender}>
+              已收到假设生成结果。综合可验证性、证据可得性和研究成本，选择 H2 作为核心假设，并将文献检索拆分为预印本与技术演进、实证研究、同行评审与争议证据三个方向。
+            </AssistantText>
+          ) : null}
+          {stage >= 7 ? (
+            <>
+              <ClawSubAgentSummonedEvent
+                agentName="文献检索智能体"
+                running={stage < 8}
+                onOpen={() => setSelectedAgent("文献检索智能体")}
+              />
+              <ClawSubAgentSummonedEvent
+                agentName="文献检索智能体+1"
+                running={stage < 8}
+                onOpen={() => setSelectedAgent("文献检索智能体+1")}
+              />
+              <ClawSubAgentSummonedEvent
+                agentName="文献检索智能体+2"
+                running={stage < 8}
+                onOpen={() => setSelectedAgent("文献检索智能体+2")}
+              />
+            </>
+          ) : null}
+          {stage >= 8 ? (
+            <AssistantText sender={mainSender}>
+              已收到三路文献检索结果。三个执行实例分别完成预印本、实证研究与同行评审文献检索，合并后的证据矩阵确认了研究热点、争议结论与证据缺口，我将据此继续下一轮分析。
+            </AssistantText>
+          ) : null}
+          {stage >= 9 ? (
+            <>
+              <ClawSubAgentSummonedEvent
+                agentName="科研绘图智能体"
+                running={stage < 10}
+                onOpen={() => setSelectedAgent("科研绘图智能体")}
+              />
+              <ClawSubAgentSummonedEvent
+                agentName="论文生成智能体"
+                running={stage < 11}
+                onOpen={() => setSelectedAgent("论文生成智能体")}
+              />
+            </>
+          ) : null}
+          {stage >= 10 ? (
+            <AssistantText sender={mainSender}>
+              论文初稿的讨论章节缺少反例与局限性。我已向论文生成智能体追加修改要求，科研图表结果已验收通过。
+            </AssistantText>
+          ) : null}
+          {stage >= 11 ? (
+            <>
+              <AssistantText sender={mainSender}>
+                论文修订版已通过阶段验收，现进入最终质量检查。
+              </AssistantText>
+              <ClawSubAgentSummonedEvent
+                agentName="论文审核智能体"
+                running={stage < 12}
+                onOpen={() => setSelectedAgent("论文审核智能体")}
+              />
+            </>
+          ) : null}
+          {stage >= 12 ? (
+            <>
+              <AssistantText sender={mainSender}>
+                所有子任务均已完成。论文、研究图表和审核意见已汇总，最终成果已生成。
+              </AssistantText>
+              <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/60 px-4 py-3">
+                <FileCheck2 className="h-5 w-5 text-blue-600" />
+                <span className="text-sm font-medium text-slate-800">
+                  科研协作效率影响研究报告.docx
+                </span>
+              </div>
+            </>
+          ) : null}
+          <p className="pt-2 text-center text-xs text-slate-400">
+            ← 上一步 · 点击页面或按 → 进入下一步
+          </p>
+        </div>
+      </main>
+      <div
+        className="shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-4"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mx-auto max-w-4xl">
+          <DebugChatComposer
+            detail={detail}
+            value={composerText}
+            onChange={setComposerText}
+            onSend={() => {
+              setComposerText("");
+              advanceStage();
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 过程监控：任务 / 产出物(文件) / 工具 */
+export function ResearchMultiAgentProcessMonitor({
+  className,
+}: {
+  className?: string;
+}) {
+  const {
+    detail,
+    stage,
+    selectedAgent,
+    tasks,
+    artifacts,
+    setSelectedAgent,
+  } = useResearchMultiAgentSession();
+
+  return (
+    <aside
+      className={cn("flex h-full min-h-0 min-w-0 flex-col bg-white", className)}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {selectedAgent ? (
+        <SubAgentSession
+          agent={selectedAgent}
+          stage={stage}
+          onBack={() => setSelectedAgent(null)}
+        />
+      ) : (
+        <div className="h-full overflow-y-auto p-4">
+          {stage >= 4 ? (
+            <section className="border-b border-slate-200 pb-5">
+              <header className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-800">任务规划</h3>
+                <span className="text-xs text-slate-400">
+                  {tasks.filter((task) => task.status === "done").length}/{tasks.length}
+                </span>
+              </header>
+              <div className="space-y-1">
+                {tasks.map((task) => (
+                  <div key={task.id} className="flex items-center gap-2.5 px-2 py-2">
+                    <StatusIcon status={task.status} />
+                    <p className="min-w-0 flex-1 truncate text-[13px] text-slate-700">
+                      {task.title}
+                    </p>
+                    <span className="shrink-0 text-[11px] text-slate-400">
+                      {statusText(task.status)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+          <section className={cn("border-b border-slate-200 pb-5", stage >= 4 && "pt-5")}>
+            <header className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-800">产出物</h3>
+              <span className="text-xs text-slate-400">{artifacts.length} 个</span>
+            </header>
+            <div className="space-y-2 text-sm text-slate-600">
+              {artifacts.length ? (
+                artifacts.map((artifact) => (
+                  <div key={artifact.id} className="flex items-center gap-2">
+                    <FileCheck2 className="h-4 w-4 text-blue-500" />
+                    {artifact.name}
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-slate-400">任务交付后展示产出物</p>
+              )}
+            </div>
+          </section>
+          <section className="pt-5">
+            <header className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-800">工具</h3>
+              <span className="text-xs text-slate-400">按调用实例分层</span>
+            </header>
+            <div className="space-y-4">
+              <ToolLayer
+                name={detail.overview.name}
+                items={[
+                  { label: "需求洞察 skill", kind: "skill" },
+                  ...(stage >= 5
+                    ? [{ label: "子智能体调度器", kind: "tool" as const }]
+                    : []),
+                ]}
+              />
+              {stage >= 5 ? (
+                <ToolLayer
+                  name="假设生成智能体"
+                  items={[
+                    { label: AGENT_CONFIG.假设生成智能体.skill, kind: "skill" },
+                    { label: AGENT_CONFIG.假设生成智能体.tool, kind: "tool" },
+                  ]}
+                />
+              ) : null}
+              {stage >= 7 ? (
+                <>
+                  <ToolLayer
+                    name="文献检索智能体"
+                    items={[
+                      { label: AGENT_CONFIG.文献检索智能体.skill, kind: "skill" },
+                      { label: AGENT_CONFIG.文献检索智能体.tool, kind: "tool" },
+                    ]}
+                  />
+                  <ToolLayer
+                    name="文献检索智能体+1"
+                    items={[
+                      {
+                        label: AGENT_CONFIG["文献检索智能体+1"].skill,
+                        kind: "skill",
+                      },
+                      {
+                        label: AGENT_CONFIG["文献检索智能体+1"].tool,
+                        kind: "tool",
+                      },
+                    ]}
+                  />
+                  <ToolLayer
+                    name="文献检索智能体+2"
+                    items={[
+                      {
+                        label: AGENT_CONFIG["文献检索智能体+2"].skill,
+                        kind: "skill",
+                      },
+                      {
+                        label: AGENT_CONFIG["文献检索智能体+2"].tool,
+                        kind: "tool",
+                      },
+                    ]}
+                  />
+                </>
+              ) : null}
+              {stage >= 9 ? (
+                <>
+                  <ToolLayer
+                    name="科研绘图智能体"
+                    items={[
+                      { label: AGENT_CONFIG.科研绘图智能体.skill, kind: "skill" },
+                      { label: AGENT_CONFIG.科研绘图智能体.tool, kind: "tool" },
+                    ]}
+                  />
+                  <ToolLayer
+                    name="论文生成智能体"
+                    items={[
+                      { label: AGENT_CONFIG.论文生成智能体.skill, kind: "skill" },
+                      { label: AGENT_CONFIG.论文生成智能体.tool, kind: "tool" },
+                    ]}
+                  />
+                </>
+              ) : null}
+              {stage >= 11 ? (
+                <ToolLayer
+                  name="论文审核智能体"
+                  items={[
+                    { label: AGENT_CONFIG.论文审核智能体.skill, kind: "skill" },
+                    { label: AGENT_CONFIG.论文审核智能体.tool, kind: "tool" },
+                  ]}
+                />
+              ) : null}
+            </div>
+          </section>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+export function ResearchMultiAgentDebugPanel({
+  detail,
+  inspectorMode = "auto",
+}: {
+  detail: ClawDetailData;
+  inspectorMode?: "auto" | "open" | "closed";
+}) {
+  return (
+    <ResearchMultiAgentSessionProvider detail={detail}>
+      <ResearchMultiAgentDebugPanelInner inspectorMode={inspectorMode} />
+    </ResearchMultiAgentSessionProvider>
+  );
+}
+
+function ResearchMultiAgentDebugPanelInner({
+  inspectorMode,
+}: {
+  inspectorMode: "auto" | "open" | "closed";
+}) {
+  const { selectedAgent } = useResearchMultiAgentSession();
+  const [rightPanelWidth, setRightPanelWidth] = useState(RIGHT_PANEL_DEFAULT_WIDTH);
+  const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const showInspector = inspectorMode !== "closed";
+  const showRightPanel = showInspector || Boolean(selectedAgent);
 
   useEffect(() => {
     if (!isResizingRightPanel) return undefined;
@@ -273,7 +734,10 @@ export function ResearchMultiAgentDebugPanel({ detail, inspectorMode = "auto" }:
 
       const rect = panel.getBoundingClientRect();
       const availableWidth = rect.width - MAIN_SESSION_MIN_WIDTH - RIGHT_PANEL_HANDLE_WIDTH;
-      const maxWidth = Math.max(RIGHT_PANEL_MIN_WIDTH, Math.min(RIGHT_PANEL_MAX_WIDTH, availableWidth));
+      const maxWidth = Math.max(
+        RIGHT_PANEL_MIN_WIDTH,
+        Math.min(RIGHT_PANEL_MAX_WIDTH, availableWidth)
+      );
       const nextWidth = rect.right - event.clientX;
       setRightPanelWidth(Math.min(Math.max(nextWidth, RIGHT_PANEL_MIN_WIDTH), maxWidth));
     }
@@ -298,48 +762,26 @@ export function ResearchMultiAgentDebugPanel({ detail, inspectorMode = "auto" }:
   function resizeRightPanelBy(delta: number) {
     const panelWidth = panelRef.current?.getBoundingClientRect().width ?? 0;
     const availableWidth = panelWidth - MAIN_SESSION_MIN_WIDTH - RIGHT_PANEL_HANDLE_WIDTH;
-    const maxWidth = Math.max(RIGHT_PANEL_MIN_WIDTH, Math.min(RIGHT_PANEL_MAX_WIDTH, availableWidth));
-    setRightPanelWidth((current) => Math.min(Math.max(current + delta, RIGHT_PANEL_MIN_WIDTH), maxWidth));
+    const maxWidth = Math.max(
+      RIGHT_PANEL_MIN_WIDTH,
+      Math.min(RIGHT_PANEL_MAX_WIDTH, availableWidth)
+    );
+    setRightPanelWidth((current) =>
+      Math.min(Math.max(current + delta, RIGHT_PANEL_MIN_WIDTH), maxWidth)
+    );
   }
 
   return (
     <div
       ref={panelRef}
-      className="grid h-full min-h-0 cursor-pointer"
-      style={{ gridTemplateColumns: showRightPanel ? `minmax(0,1fr) ${RIGHT_PANEL_HANDLE_WIDTH}px ${rightPanelWidth}px` : "minmax(0,1fr)" }}
-      onClick={() => setStage((current) => Math.min(current + 1, MAX_STAGE))}
+      className="grid h-full min-h-0"
+      style={{
+        gridTemplateColumns: showRightPanel
+          ? `minmax(0,1fr) ${RIGHT_PANEL_HANDLE_WIDTH}px ${rightPanelWidth}px`
+          : "minmax(0,1fr)",
+      }}
     >
-      <div className="flex min-h-0 flex-col bg-slate-50">
-        <main className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-          <div className="mx-auto max-w-4xl space-y-5">
-            <div className="flex justify-end"><div className="max-w-2xl rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm leading-6 text-slate-700">请帮我研究生成式 AI 对科研协作效率的影响，并形成一篇带图表的研究论文。</div></div>
-            {stage >= 1 ? <ClawAgentAction item={{ key: "insight-skill", type: "action", title: "调用需求洞察 skill", kind: "skill", status: "done", logs: ["识别研究对象、成果形态、证据要求与时间范围。"], source: "audit" }} expanded={false} onToggle={() => undefined} /> : null}
-            {stage >= 2 ? <ClawAgentAction item={{ key: "clarify", type: "action", title: "澄清研究范围", kind: "user", status: stage === 2 ? "running" : "done", logs: [], source: "audit" }} expanded onToggle={() => undefined}><div className="space-y-3 text-sm text-slate-600"><p>为了让研究可验证，请确认：聚焦高校科研团队，并以近五年公开研究和模拟实验数据为依据，可以吗？</p><div className="flex gap-2"><span className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-blue-700">确认，按此范围继续</span><span className="rounded-md border border-slate-200 px-3 py-1.5">调整范围</span></div></div></ClawAgentAction> : null}
-            {stage >= 3 ? <div className="flex justify-end"><div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">确认，按高校科研团队、近五年公开研究继续。</div></div> : null}
-            {stage >= 4 ? <AssistantText sender={mainSender}>{`已完成任务规划，将按照以下步骤推进研究：
-
-1. 生成可验证研究假设，明确关键变量与验证方法
-2. 检索近五年高质量文献，建立核心文献证据矩阵
-3. 基于实验数据生成研究框架图与核心科研图表
-4. 整合假设、证据和图表，生成并修订论文初稿
-5. 按同行评审标准审核论文，汇总最终研究成果`}</AssistantText> : null}
-            {stage >= 5 ? <ClawSubAgentSummonedEvent agentName="假设生成智能体" running={stage < 6} onOpen={() => setSelectedAgent("假设生成智能体")} /> : null}
-            {stage >= 6 ? <AssistantText sender={mainSender}>已收到假设生成结果。综合可验证性、证据可得性和研究成本，选择 H2 作为核心假设，并将文献检索拆分为预印本与技术演进、实证研究、同行评审与争议证据三个方向。</AssistantText> : null}
-            {stage >= 7 ? <><ClawSubAgentSummonedEvent agentName="文献检索智能体" running={stage < 8} onOpen={() => setSelectedAgent("文献检索智能体")} /><ClawSubAgentSummonedEvent agentName="文献检索智能体+1" running={stage < 8} onOpen={() => setSelectedAgent("文献检索智能体+1")} /><ClawSubAgentSummonedEvent agentName="文献检索智能体+2" running={stage < 8} onOpen={() => setSelectedAgent("文献检索智能体+2")} /></> : null}
-            {stage >= 8 ? <AssistantText sender={mainSender}>已收到三路文献检索结果。三个执行实例分别完成预印本、实证研究与同行评审文献检索，合并后的证据矩阵确认了研究热点、争议结论与证据缺口，我将据此继续下一轮分析。</AssistantText> : null}
-            {stage >= 9 ? <><ClawSubAgentSummonedEvent agentName="科研绘图智能体" running={stage < 10} onOpen={() => setSelectedAgent("科研绘图智能体")} /><ClawSubAgentSummonedEvent agentName="论文生成智能体" running={stage < 11} onOpen={() => setSelectedAgent("论文生成智能体")} /></> : null}
-            {stage >= 10 ? <AssistantText sender={mainSender}>论文初稿的讨论章节缺少反例与局限性。我已向论文生成智能体追加修改要求，科研图表结果已验收通过。</AssistantText> : null}
-            {stage >= 11 ? <><AssistantText sender={mainSender}>论文修订版已通过阶段验收，现进入最终质量检查。</AssistantText><ClawSubAgentSummonedEvent agentName="论文审核智能体" running={stage < 12} onOpen={() => setSelectedAgent("论文审核智能体")} /></> : null}
-            {stage >= 12 ? <><AssistantText sender={mainSender}>所有子任务均已完成。论文、研究图表和审核意见已汇总，最终成果已生成。</AssistantText><div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/60 px-4 py-3"><FileCheck2 className="h-5 w-5 text-blue-600" /><span className="text-sm font-medium text-slate-800">科研协作效率影响研究报告.docx</span></div></> : null}
-            <p className="pt-2 text-center text-xs text-slate-400">← 上一步 · 点击页面或按 → 进入下一步</p>
-          </div>
-        </main>
-        <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-5 py-4" onClick={(event) => event.stopPropagation()}>
-          <div className="mx-auto max-w-4xl">
-            <DebugChatComposer detail={detail} value={composerText} onChange={setComposerText} onSend={() => { setComposerText(""); setStage((current) => Math.min(current + 1, MAX_STAGE)); }} />
-          </div>
-        </div>
-      </div>
+      <ResearchMultiAgentChatPane />
 
       {showRightPanel ? (
         <div
@@ -374,21 +816,18 @@ export function ResearchMultiAgentDebugPanel({ detail, inspectorMode = "auto" }:
             }
           }}
         >
-          <span className={cn("my-0.5 w-px bg-slate-200 transition-colors group-hover:bg-blue-300", isResizingRightPanel && "bg-blue-400")} />
+          <span
+            className={cn(
+              "my-0.5 w-px bg-slate-200 transition-colors group-hover:bg-blue-300",
+              isResizingRightPanel && "bg-blue-400"
+            )}
+          />
         </div>
       ) : null}
 
-      <aside className={cn("min-h-0 bg-white", showRightPanel ? "block" : "hidden")} onClick={(event) => event.stopPropagation()}>
-        {selectedAgent ? (
-          <SubAgentSession agent={selectedAgent} stage={stage} onBack={() => setSelectedAgent(null)} />
-        ) : (
-        <div className="h-full overflow-y-auto p-4">
-          {stage >= 4 ? <section className="border-b border-slate-200 pb-5"><header className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-800">任务规划</h3><span className="text-xs text-slate-400">{tasks.filter((task) => task.status === "done").length}/{tasks.length}</span></header><div className="space-y-1">{tasks.map((task) => <div key={task.id} className="flex items-center gap-2.5 px-2 py-2"><StatusIcon status={task.status} /><p className="min-w-0 flex-1 truncate text-[13px] text-slate-700">{task.title}</p><span className="shrink-0 text-[11px] text-slate-400">{statusText(task.status)}</span></div>)}</div></section> : null}
-          <section className={cn("border-b border-slate-200 pb-5", stage >= 4 && "pt-5")}><header className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-800">产出物</h3><span className="text-xs text-slate-400">{artifacts.length} 个</span></header><div className="space-y-2 text-sm text-slate-600">{artifacts.length ? artifacts.map((artifact) => <div key={artifact.id} className="flex items-center gap-2"><FileCheck2 className="h-4 w-4 text-blue-500" />{artifact.name}</div>) : <p className="text-xs text-slate-400">任务交付后展示产出物</p>}</div></section>
-          <section className="pt-5"><header className="mb-4 flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-800">工具</h3><span className="text-xs text-slate-400">按调用实例分层</span></header><div className="space-y-4"><ToolLayer name={detail.overview.name} items={[{ label: "需求洞察 skill", kind: "skill" }, ...(stage >= 5 ? [{ label: "子智能体调度器", kind: "tool" as const }] : [])]} />{stage >= 5 ? <ToolLayer name="假设生成智能体" items={[{ label: AGENT_CONFIG.假设生成智能体.skill, kind: "skill" }, { label: AGENT_CONFIG.假设生成智能体.tool, kind: "tool" }]} /> : null}{stage >= 7 ? <><ToolLayer name="文献检索智能体" items={[{ label: AGENT_CONFIG.文献检索智能体.skill, kind: "skill" }, { label: AGENT_CONFIG.文献检索智能体.tool, kind: "tool" }]} /><ToolLayer name="文献检索智能体+1" items={[{ label: AGENT_CONFIG["文献检索智能体+1"].skill, kind: "skill" }, { label: AGENT_CONFIG["文献检索智能体+1"].tool, kind: "tool" }]} /><ToolLayer name="文献检索智能体+2" items={[{ label: AGENT_CONFIG["文献检索智能体+2"].skill, kind: "skill" }, { label: AGENT_CONFIG["文献检索智能体+2"].tool, kind: "tool" }]} /></> : null}{stage >= 9 ? <><ToolLayer name="科研绘图智能体" items={[{ label: AGENT_CONFIG.科研绘图智能体.skill, kind: "skill" }, { label: AGENT_CONFIG.科研绘图智能体.tool, kind: "tool" }]} /><ToolLayer name="论文生成智能体" items={[{ label: AGENT_CONFIG.论文生成智能体.skill, kind: "skill" }, { label: AGENT_CONFIG.论文生成智能体.tool, kind: "tool" }]} /></> : null}{stage >= 11 ? <ToolLayer name="论文审核智能体" items={[{ label: AGENT_CONFIG.论文审核智能体.skill, kind: "skill" }, { label: AGENT_CONFIG.论文审核智能体.tool, kind: "tool" }]} /> : null}</div></section>
-        </div>
-        )}
-      </aside>
+      <ResearchMultiAgentProcessMonitor
+        className={showRightPanel ? "block" : "hidden"}
+      />
     </div>
   );
 }

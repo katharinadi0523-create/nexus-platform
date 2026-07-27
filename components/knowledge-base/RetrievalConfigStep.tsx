@@ -1,16 +1,29 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { Check, ChevronDown, ChevronRight, HelpCircle } from "lucide-react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  HelpCircle,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
+import { ModelSelector, type ModelParams } from "@/components/agent-editor/ModelSelector";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { getDefaultModelParams } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 
 export type RetrievalEngineId =
@@ -18,6 +31,38 @@ export type RetrievalEngineId =
   | "semantic"
   | "pageindex"
   | "graph";
+
+export type GraphCategoryMode = "system" | "custom";
+
+export interface GraphNamedItem {
+  id: string;
+  name: string;
+  description: string;
+  /** 用户手动添加的同义词，标签展示 */
+  synonyms: string[];
+}
+
+export interface GraphEntityConfig {
+  prompt: string;
+  categoryMode: GraphCategoryMode;
+  customItems: GraphNamedItem[];
+  /** 将实体名称、描述、枚举值等向量化，用于语义检索 */
+  vectorize: boolean;
+  similarityMerge: number;
+}
+
+export interface GraphRelationConfig {
+  prompt: string;
+  categoryMode: GraphCategoryMode;
+  customItems: GraphNamedItem[];
+}
+
+export interface GraphRetrievalConfig {
+  model: string;
+  modelParams: ModelParams;
+  entity: GraphEntityConfig;
+  relation: GraphRelationConfig;
+}
 
 export interface RetrievalConfigState {
   engines: RetrievalEngineId[];
@@ -33,10 +78,105 @@ export interface RetrievalConfigState {
   pageindex: {
     maxDepth: number;
   };
-  graph: {
-    prompt: string;
+  graph: GraphRetrievalConfig;
+}
+
+const DEFAULT_GRAPH_MODEL = "Qwen3-32B";
+
+function createNamedItem(): GraphNamedItem {
+  return {
+    id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: "",
+    description: "",
+    synonyms: [],
   };
 }
+
+/** 同义词标签输入：Enter 添加，标签可删除 */
+function SynonymTagInput({
+  synonyms,
+  onChange,
+  placeholder = "输入同义词后按 Enter 添加",
+}: {
+  synonyms: string[];
+  onChange: (synonyms: string[]) => void;
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const addSynonym = (raw: string) => {
+    const next = raw.trim();
+    if (!next) return;
+    if (synonyms.some((s) => s.toLowerCase() === next.toLowerCase())) {
+      setDraft("");
+      return;
+    }
+    onChange([...synonyms, next]);
+    setDraft("");
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addSynonym(draft);
+    } else if (e.key === "Backspace" && !draft && synonyms.length > 0) {
+      onChange(synonyms.slice(0, -1));
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="text-xs text-slate-500">同义词</div>
+      <div className="min-h-[40px] rounded-md border border-slate-200 bg-white px-2 py-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {synonyms.map((synonym) => (
+            <Badge
+              key={synonym}
+              variant="secondary"
+              className="gap-1 bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-700 hover:bg-slate-100"
+            >
+              {synonym}
+              <button
+                type="button"
+                aria-label={`删除同义词 ${synonym}`}
+                onClick={() =>
+                  onChange(synonyms.filter((s) => s !== synonym))
+                }
+                className="rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={synonyms.length === 0 ? placeholder : "继续添加…"}
+            className="h-7 min-w-[120px] flex-1 border-0 px-1 shadow-none focus-visible:ring-0"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export const defaultGraphRetrievalConfig: GraphRetrievalConfig = {
+  model: DEFAULT_GRAPH_MODEL,
+  modelParams: getDefaultModelParams(DEFAULT_GRAPH_MODEL),
+  entity: {
+    prompt: "",
+    categoryMode: "system",
+    customItems: [],
+    vectorize: false,
+    similarityMerge: 0.8,
+  },
+  relation: {
+    prompt: "",
+    categoryMode: "system",
+    customItems: [],
+  },
+};
 
 export const defaultRetrievalConfig: RetrievalConfigState = {
   engines: ["fulltext", "semantic"],
@@ -52,9 +192,7 @@ export const defaultRetrievalConfig: RetrievalConfigState = {
   pageindex: {
     maxDepth: 3,
   },
-  graph: {
-    prompt: "",
-  },
+  graph: defaultGraphRetrievalConfig,
 };
 
 const ENGINE_OPTIONS: {
@@ -271,6 +409,108 @@ function SliderWithInput({
   );
 }
 
+function PromptField({
+  label,
+  tip,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  tip?: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <ConfigField label={label} tip={tip}>
+      <div className="relative">
+        <Textarea
+          value={value}
+          maxLength={800}
+          rows={4}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          className="resize-none pb-6"
+        />
+        <span className="absolute bottom-2 right-3 text-xs text-slate-400">
+          {value.length}/800
+        </span>
+      </div>
+    </ConfigField>
+  );
+}
+
+function NamedItemListEditor({
+  items,
+  onChange,
+  namePlaceholder = "请输入名称",
+  descriptionPlaceholder = "请输入描述",
+  addLabel = "添加",
+}: {
+  items: GraphNamedItem[];
+  onChange: (items: GraphNamedItem[]) => void;
+  namePlaceholder?: string;
+  descriptionPlaceholder?: string;
+  addLabel?: string;
+}) {
+  const updateItem = (id: string, patch: Partial<GraphNamedItem>) => {
+    onChange(items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  };
+
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div
+          key={item.id}
+          className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3"
+        >
+          <div className="flex items-start gap-2">
+            <Input
+              value={item.name}
+              placeholder={namePlaceholder}
+              onChange={(e) => updateItem(item.id, { name: e.target.value })}
+              className="h-8 flex-1"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-slate-400 hover:text-red-500"
+              onClick={() => onChange(items.filter((entry) => entry.id !== item.id))}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+          <Textarea
+            value={item.description}
+            placeholder={descriptionPlaceholder}
+            rows={2}
+            onChange={(e) =>
+              updateItem(item.id, { description: e.target.value })
+            }
+            className="resize-none"
+          />
+          <SynonymTagInput
+            synonyms={item.synonyms ?? []}
+            onChange={(synonyms) => updateItem(item.id, { synonyms })}
+          />
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="gap-1.5"
+        onClick={() => onChange([...items, createNamedItem()])}
+      >
+        <Plus className="h-3.5 w-3.5" />
+        {addLabel}
+      </Button>
+    </div>
+  );
+}
+
 interface RetrievalConfigStepProps {
   value: RetrievalConfigState;
   onChange: (value: RetrievalConfigState) => void;
@@ -297,6 +537,10 @@ export function RetrievalConfigStep({
     next: RetrievalConfigState[K]
   ) => {
     onChange({ ...value, [key]: next });
+  };
+
+  const patchGraph = (next: Partial<GraphRetrievalConfig>) => {
+    patch("graph", { ...value.graph, ...next });
   };
 
   return (
@@ -526,28 +770,200 @@ export function RetrievalConfigStep({
             <span className="text-red-500">*</span>
             <Label className="text-sm text-slate-700">图谱检索</Label>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-1">
-                <Label className="text-sm text-slate-700">提示词</Label>
-                <HelpTip content="用于引导图谱检索的提示词，帮助模型理解多文档关联问题。" />
-              </div>
-              <div className="relative">
-                <Textarea
-                  value={value.graph.prompt}
-                  maxLength={800}
-                  rows={5}
-                  placeholder="请输入图谱检索提示词，用于描述实体关系抽取与召回偏好"
-                  onChange={(e) =>
-                    patch("graph", { ...value.graph, prompt: e.target.value })
+          <div className="rounded-lg border border-slate-200 bg-white px-4">
+            <CollapseSection title="模型选择" defaultOpen>
+              <ConfigField
+                label="模型"
+                tip="用于实体/关系抽取的大模型"
+              >
+                <ModelSelector
+                  presetOnly
+                  selectedModel={value.graph.model}
+                  modelParams={value.graph.modelParams}
+                  onModelChange={(model) =>
+                    patchGraph({
+                      model,
+                      modelParams: getDefaultModelParams(model),
+                    })
                   }
-                  className="resize-none pb-6"
+                  onParamsChange={(modelParams) => patchGraph({ modelParams })}
                 />
-                <span className="absolute bottom-2 right-3 text-xs text-slate-400">
-                  {value.graph.prompt.length}/800
-                </span>
-              </div>
-            </div>
+              </ConfigField>
+            </CollapseSection>
+
+            <CollapseSection title="实体抽取" defaultOpen>
+              <PromptField
+                label="用户提示词"
+                tip="引导模型抽取实体的用户提示词"
+                value={value.graph.entity.prompt}
+                placeholder="请输入实体抽取用户提示词"
+                onChange={(prompt) =>
+                  patchGraph({
+                    entity: { ...value.graph.entity, prompt },
+                  })
+                }
+              />
+
+              <ConfigField
+                label="实体分类"
+                tip="使用系统预置分类或自定义实体类型"
+              >
+                <div className="flex flex-wrap gap-2">
+                  <OptionPill
+                    selected={value.graph.entity.categoryMode === "system"}
+                    onClick={() =>
+                      patchGraph({
+                        entity: {
+                          ...value.graph.entity,
+                          categoryMode: "system",
+                        },
+                      })
+                    }
+                  >
+                    系统默认
+                  </OptionPill>
+                  <OptionPill
+                    selected={value.graph.entity.categoryMode === "custom"}
+                    onClick={() =>
+                      patchGraph({
+                        entity: {
+                          ...value.graph.entity,
+                          categoryMode: "custom",
+                          customItems:
+                            value.graph.entity.customItems.length > 0
+                              ? value.graph.entity.customItems
+                              : [createNamedItem()],
+                        },
+                      })
+                    }
+                  >
+                    自定义
+                  </OptionPill>
+                </div>
+              </ConfigField>
+
+              <ConfigField
+                label="向量化"
+                tip="将实体名称、描述、枚举值等进行向量化，后续可用于语义检索"
+              >
+                <Switch
+                  checked={value.graph.entity.vectorize}
+                  onCheckedChange={(vectorize) =>
+                    patchGraph({
+                      entity: { ...value.graph.entity, vectorize },
+                    })
+                  }
+                />
+              </ConfigField>
+
+              {value.graph.entity.categoryMode === "custom" && (
+                <ConfigField
+                  label="自定义实体"
+                  tip="配置实体名称、描述与同义词"
+                >
+                  <NamedItemListEditor
+                    items={value.graph.entity.customItems}
+                    namePlaceholder="实体名称"
+                    descriptionPlaceholder="实体描述"
+                    addLabel="添加实体"
+                    onChange={(customItems) =>
+                      patchGraph({
+                        entity: { ...value.graph.entity, customItems },
+                      })
+                    }
+                  />
+                </ConfigField>
+              )}
+
+              <ConfigField
+                label="相似度合并"
+                tip="相似度高于阈值的实体将合并"
+                hint="取值范围区间：0 ~ 1.0 (精度 0.01)"
+              >
+                <SliderWithInput
+                  value={value.graph.entity.similarityMerge}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  onChange={(similarityMerge) =>
+                    patchGraph({
+                      entity: { ...value.graph.entity, similarityMerge },
+                    })
+                  }
+                />
+              </ConfigField>
+            </CollapseSection>
+
+            <CollapseSection title="关系抽取">
+              <PromptField
+                label="用户提示词"
+                tip="引导模型抽取关系的用户提示词"
+                value={value.graph.relation.prompt}
+                placeholder="请输入关系抽取用户提示词"
+                onChange={(prompt) =>
+                  patchGraph({
+                    relation: { ...value.graph.relation, prompt },
+                  })
+                }
+              />
+
+              <ConfigField
+                label="关系分类"
+                tip="使用系统预置分类或自定义关系类型"
+              >
+                <div className="flex flex-wrap gap-2">
+                  <OptionPill
+                    selected={value.graph.relation.categoryMode === "system"}
+                    onClick={() =>
+                      patchGraph({
+                        relation: {
+                          ...value.graph.relation,
+                          categoryMode: "system",
+                        },
+                      })
+                    }
+                  >
+                    系统默认
+                  </OptionPill>
+                  <OptionPill
+                    selected={value.graph.relation.categoryMode === "custom"}
+                    onClick={() =>
+                      patchGraph({
+                        relation: {
+                          ...value.graph.relation,
+                          categoryMode: "custom",
+                          customItems:
+                            value.graph.relation.customItems.length > 0
+                              ? value.graph.relation.customItems
+                              : [createNamedItem()],
+                        },
+                      })
+                    }
+                  >
+                    自定义
+                  </OptionPill>
+                </div>
+              </ConfigField>
+
+              {value.graph.relation.categoryMode === "custom" && (
+                <ConfigField
+                  label="自定义关系"
+                  tip="配置关系名称、描述与同义词"
+                >
+                  <NamedItemListEditor
+                    items={value.graph.relation.customItems}
+                    namePlaceholder="关系名称"
+                    descriptionPlaceholder="关系描述"
+                    addLabel="添加关系"
+                    onChange={(customItems) =>
+                      patchGraph({
+                        relation: { ...value.graph.relation, customItems },
+                      })
+                    }
+                  />
+                </ConfigField>
+              )}
+            </CollapseSection>
           </div>
         </div>
       )}

@@ -16,8 +16,8 @@ export function MultiAgentDetailWorkbench({
     <ClawDetailWorkbench
       detail={detail}
       mode="multi-agent"
-      backHref="/agent"
-      backAriaLabel="返回智能体列表"
+      backHref="/multi-agent"
+      backAriaLabel="返回多智能体列表"
     />
   );
 }

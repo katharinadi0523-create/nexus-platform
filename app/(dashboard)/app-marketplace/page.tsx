@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -36,6 +36,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import {
+  getShelvedMultiAgents,
+  type ShelvedMultiAgentItem,
+} from "@/lib/published-multi-agents";
 
 // Mock data types
 interface FeaturedApp {
@@ -67,6 +71,24 @@ interface App {
   stats: {
     downloads: string;
     favorites: string;
+  };
+  /** 上架的多智能体应用，点击进入专用使用页 */
+  kind?: "multi-agent";
+}
+
+function shelvedToApp(item: ShelvedMultiAgentItem): App {
+  return {
+    id: item.id,
+    title: item.name,
+    author: item.author,
+    description: item.description,
+    tags: item.agentTypes.length > 0 ? item.agentTypes : ["多智能体"],
+    icon: Network,
+    stats: {
+      downloads: "—",
+      favorites: "—",
+    },
+    kind: "multi-agent",
   };
 }
 
@@ -293,20 +315,38 @@ export default function AppMarketplacePage() {
   const [activeCategory, setActiveCategory] = useState("全部类型");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [shelvedApps, setShelvedApps] = useState<App[]>([]);
   // 推荐位轮播（仅影响推荐位区域）
   const carouselViewportRef = useRef<HTMLDivElement | null>(null);
   const [carouselIndex, setCarouselIndex] = useState(0); // 按“卡片”为单位滑动
   const [carouselCardWidth, setCarouselCardWidth] = useState<number | null>(
     null
   );
+  const displayAppList = useMemo(
+    () => [...shelvedApps, ...appList],
+    [shelvedApps]
+  );
   const itemsPerPage = 20;
-  const totalItems = 200;
+  const totalItems = 200 + shelvedApps.length;
   const carouselVisibleCount = 3;
   const carouselGapPx = 24;
   const carouselMaxIndex = Math.max(0, featuredApps.length - carouselVisibleCount);
   const carouselDotsCount = carouselMaxIndex + 1;
 
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  useEffect(() => {
+    const refreshShelved = () => {
+      setShelvedApps(getShelvedMultiAgents().map(shelvedToApp));
+    };
+    refreshShelved();
+    window.addEventListener("focus", refreshShelved);
+    window.addEventListener("storage", refreshShelved);
+    return () => {
+      window.removeEventListener("focus", refreshShelved);
+      window.removeEventListener("storage", refreshShelved);
+    };
+  }, []);
 
   useEffect(() => {
     const el = carouselViewportRef.current;
@@ -350,8 +390,12 @@ export default function AppMarketplacePage() {
     }
   };
 
-  const handleAppClick = (appId: string) => {
-    router.push(`/app-marketplace/${appId}`);
+  const handleAppClick = (app: App) => {
+    if (app.kind === "multi-agent") {
+      router.push(`/app-marketplace/multi-agent/${app.id}`);
+      return;
+    }
+    router.push(`/app-marketplace/${app.id}`);
   };
 
   return (
@@ -682,13 +726,13 @@ export default function AppMarketplacePage() {
 
       {/* App Grid */}
       <div className="mb-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-w-0">
-        {appList.map((app) => {
+        {displayAppList.map((app) => {
           const Icon = app.icon;
           return (
             <Card
-              key={app.id}
+              key={app.kind === "multi-agent" ? `multi-agent-${app.id}` : app.id}
               className="group cursor-pointer transition-all hover:shadow-md"
-              onClick={() => handleAppClick(app.id)}
+              onClick={() => handleAppClick(app)}
             >
               <div className="p-5">
                 <div className="mb-3 flex items-start justify-between">

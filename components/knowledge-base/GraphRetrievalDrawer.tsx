@@ -26,9 +26,31 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type EntityKind = "movie" | "actor";
+
+interface GraphSliceSource {
+  id: number;
+  content: string;
+  tags: string[];
+}
+
+interface GraphDocumentSource {
+  id: string;
+  name: string;
+  /** 为空时界面展示为 "-" */
+  description?: string;
+  slices: GraphSliceSource[];
+}
 
 interface EntityNodeData {
   label: string;
@@ -401,7 +423,8 @@ function makeEdge(
   id: string,
   source: string,
   target: string,
-  properties: Record<string, string>
+  properties: Record<string, string>,
+  label = "参演"
 ): Edge<RelationEdgeData> {
   return {
     id,
@@ -409,10 +432,10 @@ function makeEdge(
     target,
     sourceHandle: "center-source",
     targetHandle: "center-target",
-    label: "参演",
+    label,
     type: "centerStraight",
     data: {
-      label: "参演",
+      label,
       properties,
     },
     style: {
@@ -496,17 +519,258 @@ const initialEdges: Edge<RelationEdgeData>[] = [
   }),
 ];
 
-const nodeMap = Object.fromEntries(initialNodes.map((n) => [n.id, n]));
-const edgeMap = Object.fromEntries(initialEdges.map((e) => [e.id, e]));
+/** 文档详情「查看图谱」示例数据（住房租赁合同） */
+const documentInitialNodes: Node<EntityNodeData>[] = [
+  {
+    id: "contract",
+    type: "entity",
+    position: { x: 280, y: 200 },
+    data: {
+      label: "租赁合同",
+      kind: "movie",
+      properties: {
+        name: "北京住房租赁合同",
+        date: "2024-02-20",
+        type: "住房租赁",
+        term: "24个月",
+      },
+    },
+  },
+  {
+    id: "party-a",
+    type: "entity",
+    position: { x: 80, y: 60 },
+    data: {
+      label: "甲方",
+      kind: "actor",
+      properties: {
+        name: "张某某",
+        role: "出租人",
+        idNo: "1101**********1234",
+      },
+    },
+  },
+  {
+    id: "party-b",
+    type: "entity",
+    position: { x: 480, y: 60 },
+    data: {
+      label: "乙方",
+      kind: "actor",
+      properties: {
+        name: "李某某",
+        role: "承租人",
+        idNo: "1101**********5678",
+      },
+    },
+  },
+  {
+    id: "house",
+    type: "entity",
+    position: { x: 280, y: 380 },
+    data: {
+      label: "租赁房屋",
+      kind: "movie",
+      properties: {
+        name: "建国路88号1501室",
+        area: "89㎡",
+        usage: "住宅",
+        district: "北京市朝阳区",
+      },
+    },
+  },
+  {
+    id: "rent",
+    type: "entity",
+    position: { x: 520, y: 280 },
+    data: {
+      label: "租金",
+      kind: "actor",
+      properties: {
+        name: "月租金",
+        amount: "8000元",
+        deposit: "16000元",
+        payDay: "每月1日前",
+      },
+    },
+  },
+];
+
+const documentInitialEdges: Edge<RelationEdgeData>[] = [
+  makeEdge(
+    "de1",
+    "party-a",
+    "contract",
+    { type: "签订", role: "出租人", date: "2024-02-20" },
+    "签订"
+  ),
+  makeEdge(
+    "de2",
+    "party-b",
+    "contract",
+    { type: "签订", role: "承租人", date: "2024-02-20" },
+    "签订"
+  ),
+  makeEdge(
+    "de3",
+    "contract",
+    "house",
+    { type: "标的", address: "朝阳区建国路88号1501室" },
+    "标的"
+  ),
+  makeEdge(
+    "de4",
+    "contract",
+    "rent",
+    { type: "约定", monthly: "8000元", deposit: "16000元" },
+    "约定"
+  ),
+];
+
+function createSlices(contents: string[]): GraphSliceSource[] {
+  return contents.map((content, index) => ({
+    id: index + 1,
+    content,
+    tags: Array.from({ length: 7 }, (_, i) => `切片标签${i + 1}`),
+  }));
+}
+
+const DOCUMENT_LIBRARY: Record<string, GraphDocumentSource> = {
+  avatarScript: {
+    id: "doc-avatar-001",
+    name: "阿凡达电影剧本节选.pdf",
+    description: "收录阿凡达主要角色设定与关键剧情段落",
+    slices: createSlices([
+      "杰克·萨利作为残疾前海军陆战队员，通过阿凡达计划进入潘多拉星球，逐步理解纳威族文化并与自然建立深层连接。",
+      "格蕾丝·奥古斯汀博士长期研究潘多拉生态网络，指出树木与生物之间存在可量化的能量与信息交换。",
+      "采矿公司为获取稀有矿物，持续扩大对潘多拉圣地的侵入，冲突由此升级为全面对抗。",
+    ]),
+  },
+  avatarReview: {
+    id: "doc-avatar-002",
+    name: "全球3D电影技术白皮书.docx",
+    description: "",
+    slices: createSlices([
+      "《阿凡达》推动立体摄影与虚拟制片流程标准化，使大规模 CG 角色表演成为可行的工业方案。",
+      "后续科幻影片在光影捕捉、表情驱动与实景合成方面大量复用该片积累的工程经验。",
+    ]),
+  },
+  farewellEssay: {
+    id: "doc-farewell-001",
+    name: "霸王别姬影评合集.md",
+    description: "京剧伶人半世纪命运与时代变迁的文本资料",
+    slices: createSlices([
+      "程蝶衣与段小楼的师兄弟关系贯穿全片，既是艺术共同体，也是个人身份认同的重要来源。",
+      "菊仙作为关键人物，在动荡年代以世俗智慧维系情感与生存，推动三人关系不断改写。",
+    ]),
+  },
+  wanderingNote: {
+    id: "doc-earth-001",
+    name: "流浪地球设定集.pdf",
+    description: "太阳危机背景下的人类自救与家庭情感线索",
+    slices: createSlices([
+      "刘培强在空间站执行关键任务，其选择与地球表面的救援行动形成互文叙事。",
+      "行星发动机与地下城体系构成故事的技术骨架，强调集体协作高于个人英雄主义。",
+    ]),
+  },
+  himomScript: {
+    id: "doc-himom-001",
+    name: "你好李焕英剧本大纲.txt",
+    description: undefined,
+    slices: createSlices([
+      "贾晓玲穿越回母亲年轻时代，在工厂生活中重新理解亲情与遗憾。",
+      "沈光林等配角以喜剧节奏缓冲情绪高潮，使温情主线更易被观众接受。",
+    ]),
+  },
+  nezhaArt: {
+    id: "doc-nezha-001",
+    name: "哪吒之魔童降世美术设定.pdf",
+    description: "角色造型、场景概念与配音备注",
+    slices: createSlices([
+      "哪吒以反抗宿命为主题，配音表演强调少年感与爆发力的平衡。",
+      "李靖形象在传统严父与现代父亲之间取舍，配音客串强化角色辨识度。",
+    ]),
+  },
+  castingSheet: {
+    id: "doc-cast-001",
+    name: "主演阵容与角色对照表.xlsx",
+    description: "演员、角色、档期与戏份权重说明",
+    slices: createSlices([
+      "参演关系通常包含角色名、出演年份与戏份级别，用于图谱检索中的关系证据回溯。",
+      "同一演员可关联多部影片，文档切片用于支撑实体抽取与关系校验。",
+    ]),
+  },
+};
+
+const ENTITY_DOCUMENTS: Record<string, GraphDocumentSource[]> = {
+  "movie-avatar": [
+    DOCUMENT_LIBRARY.avatarScript,
+    DOCUMENT_LIBRARY.avatarReview,
+  ],
+  "movie-farewell": [DOCUMENT_LIBRARY.farewellEssay],
+  "movie-wandering": [DOCUMENT_LIBRARY.wanderingNote],
+  "movie-hi-mom": [DOCUMENT_LIBRARY.himomScript],
+  "movie-nezha": [DOCUMENT_LIBRARY.nezhaArt],
+  "actor-worthington": [
+    DOCUMENT_LIBRARY.avatarScript,
+    DOCUMENT_LIBRARY.castingSheet,
+  ],
+  "actor-sigourney": [DOCUMENT_LIBRARY.avatarScript],
+  "actor-leslie": [DOCUMENT_LIBRARY.farewellEssay, DOCUMENT_LIBRARY.castingSheet],
+  "actor-maggie": [DOCUMENT_LIBRARY.farewellEssay],
+  "actor-wujing": [
+    DOCUMENT_LIBRARY.wanderingNote,
+    DOCUMENT_LIBRARY.nezhaArt,
+    DOCUMENT_LIBRARY.castingSheet,
+  ],
+  "actor-jialing": [DOCUMENT_LIBRARY.himomScript],
+  "actor-shen": [DOCUMENT_LIBRARY.himomScript],
+  "actor-lv": [DOCUMENT_LIBRARY.nezhaArt],
+};
+
+const EDGE_DOCUMENTS: Record<string, GraphDocumentSource[]> = {
+  e1: [DOCUMENT_LIBRARY.avatarScript, DOCUMENT_LIBRARY.castingSheet],
+  e2: [DOCUMENT_LIBRARY.avatarScript],
+  e3: [DOCUMENT_LIBRARY.farewellEssay, DOCUMENT_LIBRARY.castingSheet],
+  e4: [DOCUMENT_LIBRARY.farewellEssay],
+  e5: [DOCUMENT_LIBRARY.wanderingNote, DOCUMENT_LIBRARY.castingSheet],
+  e6: [DOCUMENT_LIBRARY.himomScript],
+  e7: [DOCUMENT_LIBRARY.himomScript],
+  e8: [DOCUMENT_LIBRARY.nezhaArt],
+  e9: [DOCUMENT_LIBRARY.nezhaArt, DOCUMENT_LIBRARY.castingSheet],
+};
+
+function getDocumentSources(selection: PanelSelection): GraphDocumentSource[] {
+  if (selection.type === "node") {
+    return ENTITY_DOCUMENTS[selection.id] ?? [];
+  }
+  if (selection.type === "edge") {
+    return EDGE_DOCUMENTS[selection.id] ?? [];
+  }
+  return [];
+}
 
 interface GraphCanvasProps {
   selection: PanelSelection;
   onSelect: (selection: PanelSelection) => void;
+  nodes: Node<EntityNodeData>[];
+  onNodesChange: ReturnType<typeof useNodesState<EntityNodeData>>[2];
+  setNodes: ReturnType<typeof useNodesState<EntityNodeData>>[1];
+  edges: Edge<RelationEdgeData>[];
+  onEdgesChange: ReturnType<typeof useEdgesState>[2];
+  setEdges: ReturnType<typeof useEdgesState>[1];
 }
 
-function GraphCanvas({ selection, onSelect }: GraphCanvasProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+function GraphCanvas({
+  selection,
+  onSelect,
+  nodes,
+  onNodesChange,
+  setNodes,
+  edges,
+  onEdgesChange,
+  setEdges,
+}: GraphCanvasProps) {
   const { fitView } = useReactFlow();
 
   useEffect(() => {
@@ -605,14 +869,37 @@ function GraphCanvas({ selection, onSelect }: GraphCanvasProps) {
   );
 }
 
-function PropertyPanel({ selection }: { selection: PanelSelection }) {
-  const movieCount = initialNodes.filter((n) => n.data.kind === "movie").length;
-  const actorCount = initialNodes.filter((n) => n.data.kind === "actor").length;
-  const relationCount = initialEdges.length;
-  const totalNodes = initialNodes.length;
+function PropertyPanel({
+  selection,
+  nodes,
+  edges,
+  onUpdateEntityName,
+  variant = "default",
+}: {
+  selection: PanelSelection;
+  nodes: Node<EntityNodeData>[];
+  edges: Edge<RelationEdgeData>[];
+  onUpdateEntityName: (nodeId: string, name: string) => void;
+  variant?: "default" | "document";
+}) {
+  const movieCount = nodes.filter((n) => n.data.kind === "movie").length;
+  const actorCount = nodes.filter((n) => n.data.kind === "actor").length;
+  const relationCount = edges.length;
+  const totalNodes = nodes.length;
+  const liveNodeMap = useMemo(
+    () => Object.fromEntries(nodes.map((n) => [n.id, n])),
+    [nodes]
+  );
+  const liveEdgeMap = useMemo(
+    () => Object.fromEntries(edges.map((e) => [e.id, e])),
+    [edges]
+  );
+  const primaryLabel = variant === "document" ? "标的" : "电影";
+  const secondaryLabel = variant === "document" ? "主体" : "演员";
+  const relationLabel = variant === "document" ? "关联" : "参演";
 
   if (selection.type === "node") {
-    const node = nodeMap[selection.id];
+    const node = liveNodeMap[selection.id];
     if (!node) return null;
 
     const isMovie = node.data.kind === "movie";
@@ -630,21 +917,33 @@ function PropertyPanel({ selection }: { selection: PanelSelection }) {
               style={{ backgroundColor: color }}
             />
             <span className="text-sm font-medium text-slate-800">
-              {isMovie ? "电影" : "演员"} · {node.data.label}
+              {isMovie ? primaryLabel : secondaryLabel} · {node.data.label}
             </span>
           </div>
-          <PropertyList properties={node.data.properties} />
+          <PropertyList
+            properties={node.data.properties}
+            editableKeys={["name"]}
+            onPropertyChange={(key, value) => {
+              if (key === "name") {
+                onUpdateEntityName(node.id, value);
+              }
+            }}
+          />
+          <DocumentSourcesSection
+            documents={getDocumentSources(selection)}
+          />
         </div>
       </>
     );
   }
 
   if (selection.type === "edge") {
-    const edge = edgeMap[selection.id];
+    const edge = liveEdgeMap[selection.id];
     if (!edge) return null;
 
-    const sourceNode = nodeMap[edge.source];
-    const targetNode = nodeMap[edge.target];
+    const sourceNode = liveNodeMap[edge.source];
+    const targetNode = liveNodeMap[edge.target];
+    const edgeLabel = edge.data?.label || relationLabel;
 
     return (
       <>
@@ -656,12 +955,15 @@ function PropertyPanel({ selection }: { selection: PanelSelection }) {
             <span className="font-medium text-purple-600">
               {sourceNode?.data.label}
             </span>
-            <span className="mx-1.5 text-slate-400">— 参演 →</span>
+            <span className="mx-1.5 text-slate-400">— {edgeLabel} →</span>
             <span className="font-medium text-emerald-600">
               {targetNode?.data.label}
             </span>
           </div>
           <PropertyList properties={edge.data?.properties ?? {}} />
+          <DocumentSourcesSection
+            documents={getDocumentSources(selection)}
+          />
         </div>
       </>
     );
@@ -684,13 +986,13 @@ function PropertyPanel({ selection }: { selection: PanelSelection }) {
               className="bg-violet-100 text-violet-700"
             />
             <StatTag
-              label="电影"
+              label={primaryLabel}
               count={movieCount}
               dotColor={MOVIE_COLOR}
               className="bg-emerald-50 text-emerald-700"
             />
             <StatTag
-              label="演员"
+              label={secondaryLabel}
               count={actorCount}
               dotColor={ACTOR_COLOR}
               className="bg-purple-50 text-purple-700"
@@ -704,7 +1006,7 @@ function PropertyPanel({ selection }: { selection: PanelSelection }) {
           </h4>
           <div className="flex flex-wrap gap-2">
             <RelationTag label="*" count={relationCount} />
-            <RelationTag label="参演" count={relationCount} />
+            <RelationTag label={relationLabel} count={relationCount} />
           </div>
         </section>
 
@@ -718,45 +1020,276 @@ function PropertyPanel({ selection }: { selection: PanelSelection }) {
   );
 }
 
-function PropertyList({ properties }: { properties: Record<string, string> }) {
+function PropertyList({
+  properties,
+  editableKeys = [],
+  onPropertyChange,
+}: {
+  properties: Record<string, string>;
+  editableKeys?: string[];
+  onPropertyChange?: (key: string, value: string) => void;
+}) {
   const entries = useMemo(() => Object.entries(properties), [properties]);
 
   return (
     <div className="space-y-2">
-      {entries.map(([key, value]) => (
-        <div
-          key={key}
-          className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2"
+      {entries.map(([key, value]) => {
+        const editable = editableKeys.includes(key);
+        return (
+          <div
+            key={key}
+            className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2"
+          >
+            <div className="mb-0.5 text-xs text-slate-400">{key}</div>
+            {editable ? (
+              <Input
+                value={value}
+                onChange={(e) => onPropertyChange?.(key, e.target.value)}
+                className="h-8 border-slate-200 bg-white text-sm text-slate-800"
+                placeholder="请输入名称"
+              />
+            ) : (
+              <div className="text-sm leading-relaxed text-slate-800 break-words">
+                {value}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const VISIBLE_TAG_COUNT = 4;
+
+function SliceTagRow({ tags }: { tags: string[] }) {
+  const visible = tags.slice(0, VISIBLE_TAG_COUNT);
+  const remaining = Math.max(0, tags.length - VISIBLE_TAG_COUNT);
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {visible.map((tag) => (
+        <span
+          key={tag}
+          className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
         >
-          <div className="mb-0.5 text-xs text-slate-400">{key}</div>
-          <div className="text-sm leading-relaxed text-slate-800 break-words">
-            {value}
+          {tag}
+        </span>
+      ))}
+      {remaining > 0 && (
+        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+          +{remaining}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function SliceSourceDialog({
+  document,
+  open,
+  onOpenChange,
+}: {
+  document: GraphDocumentSource | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [keyword, setKeyword] = useState("");
+
+  useEffect(() => {
+    if (!open) setKeyword("");
+  }, [open]);
+
+  const filteredSlices = useMemo(() => {
+    if (!document) return [];
+    const q = keyword.trim().toLowerCase();
+    if (!q) return document.slices;
+    return document.slices.filter(
+      (slice) =>
+        slice.content.toLowerCase().includes(q) ||
+        String(slice.id).includes(q) ||
+        slice.tags.some((tag) => tag.toLowerCase().includes(q))
+    );
+  }, [document, keyword]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] w-[min(92vw,640px)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px]">
+        <DialogHeader className="shrink-0 border-b border-slate-100 px-5 py-4 text-left">
+          <DialogTitle className="text-base font-semibold text-slate-900">
+            切片来源
+            {document ? (
+              <span className="ml-2 text-sm font-normal text-slate-500">
+                {document.name}
+              </span>
+            ) : null}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex min-h-0 flex-1 flex-col bg-[#f4f6f8]">
+          <div className="shrink-0 border-b border-slate-100 bg-white px-5 py-3">
+            <div className="relative">
+              <Input
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="搜索关键词"
+                className="h-9 rounded-md border-slate-200 pr-9"
+              />
+              <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+            {filteredSlices.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-400">
+                暂无匹配的切片
+              </div>
+            ) : (
+              filteredSlices.map((slice) => (
+                <div
+                  key={slice.id}
+                  className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
+                    <span>切片 ID: {slice.id}</span>
+                    <span>字符: {slice.content.length}</span>
+                  </div>
+                  <p className="mb-3 text-sm leading-relaxed text-slate-800">
+                    {slice.content}
+                  </p>
+                  <SliceTagRow tags={slice.tags} />
+                </div>
+              ))
+            )}
           </div>
         </div>
-      ))}
-    </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DocumentSourcesSection({
+  documents,
+}: {
+  documents: GraphDocumentSource[];
+}) {
+  const [activeDoc, setActiveDoc] = useState<GraphDocumentSource | null>(null);
+
+  return (
+    <section className="space-y-2">
+      <h4 className="text-sm font-medium text-slate-800">
+        文档来源
+        <span className="ml-1 text-xs font-normal text-slate-400">
+          ({documents.length})
+        </span>
+      </h4>
+
+      {documents.length === 0 ? (
+        <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-400">
+          暂无关联文档
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {documents.map((doc) => (
+            <button
+              key={doc.id}
+              type="button"
+              onClick={() => setActiveDoc(doc)}
+              className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition-colors hover:border-[#2773ff]/40 hover:bg-blue-50/40"
+            >
+              <div className="mb-1 truncate text-sm font-medium text-slate-800">
+                {doc.name}
+              </div>
+              <div className="mb-1 text-xs text-slate-400">文档 ID: {doc.id}</div>
+              <div className="line-clamp-2 text-xs leading-relaxed text-slate-500">
+                {doc.description?.trim() ? doc.description : "-"}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <SliceSourceDialog
+        document={activeDoc}
+        open={Boolean(activeDoc)}
+        onOpenChange={(open) => {
+          if (!open) setActiveDoc(null);
+        }}
+      />
+    </section>
   );
 }
 
 interface GraphRetrievalDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  title?: string;
+  variant?: "default" | "document";
 }
 
 export function GraphRetrievalDrawer({
   open,
   onOpenChange,
+  title = "图谱检索",
+  variant = "default",
 }: GraphRetrievalDrawerProps) {
+  const seedNodes =
+    variant === "document" ? documentInitialNodes : initialNodes;
+  const seedEdges =
+    variant === "document" ? documentInitialEdges : initialEdges;
+
   const [selection, setSelection] = useState<PanelSelection>({
     type: "overview",
   });
+  const [nodes, setNodes, onNodesChange] = useNodesState(seedNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(seedEdges);
+
+  useEffect(() => {
+    if (!open) return;
+    const nextNodes =
+      variant === "document" ? documentInitialNodes : initialNodes;
+    const nextEdges =
+      variant === "document" ? documentInitialEdges : initialEdges;
+    setSelection({ type: "overview" });
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+  }, [open, variant, setNodes, setEdges]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setSelection({ type: "overview" });
+      setNodes(
+        variant === "document" ? documentInitialNodes : initialNodes
+      );
+      setEdges(
+        variant === "document" ? documentInitialEdges : initialEdges
+      );
     }
     onOpenChange(nextOpen);
   };
+
+  const updateEntityName = useCallback(
+    (nodeId: string, name: string) => {
+      setNodes((prev) =>
+        prev.map((node) => {
+          if (node.id !== nodeId) return node;
+          const nextLabel = name.trim() || node.data.label;
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              label: nextLabel,
+              properties: {
+                ...node.data.properties,
+                name,
+              },
+            },
+          };
+        })
+      );
+    },
+    [setNodes]
+  );
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -766,7 +1299,7 @@ export function GraphRetrievalDrawer({
       >
         <SheetHeader className="shrink-0 border-b border-slate-200 px-5 py-4 text-left">
           <SheetTitle className="text-base font-semibold text-slate-900">
-            图谱检索
+            {title}
           </SheetTitle>
         </SheetHeader>
 
@@ -778,14 +1311,26 @@ export function GraphRetrievalDrawer({
                   <GraphCanvas
                     selection={selection}
                     onSelect={setSelection}
+                    nodes={nodes}
+                    onNodesChange={onNodesChange}
+                    setNodes={setNodes}
+                    edges={edges}
+                    onEdgesChange={onEdgesChange}
+                    setEdges={setEdges}
                   />
                 </div>
               </ReactFlowProvider>
             )}
           </div>
 
-          <aside className="flex h-full w-[280px] shrink-0 flex-col border-l border-slate-200 bg-white">
-            <PropertyPanel selection={selection} />
+          <aside className="flex h-full w-[300px] shrink-0 flex-col border-l border-slate-200 bg-white">
+            <PropertyPanel
+              selection={selection}
+              nodes={nodes}
+              edges={edges}
+              onUpdateEntityName={updateEntityName}
+              variant={variant}
+            />
           </aside>
         </div>
       </SheetContent>

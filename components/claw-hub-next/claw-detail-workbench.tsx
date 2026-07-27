@@ -131,7 +131,9 @@ import { ModelSelector, type ModelParams } from "@/components/agent-editor/Model
 import { PRESET_MODEL_IDS, getDefaultModelParams, type ModelParamKey } from "@/lib/model-schemas";
 import {
   formatMultiAgentUpdatedAt,
+  getShelvedMultiAgentById,
   upsertPublishedMultiAgent,
+  upsertShelvedMultiAgent,
 } from "@/lib/published-multi-agents";
 import { cn } from "@/lib/utils";
 
@@ -608,7 +610,11 @@ export function ClawDetailWorkbench({
   const [publishPanelOpen, setPublishPanelOpen] = useState(false);
   const [publishValidationOpen, setPublishValidationOpen] = useState(false);
   const [apiPublishEffective, setApiPublishEffective] = useState(detail.overview.publishStatus === "已发布");
-  const [plazaStatus, setPlazaStatus] = useState<ClawPlazaStatus>("未上架");
+  const [plazaStatus, setPlazaStatus] = useState<ClawPlazaStatus>(() =>
+    isMultiAgentMode && getShelvedMultiAgentById(detail.overview.id)
+      ? "已上架"
+      : "未上架"
+  );
   const [shelfDialogOpen, setShelfDialogOpen] = useState(false);
   const [shelfReleaseMode, setShelfReleaseMode] = useState<ClawReleaseMode>("公开发布");
   const [shelfAgentTypes, setShelfAgentTypes] = useState<string[]>([]);
@@ -1325,7 +1331,7 @@ export function ClawDetailWorkbench({
       setApiPublishEffective(true);
       setPublishValidationOpen(false);
       toast.success(`已发布：${publishedName}`);
-      router.push("/agent");
+      router.push("/multi-agent");
       return;
     }
 
@@ -1369,9 +1375,35 @@ export function ClawDetailWorkbench({
       return;
     }
 
+    if (isMultiAgentMode) {
+      const shelvedName = entityName.trim() || detail.overview.name;
+      upsertShelvedMultiAgent({
+        id: detail.overview.id || `multi-agent-${Date.now()}`,
+        name: shelvedName,
+        description: entityDescription.trim() || detail.overview.summary,
+        releaseMode: shelfReleaseMode,
+        agentTypes: shelfAgentTypes,
+      });
+      // 上架前若未发布，一并写入已发布列表，保证广场可回链编辑
+      if (publishStatus !== "已发布") {
+        upsertPublishedMultiAgent({
+          id: detail.overview.id || `multi-agent-${Date.now()}`,
+          name: shelvedName,
+          desc: entityDescription.trim() || detail.overview.summary,
+          updatedAt: formatMultiAgentUpdatedAt(),
+        });
+        setPublishStatus("已发布");
+        setApiPublishEffective(true);
+      }
+    }
+
     setPlazaStatus("已上架");
     setShelfDialogOpen(false);
-    toast.success(`已上架到智能体广场：${shelfReleaseMode} / ${shelfAgentTypes.join("、")}`);
+    toast.success(
+      isMultiAgentMode
+        ? `已上架到应用广场：${shelfReleaseMode} / ${shelfAgentTypes.join("、")}`
+        : `已上架到智能体广场：${shelfReleaseMode} / ${shelfAgentTypes.join("、")}`
+    );
   }
 
   function handleSubAgentConfigToggle(enabled: boolean) {
