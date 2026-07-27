@@ -10,7 +10,6 @@ import {
 import { useProjectConversation } from "@/components/my-claw/project-conversation/project-conversation-provider";
 import { ProjectIssueCard } from "./project-issue-card";
 import { ProjectIssueColumn } from "./project-issue-column";
-import { IssueStewardSuggestion } from "./issue-steward-suggestion";
 
 interface ProjectIssueBoardProps {
   projectId: string;
@@ -21,13 +20,8 @@ export function ProjectIssueBoard({
   projectId,
   onOpenIssue,
 }: ProjectIssueBoardProps) {
-  const { getIssues, state, applyIssueProposal, dismissIssueProposal } =
-    useProjectConversation();
-
+  const { getIssues, state } = useProjectConversation();
   const issues = getIssues(projectId);
-  const proposals = state.issueProposals.filter(
-    (item) => item.projectId === projectId && !item.dismissed
-  );
 
   const columns = useMemo(() => {
     const map = new Map<BoardColumnId, ProjectIssue[]>();
@@ -54,19 +48,6 @@ export function ProjectIssueBoard({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f8f9fb]">
-      {proposals.length > 0 ? (
-        <div className="space-y-2 border-b border-[#eef2f6] bg-white px-4 py-3">
-          {proposals.map((proposal) => (
-            <IssueStewardSuggestion
-              key={proposal.id}
-              proposal={proposal}
-              onApply={() => applyIssueProposal(proposal.id)}
-              onDismiss={() => dismissIssueProposal(proposal.id)}
-            />
-          ))}
-        </div>
-      ) : null}
-
       <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden px-4 py-4">
         <div className="flex h-full min-h-[420px] gap-3">
           {BOARD_COLUMNS.map((columnId) => {

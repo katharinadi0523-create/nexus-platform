@@ -61,21 +61,23 @@ export function MyClawSidebar() {
       <div className="mx-3 border-t border-[#eef2f6]" />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="px-3 pb-1 pt-3">
+        <div className="shrink-0 px-3 pb-1 pt-3">
           <div className="px-0.5 text-[11px] font-medium text-[#5a6779]">
             个人 Chat
           </div>
         </div>
-        <div className="max-h-[42%] min-h-0 overflow-hidden border-b border-[#eef2f6]">
+        <div className="flex min-h-0 basis-0 flex-1 flex-col overflow-hidden border-b border-[#eef2f6]">
           <SessionList />
         </div>
 
-        <div className="px-3 pb-1 pt-3">
+        <div className="shrink-0 px-3 pb-1 pt-3">
           <div className="px-0.5 text-[11px] font-medium text-[#5a6779]">
             Project Chat
           </div>
         </div>
-        <ProjectChatList />
+        <div className="flex min-h-0 basis-0 flex-1 flex-col overflow-hidden">
+          <ProjectChatList />
+        </div>
       </div>
 
       <div className="mt-auto border-t border-[#eef2f6] px-3 py-3">

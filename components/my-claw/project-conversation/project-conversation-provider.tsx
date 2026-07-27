@@ -60,6 +60,7 @@ import {
   PUBLISHED_TOOL_CATALOG,
   SEED_SHARED_TOOL_BINDINGS,
   type ProjectSharedToolBinding,
+  type ProjectSharedToolKind,
   type PublishedToolResource,
 } from "@/lib/mock/my-claw/project-tools";
 import {
@@ -138,6 +139,14 @@ interface BindSharedToolPayload {
   publishedResourceVersionId: string;
   permission: "read" | "execute" | "write";
   credentialRef?: string;
+  /** When binding from Claw workbench ToolConfigDialog catalog */
+  resource?: {
+    kind: ProjectSharedToolKind;
+    displayName: string;
+    description?: string;
+    compatibleActorIds?: string[];
+    requiresCredential?: boolean;
+  };
 }
 
 interface ProjectConversationContextValue {
@@ -2030,36 +2039,74 @@ export function ProjectConversationProvider({
 
   const bindSharedTool = useCallback((payload: BindSharedToolPayload) => {
     setState((prev) => {
+      const alreadyBound = prev.sharedToolBindings.some(
+        (item) =>
+          item.projectId === payload.projectId &&
+          item.publishedResourceVersionId === payload.publishedResourceVersionId
+      );
+      if (alreadyBound) return prev;
+
       const catalog = prev.publishedTools.find(
         (item) => item.versionId === payload.publishedResourceVersionId
       );
-      if (!catalog) return prev;
+      const kind = catalog?.kind ?? payload.resource?.kind;
+      const displayName = catalog?.name ?? payload.resource?.displayName;
+      if (!kind || !displayName) return prev;
+
+      const requiresCredential =
+        catalog?.requiresCredential ??
+        payload.resource?.requiresCredential ??
+        kind === "mcp";
+      const compatibleActorIds =
+        catalog?.compatibleActorIds ??
+        payload.resource?.compatibleActorIds ??
+        [];
+
+      let publishedTools = prev.publishedTools;
+      if (!catalog && payload.resource) {
+        publishedTools = [
+          ...prev.publishedTools,
+          {
+            id: payload.publishedResourceVersionId.replace(/-v\d+$/, ""),
+            versionId: payload.publishedResourceVersionId,
+            kind,
+            name: displayName,
+            description: payload.resource.description ?? "",
+            publisher: "Claw Workbench Catalog",
+            version: "1.0.0",
+            scenario: "",
+            compatibleActorIds,
+            requiresCredential,
+            available: true,
+          },
+        ];
+      }
+
       const bindingId = createId("stb");
       const binding: ProjectSharedToolBinding = {
         id: bindingId,
         projectId: payload.projectId,
         publishedResourceVersionId: payload.publishedResourceVersionId,
-        kind: catalog.kind,
-        displayName: catalog.name,
+        kind,
+        displayName,
         permission: payload.permission,
         credentialRef: payload.credentialRef,
-        compatibleActorIds: catalog.compatibleActorIds,
-        status: catalog.requiresCredential
-          ? "authorization_required"
-          : "active",
+        compatibleActorIds,
+        status: requiresCredential ? "authorization_required" : "active",
         addedByUserId: CURRENT_USER_ID,
         createdAt: nowIso(),
         updatedAt: nowIso(),
       };
       return {
         ...prev,
+        publishedTools,
         sharedToolBindings: [...prev.sharedToolBindings, binding],
         projects: prev.projects.map((item) =>
           item.id === payload.projectId
             ? {
                 ...item,
                 sharedToolBindingIds: [
-                  ...item.sharedToolBindingIds,
+                  ...(item.sharedToolBindingIds ?? []),
                   bindingId,
                 ],
                 updatedAt: nowIso(),

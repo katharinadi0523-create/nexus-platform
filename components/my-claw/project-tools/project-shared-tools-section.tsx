@@ -82,7 +82,7 @@ export function ProjectSharedToolsSection({
 
       {rows.length === 0 ? (
         <p className="mb-2 text-[12px] text-[#5a6779]">
-          暂无共享工具。可从已发布目录添加 Workflow / Plugin / MCP。
+          暂无共享工具。可从 Claw 工具目录添加 MCP / OpenAPI。
         </p>
       ) : (
         <ul className="mb-2 space-y-1.5">
