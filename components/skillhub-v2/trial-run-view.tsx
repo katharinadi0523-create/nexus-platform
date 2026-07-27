@@ -31,40 +31,83 @@ export function TrialRunView({ skill, onBack, onComplete }: TrialRunViewProps) {
   );
   const lockedVersion = getCurrentManagedVersion(skill)?.version ?? "v1.0";
   const isResearchSkill = skill.id === "research-evidence-extractor";
+  const isFastqSkill = skill.id === "fastq-parser";
   const sampleInput = isResearchSkill
     ? "samples/rice_drought_study.pdf"
-    : skill.runtimeSnapshot.sample ?? "samples/rice_expression.csv";
-  const candidateDependencies = isResearchSkill ? "pypdf · httpx" : "pandas · scipy";
+    : isFastqSkill
+      ? skill.runtimeSnapshot.sample ?? "samples/SRR000001.fastq"
+      : skill.runtimeSnapshot.sample ?? "samples/rice_expression.csv";
+  const candidateDependencies = isResearchSkill
+    ? "pypdf · httpx"
+    : isFastqSkill
+      ? "biopython · pysam"
+      : "pandas · scipy";
   const trialItems = TRIAL_RUN_TIMELINE_ITEMS.map((item) => {
     if (item.key === "trial-user" && item.type === "user") {
       return {
         ...item,
         message: {
           ...item.message,
-          content: `用 ${sampleInput} 对当前锁定版本做一次试运行，自动识别、安装并锁定依赖。`,
+          content: isFastqSkill
+            ? `用 ${sampleInput} 对当前锁定版本做一次试运行，按解析流水线完成本体匹配、确定性解析、元数据生成与入库血缘。`
+            : `用 ${sampleInput} 对当前锁定版本做一次试运行，自动识别、安装并锁定依赖。`,
           attachments: [sampleInput],
         },
       };
     }
-    if (item.key === "trial-scan" && item.type === "action" && isResearchSkill) {
+    if (item.key === "trial-thinking" && item.type === "thinking" && isFastqSkill) {
       return {
         ...item,
-        logs: ["候选依赖：pypdf>=4.3、httpx>=0.27。", "平台引用：Crossref API。"],
+        message: {
+          ...item.message,
+          content:
+            "按解析流水线固定顺序执行：本体查询 → Skill 调用（预装工具、不联网）→ 解码/结构化/QC → 元数据生成 → 入库并记录血缘；同一输入需确定性、幂等。",
+        },
       };
+    }
+    if (item.key === "trial-scan" && item.type === "action") {
+      if (isResearchSkill) {
+        return {
+          ...item,
+          logs: ["候选依赖：pypdf>=4.3、httpx>=0.27。", "平台引用：Crossref API。"],
+        };
+      }
+      if (isFastqSkill) {
+        return {
+          ...item,
+          logs: [
+            "候选依赖：biopython>=1.83、pysam>=0.22。",
+            "本体命中：format=fastq · 工具=SeqIO/fastqc · 元数据字段=read_count/avg_length/qc_pass。",
+          ],
+        };
+      }
     }
     if (item.key === "trial-fixture" && item.type === "action") {
       return {
         ...item,
-        logs: [`选择 ${sampleInput}，覆盖当前技能主执行路径。`],
+        logs: isFastqSkill
+          ? [`选择 ${sampleInput}，覆盖上传→本体→解析→元数据→入库主路径。`]
+          : [`选择 ${sampleInput}，覆盖当前技能主执行路径。`],
+      };
+    }
+    if (item.key === "trial-sandbox" && item.type === "action" && isFastqSkill) {
+      return {
+        ...item,
+        logs: ["Python 3.11 · 隔离沙箱 · 禁止外网。", "已安装 biopython==1.83、pysam==0.22.1。"],
       };
     }
     if (item.key === "trial-skill" && item.type === "action") {
       return {
         ...item,
-        title: `Skill · ${skill.id}@${lockedVersion}`,
+        title: `Skill · ${skill.name}@${lockedVersion}`,
         logs: isResearchSkill
           ? ["退出码 0；证据一致性用例 9/9 通过。", "产物：artifacts/evidence-trace.json。"]
-          : item.logs,
+          : isFastqSkill
+            ? [
+                "退出码 0；流水线步骤 ①~⑦ 全部完成。",
+                "产物：artifacts/parse-result.json · artifacts/metadata.yaml · artifacts/lineage.json。",
+              ]
+            : item.logs,
       };
     }
     return item;
@@ -101,7 +144,7 @@ export function TrialRunView({ skill, onBack, onComplete }: TrialRunViewProps) {
           </span>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-base font-semibold text-slate-950">AI 试运行</h1>
+              <h1 className="truncate text-base font-semibold text-slate-950">{skill.name}</h1>
               <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700">
                 <Sparkles className="h-3 w-3" />
                 复用 Claw
@@ -112,7 +155,9 @@ export function TrialRunView({ skill, onBack, onComplete }: TrialRunViewProps) {
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              {skill.displayName} · 静态扫描、沙箱运行、依赖锁定与快照冻结在同一对话中完成
+              {isFastqSkill
+                ? "解析流水线试运行 · 本体匹配、确定性解析、元数据与血缘在同一对话中完成"
+                : "静态扫描、沙箱运行、依赖锁定与快照冻结在同一对话中完成"}
             </p>
           </div>
         </div>
@@ -200,8 +245,8 @@ export function TrialRunView({ skill, onBack, onComplete }: TrialRunViewProps) {
                 试运行成功
               </div>
               <p className="mt-2 text-xs leading-5">
-                {isResearchSkill ? "9/9" : "4/4"} 用例通过，运行时快照已绑定 {lockedVersion}
-                ，依赖版本已冻结。
+                {isResearchSkill ? "9/9" : isFastqSkill ? "6/6" : "4/4"} 用例通过，运行时快照已绑定{" "}
+                {lockedVersion}，依赖版本已冻结。
               </p>
             </div>
           ) : null}
