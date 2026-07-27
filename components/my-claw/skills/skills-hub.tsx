@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Search, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { SkillsPage } from "@/components/skills/skills-page";
@@ -63,17 +63,16 @@ function MineSkillsWorkbench() {
   const safePage = Math.min(currentPage, totalPages);
   const pageRows = filteredSkills.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  useEffect(() => {
+  const resetPagination = () => {
     setCurrentPage(1);
     setJumpInput("1");
-  }, [query, originFilter, pageSize]);
+  };
 
-  useEffect(() => {
-    setJumpInput(String(safePage));
-    if (currentPage !== safePage) {
-      setCurrentPage(safePage);
-    }
-  }, [currentPage, safePage]);
+  const goToPage = (page: number) => {
+    const nextPage = Math.min(totalPages, Math.max(1, page));
+    setCurrentPage(nextPage);
+    setJumpInput(String(nextPage));
+  };
 
   const handleToggle = (id: string, enabled: boolean) => {
     setSkills((current) =>
@@ -104,7 +103,7 @@ function MineSkillsWorkbench() {
       setJumpInput(String(safePage));
       return;
     }
-    setCurrentPage(Math.min(totalPages, Math.max(1, Math.floor(next))));
+    goToPage(Math.floor(next));
   };
 
   const visiblePages = getVisiblePageIndices(safePage, totalPages);
@@ -130,7 +129,10 @@ function MineSkillsWorkbench() {
               <button
                 key={tab.value}
                 type="button"
-                onClick={() => setOriginFilter(tab.value)}
+                onClick={() => {
+                  setOriginFilter(tab.value);
+                  resetPagination();
+                }}
                 className={cn(
                   "pb-2.5 text-[13px] transition-colors duration-100",
                   active
@@ -147,7 +149,10 @@ function MineSkillsWorkbench() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              resetPagination();
+            }}
             placeholder="搜索技能名称或描述"
             className="h-8 rounded border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-none focus-visible:border-[#2773ff]/40 focus-visible:ring-[#dbe7f4]"
           />
@@ -255,7 +260,7 @@ function MineSkillsWorkbench() {
                 size="icon"
                 className="h-8 w-8 rounded-[4px] text-slate-400 hover:bg-slate-50 hover:text-slate-700"
                 disabled={safePage <= 1}
-                onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
+                onClick={() => goToPage(safePage - 1)}
                 aria-label="上一页"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -268,7 +273,7 @@ function MineSkillsWorkbench() {
                   ) : null}
                   <button
                     type="button"
-                    onClick={() => setCurrentPage(page)}
+                    onClick={() => goToPage(page)}
                     className={cn(
                       "h-8 min-w-8 rounded-[4px] px-2 text-sm font-medium transition-colors",
                       page === safePage
@@ -287,7 +292,7 @@ function MineSkillsWorkbench() {
                 size="icon"
                 className="h-8 w-8 rounded-[4px] text-slate-500 hover:bg-slate-50 hover:text-slate-800"
                 disabled={safePage >= totalPages}
-                onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
+                onClick={() => goToPage(safePage + 1)}
                 aria-label="下一页"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -296,7 +301,10 @@ function MineSkillsWorkbench() {
 
             <select
               value={String(pageSize)}
-              onChange={(event) => setPageSize(Number(event.target.value))}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value));
+                resetPagination();
+              }}
               className="h-8 w-[92px] rounded-[4px] border border-slate-200 bg-white px-2 text-sm text-slate-700 outline-none transition hover:border-slate-300 focus:border-blue-300"
               aria-label="每页条数"
             >
@@ -355,6 +363,12 @@ export function MyClawSkillsHub() {
             >
               技能广场
             </TabsTrigger>
+            <TabsTrigger
+              value="management"
+              className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-[#5a6779] shadow-none data-[state=active]:border-[#2773ff] data-[state=active]:bg-transparent data-[state=active]:text-[#2773ff] data-[state=active]:shadow-none"
+            >
+              技能管理
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -367,6 +381,13 @@ export function MyClawSkillsHub() {
           className="mt-0 min-h-0 flex-1 overflow-y-auto bg-[#e8f0fb] px-4 py-4 md:px-6"
         >
           <SkillsPage moduleView="hub" embedded />
+        </TabsContent>
+
+        <TabsContent
+          value="management"
+          className="mt-0 min-h-0 flex-1 overflow-y-auto bg-[#f8f9fb] px-4 py-4 md:px-6"
+        >
+          <SkillsPage moduleView="management" embedded />
         </TabsContent>
       </Tabs>
     </div>
