@@ -161,11 +161,11 @@ function buildInitialState(): ProjectConversationState {
   };
 }
 
-function loadState(): ProjectConversationState {
-  if (typeof window === "undefined") return buildInitialState();
+function readPersistedState(): ProjectConversationState | null {
+  if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return buildInitialState();
+    if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ProjectConversationState>;
     const base = buildInitialState();
     return {
@@ -180,7 +180,7 @@ function loadState(): ProjectConversationState {
       actors: base.actors,
     };
   } catch {
-    return buildInitialState();
+    return null;
   }
 }
 
@@ -193,16 +193,25 @@ export function ProjectConversationProvider({
 }: {
   children: ReactNode;
 }) {
-  const [state, setState] = useState<ProjectConversationState>(() => loadState());
+  // Always seed identically on server + first client paint to avoid hydration mismatch.
+  const [state, setState] = useState<ProjectConversationState>(buildInitialState);
+  const [readyToPersist, setReadyToPersist] = useState(false);
   const timersRef = useRef<Record<string, number>>({});
-  const skipPersistRef = useRef(true);
 
   useEffect(() => {
-    skipPersistRef.current = false;
+    // Defer restore so SSR HTML matches the first client paint (seed).
+    const timer = window.setTimeout(() => {
+      const persisted = readPersistedState();
+      if (persisted) {
+        setState(persisted);
+      }
+      setReadyToPersist(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    if (skipPersistRef.current) return;
+    if (!readyToPersist) return;
     const persistable = {
       workspaces: state.workspaces,
       projects: state.projects,
@@ -221,7 +230,7 @@ export function ProjectConversationProvider({
       inbox: state.inbox,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
-  }, [state]);
+  }, [readyToPersist, state]);
 
   useEffect(() => {
     const timers = timersRef.current;

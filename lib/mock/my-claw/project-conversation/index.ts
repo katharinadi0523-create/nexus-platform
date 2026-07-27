@@ -26,12 +26,12 @@ export function createId(prefix: string) {
 
 export function formatDurationLabel(
   startedAt?: string,
-  completedAt?: string,
-  nowMs: number = Date.now()
+  completedAt?: string
 ) {
-  if (!startedAt) return undefined;
+  // Only use fixed endpoints — avoid Date.now() to prevent SSR/client hydration drift.
+  if (!startedAt || !completedAt) return undefined;
   const start = new Date(startedAt).getTime();
-  const end = completedAt ? new Date(completedAt).getTime() : nowMs;
+  const end = new Date(completedAt).getTime();
   const seconds = Math.max(0, Math.floor((end - start) / 1000));
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
