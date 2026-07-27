@@ -125,6 +125,16 @@ interface ProjectConversationContextValue {
   archiveProject: (projectId: string) => void;
   updateProjectBrief: (projectId: string, brief: string) => void;
   restoreActorOnline: (actorId: string) => void;
+  addGitHubWorkSource: (
+    projectId: string,
+    repoInput: string
+  ) => { ok: true } | { ok: false; error: string };
+  addLocalWorkSource: (
+    projectId: string,
+    displayName: string,
+    localPath: string
+  ) => { ok: true } | { ok: false; error: string };
+  removeWorkSource: (projectId: string, sourceId: string) => void;
 }
 
 const ProjectConversationContext =
@@ -1341,6 +1351,143 @@ export function ProjectConversationProvider({
     }));
   }, []);
 
+  const addGitHubWorkSource = useCallback(
+    (projectId: string, repoInput: string) => {
+      const trimmed = repoInput.trim();
+      if (!trimmed) {
+        return { ok: false as const, error: "请输入 GitHub 仓库地址" };
+      }
+
+      const match =
+        trimmed.match(
+          /(?:https?:\/\/github\.com\/)?([^/\s]+)\/([^/\s#?]+?)(?:\.git)?\/?$/i
+        ) ?? trimmed.match(/^([^/\s]+)\/([^/\s]+)$/);
+      if (!match) {
+        return {
+          ok: false as const,
+          error: "格式需为 owner/repo 或 https://github.com/owner/repo",
+        };
+      }
+
+      const owner = match[1];
+      const repo = match[2].replace(/\.git$/i, "");
+      const name = `${owner}/${repo}`;
+      const detail = `github.com/${owner}/${repo} · main`;
+
+      setState((prev) => {
+        const project = prev.projects.find((item) => item.id === projectId);
+        if (!project || project.status === "archived") return prev;
+
+        const duplicate = prev.workSources.some(
+          (item) =>
+            item.projectId === projectId &&
+            item.type === "github_repository" &&
+            item.name.toLowerCase() === name.toLowerCase()
+        );
+        if (duplicate) return prev;
+
+        const sourceId = createId("ws-gh");
+        return {
+          ...prev,
+          workSources: [
+            ...prev.workSources,
+            {
+              id: sourceId,
+              projectId,
+              type: "github_repository",
+              name,
+              detail,
+              access: "read",
+              availability: "available",
+            },
+          ],
+          projects: prev.projects.map((item) =>
+            item.id === projectId
+              ? {
+                  ...item,
+                  workSourceIds: [...item.workSourceIds, sourceId],
+                  updatedAt: nowIso(),
+                }
+              : item
+          ),
+        };
+      });
+
+      return { ok: true as const };
+    },
+    []
+  );
+
+  const addLocalWorkSource = useCallback(
+    (projectId: string, displayName: string, localPath: string) => {
+      const name = displayName.trim() || "本地工作区";
+      const path = localPath.trim();
+      if (!path) {
+        return { ok: false as const, error: "请输入本地目录路径" };
+      }
+
+      setState((prev) => {
+        const project = prev.projects.find((item) => item.id === projectId);
+        if (!project || project.status === "archived") return prev;
+
+        const hasLocal = prev.workSources.some(
+          (item) =>
+            item.projectId === projectId && item.type === "local_directory"
+        );
+        if (hasLocal) return prev;
+
+        const sourceId = createId("ws-local");
+        return {
+          ...prev,
+          workSources: [
+            ...prev.workSources,
+            {
+              id: sourceId,
+              projectId,
+              type: "local_directory",
+              name,
+              detail: path,
+              access: "read_write",
+              availability: "available",
+              runtimeActorId: "actor-coding",
+            },
+          ],
+          projects: prev.projects.map((item) =>
+            item.id === projectId
+              ? {
+                  ...item,
+                  workSourceIds: [...item.workSourceIds, sourceId],
+                  updatedAt: nowIso(),
+                }
+              : item
+          ),
+        };
+      });
+
+      return { ok: true as const };
+    },
+    []
+  );
+
+  const removeWorkSource = useCallback(
+    (projectId: string, sourceId: string) => {
+      setState((prev) => ({
+        ...prev,
+        workSources: prev.workSources.filter((item) => item.id !== sourceId),
+        projects: prev.projects.map((item) =>
+          item.id === projectId
+            ? {
+                ...item,
+                workSourceIds: item.workSourceIds.filter((id) => id !== sourceId),
+                updatedAt: nowIso(),
+              }
+            : item
+        ),
+      }));
+    },
+    []
+  );
+
   const value = useMemo<ProjectConversationContextValue>(
     () => ({
       state,
@@ -1377,6 +1524,9 @@ export function ProjectConversationProvider({
       archiveProject,
       updateProjectBrief,
       restoreActorOnline,
+      addGitHubWorkSource,
+      addLocalWorkSource,
+      removeWorkSource,
     }),
     [
       state,
@@ -1412,6 +1562,9 @@ export function ProjectConversationProvider({
       archiveProject,
       updateProjectBrief,
       restoreActorOnline,
+      addGitHubWorkSource,
+      addLocalWorkSource,
+      removeWorkSource,
     ]
   );
 

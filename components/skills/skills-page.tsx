@@ -670,6 +670,180 @@ description: "从科研文献和实验记录中抽取结构化结论与来源证
     ],
   }),
   createMySkill({
+    id: "fastq-parser",
+    name: "FASTQ解析",
+    description:
+      "按解析流水线对 FASTQ 测序文件做确定性解析：本体匹配格式与工具、解码与 QC、生成带来源证据的元数据，并写入可追溯血缘后入库。",
+    category: "数据分析",
+    tags: ["FASTQ", "测序", "解析", "质控", "农业"],
+    usageInstructions:
+      "上传已完成入库的 FASTQ 文件（或给出文件资产 ID）。技能会按固定顺序执行本体查询、预装工具解析、元数据生成与入库，不访问外网、不调用大模型。",
+    source: "blank",
+    status: "published",
+    version: "1.0",
+    publishedVersion: "1.0",
+    releaseNotes:
+      "首版对齐解析流水线：上传→本体→Skill→解析/QC→元数据→入库血缘，保证确定性与重试幂等。",
+    createdBy: "科研数据组",
+    updatedBy: "科研数据组",
+    linkedCECClaws: [CEC_CLAW_INSTANCE],
+    files: [
+      createFile(
+        "SKILL.md",
+        `---
+name: fastq-parser
+description: "对 FASTQ 文件执行确定性解析流水线：本体匹配、解码与 QC、元数据生成、入库与血缘。"
+runtime: deterministic
+network: none
+---
+
+# 解析流水线（运行态）
+
+1. 文件上传：引用原始文件资产与 SHA-256（原始层只读）
+2. 本体查询：匹配格式定义 / 结构规则 / 元数据字段 / 解析规则 / 对应工具
+3. 可用性判断：无可用算子则转 AI-SKILL 订单；有则继续
+4. Skill 调用：仅使用系统预装工具，确定性执行，不联网
+5. 文件解析：解码 + 结构化 + 质量检查 QC
+6. 元数据生成：字段 + 来源证据 + 冲突 / 缺失项
+7. 入库：沉淀文件资产 / 基础关系，并记录数据血缘
+
+# 不变量
+- 同一文件 + 同一 Skill 版本 → 两次结果一致
+- 重试幂等：成功项不重复解析、不重复入库
+- 原始文件只读，解析产物仅引用原始层
+`,
+        "fastq-parser"
+      ),
+      createFile(
+        "src/main.py",
+        `from ontology import match_fastq_operator
+from parse import decode_and_qc
+from metadata import build_metadata
+from lineage import record_lineage, ingest
+
+def run(file_asset):
+    """Deterministic FASTQ parse pipeline. No LLM. No network."""
+    operator = match_fastq_operator(file_asset)
+    if operator is None:
+        return {"status": "need_skill_order", "reason": "no_operator"}
+
+    parsed = decode_and_qc(file_asset, operator)
+    meta = build_metadata(file_asset, parsed, operator)
+    lineage = record_lineage(file_asset, skill_id="fastq-parser", version="1.0", parsed=parsed)
+    return ingest(file_asset, parsed, meta, lineage)
+`,
+        "fastq-parser"
+      ),
+      createFile(
+        "src/ontology.py",
+        `def match_fastq_operator(file_asset):
+    """② 本体查询：用默认本体匹配格式 / 规则 / 工具。"""
+    hint = (file_asset.get("format") or file_asset.get("ext") or "").lower()
+    if hint not in {"fastq", "fq", "fastq.gz", "fq.gz"}:
+        return None
+    return {
+        "format": "fastq",
+        "tools": ["Bio.SeqIO", "fastqc"],
+        "metadata_fields": ["read_count", "avg_length", "gc_content", "qc_pass", "species"],
+        "parse_rule": "illumina_phred33",
+    }
+`,
+        "fastq-parser"
+      ),
+      createFile(
+        "src/parse.py",
+        `from Bio import SeqIO
+
+def decode_and_qc(file_asset, operator):
+    """⑤ 文件解析：解码 + 结构化 + QC。"""
+    path = file_asset["path"]
+    records = list(SeqIO.parse(path, "fastq"))
+    lengths = [len(r.seq) for r in records]
+    avg_length = sum(lengths) / len(lengths) if lengths else 0
+    qc_pass = bool(lengths) and min(lengths) >= 50
+    return {
+        "decode_ok": True,
+        "record_count": len(records),
+        "avg_length": round(avg_length, 2),
+        "qc_pass": qc_pass,
+        "errors": [] if qc_pass else ["avg_length_or_min_len_failed"],
+    }
+`,
+        "fastq-parser"
+      ),
+      createFile(
+        "src/metadata.py",
+        `def build_metadata(file_asset, parsed, operator):
+    """⑥ 元数据生成：字段 + 来源证据；源文件没有的信息不填（防幻觉）。"""
+    return {
+        "fields": {
+            "read_count": parsed["record_count"],
+            "avg_length": parsed["avg_length"],
+            "qc_pass": parsed["qc_pass"],
+            "species": None,
+        },
+        "evidence": {
+            "read_count": {"source": "SeqIO.parse", "file_sha256": file_asset["sha256"]},
+            "species": {"source": None, "note": "FASTQ 不含物种信息，保持 null"},
+        },
+        "conflicts": [],
+        "missing": ["species"],
+    }
+`,
+        "fastq-parser"
+      ),
+      createFile(
+        "src/lineage.py",
+        `def record_lineage(file_asset, skill_id, version, parsed):
+    """⑦ 数据血缘：原始文件 → Skill 版本 → 解析任务 → 时间。"""
+    return {
+        "raw_file_id": file_asset["id"],
+        "raw_sha256": file_asset["sha256"],
+        "skill_id": skill_id,
+        "skill_version": version,
+        "parsed_ok": parsed.get("decode_ok") and parsed.get("qc_pass"),
+        "layer": "parse_standardized",
+    }
+
+def ingest(file_asset, parsed, meta, lineage):
+    return {
+        "status": "ingested" if lineage["parsed_ok"] else "failed",
+        "parsed": parsed,
+        "metadata": meta,
+        "lineage": lineage,
+        "raw_readonly": True,
+    }
+`,
+        "fastq-parser"
+      ),
+      createFile(
+        "tests/test_fastq_pipeline.py",
+        `def test_standard_fastq_pipeline():
+    asset = {"id": "fa-001", "path": "samples/SRR000001.fastq", "sha256": "abc", "format": "fastq"}
+    result = run(asset)
+    assert result["status"] == "ingested"
+    assert result["parsed"]["decode_ok"] is True
+    assert result["metadata"]["fields"]["species"] is None
+    assert result["lineage"]["skill_id"] == "fastq-parser"
+
+def test_deterministic_same_input():
+    asset = {"id": "fa-001", "path": "samples/SRR000001.fastq", "sha256": "abc", "format": "fastq"}
+    assert run(asset) == run(asset)
+`,
+        "fastq-parser"
+      ),
+      createFile(
+        "samples/SRR000001.fastq",
+        `@SEQ_ID
+GATTTGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
++
+!''*((((***+))%%%++)(%%%%).1***-+*''))**55CCF>>>>>>CCCCCCC65
+`,
+        "fastq-parser"
+      ),
+    ],
+  }),
+  createMySkill({
     id: "mcp-sync-assistant",
     name: "MCP接口联调助手",
     description:
@@ -4201,6 +4375,32 @@ source_url: "${parsedUrl.toString()}"
                 initialScreen={skillHubV2Screen}
                 seedSkill={skillHubV2Seed}
                 onExit={closeMySkillDetail}
+                onSkillCreated={(created) => {
+                  setMySkills((current) => {
+                    if (current.some((skill) => skill.id === created.id)) {
+                      return current;
+                    }
+                    return [
+                      createMySkill({
+                        id: created.id,
+                        name: created.name,
+                        description: created.description,
+                        usageInstructions: created.usageInstructions,
+                        category: "数据分析",
+                        tags: ["GFF", "基因注释", "解析", "农业"],
+                        source: "blank",
+                        status: "draft",
+                        version: "1.0",
+                        releaseNotes:
+                          "AI 创建首版：本地无 GFF Skill，按本体 Object Type「GeneAnnotation」装配解析器。",
+                        createdBy: "邸若楠",
+                        updatedBy: "邸若楠",
+                        files: created.files,
+                      }),
+                      ...current,
+                    ];
+                  });
+                }}
               />
             ) : selectedMySkillDetail ? renderMySkillDetailPage(selectedMySkillDetail) : (
             <div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -21,6 +21,10 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  ToolConfigDialog,
+  type ToolConfigSelection,
+} from "@/components/claw-hub-next/tool-config-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -54,6 +58,23 @@ import {
   hasUnpublishedChanges,
 } from "./versioning";
 
+const PLATFORM_TOOL_KINDS = ["mcp", "plugin"] as const;
+
+function mapToolSelectionToPlatformDependency(
+  selection: ToolConfigSelection
+): SkillDependency | null {
+  if (selection.kind !== "mcp" && selection.kind !== "plugin") {
+    return null;
+  }
+  return {
+    id: selection.id,
+    name: selection.name,
+    kind: "platform",
+    type: selection.kind,
+    status: "ready",
+    note: selection.description || "来自平台插件广场",
+  };
+}
 interface SkillDetailViewProps {
   skill: SkillRecord;
   activeTab: SkillDetailTab;
@@ -571,6 +592,7 @@ function DependenciesTab({
   onChange: (dependencies: SkillManualDraft["dependencies"]) => void;
   onRunAssembly: () => void;
 }) {
+  const [platformToolDialogOpen, setPlatformToolDialogOpen] = useState(false);
   const snapshotDependencies = dependencies.filter((item) => item.kind === "snapshot");
   const platformDependencies = dependencies.filter((item) => item.kind === "platform");
   const snapshot = skill.runtimeSnapshot;
@@ -585,6 +607,24 @@ function DependenciesTab({
 
   function removeDependency(id: string) {
     onChange(dependencies.filter((dependency) => dependency.id !== id));
+  }
+
+  function handleConfirmPlatformTools(selections: ToolConfigSelection[]) {
+    const existingIds = new Set(dependencies.map((item) => item.id));
+    const nextItems = selections
+      .map(mapToolSelectionToPlatformDependency)
+      .filter((item): item is SkillDependency => Boolean(item))
+      .filter((item) => !existingIds.has(item.id));
+
+    if (!nextItems.length) {
+      toast.message("所选 OpenAPI / MCP 均已在平台引用中");
+      setPlatformToolDialogOpen(false);
+      return;
+    }
+
+    onChange([...dependencies, ...nextItems]);
+    setPlatformToolDialogOpen(false);
+    toast.success(`已添加 ${nextItems.length} 个平台引用`);
   }
 
   return (
@@ -639,8 +679,8 @@ function DependenciesTab({
         </div>
 
         <DependencyGroup
-          title="随快照携带"
-          subtitle="试运行已安装并锁定版本，随版本快照复现"
+          title="沙箱依赖"
+          subtitle="试运行时安装并锁定版本，在沙箱中复现运行环境"
           dependencies={snapshotDependencies}
           emptyText="试运行后将在这里展示已安装的运行时依赖。"
           editing={editing}
@@ -649,38 +689,27 @@ function DependenciesTab({
         />
         <DependencyGroup
           title="平台引用"
-          subtitle="不随包携带，运行时连接；下架或失效会显式告警"
+          subtitle="从平台插件广场引用 OpenAPI / MCP；不随包携带，运行时连接"
           dependencies={platformDependencies}
-          emptyText="当前没有 MCP、插件或外部服务引用。"
+          emptyText="当前没有 MCP 或 OpenAPI 平台引用。"
           editing={editing}
           onChange={updateDependency}
           onRemove={removeDependency}
+          action={
+            editing && canManage ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-[5px]"
+                onClick={() => setPlatformToolDialogOpen(true)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                添加 OpenAPI / MCP
+              </Button>
+            ) : null
+          }
         />
-        {editing ? (
-          <div className="border-t border-slate-100 py-4">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full border-dashed"
-              onClick={() =>
-                onChange([
-                  ...dependencies,
-                  {
-                    id: `dependency-${Date.now()}`,
-                    name: "新依赖",
-                    kind: "platform",
-                    type: "mcp",
-                    status: "ready",
-                    note: "待补充说明",
-                  },
-                ])
-              }
-            >
-              <Plus className="h-4 w-4" />
-              添加依赖
-            </Button>
-          </div>
-        ) : null}
       </div>
 
       <aside>
@@ -706,6 +735,15 @@ function DependenciesTab({
           </ol>
         </div>
       </aside>
+
+      <ToolConfigDialog
+        open={platformToolDialogOpen}
+        onOpenChange={setPlatformToolDialogOpen}
+        onConfirm={handleConfirmPlatformTools}
+        allowedKinds={[...PLATFORM_TOOL_KINDS]}
+        title="添加平台引用"
+        confirmLabel="添加到平台引用"
+      />
     </div>
   );
 }
@@ -718,6 +756,7 @@ function DependencyGroup({
   editing,
   onChange,
   onRemove,
+  action,
 }: {
   title: string;
   subtitle: string;
@@ -726,12 +765,16 @@ function DependencyGroup({
   editing: boolean;
   onChange: (id: string, patch: Partial<SkillDependency>) => void;
   onRemove: (id: string) => void;
+  action?: ReactNode;
 }) {
   return (
     <div className="border-t border-slate-100 py-4">
-      <div>
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-        <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
+        </div>
+        {action}
       </div>
       <div className="mt-3 space-y-2">
         {dependencies.length > 0 ? (

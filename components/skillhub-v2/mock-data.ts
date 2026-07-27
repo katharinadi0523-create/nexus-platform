@@ -297,6 +297,123 @@ export const INITIAL_SKILLS: SkillRecord[] = [
       sample: "samples/rice_expression.csv",
     },
   },
+  {
+    id: "fastq-parser",
+    name: "FASTQ解析",
+    displayName: "FASTQ解析",
+    description:
+      "按解析流水线对 FASTQ 测序文件做确定性解析：本体匹配、解码与 QC、元数据生成、入库与血缘。",
+    owner: "科研数据组",
+    updatedAt: "2026-07-27 14:20",
+    status: "published",
+    currentVersionId: "fastq-v10",
+    publishedVersionId: "fastq-v10",
+    sourceLabel: "AI 创建",
+    usageInstructions:
+      "上传已完成入库的 FASTQ 文件。技能按固定顺序执行本体查询、预装工具解析、元数据生成与入库，不访问外网。",
+    versions: [
+      version({
+        id: "fastq-v10",
+        version: "v1.0",
+        status: "published",
+        source: "ai-create",
+        releaseNotes: "对齐解析流水线：上传→本体→Skill→解析/QC→元数据→入库血缘。",
+        files: [
+          {
+            path: "SKILL.md",
+            content: `---
+name: fastq-parser
+description: Deterministic FASTQ parse pipeline.
+runtime: deterministic
+network: none
+---
+
+# Pipeline
+1. Upload / SHA-256
+2. Ontology match
+3. Skill invoke (preinstalled tools)
+4. Decode + QC
+5. Metadata + evidence
+6. Ingest + lineage
+`,
+          },
+          {
+            path: "src/main.py",
+            content: `from ontology import match_fastq_operator
+from parse import decode_and_qc
+from metadata import build_metadata
+from lineage import record_lineage, ingest
+
+def run(file_asset):
+    operator = match_fastq_operator(file_asset)
+    if operator is None:
+        return {"status": "need_skill_order"}
+    parsed = decode_and_qc(file_asset, operator)
+    meta = build_metadata(file_asset, parsed, operator)
+    lineage = record_lineage(file_asset, "fastq-parser", "1.0", parsed)
+    return ingest(file_asset, parsed, meta, lineage)
+`,
+          },
+          {
+            path: "src/ontology.py",
+            content: `def match_fastq_operator(file_asset):
+    hint = (file_asset.get("format") or "").lower()
+    if hint not in {"fastq", "fq", "fastq.gz"}:
+        return None
+    return {"format": "fastq", "tools": ["Bio.SeqIO", "fastqc"]}
+`,
+          },
+          {
+            path: "src/parse.py",
+            content: `from Bio import SeqIO
+
+def decode_and_qc(file_asset, operator):
+    records = list(SeqIO.parse(file_asset["path"], "fastq"))
+    return {
+        "decode_ok": True,
+        "record_count": len(records),
+        "qc_pass": len(records) > 0,
+    }
+`,
+          },
+          {
+            path: "tests/test_fastq_pipeline.py",
+            content: `def test_deterministic_same_input():
+    asset = {"id": "fa-001", "path": "samples/SRR000001.fastq", "sha256": "abc", "format": "fastq"}
+    assert run(asset) == run(asset)
+`,
+          },
+        ],
+      }),
+    ],
+    dependencies: [
+      {
+        id: "biopython",
+        name: "biopython",
+        version: "1.83",
+        kind: "snapshot",
+        type: "runtime",
+        status: "ready",
+        note: "预装确定性解析工具",
+      },
+      {
+        id: "pysam",
+        name: "pysam",
+        version: "0.22.1",
+        kind: "snapshot",
+        type: "runtime",
+        status: "ready",
+        note: "预装确定性解析工具",
+      },
+    ],
+    runtimeSnapshot: {
+      id: "rt-fastq-v10",
+      boundVersion: "v1.0",
+      status: "ready",
+      assembledAt: "2026-07-27 14:18",
+      sample: "samples/SRR000001.fastq",
+    },
+  },
 ];
 
 export const INITIAL_WORK_ORDERS: SkillWorkOrder[] = [
