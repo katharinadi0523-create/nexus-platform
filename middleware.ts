@@ -4,6 +4,10 @@ import {
   PUBLIC_PATH_PREFIXES,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth/constants";
+import {
+  DEFAULT_POST_LOGIN_PATH,
+  getSafeRedirectPath,
+} from "@/lib/auth/redirect";
 import { parseSessionTokenEdge } from "@/lib/auth/session-edge";
 
 function isPublicPath(pathname: string): boolean {
@@ -23,7 +27,7 @@ function isStaticAsset(pathname: string): boolean {
 }
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
 
   if (isStaticAsset(pathname)) {
     return NextResponse.next();
@@ -35,7 +39,11 @@ export async function middleware(request: NextRequest) {
 
   if (pathname === "/login") {
     if (isAuthenticated) {
-      return NextResponse.redirect(new URL("/claw-hub-next", request.url));
+      const target = getSafeRedirectPath(
+        request.nextUrl.searchParams.get("redirect"),
+        DEFAULT_POST_LOGIN_PATH
+      );
+      return NextResponse.redirect(new URL(target, request.url));
     }
     return NextResponse.next();
   }
@@ -46,7 +54,8 @@ export async function middleware(request: NextRequest) {
 
   if (!isAuthenticated) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirect", pathname);
+    const returnTo = `${pathname}${search}`;
+    loginUrl.searchParams.set("redirect", returnTo);
     return NextResponse.redirect(loginUrl);
   }
 
