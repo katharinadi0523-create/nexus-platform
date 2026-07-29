@@ -87,6 +87,20 @@ export const PROJECT_CONVERSATION_USERS: CollaborationUser[] = [
     initials: "赵",
     workspaceIds: [WS_RESEARCH],
   },
+  {
+    id: "user-lindao",
+    name: "林稻",
+    title: "田间育种技术员",
+    initials: "林",
+    workspaceIds: [WS_RESEARCH],
+  },
+  {
+    id: "user-sunlan",
+    name: "孙岚",
+    title: "植物数量遗传研究员",
+    initials: "孙",
+    workspaceIds: [WS_RESEARCH],
+  },
 ];
 
 export function getUserById(id: string) {

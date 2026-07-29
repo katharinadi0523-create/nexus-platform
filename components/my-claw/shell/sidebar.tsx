@@ -124,7 +124,7 @@ export function MyClawSidebar() {
               个人 Chat
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <SessionList />
           </div>
         </section>
@@ -159,7 +159,7 @@ export function MyClawSidebar() {
               Project
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <ProjectList />
           </div>
         </section>

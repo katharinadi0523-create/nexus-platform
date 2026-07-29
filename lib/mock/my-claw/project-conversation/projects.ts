@@ -11,6 +11,7 @@ export const PROJECT_KB_ID = "proj-kb-2";
 export const PROJECT_RESEARCH_ID = "proj-research-agent";
 export const PROJECT_LUNG_IMMUNO_ID = "proj-lung-immunotherapy";
 export const PROJECT_WHEAT_WATER_ID = "proj-wheat-water-saving";
+export const PROJECT_RICE_SALT_GWAS_ID = "proj-rice-salt-gwas";
 export const PROJECT_ARCHIVED_DEMO_ID = "proj-archived-demo";
 
 export const CONV_REQ_DISCUSSION = "conv-req-discussion";
@@ -24,6 +25,11 @@ export const CONV_RESEARCH_ANALYSIS = "conv-research-analysis";
 export const CONV_AGRI_INGEST = "conv-agri-data-ingest";
 export const CONV_AGRI_MODELING = "conv-agri-modeling";
 export const CONV_AGRI_REPORT = "conv-agri-report";
+export const CONV_RICE_PHENOTYPE = "conv-rice-phenotype";
+export const CONV_RICE_RESEQ = "conv-rice-reseq";
+export const CONV_RICE_POPGEN = "conv-rice-popgen";
+export const CONV_RICE_GWAS = "conv-rice-gwas";
+export const CONV_RICE_VALIDATION = "conv-rice-validation";
 export const CONV_ARCHIVED = "thread-archived";
 
 export const PROJECT_CONVERSATION_PROJECTS: CollaborationProject[] = [
@@ -246,6 +252,61 @@ export const PROJECT_CONVERSATION_PROJECTS: CollaborationProject[] = [
     pinned: true,
     createdAt: "2026-07-29T09:00:00+08:00",
     updatedAt: "2026-07-31T10:00:00+08:00",
+  },
+  {
+    id: PROJECT_RICE_SALT_GWAS_ID,
+    workspaceId: "ws-research",
+    originWorkspaceId: "ws-research",
+    name: "华南地方水稻种质耐盐 GWAS 挖掘",
+    description:
+      "基于 192 份华南地方水稻的盐胁迫表型与重测序数据，定位耐盐关联位点并形成候选基因验证计划",
+    status: "active",
+    ownerUserId: CURRENT_USER_ID,
+    threadId: CONV_RICE_PHENOTYPE,
+    conversationIds: [
+      CONV_RICE_PHENOTYPE,
+      CONV_RICE_RESEQ,
+      CONV_RICE_POPGEN,
+      CONV_RICE_GWAS,
+      CONV_RICE_VALIDATION,
+    ],
+    brief:
+      "研究对象：192 份华南地方水稻种质。目标：在 150 mM NaCl、14 天苗期胁迫表型与重测序变异基础上，完成表型质控、变异挖掘、群体结构校正、GWAS 与候选基因验证设计。约束：样本身份、异常处理与统计阈值由 Human 明确确认；只有验收后的数据和结论可发布为 Project 事实。",
+    instructions:
+      "每一步都要保留输入、方法与产物血缘。下游仅引用 Human 验收后发布到 Project 的 Artifact；关联峰和候选基因仅是当前群体与苗期条件下的证据，不直接宣称因果。",
+    humanMemberIds: [CURRENT_USER_ID, "user-lindao", "user-sunlan"],
+    agentMemberIds: [
+      "actor-rice-phenotype",
+      "actor-rice-variant",
+      "actor-rice-popgen",
+      "actor-rice-gwas",
+      "actor-rice-candidate",
+      "actor-research-writer",
+    ],
+    workSourceIds: ["ws-github-rice-gwas"],
+    sharedToolBindingIds: [],
+    issueIds: [
+      "issue-rice-101",
+      "issue-rice-102",
+      "issue-rice-103",
+      "issue-rice-104",
+      "issue-rice-105",
+    ],
+    projectFileIds: [
+      "file-rice-101-output",
+      "file-rice-101-report",
+      "file-rice-102-output",
+      "file-rice-102-report",
+      "file-rice-103-output",
+      "file-rice-103-report",
+      "file-rice-104-output",
+      "file-rice-104-report",
+      "file-rice-105-output",
+      "file-rice-105-report",
+    ],
+    pinned: true,
+    createdAt: "2026-08-01T09:00:00+08:00",
+    updatedAt: "2026-08-10T16:00:00+08:00",
   },
   {
     id: PROJECT_ARCHIVED_DEMO_ID,
@@ -550,6 +611,106 @@ export const PROJECT_CONVERSATION_THREADS: ProjectConversation[] = [
     createdAt: "2026-07-31T09:00:00+08:00",
     updatedAt: "2026-07-31T10:00:00+08:00",
   },
+  {
+    id: CONV_RICE_PHENOTYPE,
+    workspaceId: "ws-research",
+    projectId: PROJECT_RICE_SALT_GWAS_ID,
+    name: "田间表型数据收集",
+    description: "盐胁迫表型、温室事件、材料身份与表型质控",
+    humanMemberIds: [CURRENT_USER_ID, "user-lindao", "user-sunlan"],
+    agentBindingIds: ["actor-rice-phenotype", "actor-ruonan-claw"],
+    conversationToolBindingIds: [],
+    messageIds: [],
+    issueIds: ["issue-rice-101"],
+    conversationFileIds: ["file-rice-101-input"],
+    instructions:
+      "保留原始表型、温室事件和未确认材料映射；异常处理由 Human 明确确认后才生成可供下游引用的表型 Artifact。",
+    defaultArtifactScope: "conversation",
+    createdByUserId: CURRENT_USER_ID,
+    createdAt: "2026-08-01T09:00:00+08:00",
+    updatedAt: "2026-08-02T16:00:00+08:00",
+    pinned: true,
+  },
+  {
+    id: CONV_RICE_RESEQ,
+    workspaceId: "ws-research",
+    projectId: PROJECT_RICE_SALT_GWAS_ID,
+    name: "全基因组重测序与变异挖掘",
+    description: "FastQ 质控、参考基因组比对、联合变异检测与 VCF 过滤",
+    humanMemberIds: [CURRENT_USER_ID, "user-lindao", "user-sunlan"],
+    agentBindingIds: ["actor-rice-variant", "actor-ruonan-claw"],
+    conversationToolBindingIds: [],
+    messageIds: [],
+    issueIds: ["issue-rice-102"],
+    conversationFileIds: ["file-rice-102-input"],
+    instructions:
+      "样本身份异常和低深度策略必须显式标记，不自动删除材料；验收后的过滤 VCF 才能进入群体结构与 GWAS。",
+    defaultArtifactScope: "conversation",
+    createdByUserId: CURRENT_USER_ID,
+    createdAt: "2026-08-03T09:00:00+08:00",
+    updatedAt: "2026-08-04T16:00:00+08:00",
+  },
+  {
+    id: CONV_RICE_POPGEN,
+    workspaceId: "ws-research",
+    projectId: PROJECT_RICE_SALT_GWAS_ID,
+    name: "群体遗传结构分析",
+    description: "PCA、ADMIXTURE、亲缘关系与 LD 衰减；形成 GWAS 校正协变量",
+    humanMemberIds: [CURRENT_USER_ID, "user-sunlan"],
+    agentBindingIds: ["actor-rice-popgen", "actor-ruonan-claw"],
+    conversationToolBindingIds: [],
+    messageIds: [],
+    issueIds: ["issue-rice-103"],
+    conversationFileIds: ["file-rice-103-input"],
+    instructions:
+      "仅使用已验收 VCF；群体分群用于模型校正与结果解释，不作为未经 Human 批准的材料剔除依据。",
+    defaultArtifactScope: "project",
+    createdByUserId: CURRENT_USER_ID,
+    createdAt: "2026-08-05T09:00:00+08:00",
+    updatedAt: "2026-08-06T16:00:00+08:00",
+  },
+  {
+    id: CONV_RICE_GWAS,
+    workspaceId: "ws-research",
+    projectId: PROJECT_RICE_SALT_GWAS_ID,
+    name: "耐盐性状 GWAS 关联分析",
+    description: "MLM / FarmCPU 关联分析、批次敏感性与模型诊断",
+    humanMemberIds: [CURRENT_USER_ID, "user-sunlan"],
+    agentBindingIds: ["actor-rice-gwas", "actor-ruonan-claw"],
+    conversationToolBindingIds: [],
+    messageIds: [],
+    issueIds: ["issue-rice-104"],
+    conversationFileIds: ["file-rice-104-input"],
+    instructions:
+      "绑定验收后的表型、VCF、PC 和 kinship；报告阈值、QQ 图和敏感性分析，关联结果不得直接表述为因果。",
+    defaultArtifactScope: "project",
+    createdByUserId: CURRENT_USER_ID,
+    createdAt: "2026-08-07T09:00:00+08:00",
+    updatedAt: "2026-08-08T16:00:00+08:00",
+  },
+  {
+    id: CONV_RICE_VALIDATION,
+    workspaceId: "ws-research",
+    projectId: PROJECT_RICE_SALT_GWAS_ID,
+    name: "候选基因筛选与验证",
+    description: "LD 区间注释、单倍型和外部证据整合，以及验证计划",
+    humanMemberIds: [CURRENT_USER_ID, "user-lindao", "user-sunlan"],
+    agentBindingIds: [
+      "actor-rice-candidate",
+      "actor-research-writer",
+      "actor-ruonan-claw",
+    ],
+    conversationToolBindingIds: [],
+    messageIds: [],
+    issueIds: ["issue-rice-105"],
+    conversationFileIds: ["file-rice-105-input"],
+    instructions:
+      "候选优先级需整合关联、功能、表达与文献证据；输出可执行的独立群体、KASP 与复现实验计划，并写明证据边界。",
+    defaultArtifactScope: "project",
+    createdByUserId: CURRENT_USER_ID,
+    createdAt: "2026-08-09T09:00:00+08:00",
+    updatedAt: "2026-08-10T16:00:00+08:00",
+  },
 ];
 
 export const PROJECT_WORK_SOURCES: ProjectWorkSource[] = [
@@ -608,6 +769,16 @@ export const PROJECT_WORK_SOURCES: ProjectWorkSource[] = [
     access: "read_write",
     availability: "available",
     runtimeActorId: "actor-agri-stat",
+  },
+  {
+    id: "ws-github-rice-gwas",
+    projectId: PROJECT_RICE_SALT_GWAS_ID,
+    type: "github_repository",
+    name: "rice-salt-gwas-analysis",
+    detail:
+      "github.com/agentfoundry/rice-salt-gwas-analysis · main · /workflow",
+    access: "read_write",
+    availability: "available",
   },
 ];
 
@@ -813,6 +984,47 @@ export const PROJECT_MEMBERS_BY_PROJECT: Record<string, ProjectMember[]> = {
     {
       kind: "agent",
       actorId: "actor-agronomy-literature",
+      actorType: "platform_claw",
+      state: "active",
+    },
+    {
+      kind: "agent",
+      actorId: "actor-research-writer",
+      actorType: "platform_claw",
+      state: "active",
+    },
+  ],
+  [PROJECT_RICE_SALT_GWAS_ID]: [
+    { kind: "human", userId: CURRENT_USER_ID, role: "owner", state: "active" },
+    { kind: "human", userId: "user-lindao", role: "member", state: "active" },
+    { kind: "human", userId: "user-sunlan", role: "member", state: "active" },
+    {
+      kind: "agent",
+      actorId: "actor-rice-phenotype",
+      actorType: "platform_claw",
+      state: "active",
+    },
+    {
+      kind: "agent",
+      actorId: "actor-rice-variant",
+      actorType: "platform_claw",
+      state: "active",
+    },
+    {
+      kind: "agent",
+      actorId: "actor-rice-popgen",
+      actorType: "platform_claw",
+      state: "active",
+    },
+    {
+      kind: "agent",
+      actorId: "actor-rice-gwas",
+      actorType: "platform_claw",
+      state: "active",
+    },
+    {
+      kind: "agent",
+      actorId: "actor-rice-candidate",
       actorType: "platform_claw",
       state: "active",
     },

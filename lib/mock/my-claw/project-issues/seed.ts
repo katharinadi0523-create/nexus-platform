@@ -20,6 +20,7 @@ import {
   LUNG_ISSUES,
 } from "@/lib/mock/my-claw/project-conversation/lung-immunotherapy-seed";
 import { AGRI_ISSUES } from "@/lib/mock/my-claw/project-conversation/agricultural-research-seed";
+import { RICE_GWAS_ISSUES } from "@/lib/mock/my-claw/project-conversation/rice-gwas-seed";
 
 export const SEED_PROJECT_ISSUES: ProjectIssue[] = [
   // —— conv-req-discussion (3 issues) ——
@@ -377,3 +378,4 @@ export const SEED_ISSUE_PROPOSALS: IssueMutationProposal[] = [
 SEED_PROJECT_ISSUES.push(...LUNG_ISSUES);
 SEED_ISSUE_REFERENCES.push(...LUNG_ISSUE_REFERENCES);
 SEED_PROJECT_ISSUES.push(...AGRI_ISSUES);
+SEED_PROJECT_ISSUES.push(...RICE_GWAS_ISSUES);

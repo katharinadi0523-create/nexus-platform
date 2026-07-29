@@ -4,6 +4,7 @@ import {
   PROJECT_KB_ID,
   PROJECT_LUNG_IMMUNO_ID,
   PROJECT_WHEAT_WATER_ID,
+  PROJECT_RICE_SALT_GWAS_ID,
   PROJECT_RESEARCH_ID,
 } from "@/lib/mock/my-claw/project-conversation/projects";
 import { CURRENT_USER_ID } from "@/lib/mock/my-claw/project-conversation/workspaces";
@@ -27,11 +28,13 @@ export const SEED_MY_WORK: MyWorkProjection = {
     "issue-sci-104-report",
     "issue-agri-102-toa5",
     "issue-agri-106-report",
+    "issue-rice-105",
     "issue-kb-done",
   ],
   projectIds: [
     PROJECT_LUNG_IMMUNO_ID,
     PROJECT_WHEAT_WATER_ID,
+    PROJECT_RICE_SALT_GWAS_ID,
     PROJECT_CLAW_COLLAB_ID,
     PROJECT_KB_ID,
     PROJECT_RESEARCH_ID,
