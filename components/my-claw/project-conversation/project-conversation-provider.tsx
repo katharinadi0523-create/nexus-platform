@@ -218,6 +218,7 @@ interface ProjectConversationContextValue {
   getFiles: (projectId: string) => ProjectFileNode[];
   getProjectFiles: (projectId: string) => ProjectFileNode[];
   getConversationFiles: (conversationId: string) => ProjectFileNode[];
+  getConversationProducedFiles: (conversationId: string) => ProjectFileNode[];
   getWorkSources: (projectId: string) => ProjectWorkSource[];
   getIssues: (projectId: string) => ProjectIssue[];
   getIssue: (issueId: string) => ProjectIssue | undefined;
@@ -729,6 +730,13 @@ export function ProjectConversationProvider({
         (item) =>
           item.scope === "conversation" &&
           item.sourceConversationId === conversationId,
+      ),
+    [state.files],
+  );
+  const getConversationProducedFiles = useCallback(
+    (conversationId: string) =>
+      state.files.filter(
+        (item) => item.sourceConversationId === conversationId,
       ),
     [state.files],
   );
@@ -3478,6 +3486,7 @@ export function ProjectConversationProvider({
       getFiles,
       getProjectFiles,
       getConversationFiles,
+      getConversationProducedFiles,
       getWorkSources,
       getIssues,
       getIssue,
@@ -3564,6 +3573,7 @@ export function ProjectConversationProvider({
       getFiles,
       getProjectFiles,
       getConversationFiles,
+      getConversationProducedFiles,
       getWorkSources,
       getIssues,
       getIssue,
