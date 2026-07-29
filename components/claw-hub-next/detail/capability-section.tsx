@@ -44,6 +44,13 @@ type CapabilitySectionProps = {
   hideSkillPreset?: boolean;
   /** 子智能体等场景：隐藏插件「内置/来源」筛选 */
   hideToolOriginFilter?: boolean;
+  /** Override default panel titles（插件 / 技能） */
+  toolsTitle?: string;
+  skillsTitle?: string;
+  /** Hide 配置插件 / 配置技能 primary buttons */
+  hideConfigureButton?: boolean;
+  /** Read-only rows: no remove, toggle still rendered but caller may no-op */
+  readOnly?: boolean;
 };
 
 type ToolListRow = {
@@ -86,6 +93,10 @@ export function ClawCapabilitySection({
   onDeleteSkill,
   hideSkillPreset = false,
   hideToolOriginFilter = false,
+  toolsTitle = "插件",
+  skillsTitle = "技能",
+  hideConfigureButton = false,
+  readOnly = false,
 }: CapabilitySectionProps) {
   const { configLabel } = useWorkbenchEntity();
   const skillViewScopeLabels = useMemo(
@@ -176,7 +187,7 @@ export function ClawCapabilitySection({
     <SectionCard>
       {panel === "tools" ? (
         <CapabilityPanelShell
-          title="插件"
+          title={toolsTitle}
           totalCount={toolTotalCount}
           countLabel={
             hasActiveToolFilter
@@ -225,15 +236,17 @@ export function ClawCapabilitySection({
                     一键启用
                   </Button>
                 ) : null}
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-9 shrink-0 rounded-md bg-blue-600 px-4 text-white shadow-none hover:bg-blue-700"
-                  onClick={onOpenToolConfigDialog}
-                >
-                  <Plus className="h-4 w-4" />
-                  配置插件
-                </Button>
+                {hideConfigureButton ? null : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 shrink-0 rounded-md bg-blue-600 px-4 text-white shadow-none hover:bg-blue-700"
+                    onClick={onOpenToolConfigDialog}
+                  >
+                    <Plus className="h-4 w-4" />
+                    配置插件
+                  </Button>
+                )}
               </div>
             </div>
           }
@@ -258,6 +271,7 @@ export function ClawCapabilitySection({
                       key={`${scope}-${item.id}`}
                       item={item}
                       scope={scope}
+                      readOnly={readOnly}
                       onToggle={onToggleTool}
                       onDelete={onDeleteTool}
                     />
@@ -273,7 +287,7 @@ export function ClawCapabilitySection({
 
       {panel === "skills" ? (
         <CapabilityPanelShell
-          title="技能"
+          title={skillsTitle}
           totalCount={skillTotalCount}
           countLabel={
             skillSearchQuery.trim()
@@ -308,15 +322,17 @@ export function ClawCapabilitySection({
                     一键启用
                   </Button>
                 ) : null}
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-9 shrink-0 rounded-md bg-blue-600 px-4 text-white shadow-none hover:bg-blue-700"
-                  onClick={onOpenSkillConfigDialog}
-                >
-                  <Plus className="h-4 w-4" />
-                  配置技能
-                </Button>
+                {hideConfigureButton ? null : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 shrink-0 rounded-md bg-blue-600 px-4 text-white shadow-none hover:bg-blue-700"
+                    onClick={onOpenSkillConfigDialog}
+                  >
+                    <Plus className="h-4 w-4" />
+                    配置技能
+                  </Button>
+                )}
               </div>
             </div>
           }
@@ -613,11 +629,13 @@ function ToolOriginBadge({ scope }: { scope: CapabilityScope }) {
 function ToolRow({
   item,
   scope,
+  readOnly = false,
   onToggle,
   onDelete,
 }: {
   item: CapabilityToolItem;
   scope: CapabilityScope;
+  readOnly?: boolean;
   onToggle: (scope: CapabilityScope, id: string, enabled: boolean) => void;
   onDelete: (scope: CapabilityScope, id: string) => void;
 }) {
@@ -639,7 +657,7 @@ function ToolRow({
       </TableCell>
       <TableCell className="px-4 py-3 align-middle">
         <CapabilityRowActions
-          canDelete={canDeleteCapability(scope)}
+          canDelete={!readOnly && canDeleteCapability(scope)}
           enabled={item.enabled}
           onDelete={() => onDelete(scope, item.id)}
           onToggle={(checked) => onToggle(scope, item.id, checked)}

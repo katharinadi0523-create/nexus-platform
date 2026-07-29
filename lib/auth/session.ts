@@ -86,12 +86,32 @@ export function parseSessionToken(token: string | undefined): SessionUser | null
   };
 }
 
-export function getSessionCookieOptions() {
+export function isSecureRequest(request?: Request): boolean {
+  if (process.env.AUTH_COOKIE_SECURE === "true") return true;
+  if (process.env.AUTH_COOKIE_SECURE === "false") return false;
+  if (!request) {
+    return process.env.NODE_ENV === "production";
+  }
+
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  if (forwardedProto) {
+    return forwardedProto.split(",")[0]?.trim().toLowerCase() === "https";
+  }
+
+  try {
+    return new URL(request.url).protocol === "https:";
+  } catch {
+    return process.env.NODE_ENV === "production";
+  }
+}
+
+export function getSessionCookieOptions(request?: Request) {
   return {
     name: SESSION_COOKIE_NAME,
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    // HTTP IP 访问时不能带 Secure，否则浏览器不存 cookie，登录后无法跳转
+    secure: isSecureRequest(request),
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   };

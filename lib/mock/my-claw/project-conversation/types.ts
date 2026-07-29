@@ -37,14 +37,30 @@ export type InboxEventType =
   | "agent_execution_failed"
   | "personal_claw_consent"
   | "project_invitation"
-  | "session_degraded";
+  | "session_degraded"
+  | "personal_chat_reply"
+  | "project_member_changed"
+  | "issue_created"
+  | "issue_assigned"
+  | "issue_needs_confirmation"
+  | "issue_waiting_for_human"
+  | "issue_review_ready"
+  | "issue_changes_requested"
+  | "issue_completed"
+  | "project_tool_authorization_required"
+  | "project_tool_degraded"
+  | "artifact_published";
 
 export type ProjectDrawerKind =
   | "info"
   | "members"
   | "files"
+  | "conversation_files"
   | "execution"
   | "add_member"
+  | "issue"
+  | "shared_tools"
+  | "conversation_settings"
   | null;
 
 export interface AgentReplyReview {
@@ -61,30 +77,66 @@ export interface CollaborationWorkspace {
   description: string;
 }
 
+export type ArtifactScope = "project" | "conversation";
+
 export interface CollaborationProject {
   id: string;
+  /** @deprecated use-end must not navigate by workspace; keep for origin/migration */
   workspaceId: string;
+  originWorkspaceId?: string;
   name: string;
   description: string;
   status: "active" | "archived";
   ownerUserId: string;
+  /**
+   * @deprecated Prefer conversationIds. Kept as first/default conversation id
+   * for one release of prototype compatibility.
+   */
   threadId: string;
+  conversationIds: string[];
   brief: string;
+  instructions?: string;
   humanMemberIds: string[];
   agentMemberIds: string[];
   workSourceIds: string[];
+  sharedToolBindingIds: string[];
+  skillBindingIds?: string[];
+  issueIds: string[];
+  /** Only scope=project file node ids */
+  projectFileIds: string[];
+  pinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ProjectThread {
+/**
+ * Project Conversation (1:N under Project).
+ * Messages / sessions / invocations still use `threadId` as this conversation id.
+ */
+export interface ProjectConversation {
   id: string;
   workspaceId: string;
   projectId: string;
+  name: string;
+  description?: string;
+  humanMemberIds: string[];
+  agentBindingIds: string[];
+  conversationToolBindingIds: string[];
   messageIds: string[];
+  issueIds: string[];
+  /** Only scope=conversation file node ids for this conversation */
+  conversationFileIds: string[];
+  instructions?: string;
+  defaultArtifactScope: ArtifactScope;
+  createdByUserId: string;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string;
+  pinned?: boolean;
 }
+
+/** @deprecated Alias — prefer ProjectConversation */
+export type ProjectThread = ProjectConversation;
 
 export interface ProjectMessage {
   id: string;
@@ -148,10 +200,12 @@ export interface ProjectAgentSession {
   id: string;
   workspaceId: string;
   projectId: string;
+  /** Conversation id (Conversation × Agent session) */
   threadId: string;
   actorId: string;
   status: "active" | "paused" | "expired" | "error";
   invocationIds: string[];
+  queuedInvocationIds?: string[];
   lastSummary: string;
   createdAt: string;
   updatedAt: string;
@@ -239,6 +293,8 @@ export interface ProjectFileNode {
   nodeType: "folder" | "file";
   parentFolderId?: string;
   name: string;
+  /** Display path e.g. docs/订单导出 PRD.md */
+  path?: string;
   mimeType?: string;
   sizeBytes?: number;
   source: "human_upload" | "agent_artifact";
@@ -247,7 +303,11 @@ export interface ProjectFileNode {
   createdBy:
     | { kind: "human"; id: string }
     | { kind: "agent"; id: string };
-  visibility: "project";
+  scope: ArtifactScope;
+  sourceConversationId?: string;
+  sourceArtifactIds?: string[];
+  issueIds?: string[];
+  producedByTransformationId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -256,7 +316,7 @@ export interface ProjectArtifact {
   id: string;
   workspaceId: string;
   projectId: string;
-  sourceMessageId: string;
+  sourceMessageId?: string;
   invocationId?: string;
   fileNodeId?: string;
   name: string;
@@ -266,13 +326,33 @@ export interface ProjectArtifact {
     | "link"
     | "commit"
     | "pull_request"
-    | "preview";
+    | "preview"
+    | "data";
   url?: string;
   createdBy:
     | { kind: "human"; id: string }
-    | { kind: "agent"; id: string };
-  visibility: "project";
+    | { kind: "agent"; id: string }
+    | { kind: "tool"; id: string };
+  scope: ArtifactScope;
+  sourceConversationId?: string;
+  sourceArtifactIds?: string[];
+  issueIds?: string[];
+  producedByTransformationId?: string;
   createdAt: string;
+}
+
+export interface Transformation {
+  id: string;
+  projectId: string;
+  conversationId: string;
+  issueIds: string[];
+  executorType: "human" | "agent" | "tool";
+  executorId: string;
+  operationLabel: string;
+  inputArtifactIds: string[];
+  outputArtifactIds: string[];
+  createdAt: string;
+  runId?: string;
 }
 
 export interface ProjectWorkSource {
@@ -299,6 +379,11 @@ export interface ProjectInboxItem {
   messageId?: string;
   invocationId?: string;
   actorId?: string;
+  issueId?: string;
+  artifactId?: string;
+  projectToolBindingId?: string;
+  href?: string;
+  sourceType?: "personal_chat" | "project" | "issue" | "agent" | "tool";
 }
 
 export interface InlineExecutionViewModel {

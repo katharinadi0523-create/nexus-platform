@@ -1,48 +1,76 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { ProjectMessage } from "@/lib/mock/my-claw/project-conversation";
 import { useProjectConversation } from "./project-conversation-provider";
 import { ProjectConversationHeader } from "./project-conversation-header";
 import { ProjectComposer } from "./composer/project-composer";
 import { MessageList, type MessageListHandle } from "./messages/message-list";
-import { ProjectInfoDrawer } from "./drawers/project-info-drawer";
-import { ProjectMembersDrawer } from "./drawers/project-members-drawer";
-import { ProjectFilesDrawer } from "./drawers/project-files-drawer";
-import { AddMemberDrawer } from "./drawers/add-member-drawer";
+import { ConversationSettingsDrawer } from "./conversation-settings-drawer";
 import { ExecutionDetailDrawer } from "./execution/execution-detail-drawer";
+import { ConversationFilesPanel } from "@/components/my-claw/project-files/project-files-panel";
+import { ProjectIssueDetailDrawer } from "@/components/my-claw/project-issues/project-issue-detail-drawer";
 
 interface ProjectConversationPageProps {
-  workspaceId: string;
   projectId: string;
+  conversationId: string;
   messageId?: string | null;
+  issueId?: string | null;
 }
 
 export function ProjectConversationPage({
-  workspaceId,
   projectId,
+  conversationId,
   messageId,
+  issueId,
 }: ProjectConversationPageProps) {
   const {
     getProject,
     getMessages,
+    getConversation,
+    canAccessConversation,
+    rememberVisitedConversation,
+    currentUserId,
     state,
     setHighlightedMessage,
     closeDrawer,
+    openIssueDrawer,
   } = useProjectConversation();
 
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [quotedMessage, setQuotedMessage] = useState<ProjectMessage | null>(
     null
   );
   const listRef = useRef<MessageListHandle>(null);
   const project = getProject(projectId);
-  const messages = getMessages(projectId);
+  const conversation = getConversation(conversationId);
+  const canAccess = canAccessConversation(conversationId, currentUserId);
+  const messages = canAccess ? getMessages(projectId, conversationId) : [];
+
+  useEffect(() => {
+    if (canAccess) {
+      rememberVisitedConversation(projectId, conversationId);
+    }
+  }, [
+    canAccess,
+    conversationId,
+    projectId,
+    rememberVisitedConversation,
+  ]);
 
   useEffect(() => {
     if (messageId) {
       setHighlightedMessage(messageId);
     }
   }, [messageId, setHighlightedMessage]);
+
+  useEffect(() => {
+    if (issueId) {
+      openIssueDrawer(issueId);
+    }
+  }, [issueId, openIssueDrawer]);
 
   useEffect(() => {
     if (
@@ -58,10 +86,10 @@ export function ProjectConversationPage({
     return undefined;
   }, [state.activeDrawer, state.scrollAnchorMessageId]);
 
-  if (!project) {
+  if (!project || !conversation) {
     return (
       <div className="flex h-full items-center justify-center text-[13px] text-[#5a6779]">
-        Project 不存在或无权访问
+        会话不存在或无权访问
       </div>
     );
   }
@@ -70,18 +98,10 @@ export function ProjectConversationPage({
 
   const renderDrawer = () => {
     switch (state.activeDrawer) {
-      case "info":
+      case "conversation_files":
         return (
-          <ProjectInfoDrawer projectId={projectId} onClose={closeDrawer} />
-        );
-      case "members":
-        return (
-          <ProjectMembersDrawer projectId={projectId} onClose={closeDrawer} />
-        );
-      case "files":
-        return (
-          <ProjectFilesDrawer
-            projectId={projectId}
+          <ConversationFilesPanel
+            conversationId={conversationId}
             onClose={closeDrawer}
             onJumpToMessage={(id) => {
               setHighlightedMessage(id);
@@ -89,15 +109,48 @@ export function ProjectConversationPage({
             }}
           />
         );
-      case "add_member":
+      case "conversation_settings":
         return (
-          <AddMemberDrawer projectId={projectId} onClose={closeDrawer} />
+          <ConversationSettingsDrawer
+            conversationId={conversationId}
+            onClose={closeDrawer}
+          />
         );
       case "execution":
         return state.activeInvocationId ? (
           <ExecutionDetailDrawer
             invocationId={state.activeInvocationId}
             onClose={closeDrawer}
+          />
+        ) : null;
+      case "issue":
+        return state.activeIssueId ? (
+          <ProjectIssueDetailDrawer
+            issueId={state.activeIssueId}
+            onClose={() => {
+              closeDrawer();
+              const params = new URLSearchParams(searchParams.toString());
+              params.delete("issue");
+              const qs = params.toString();
+              router.replace(
+                qs
+                  ? `/my-claw/projects/${projectId}/conversations/${conversationId}?${qs}`
+                  : `/my-claw/projects/${projectId}/conversations/${conversationId}`,
+                { scroll: false }
+              );
+            }}
+            onJumpToMessage={(id) => {
+              setHighlightedMessage(id);
+              window.setTimeout(() => {
+                listRef.current?.scrollToMessage(id);
+              }, 80);
+            }}
+            onOpenConversation={(id, msgId) => {
+              const qs = msgId ? `?message=${msgId}` : "";
+              router.push(
+                `/my-claw/projects/${projectId}/conversations/${id}${qs}`
+              );
+            }}
           />
         ) : null;
       default:
@@ -109,20 +162,30 @@ export function ProjectConversationPage({
     <div className="relative flex h-full min-h-0 w-full overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f8f9fb]">
         <ProjectConversationHeader
-          workspaceId={workspaceId}
           projectId={projectId}
+          conversationId={conversationId}
         />
-        <MessageList
-          ref={listRef}
-          messages={messages}
-          highlightedMessageId={state.highlightedMessageId}
-          onQuote={setQuotedMessage}
-        />
-        <ProjectComposer
-          projectId={projectId}
-          quotedMessage={quotedMessage}
-          onClearQuote={() => setQuotedMessage(null)}
-        />
+
+        {!canAccess ? (
+          <div className="flex flex-1 items-center justify-center px-6 text-center text-[13px] text-[#5a6779]">
+            无权访问该会话消息。相关事项仍可在 Project 事项看板查看。
+          </div>
+        ) : (
+          <>
+            <MessageList
+              ref={listRef}
+              messages={messages}
+              highlightedMessageId={state.highlightedMessageId}
+              onQuote={setQuotedMessage}
+            />
+            <ProjectComposer
+              projectId={projectId}
+              conversationId={conversationId}
+              quotedMessage={quotedMessage}
+              onClearQuote={() => setQuotedMessage(null)}
+            />
+          </>
+        )}
       </div>
 
       {drawerOpen ? (

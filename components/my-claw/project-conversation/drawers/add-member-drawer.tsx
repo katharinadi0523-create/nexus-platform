@@ -49,7 +49,6 @@ export function AddMemberDrawer({
     if (!project) return [];
     return state.users.filter(
       (user) =>
-        user.workspaceIds.includes(project.workspaceId) &&
         !existingHumanIds.includes(user.id) &&
         (!q ||
           user.name.toLowerCase().includes(q) ||
@@ -61,7 +60,6 @@ export function AddMemberDrawer({
     if (!project) return [];
     return state.actors.filter(
       (actor) =>
-        (!actor.workspaceId || actor.workspaceId === project.workspaceId) &&
         !existingActorIds.includes(actor.id) &&
         (!q || actor.name.toLowerCase().includes(q))
     );
@@ -113,8 +111,8 @@ export function AddMemberDrawer({
 
       <p className="mb-3 text-[11px] leading-4 text-[#5a6779]">
         {tab === "human"
-          ? "列表按当前 Workspace 成员范围拉取，已在本 Project 的成员不会出现。"
-          : "列表按当前 Workspace 可接入的 Agent 拉取，已加入本 Project 的不会出现。"}
+          ? "列表包含全部可邀请用户，已在本 Project 的成员不会出现。"
+          : "列表包含可接入的已发布 Agent，已加入本 Project 的不会出现。"}
       </p>
 
       {tab === "human" ? (

@@ -34,6 +34,8 @@ interface SkillConfigDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (selections: SkillConfigSelection[]) => void;
+  /** plaza = 仅技能广场；all = 广场 + 管理 */
+  sourceMode?: "plaza" | "all";
 }
 
 const SKILL_HUB_OPTIONS: SkillConfigOption[] = getMarketplaceSkillConfigOptions();
@@ -70,9 +72,18 @@ function shouldEllipsisBefore(page: number, prev: number | undefined): boolean {
   return prev !== undefined && page - prev > 1;
 }
 
-export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfigDialogProps) {
+export function SkillConfigDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  sourceMode = "all",
+}: SkillConfigDialogProps) {
   const { configLabel } = useWorkbenchEntity();
   const [sourceTab, setSourceTab] = useState<SkillSourceTab>("skillshub");
+  const plazaOnly = sourceMode === "plaza";
+  const visibleSourceTabs = plazaOnly
+    ? SKILL_SOURCE_TABS.filter((tab) => tab.id === "skillshub")
+    : SKILL_SOURCE_TABS;
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -80,7 +91,9 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
   const [jumpInput, setJumpInput] = useState("");
 
   const filteredOptions = useMemo(() => {
-    const pool = sourceTab === "skillshub" ? SKILL_HUB_OPTIONS : SKILL_MANAGED_OPTIONS;
+    const effectiveTab = plazaOnly ? "skillshub" : sourceTab;
+    const pool =
+      effectiveTab === "skillshub" ? SKILL_HUB_OPTIONS : SKILL_MANAGED_OPTIONS;
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     if (!normalizedQuery) {
@@ -93,7 +106,7 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
         .toLowerCase()
         .includes(normalizedQuery)
     );
-  }, [searchQuery, sourceTab]);
+  }, [plazaOnly, searchQuery, sourceTab]);
 
   const total = filteredOptions.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -194,7 +207,7 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
           </div>
 
           <div className="flex border-b border-[#eeeeee] px-6">
-            {SKILL_SOURCE_TABS.map((tab) => (
+            {visibleSourceTabs.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -204,7 +217,7 @@ export function SkillConfigDialog({ open, onOpenChange, onConfirm }: SkillConfig
                 }}
                 className={cn(
                   "flex-1 border-b-2 py-3 text-sm font-medium transition-colors",
-                  sourceTab === tab.id
+                  (plazaOnly ? "skillshub" : sourceTab) === tab.id
                     ? "border-blue-600 text-blue-600"
                     : "border-transparent text-slate-500 hover:text-slate-800"
                 )}

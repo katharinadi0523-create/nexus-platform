@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useProjectConversation } from "../project-conversation-provider";
 import { DrawerShell } from "../shared/drawer-shell";
+import { ProjectSharedToolsSection } from "@/components/my-claw/project-tools/project-shared-tools-section";
 
 interface ProjectInfoDrawerProps {
   projectId: string;
@@ -131,14 +132,19 @@ export function ProjectInfoDrawer({
               {project.description || "—"}
             </p>
           </div>
-          <div>
-            <div className="mb-1 text-[11px] font-medium text-[#5a6779]">
-              Workspace
+          {workspace ? (
+            <div>
+              <div className="mb-1 text-[11px] font-medium text-[#5a6779]">
+                来源（可选）
+              </div>
+              <p className="text-[12px] text-[#5a6779]">
+                {workspace.name}
+                {project.originWorkspaceId
+                  ? ` · ${project.originWorkspaceId}`
+                  : ""}
+              </p>
             </div>
-            <p className="text-[13px] text-slate-700">
-              {workspace?.name ?? project.workspaceId}
-            </p>
-          </div>
+          ) : null}
         </section>
 
         <section className="mb-5">
@@ -165,6 +171,8 @@ export function ProjectInfoDrawer({
             className="min-h-[100px] border-[#e2e8f0] text-[13px]"
           />
         </section>
+
+        <ProjectSharedToolsSection projectId={projectId} archived={archived} />
 
         <section className="mb-5">
           <div className="mb-2 text-[11px] font-medium text-[#5a6779]">
