@@ -23,12 +23,8 @@ import { formatRelativeTime } from "@/components/my-claw/project-issues/format";
 export function ProjectList() {
   const pathname = usePathname();
   const router = useRouter();
-  const {
-    state,
-    currentUserId,
-    getVisibleConversations,
-    getMessages,
-  } = useProjectConversation();
+  const { state, currentUserId, getVisibleConversations } =
+    useProjectConversation();
   const [query, setQuery] = useState("");
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [createConversationProjectId, setCreateConversationProjectId] =
@@ -45,7 +41,7 @@ export function ProjectList() {
 
   const activeConversationId = useMemo(() => {
     const match = pathname.match(
-      /^\/my-claw\/projects\/[^/]+\/conversations\/([^/]+)/
+      /^\/my-claw\/projects\/[^/]+\/conversations\/([^/]+)/,
     );
     return match?.[1] ?? null;
   }, [pathname]);
@@ -58,7 +54,7 @@ export function ProjectList() {
         if (!q) return true;
         if (project.name.toLowerCase().includes(q)) return true;
         return getVisibleConversations(project.id, currentUserId).some((c) =>
-          c.name.toLowerCase().includes(q)
+          c.name.toLowerCase().includes(q),
         );
       })
       .sort((a, b) => {
@@ -126,7 +122,7 @@ export function ProjectList() {
           const expanded = expandedIds.has(project.id);
           const conversations = getVisibleConversations(
             project.id,
-            currentUserId
+            currentUserId,
           ).filter((item) => {
             const q = query.trim().toLowerCase();
             if (!q) return true;
@@ -141,7 +137,7 @@ export function ProjectList() {
               <div
                 className={cn(
                   "group flex items-center gap-0.5 rounded-lg pr-1 transition-colors",
-                  projectActive ? "bg-[#e8f0fb]" : "hover:bg-slate-50"
+                  projectActive ? "bg-[#e8f0fb]" : "hover:bg-slate-50",
                 )}
               >
                 <button
@@ -160,17 +156,19 @@ export function ProjectList() {
                   href={href}
                   className={cn(
                     "flex min-w-0 flex-1 items-center gap-2 py-2 pr-1 text-[13px] font-medium",
-                    projectActive ? "text-[#2773ff]" : "text-slate-700"
+                    projectActive ? "text-[#2773ff]" : "text-slate-700",
                   )}
                   title={project.description}
                 >
                   <Folder
                     className={cn(
                       "h-4 w-4 shrink-0",
-                      projectActive ? "text-[#2773ff]" : "text-amber-500"
+                      projectActive ? "text-[#2773ff]" : "text-amber-500",
                     )}
                   />
-                  <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {project.name}
+                  </span>
                   {project.pinned ? (
                     <Pin className="h-3 w-3 shrink-0 text-[#2773ff]" />
                   ) : null}
@@ -194,16 +192,11 @@ export function ProjectList() {
                   {conversations.map((conversation) => {
                     const convHref = `/my-claw/projects/${project.id}/conversations/${conversation.id}`;
                     const active = conversation.id === activeConversationId;
-                    const messages = getMessages(project.id, conversation.id);
-                    const last = messages[messages.length - 1];
-                    const preview =
-                      last?.content?.replace(/\s+/g, " ").slice(0, 28) ||
-                      "暂无消息";
                     const running = state.invocations.some(
                       (inv) =>
                         inv.threadId === conversation.id &&
                         (inv.status === "running" || inv.status === "queued") &&
-                        !inv.parentInvocationId
+                        !inv.parentInvocationId,
                     );
 
                     return (
@@ -211,33 +204,27 @@ export function ProjectList() {
                         key={conversation.id}
                         href={convHref}
                         className={cn(
-                          "flex items-start gap-2 rounded-lg px-2 py-1.5 transition-colors",
+                          "flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors",
                           active
                             ? "bg-[#e8f0fb] text-[#2773ff]"
-                            : "text-slate-700 hover:bg-slate-50"
+                            : "text-slate-700 hover:bg-slate-50",
                         )}
                       >
                         <MessagesSquare
                           className={cn(
-                            "mt-0.5 h-3.5 w-3.5 shrink-0",
-                            active ? "text-[#2773ff]" : "text-[#5a6779]"
+                            "h-3.5 w-3.5 shrink-0",
+                            active ? "text-[#2773ff]" : "text-[#5a6779]",
                           )}
                         />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1">
-                            <span className="truncate text-[12px] font-medium">
-                              {conversation.name}
+                        <div className="flex min-w-0 flex-1 items-center gap-1">
+                          <span className="truncate text-[12px] font-medium">
+                            {conversation.name}
+                          </span>
+                          {running ? (
+                            <span className="shrink-0 rounded bg-[#e8f0fb] px-1 py-0.5 text-[9px] text-[#2773ff]">
+                              运行中
                             </span>
-                            {running ? (
-                              <span className="shrink-0 rounded bg-[#e8f0fb] px-1 py-0.5 text-[9px] text-[#2773ff]">
-                                运行中
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="mt-0.5 truncate text-[10px] text-[#5a6779]">
-                            {preview}
-                            {preview.length >= 28 ? "…" : ""}
-                          </div>
+                          ) : null}
                         </div>
                         <span className="shrink-0 pt-0.5 text-[10px] text-[#5a6779]">
                           {formatRelativeTime(conversation.updatedAt)}
@@ -282,7 +269,7 @@ export function ProjectList() {
             setCreateConversationProjectId(null);
             setExpandedIds((prev) => new Set(prev).add(projectId));
             router.push(
-              `/my-claw/projects/${projectId}/conversations/${conversationId}`
+              `/my-claw/projects/${projectId}/conversations/${conversationId}`,
             );
           }}
         />

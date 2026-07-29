@@ -21,7 +21,11 @@ export {
   CONV_VENDOR,
   CONV_RESEARCH_QC,
   CONV_RESEARCH_ANALYSIS,
+  CONV_AGRI_INGEST,
+  CONV_AGRI_MODELING,
+  CONV_AGRI_REPORT,
   PROJECT_LUNG_IMMUNO_ID,
+  PROJECT_WHEAT_WATER_ID,
   getConversationById,
 } from "./projects";
 
@@ -35,10 +39,7 @@ export function createId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export function formatDurationLabel(
-  startedAt?: string,
-  completedAt?: string
-) {
+export function formatDurationLabel(startedAt?: string, completedAt?: string) {
   // Only use fixed endpoints — avoid Date.now() to prevent SSR/client hydration drift.
   if (!startedAt || !completedAt) return undefined;
   const start = new Date(startedAt).getTime();
@@ -52,10 +53,10 @@ export function formatDurationLabel(
 
 export function deriveInlineStatuses(
   message: ProjectMessage,
-  invocations: AgentInvocation[]
+  invocations: AgentInvocation[],
 ): InlineExecutionViewModel[] {
   const related = invocations.filter(
-    (item) => item.sourceMessageId === message.id && !item.parentInvocationId
+    (item) => item.sourceMessageId === message.id && !item.parentInvocationId,
   );
   if (related.length === 0) return [];
 
@@ -69,7 +70,7 @@ export function deriveInlineStatuses(
   const views: InlineExecutionViewModel[] = [];
   for (const [, list] of byActor) {
     const latest = [...list].sort(
-      (a, b) => b.attemptNumber - a.attemptNumber
+      (a, b) => b.attemptNumber - a.attemptNumber,
     )[0];
     views.push({
       invocationId: latest.id,

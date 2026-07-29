@@ -1,4 +1,8 @@
-import type { IssueMutationProposal, IssueReference, ProjectIssue } from "./types";
+import type {
+  IssueMutationProposal,
+  IssueReference,
+  ProjectIssue,
+} from "./types";
 import {
   CONV_KB,
   CONV_LINEAGE,
@@ -15,6 +19,7 @@ import {
   LUNG_ISSUE_REFERENCES,
   LUNG_ISSUES,
 } from "@/lib/mock/my-claw/project-conversation/lung-immunotherapy-seed";
+import { AGRI_ISSUES } from "@/lib/mock/my-claw/project-conversation/agricultural-research-seed";
 
 export const SEED_PROJECT_ISSUES: ProjectIssue[] = [
   // —— conv-req-discussion (3 issues) ——
@@ -23,7 +28,8 @@ export const SEED_PROJECT_ISSUES: ProjectIssue[] = [
     projectId: PROJECT_CLAW_COLLAB_ID,
     key: "CLAW-12",
     title: "审阅组织协作方案",
-    summary: "基于 Conversation 引用，审阅 Coze 式项目协作方案并给出风险与建议。",
+    summary:
+      "基于 Conversation 引用，审阅 Coze 式项目协作方案并给出风险与建议。",
     status: "in_review",
     conversationId: CONV_REQ_DISCUSSION,
     sourceMessageId: "msg-1",
@@ -33,10 +39,7 @@ export const SEED_PROJECT_ISSUES: ProjectIssue[] = [
     agentAssigneeIds: ["actor-req-analysis"],
     invocationIds: ["inv-req-1"],
     artifactIds: ["art-prd"],
-    acceptanceCriteria: [
-      "给出方案结论与风险清单",
-      "明确是否继续 Option B",
-    ],
+    acceptanceCriteria: ["给出方案结论与风险清单", "明确是否继续 Option B"],
     waitingForCurrentUser: true,
     latestProgress: "需求分析 Claw 已提交审阅结论，等待验收",
     createdBy: { kind: "issue_steward", id: "steward" },
@@ -373,3 +376,4 @@ export const SEED_ISSUE_PROPOSALS: IssueMutationProposal[] = [
 
 SEED_PROJECT_ISSUES.push(...LUNG_ISSUES);
 SEED_ISSUE_REFERENCES.push(...LUNG_ISSUE_REFERENCES);
+SEED_PROJECT_ISSUES.push(...AGRI_ISSUES);

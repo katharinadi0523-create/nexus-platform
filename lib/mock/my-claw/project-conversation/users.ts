@@ -73,6 +73,20 @@ export const PROJECT_CONVERSATION_USERS: CollaborationUser[] = [
     initials: "E",
     workspaceIds: [WS_RESEARCH],
   },
+  {
+    id: "user-chenhe",
+    name: "陈禾",
+    title: "田间技术员",
+    initials: "陈",
+    workspaceIds: [WS_RESEARCH],
+  },
+  {
+    id: "user-zhaoyan",
+    name: "赵妍",
+    title: "农业统计研究员",
+    initials: "赵",
+    workspaceIds: [WS_RESEARCH],
+  },
 ];
 
 export function getUserById(id: string) {
@@ -81,6 +95,6 @@ export function getUserById(id: string) {
 
 export function getWorkspaceUsers(workspaceId: string) {
   return PROJECT_CONVERSATION_USERS.filter((user) =>
-    user.workspaceIds.includes(workspaceId)
+    user.workspaceIds.includes(workspaceId),
   );
 }

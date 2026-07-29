@@ -58,13 +58,13 @@ function SessionRow({ session, isActive }: SessionRowProps) {
     <div
       className={cn(
         "group relative flex items-center rounded-lg transition-colors",
-        isActive ? "bg-[#e8f0fb]" : "hover:bg-slate-50"
+        isActive ? "bg-[#e8f0fb]" : "hover:bg-slate-50",
       )}
     >
       <Link
         href={`/my-claw/chat?sessionId=${encodeURIComponent(session.id)}`}
         onClick={() => setActiveSession(session.id)}
-        className="min-w-0 flex-1 px-2.5 py-2"
+        className="min-w-0 flex-1 px-2.5 py-1.5"
       >
         <div className="flex items-center gap-1.5">
           {session.pinned ? (
@@ -73,15 +73,12 @@ function SessionRow({ session, isActive }: SessionRowProps) {
           <span
             className={cn(
               "truncate text-[13px] leading-5",
-              isActive ? "font-medium text-slate-900" : "text-slate-700"
+              isActive ? "font-medium text-slate-900" : "text-slate-700",
             )}
           >
             {session.title}
           </span>
         </div>
-        <p className="mt-0.5 truncate text-xs text-[#5a6779]">
-          {session.preview}
-        </p>
       </Link>
 
       <DropdownMenu>
@@ -112,10 +109,7 @@ function SessionRow({ session, isActive }: SessionRowProps) {
             <Pencil className="h-3.5 w-3.5" />
             重命名
           </DropdownMenuItem>
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={handleDelete}
-          >
+          <DropdownMenuItem variant="destructive" onClick={handleDelete}>
             <Trash2 className="h-3.5 w-3.5" />
             删除
           </DropdownMenuItem>
@@ -152,7 +146,11 @@ function SessionGroup({ title, sessions, activeSessionId }: SessionGroupProps) {
   );
 }
 
-function RunStatusGlyph({ status }: { status: AutomationSidebarRun["status"] }) {
+function RunStatusGlyph({
+  status,
+}: {
+  status: AutomationSidebarRun["status"];
+}) {
   if (status === "running") {
     return <Loader2 className="h-3 w-3 animate-spin text-amber-500" />;
   }
@@ -196,7 +194,7 @@ function AutomationTaskRow({
         }}
         className={cn(
           "flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors",
-          isTaskActive ? "bg-[#e8f0fb]" : "hover:bg-slate-50"
+          isTaskActive ? "bg-[#e8f0fb]" : "hover:bg-slate-50",
         )}
         title={task.workspaceName}
         aria-expanded={expanded}
@@ -210,7 +208,7 @@ function AutomationTaskRow({
         <span
           className={cn(
             "min-w-0 flex-1 truncate text-[13px] leading-5",
-            isTaskActive ? "font-medium text-slate-900" : "text-slate-700"
+            isTaskActive ? "font-medium text-slate-900" : "text-slate-700",
           )}
         >
           {task.workspaceName}
@@ -233,7 +231,7 @@ function AutomationTaskRow({
                   onClick={() => onOpenRun(task.id, run.id)}
                   className={cn(
                     "flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors",
-                    active ? "bg-[#e8f0fb]" : "hover:bg-slate-50"
+                    active ? "bg-[#e8f0fb]" : "hover:bg-slate-50",
                   )}
                   title={run.summary || `${run.title} · ${run.timeLabel}`}
                 >
@@ -243,7 +241,7 @@ function AutomationTaskRow({
                   <span
                     className={cn(
                       "min-w-0 flex-1 truncate text-[12px]",
-                      active ? "font-medium text-slate-900" : "text-slate-600"
+                      active ? "font-medium text-slate-900" : "text-slate-600",
                     )}
                   >
                     {run.title}
@@ -273,7 +271,7 @@ function AutomationTaskGroup({
 
   const sidebarTasks = useMemo(
     () => getAutomationSidebarTasks(automationTasks),
-    [automationTasks]
+    [automationTasks],
   );
 
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>(() => {
@@ -298,7 +296,7 @@ function AutomationTaskGroup({
     setExpandedTaskIds((prev) =>
       prev.includes(taskId)
         ? prev.filter((id) => id !== taskId)
-        : [...prev, taskId]
+        : [...prev, taskId],
     );
   };
 
@@ -313,7 +311,7 @@ function AutomationTaskGroup({
       return;
     }
     router.push(
-      `/my-claw/automation?taskId=${encodeURIComponent(taskId)}&runId=${encodeURIComponent(runId)}`
+      `/my-claw/automation?taskId=${encodeURIComponent(taskId)}&runId=${encodeURIComponent(runId)}`,
     );
   };
 
@@ -325,7 +323,9 @@ function AutomationTaskGroup({
           <span>自动化任务</span>
         </div>
         {sidebarTasks.length > 0 ? (
-          <span className="text-[11px] text-[#5a6779]">{sidebarTasks.length}</span>
+          <span className="text-[11px] text-[#5a6779]">
+            {sidebarTasks.length}
+          </span>
         ) : null}
       </div>
 

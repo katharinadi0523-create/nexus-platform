@@ -132,6 +132,51 @@ export const PROJECT_CONVERSATION_ACTORS: AgentActor[] = [
     capabilitySummary: ["阶段报告", "图表编排", "研究限制"],
     lastHeartbeatAt: "2026-07-29T16:50:00+08:00",
   },
+  {
+    id: "actor-field-ingest",
+    workspaceId: "ws-research",
+    type: "platform_claw",
+    name: "田间数据接入 Claw",
+    description:
+      "调用 Campbell TOA5 农田数据解析 Skill，产出标准化数据和解析报告",
+    runtimeStatus: "online",
+    capabilitySummary: [
+      "Campbell TOA5 农田数据解析",
+      "通道映射校验",
+      "数据血缘记录",
+    ],
+    lastHeartbeatAt: "2026-07-29T20:55:00+08:00",
+  },
+  {
+    id: "actor-agri-stat",
+    workspaceId: "ws-research",
+    type: "platform_claw",
+    name: "农业统计 Claw",
+    description: "传感器质控、日尺度特征、混合效应模型和诊断",
+    runtimeStatus: "online",
+    capabilitySummary: ["传感器 QC", "日尺度聚合", "混合效应模型"],
+    lastHeartbeatAt: "2026-07-30T12:20:00+08:00",
+  },
+  {
+    id: "actor-remote-sensing",
+    workspaceId: "ws-research",
+    type: "platform_claw",
+    name: "农田遥感 Claw",
+    description: "提取小区 NDVI 并复核地面传感器结论",
+    runtimeStatus: "online",
+    capabilitySummary: ["GeoTIFF 小区统计", "NDVI 特征提取", "一致性复核"],
+    lastHeartbeatAt: "2026-07-30T13:00:00+08:00",
+  },
+  {
+    id: "actor-agronomy-literature",
+    workspaceId: "ws-research",
+    type: "platform_claw",
+    name: "农艺文献 Claw",
+    description: "检索水分胁迫、NDVI 与产量响应的证据边界",
+    runtimeStatus: "online",
+    capabilitySummary: ["农业文献检索", "证据摘要", "外推边界"],
+    lastHeartbeatAt: "2026-07-30T13:00:00+08:00",
+  },
 ];
 
 export function getActorById(id: string) {

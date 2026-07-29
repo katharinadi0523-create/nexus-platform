@@ -29,6 +29,16 @@ import {
   LUNG_SESSIONS,
   LUNG_TRANSFORMATIONS,
 } from "./lung-immunotherapy-seed";
+import {
+  AGRI_ARTIFACTS,
+  AGRI_EVENTS,
+  AGRI_FILES,
+  AGRI_INBOX,
+  AGRI_INVOCATIONS,
+  AGRI_MESSAGES,
+  AGRI_SESSIONS,
+  AGRI_TRANSFORMATIONS,
+} from "./agricultural-research-seed";
 
 const WS = "ws-agentfoundry";
 const THREAD = CONV_REQ_DISCUSSION;
@@ -211,8 +221,7 @@ export const SEED_MESSAGES: ProjectMessage[] = [
     threadId: THREAD,
     kind: "human",
     author: { kind: "human", id: "user-zhouning" },
-    content:
-      "覆盖可以先合并。大文件和权限边界我补进下周回归清单。@邸若楠",
+    content: "覆盖可以先合并。大文件和权限边界我补进下周回归清单。@邸若楠",
     mentionedHumanIds: [CURRENT_USER_ID],
     mentionedActorIds: [],
     quotedMessageIds: ["msg-9"],
@@ -518,10 +527,7 @@ export const SEED_EVENTS: AgentInvocationEvent[] = [
       type: "action",
       actionKind: "tool",
       status: "done",
-      logs: [
-        "发布：需求拆解-订单导出.md",
-        "合并子结果：订单导出 PRD.md",
-      ],
+      logs: ["发布：需求拆解-订单导出.md", "合并子结果：订单导出 PRD.md"],
     },
   },
   {
@@ -1020,7 +1026,6 @@ export const SEED_INBOX: ProjectInboxItem[] = [
   },
 ];
 
-
 // —— Multi-conversation additions ——
 
 export const SEED_MESSAGES_EXTRA: ProjectMessage[] = [
@@ -1106,11 +1111,7 @@ export const SEED_MESSAGES_EXTRA: ProjectMessage[] = [
     mentionedHumanIds: [CURRENT_USER_ID],
     mentionedActorIds: [],
     quotedMessageIds: [],
-    fileIds: [
-      "file-cleaned-parquet",
-      "file-diff-csv",
-      "file-research-report",
-    ],
+    fileIds: ["file-cleaned-parquet", "file-diff-csv", "file-research-report"],
     artifactIds: [
       "art-raw-csv",
       "art-cleaned-parquet",
@@ -1128,7 +1129,8 @@ export const SEED_MESSAGES_EXTRA: ProjectMessage[] = [
     threadId: CONV_VENDOR,
     kind: "human",
     author: { kind: "human", id: "user-linxiao" },
-    content: "本轮先评估三家供应商的交付 SLA 与安全合规，打分表放 Project 文件区。",
+    content:
+      "本轮先评估三家供应商的交付 SLA 与安全合规，打分表放 Project 文件区。",
     mentionedHumanIds: ["user-litao", "user-zhouning"],
     mentionedActorIds: [],
     quotedMessageIds: [],
@@ -1523,7 +1525,6 @@ export const SEED_TRANSFORMATIONS: Transformation[] = [
   },
 ];
 
-
 // Merge extras into primary seed arrays for provider bootstrap
 SEED_MESSAGES.push(...SEED_MESSAGES_EXTRA);
 SEED_FILES.push(...SEED_FILES_EXTRA);
@@ -1538,3 +1539,12 @@ SEED_INVOCATIONS.push(...LUNG_INVOCATIONS);
 SEED_DELEGATIONS.push(...LUNG_DELEGATIONS);
 SEED_EVENTS.push(...LUNG_EVENTS);
 SEED_INBOX.push(...LUNG_INBOX);
+
+SEED_MESSAGES.push(...AGRI_MESSAGES);
+SEED_FILES.push(...AGRI_FILES);
+SEED_ARTIFACTS.push(...AGRI_ARTIFACTS);
+SEED_TRANSFORMATIONS.push(...AGRI_TRANSFORMATIONS);
+SEED_SESSIONS.push(...AGRI_SESSIONS);
+SEED_INVOCATIONS.push(...AGRI_INVOCATIONS);
+SEED_EVENTS.push(...AGRI_EVENTS);
+SEED_INBOX.push(...AGRI_INBOX);

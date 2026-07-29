@@ -19,6 +19,12 @@ import {
   LUNG_PUBLISHED_TOOLS,
   LUNG_SHARED_TOOLS,
 } from "@/lib/mock/my-claw/project-conversation/lung-immunotherapy-seed";
+import {
+  AGRI_CONVERSATION_SKILLS,
+  AGRI_CONVERSATION_TOOLS,
+  AGRI_PUBLISHED_TOOLS,
+  AGRI_SHARED_TOOLS,
+} from "@/lib/mock/my-claw/project-conversation/agricultural-research-seed";
 
 export const PUBLISHED_TOOL_CATALOG: PublishedToolResource[] = [
   {
@@ -325,16 +331,20 @@ export const SEED_PROJECT_SKILL_BINDINGS: ProjectSkillBinding[] = [
 ];
 
 export function getSharedToolsForProject(projectId: string) {
-  return SEED_SHARED_TOOL_BINDINGS.filter((item) => item.projectId === projectId);
+  return SEED_SHARED_TOOL_BINDINGS.filter(
+    (item) => item.projectId === projectId,
+  );
 }
 
 export function getProjectSkills(projectId: string) {
-  return SEED_PROJECT_SKILL_BINDINGS.filter((item) => item.projectId === projectId);
+  return SEED_PROJECT_SKILL_BINDINGS.filter(
+    (item) => item.projectId === projectId,
+  );
 }
 
 export function getConversationTools(conversationId: string) {
   return SEED_CONVERSATION_TOOL_BINDINGS.filter(
-    (item) => item.conversationId === conversationId
+    (item) => item.conversationId === conversationId,
   );
 }
 
@@ -350,3 +360,7 @@ PUBLISHED_TOOL_CATALOG.push(...LUNG_PUBLISHED_TOOLS);
 SEED_SHARED_TOOL_BINDINGS.push(...LUNG_SHARED_TOOLS);
 SEED_CONVERSATION_TOOL_BINDINGS.push(...LUNG_CONVERSATION_TOOLS);
 SEED_PROJECT_SKILL_BINDINGS.push(...LUNG_PROJECT_SKILLS);
+PUBLISHED_TOOL_CATALOG.push(...AGRI_PUBLISHED_TOOLS);
+SEED_SHARED_TOOL_BINDINGS.push(...AGRI_SHARED_TOOLS);
+SEED_CONVERSATION_TOOL_BINDINGS.push(...AGRI_CONVERSATION_TOOLS);
+SEED_CONVERSATION_SKILL_BINDINGS.push(...AGRI_CONVERSATION_SKILLS);

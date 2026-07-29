@@ -203,12 +203,9 @@ interface ProjectConversationContextValue {
   getConversation: (conversationId: string) => ProjectConversation | undefined;
   getVisibleConversations: (
     projectId: string,
-    userId?: string
+    userId?: string,
   ) => ProjectConversation[];
-  getMessages: (
-    projectId: string,
-    conversationId?: string
-  ) => ProjectMessage[];
+  getMessages: (projectId: string, conversationId?: string) => ProjectMessage[];
   canAccessConversation: (conversationId: string, userId?: string) => boolean;
   getMembers: (projectId: string) => ProjectMember[];
   getUser: (id: string) => CollaborationUser | undefined;
@@ -231,7 +228,7 @@ interface ProjectConversationContextValue {
   getConversationTools: (conversationId: string) => ConversationToolBinding[];
   getEffectiveTools: (
     projectId: string,
-    conversationId: string
+    conversationId: string,
   ) => Array<{
     versionId: string;
     displayName: string;
@@ -258,15 +255,17 @@ interface ProjectConversationContextValue {
   getTransformations: (projectId: string) => Transformation[];
   getSessionByConversationActor: (
     conversationId: string,
-    actorId: string
+    actorId: string,
   ) => ProjectAgentSession | undefined;
   rememberVisitedConversation: (
     projectId: string,
-    conversationId: string
+    conversationId: string,
   ) => void;
   getLastVisitedConversationId: (projectId: string) => string | undefined;
   getMyWorkProjection: () => MyWorkProjection;
-  sendMessage: (payload: SendMessagePayload) => { ok: true } | { ok: false; error: string };
+  sendMessage: (
+    payload: SendMessagePayload,
+  ) => { ok: true } | { ok: false; error: string };
   createConversation: (payload: CreateConversationPayload) => string | null;
   createProject: (payload: {
     name: string;
@@ -284,7 +283,7 @@ interface ProjectConversationContextValue {
         | "agentBindingIds"
         | "instructions"
       >
-    >
+    >,
   ) => void;
   archiveConversation: (conversationId: string) => void;
   publishArtifactToProject: (artifactId: string) => void;
@@ -293,7 +292,7 @@ interface ProjectConversationContextValue {
   referenceIssueFromMessage: (
     issueId: string,
     conversationId: string,
-    messageId: string
+    messageId: string,
   ) => void;
   bindConversationTool: (payload: {
     projectId: string;
@@ -314,13 +313,13 @@ interface ProjectConversationContextValue {
   cancelInvocation: (invocationId: string) => void;
   retryInvocation: (
     invocationId: string,
-    sessionPolicy: "continue" | "new"
+    sessionPolicy: "continue" | "new",
   ) => void;
   acceptAgentReply: (messageId: string) => void;
   requestAgentChanges: (messageId: string, feedback: string) => void;
   openDrawer: (
     kind: Exclude<ProjectDrawerKind, null>,
-    invocationId?: string
+    invocationId?: string,
   ) => void;
   openIssueDrawer: (issueId: string) => void;
   closeDrawer: () => void;
@@ -330,7 +329,7 @@ interface ProjectConversationContextValue {
   resolvePersonalClawConsent: (
     projectId: string,
     actorId: string,
-    decision: "accept" | "reject"
+    decision: "accept" | "reject",
   ) => void;
   addHumanMember: (projectId: string, userId: string) => void;
   addAgentMember: (projectId: string, actorId: string) => void;
@@ -340,12 +339,12 @@ interface ProjectConversationContextValue {
   restoreActorOnline: (actorId: string) => void;
   addGitHubWorkSource: (
     projectId: string,
-    repoInput: string
+    repoInput: string,
   ) => { ok: true } | { ok: false; error: string };
   addLocalWorkSource: (
     projectId: string,
     displayName: string,
-    localPath: string
+    localPath: string,
   ) => { ok: true } | { ok: false; error: string };
   removeWorkSource: (projectId: string, sourceId: string) => void;
   createIssue: (payload: CreateIssuePayload) => string | null;
@@ -370,7 +369,7 @@ function buildInitialState(): ProjectConversationState {
   const threads = PROJECT_CONVERSATION_THREADS.map((thread) => ({
     ...thread,
     messageIds: SEED_MESSAGES.filter((msg) => msg.threadId === thread.id).map(
-      (msg) => msg.id
+      (msg) => msg.id,
     ),
   }));
 
@@ -397,7 +396,9 @@ function buildInitialState(): ProjectConversationState {
     sharedToolBindings: structuredClone(SEED_SHARED_TOOL_BINDINGS),
     conversationToolBindings: structuredClone(SEED_CONVERSATION_TOOL_BINDINGS),
     projectSkillBindings: structuredClone(SEED_PROJECT_SKILL_BINDINGS),
-    conversationSkillBindings: structuredClone(SEED_CONVERSATION_SKILL_BINDINGS),
+    conversationSkillBindings: structuredClone(
+      SEED_CONVERSATION_SKILL_BINDINGS,
+    ),
     publishedTools: structuredClone(PUBLISHED_TOOL_CATALOG),
     lastVisitedConversationIds: {},
     activeDrawer: null,
@@ -411,7 +412,7 @@ function buildInitialState(): ProjectConversationState {
 
 function mergeMissingById<T extends { id: string }>(
   current: T[] | undefined,
-  seed: T[]
+  seed: T[],
 ): T[] {
   const list = Array.isArray(current) ? [...current] : [];
   const existing = new Set(list.map((item) => item.id));
@@ -444,60 +445,79 @@ function readPersistedState(): ProjectConversationState | null {
       users: base.users,
       actors: base.actors,
       publishedTools: base.publishedTools,
-      // Force-merge catalog entities so prototype seeds stay available after hydrate.
+      // Force-merge seed entities so new prototype storylines also hydrate into
+      // an existing browser state. Persisted state may predate a new Project,
+      // but it must not erase the Project's messages, files, or lineage.
+      messages: mergeMissingById(parsed.messages, base.messages),
+      files: mergeMissingById(parsed.files, base.files),
+      artifacts: mergeMissingById(parsed.artifacts, base.artifacts),
+      sessions: mergeMissingById(parsed.sessions, base.sessions),
+      invocations: mergeMissingById(parsed.invocations, base.invocations),
+      delegations: mergeMissingById(parsed.delegations, base.delegations),
+      events: mergeMissingById(parsed.events, base.events),
+      inbox: mergeMissingById(parsed.inbox, base.inbox),
+      workSources: mergeMissingById(parsed.workSources, base.workSources),
       issues: mergeMissingById(parsed.issues, base.issues),
       issueReferences: mergeMissingById(
         parsed.issueReferences,
-        base.issueReferences
+        base.issueReferences,
       ),
-      issueProposals: mergeMissingById(parsed.issueProposals, base.issueProposals),
+      issueProposals: mergeMissingById(
+        parsed.issueProposals,
+        base.issueProposals,
+      ),
       sharedToolBindings: mergeMissingById(
         parsed.sharedToolBindings,
-        base.sharedToolBindings
+        base.sharedToolBindings,
       ),
       conversationToolBindings: mergeMissingById(
         parsed.conversationToolBindings,
-        base.conversationToolBindings
+        base.conversationToolBindings,
       ),
       projectSkillBindings: mergeMissingById(
         parsed.projectSkillBindings,
-        base.projectSkillBindings
+        base.projectSkillBindings,
       ),
       conversationSkillBindings: mergeMissingById(
         parsed.conversationSkillBindings,
-        base.conversationSkillBindings
+        base.conversationSkillBindings,
       ),
       transformations: mergeMissingById(
         parsed.transformations,
-        base.transformations
+        base.transformations,
       ),
+      membersByProject: {
+        ...base.membersByProject,
+        ...(parsed.membersByProject ?? {}),
+      },
       threads: mergeMissingById(parsed.threads, base.threads),
       lastVisitedConversationIds: {
         ...base.lastVisitedConversationIds,
         ...(parsed.lastVisitedConversationIds ?? {}),
       },
-      projects: mergeMissingById(parsed.projects, base.projects).map((project) => {
-        const seed = base.projects.find((item) => item.id === project.id);
-        if (!seed) return project;
-        return {
-          ...seed,
-          ...project,
-          conversationIds:
-            project.conversationIds?.length
+      projects: mergeMissingById(parsed.projects, base.projects).map(
+        (project) => {
+          const seed = base.projects.find((item) => item.id === project.id);
+          if (!seed) return project;
+          return {
+            ...seed,
+            ...project,
+            conversationIds: project.conversationIds?.length
               ? project.conversationIds
               : seed.conversationIds,
-          projectFileIds:
-            project.projectFileIds?.length
+            projectFileIds: project.projectFileIds?.length
               ? project.projectFileIds
               : seed.projectFileIds,
-          sharedToolBindingIds:
-            project.sharedToolBindingIds?.length
+            sharedToolBindingIds: project.sharedToolBindingIds?.length
               ? project.sharedToolBindingIds
               : seed.sharedToolBindingIds,
-          issueIds: project.issueIds?.length ? project.issueIds : seed.issueIds,
-          threadId: project.threadId || seed.threadId,
-        };
-      }),
+            issueIds: project.issueIds?.length
+              ? project.issueIds
+              : seed.issueIds,
+            threadId: project.threadId || seed.threadId,
+          };
+        },
+      ),
     };
   } catch {
     return null;
@@ -514,7 +534,8 @@ export function ProjectConversationProvider({
   children: ReactNode;
 }) {
   // Always seed identically on server + first client paint to avoid hydration mismatch.
-  const [state, setState] = useState<ProjectConversationState>(buildInitialState);
+  const [state, setState] =
+    useState<ProjectConversationState>(buildInitialState);
   const [readyToPersist, setReadyToPersist] = useState(false);
   const timersRef = useRef<Record<string, number>>({});
   const scheduleInvocationProgressRef = useRef<
@@ -573,16 +594,18 @@ export function ProjectConversationProvider({
   }, []);
   const unreadInboxCount = useMemo(
     () => state.inbox.filter((item) => !item.read).length,
-    [state.inbox]
+    [state.inbox],
   );
 
   const getWorkspace = useCallback(
-    (id: string) => state.workspaces.find((item) => item.id === id) ?? getWorkspaceById(id),
-    [state.workspaces]
+    (id: string) =>
+      state.workspaces.find((item) => item.id === id) ?? getWorkspaceById(id),
+    [state.workspaces],
   );
   const getProject = useCallback(
-    (id: string) => state.projects.find((item) => item.id === id) ?? getProjectById(id),
-    [state.projects]
+    (id: string) =>
+      state.projects.find((item) => item.id === id) ?? getProjectById(id),
+    [state.projects],
   );
   const getThread = useCallback(
     (projectId: string) => {
@@ -592,7 +615,7 @@ export function ProjectConversationProvider({
       }
       return state.threads.find((item) => item.projectId === projectId);
     },
-    [state.projects, state.threads]
+    [state.projects, state.threads],
   );
   const getConversations = useCallback(
     (projectId: string) =>
@@ -600,22 +623,24 @@ export function ProjectConversationProvider({
         .filter((item) => item.projectId === projectId && !item.archivedAt)
         .sort(
           (a, b) =>
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
         ),
-    [state.threads]
+    [state.threads],
   );
   const getConversation = useCallback(
     (conversationId: string) =>
       state.threads.find((item) => item.id === conversationId),
-    [state.threads]
+    [state.threads],
   );
   const canAccessConversation = useCallback(
     (conversationId: string, userId: string = CURRENT_USER_ID) => {
-      const conversation = state.threads.find((item) => item.id === conversationId);
+      const conversation = state.threads.find(
+        (item) => item.id === conversationId,
+      );
       if (!conversation || conversation.archivedAt) return false;
       return conversation.humanMemberIds.includes(userId);
     },
-    [state.threads]
+    [state.threads],
   );
   const getVisibleConversations = useCallback(
     (projectId: string, userId: string = CURRENT_USER_ID) => {
@@ -630,7 +655,7 @@ export function ProjectConversationProvider({
           );
         });
     },
-    [getConversations]
+    [getConversations],
   );
   const getMessages = useCallback(
     (projectId: string, conversationId?: string) =>
@@ -642,70 +667,75 @@ export function ProjectConversationProvider({
         })
         .sort(
           (a, b) =>
-            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
         ),
-    [state.messages]
+    [state.messages],
   );
   const getMembers = useCallback(
     (projectId: string) => state.membersByProject[projectId] ?? [],
-    [state.membersByProject]
+    [state.membersByProject],
   );
   const getUser = useCallback(
-    (id: string) => state.users.find((item) => item.id === id) ?? getUserById(id),
-    [state.users]
+    (id: string) =>
+      state.users.find((item) => item.id === id) ?? getUserById(id),
+    [state.users],
   );
   const getActor = useCallback(
-    (id: string) => state.actors.find((item) => item.id === id) ?? getActorById(id),
-    [state.actors]
+    (id: string) =>
+      state.actors.find((item) => item.id === id) ?? getActorById(id),
+    [state.actors],
   );
   const getInvocation = useCallback(
     (id: string) => state.invocations.find((item) => item.id === id),
-    [state.invocations]
+    [state.invocations],
   );
   const getSession = useCallback(
     (id: string) => state.sessions.find((item) => item.id === id),
-    [state.sessions]
+    [state.sessions],
   );
   const getDelegations = useCallback(
     (invocationId: string) =>
-      state.delegations.filter((item) => item.parentInvocationId === invocationId),
-    [state.delegations]
+      state.delegations.filter(
+        (item) => item.parentInvocationId === invocationId,
+      ),
+    [state.delegations],
   );
   const getEvents = useCallback(
     (invocationId: string) =>
       state.events
         .filter((item) => item.invocationId === invocationId)
         .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()),
-    [state.events]
+    [state.events],
   );
   const getArtifacts = useCallback(
     (ids: string[]) => state.artifacts.filter((item) => ids.includes(item.id)),
-    [state.artifacts]
+    [state.artifacts],
   );
   const getFiles = useCallback(
-    (projectId: string) => state.files.filter((item) => item.projectId === projectId),
-    [state.files]
+    (projectId: string) =>
+      state.files.filter((item) => item.projectId === projectId),
+    [state.files],
   );
   const getProjectFiles = useCallback(
     (projectId: string) =>
       state.files.filter(
-        (item) => item.projectId === projectId && item.scope === "project"
+        (item) => item.projectId === projectId && item.scope === "project",
       ),
-    [state.files]
+    [state.files],
   );
   const getConversationFiles = useCallback(
     (conversationId: string) =>
       state.files.filter(
         (item) =>
           item.scope === "conversation" &&
-          item.sourceConversationId === conversationId
+          item.sourceConversationId === conversationId,
       ),
-    [state.files]
+    [state.files],
   );
   const getWorkSources = useCallback(
     (projectId: string) =>
       state.workSources.filter((item) => item.projectId === projectId),
-    [state.workSources]
+    [state.workSources],
   );
   const getIssues = useCallback(
     (projectId: string) =>
@@ -713,48 +743,48 @@ export function ProjectConversationProvider({
         .filter((item) => item.projectId === projectId)
         .sort(
           (a, b) =>
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
         ),
-    [state.issues]
+    [state.issues],
   );
   const getIssue = useCallback(
     (issueId: string) => state.issues.find((item) => item.id === issueId),
-    [state.issues]
+    [state.issues],
   );
   const getSharedTools = useCallback(
     (projectId: string) =>
       state.sharedToolBindings.filter((item) => item.projectId === projectId),
-    [state.sharedToolBindings]
+    [state.sharedToolBindings],
   );
   const getProjectSkills = useCallback(
     (projectId: string) =>
       state.projectSkillBindings.filter((item) => item.projectId === projectId),
-    [state.projectSkillBindings]
+    [state.projectSkillBindings],
   );
   const getConversationSkills = useCallback(
     (conversationId: string) =>
       state.conversationSkillBindings.filter(
         (item) =>
-          item.conversationId === conversationId && item.status === "active"
+          item.conversationId === conversationId && item.status === "active",
       ),
-    [state.conversationSkillBindings]
+    [state.conversationSkillBindings],
   );
   const getConversationTools = useCallback(
     (conversationId: string) =>
       state.conversationToolBindings.filter(
-        (item) => item.conversationId === conversationId
+        (item) => item.conversationId === conversationId,
       ),
-    [state.conversationToolBindings]
+    [state.conversationToolBindings],
   );
   const getConversationIssues = useCallback(
     (conversationId: string) =>
       state.issues.filter((item) => item.conversationId === conversationId),
-    [state.issues]
+    [state.issues],
   );
   const getTransformations = useCallback(
     (projectId: string) =>
       state.transformations.filter((item) => item.projectId === projectId),
-    [state.transformations]
+    [state.transformations],
   );
   const getSessionByConversationActor = useCallback(
     (conversationId: string, actorId: string) =>
@@ -762,9 +792,9 @@ export function ProjectConversationProvider({
         (item) =>
           item.threadId === conversationId &&
           item.actorId === actorId &&
-          item.status === "active"
+          item.status === "active",
       ),
-    [state.sessions]
+    [state.sessions],
   );
   const rememberVisitedConversation = useCallback(
     (projectId: string, conversationId: string) => {
@@ -776,17 +806,17 @@ export function ProjectConversationProvider({
         },
       }));
     },
-    []
+    [],
   );
   const getLastVisitedConversationId = useCallback(
     (projectId: string) => state.lastVisitedConversationIds[projectId],
-    [state.lastVisitedConversationIds]
+    [state.lastVisitedConversationIds],
   );
   const permissionRank = (p: "read" | "execute" | "write") =>
     p === "read" ? 1 : p === "execute" ? 2 : 3;
   const stricterPermission = (
     a: "read" | "execute" | "write",
-    b: "read" | "execute" | "write"
+    b: "read" | "execute" | "write",
   ) => (permissionRank(a) <= permissionRank(b) ? a : b);
   const getEffectiveTools = useCallback(
     (projectId: string, conversationId: string) => {
@@ -802,7 +832,7 @@ export function ProjectConversationProvider({
         }
       >();
       for (const binding of state.sharedToolBindings.filter(
-        (item) => item.projectId === projectId
+        (item) => item.projectId === projectId,
       )) {
         map.set(binding.publishedResourceVersionId, {
           versionId: binding.publishedResourceVersionId,
@@ -814,16 +844,16 @@ export function ProjectConversationProvider({
         });
       }
       for (const binding of state.conversationToolBindings.filter(
-        (item) => item.conversationId === conversationId
+        (item) => item.conversationId === conversationId,
       )) {
         const existing = map.get(binding.publishedResourceVersionId);
         if (existing) {
           existing.sources = Array.from(
-            new Set([...existing.sources, "conversation" as const])
+            new Set([...existing.sources, "conversation" as const]),
           );
           existing.permission = stricterPermission(
             existing.permission,
-            binding.permission
+            binding.permission,
           );
           if (binding.status === "revoked" || existing.status === "revoked") {
             existing.status = "revoked";
@@ -846,7 +876,7 @@ export function ProjectConversationProvider({
       }
       return Array.from(map.values());
     },
-    [state.conversationToolBindings, state.sharedToolBindings]
+    [state.conversationToolBindings, state.sharedToolBindings],
   );
   const getMyWorkProjection = useCallback((): MyWorkProjection => {
     const attention = state.issues
@@ -854,20 +884,21 @@ export function ProjectConversationProvider({
         (issue) =>
           issue.waitingForCurrentUser ||
           issue.status === "in_review" ||
-          issue.executionFailed
+          issue.executionFailed,
       )
       .map((issue) => issue.id);
     const running = state.issues
       .filter(
         (issue) =>
-          issue.status === "in_progress" || issue.status === "changes_requested"
+          issue.status === "in_progress" ||
+          issue.status === "changes_requested",
       )
       .map((issue) => issue.id);
     const recent = state.issues
       .filter((issue) => issue.status === "done")
       .sort(
         (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
       )
       .slice(0, 5)
       .map((issue) => issue.id);
@@ -875,15 +906,11 @@ export function ProjectConversationProvider({
       .filter(
         (project) =>
           project.status === "active" &&
-          project.humanMemberIds.includes(CURRENT_USER_ID)
+          project.humanMemberIds.includes(CURRENT_USER_ID),
       )
       .map((project) => project.id);
 
-    if (
-      attention.length === 0 &&
-      running.length === 0 &&
-      recent.length === 0
-    ) {
+    if (attention.length === 0 && running.length === 0 && recent.length === 0) {
       return SEED_MY_WORK;
     }
 
@@ -908,14 +935,15 @@ export function ProjectConversationProvider({
         activeDrawer: kind,
         activeInvocationId:
           kind === "execution"
-            ? invocationId ?? prev.activeInvocationId
+            ? (invocationId ?? prev.activeInvocationId)
             : prev.activeInvocationId,
-        activeIssueId: kind === "issue" ? prev.activeIssueId : prev.activeIssueId,
+        activeIssueId:
+          kind === "issue" ? prev.activeIssueId : prev.activeIssueId,
         scrollAnchorMessageId:
           prev.highlightedMessageId ?? prev.scrollAnchorMessageId,
       }));
     },
-    []
+    [],
   );
 
   const openIssueDrawer = useCallback((issueId: string) => {
@@ -970,7 +998,8 @@ export function ProjectConversationProvider({
       ...prev,
       activeDrawer: "execution",
       activeInvocationId: invocationId,
-      scrollAnchorMessageId: prev.highlightedMessageId ?? prev.scrollAnchorMessageId,
+      scrollAnchorMessageId:
+        prev.highlightedMessageId ?? prev.scrollAnchorMessageId,
     }));
   }, []);
 
@@ -986,7 +1015,7 @@ export function ProjectConversationProvider({
     setState((prev) => ({
       ...prev,
       inbox: prev.inbox.map((item) =>
-        item.id === id ? { ...item, read: true } : item
+        item.id === id ? { ...item, read: true } : item,
       ),
     }));
   }, []);
@@ -996,7 +1025,7 @@ export function ProjectConversationProvider({
       draft: ProjectConversationState,
       project: CollaborationProject,
       content: string,
-      conversationId?: string
+      conversationId?: string,
     ) => {
       const threadId = conversationId ?? project.threadId;
       const message: ProjectMessage = {
@@ -1023,10 +1052,10 @@ export function ProjectConversationProvider({
               messageIds: [...thread.messageIds, message.id],
               updatedAt: nowIso(),
             }
-          : thread
+          : thread,
       );
     },
-    []
+    [],
   );
 
   const scheduleInvocationProgress = useCallback(
@@ -1035,8 +1064,14 @@ export function ProjectConversationProvider({
       if (actor?.runtimeStatus === "offline") {
         const failTimer = window.setTimeout(() => {
           setState((prev) => {
-            const inv = prev.invocations.find((item) => item.id === invocationId);
-            if (!inv || inv.status === "cancelled" || inv.status === "completed") {
+            const inv = prev.invocations.find(
+              (item) => item.id === invocationId,
+            );
+            if (
+              !inv ||
+              inv.status === "cancelled" ||
+              inv.status === "completed"
+            ) {
               return prev;
             }
             const next = structuredClone(prev);
@@ -1049,7 +1084,7 @@ export function ProjectConversationProvider({
                     errorMessage: "Runtime offline",
                     completedAt: nowIso(),
                   }
-                : item
+                : item,
             );
             next.events = [
               ...next.events,
@@ -1095,8 +1130,12 @@ export function ProjectConversationProvider({
           const next = structuredClone(prev);
           next.invocations = next.invocations.map((item) =>
             item.id === invocationId
-              ? { ...item, status: "running", startedAt: item.startedAt ?? nowIso() }
-              : item
+              ? {
+                  ...item,
+                  status: "running",
+                  startedAt: item.startedAt ?? nowIso(),
+                }
+              : item,
           );
           next.events = [
             ...next.events,
@@ -1174,13 +1213,17 @@ export function ProjectConversationProvider({
       if (withDelegation) {
         const dlgTimer = window.setTimeout(() => {
           setState((prev) => {
-            const inv = prev.invocations.find((item) => item.id === invocationId);
+            const inv = prev.invocations.find(
+              (item) => item.id === invocationId,
+            );
             if (!inv || inv.status !== "running") return prev;
-            const project = prev.projects.find((item) => item.id === inv.projectId);
+            const project = prev.projects.find(
+              (item) => item.id === inv.projectId,
+            );
             if (!project) return prev;
             const targetId =
               project.agentMemberIds.find(
-                (id) => id !== actorId && id === "actor-product-design"
+                (id) => id !== actorId && id === "actor-product-design",
               ) ?? project.agentMemberIds.find((id) => id !== actorId);
             if (!targetId) return prev;
             const target = prev.actors.find((item) => item.id === targetId);
@@ -1206,7 +1249,7 @@ export function ProjectConversationProvider({
                     ...item,
                     delegationIds: [...item.delegationIds, delegationId],
                   }
-                : item
+                : item,
             );
             next.events = [
               ...next.events,
@@ -1232,205 +1275,217 @@ export function ProjectConversationProvider({
         timersRef.current[`${invocationId}-dlg`] = dlgTimer;
       }
 
-      const sandboxTimer = window.setTimeout(() => {
-        setState((prev) => {
-          const inv = prev.invocations.find((item) => item.id === invocationId);
-          if (!inv || inv.status !== "running") return prev;
-          return {
-            ...prev,
-            events: [
-              ...prev.events,
+      const sandboxTimer = window.setTimeout(
+        () => {
+          setState((prev) => {
+            const inv = prev.invocations.find(
+              (item) => item.id === invocationId,
+            );
+            if (!inv || inv.status !== "running") return prev;
+            return {
+              ...prev,
+              events: [
+                ...prev.events,
+                {
+                  id: createId("evt"),
+                  invocationId,
+                  kind: "sandbox",
+                  label: "沙箱写入产物",
+                  at: nowIso(),
+                  display: {
+                    type: "action",
+                    actionKind: "tool",
+                    status: "done",
+                    logs: [
+                      "机制：Sandbox File Writer",
+                      "已生成 Markdown 产物，等待发布到 Project",
+                    ],
+                  },
+                },
+              ],
+            };
+          });
+        },
+        withDelegation ? 3000 : 2000,
+      );
+      timersRef.current[`${invocationId}-sandbox`] = sandboxTimer;
+
+      const completeTimer = window.setTimeout(
+        () => {
+          setState((prev) => {
+            const inv = prev.invocations.find(
+              (item) => item.id === invocationId,
+            );
+            if (!inv || inv.status === "cancelled" || inv.status === "failed") {
+              return prev;
+            }
+            if (inv.responseMessageId) return prev;
+            const actor = prev.actors.find((item) => item.id === actorId);
+            const project = prev.projects.find(
+              (item) => item.id === inv.projectId,
+            );
+            if (!actor || !project) return prev;
+
+            const replyId = createId("msg");
+            const artifactId = createId("art");
+            const next = structuredClone(prev);
+
+            next.delegations = next.delegations.map((item) =>
+              inv.delegationIds.includes(item.id)
+                ? { ...item, status: "responded", respondedAt: nowIso() }
+                : item,
+            );
+
+            const reply: ProjectMessage = {
+              id: replyId,
+              workspaceId: inv.workspaceId,
+              projectId: inv.projectId,
+              threadId: inv.threadId,
+              kind: "agent_reply",
+              author: { kind: "agent", id: actorId },
+              content: `${actor.name} 已完成你的请求。\n\n基于当前 Project 公共上下文，给出了可直接审阅的结果摘要。如需调整，可要求返工。`,
+              replyToMessageId: inv.sourceMessageId,
+              mentionedHumanIds: [],
+              mentionedActorIds: [],
+              quotedMessageIds: [],
+              fileIds: [],
+              artifactIds: [artifactId],
+              invocationIds: [invocationId],
+              agentReview: { status: "unreviewed" },
+              createdAt: nowIso(),
+            };
+
+            next.messages = [...next.messages, reply];
+            const conversation = next.threads.find(
+              (item) => item.id === inv.threadId,
+            );
+            const artifactScope =
+              conversation?.defaultArtifactScope ?? "project";
+            next.artifacts = [
+              ...next.artifacts,
+              {
+                id: artifactId,
+                workspaceId: inv.workspaceId,
+                projectId: inv.projectId,
+                sourceMessageId: replyId,
+                invocationId,
+                name: `${actor.name} 结果摘要.md`,
+                kind: "report",
+                createdBy: { kind: "agent", id: actorId },
+                scope: artifactScope,
+                sourceConversationId: inv.threadId,
+                sourceArtifactIds: [],
+                createdAt: nowIso(),
+              },
+            ];
+            next.invocations = next.invocations.map((item) =>
+              item.id === invocationId
+                ? {
+                    ...item,
+                    status: "completed",
+                    responseMessageId: replyId,
+                    artifactIds: [...item.artifactIds, artifactId],
+                    completedAt: nowIso(),
+                    summary: `${actor.name} 已回复`,
+                  }
+                : item,
+            );
+            next.events = [
+              ...next.events,
               {
                 id: createId("evt"),
                 invocationId,
-                kind: "sandbox",
-                label: "沙箱写入产物",
+                kind: "artifact",
+                label: "生成 Artifact",
+                detail: `${actor.name} 结果摘要.md`,
                 at: nowIso(),
                 display: {
                   type: "action",
                   actionKind: "tool",
                   status: "done",
-                  logs: [
-                    "机制：Sandbox File Writer",
-                    "已生成 Markdown 产物，等待发布到 Project",
-                  ],
+                  logs: [`发布：${actor.name} 结果摘要.md`],
                 },
               },
-            ],
-          };
-        });
-      }, withDelegation ? 3000 : 2000);
-      timersRef.current[`${invocationId}-sandbox`] = sandboxTimer;
-
-      const completeTimer = window.setTimeout(() => {
-        setState((prev) => {
-          const inv = prev.invocations.find((item) => item.id === invocationId);
-          if (!inv || inv.status === "cancelled" || inv.status === "failed") {
-            return prev;
-          }
-          if (inv.responseMessageId) return prev;
-          const actor = prev.actors.find((item) => item.id === actorId);
-          const project = prev.projects.find((item) => item.id === inv.projectId);
-          if (!actor || !project) return prev;
-
-          const replyId = createId("msg");
-          const artifactId = createId("art");
-          const next = structuredClone(prev);
-
-          next.delegations = next.delegations.map((item) =>
-            inv.delegationIds.includes(item.id)
-              ? { ...item, status: "responded", respondedAt: nowIso() }
-              : item
-          );
-
-          const reply: ProjectMessage = {
-            id: replyId,
-            workspaceId: inv.workspaceId,
-            projectId: inv.projectId,
-            threadId: inv.threadId,
-            kind: "agent_reply",
-            author: { kind: "agent", id: actorId },
-            content: `${actor.name} 已完成你的请求。\n\n基于当前 Project 公共上下文，给出了可直接审阅的结果摘要。如需调整，可要求返工。`,
-            replyToMessageId: inv.sourceMessageId,
-            mentionedHumanIds: [],
-            mentionedActorIds: [],
-            quotedMessageIds: [],
-            fileIds: [],
-            artifactIds: [artifactId],
-            invocationIds: [invocationId],
-            agentReview: { status: "unreviewed" },
-            createdAt: nowIso(),
-          };
-
-          next.messages = [...next.messages, reply];
-          const conversation = next.threads.find(
-            (item) => item.id === inv.threadId
-          );
-          const artifactScope =
-            conversation?.defaultArtifactScope ?? "project";
-          next.artifacts = [
-            ...next.artifacts,
-            {
-              id: artifactId,
-              workspaceId: inv.workspaceId,
-              projectId: inv.projectId,
-              sourceMessageId: replyId,
-              invocationId,
-              name: `${actor.name} 结果摘要.md`,
-              kind: "report",
-              createdBy: { kind: "agent", id: actorId },
-              scope: artifactScope,
-              sourceConversationId: inv.threadId,
-              sourceArtifactIds: [],
-              createdAt: nowIso(),
-            },
-          ];
-          next.invocations = next.invocations.map((item) =>
-            item.id === invocationId
-              ? {
-                  ...item,
-                  status: "completed",
-                  responseMessageId: replyId,
-                  artifactIds: [...item.artifactIds, artifactId],
-                  completedAt: nowIso(),
-                  summary: `${actor.name} 已回复`,
-                }
-              : item
-          );
-          next.events = [
-            ...next.events,
-            {
-              id: createId("evt"),
-              invocationId,
-              kind: "artifact",
-              label: "生成 Artifact",
-              detail: `${actor.name} 结果摘要.md`,
-              at: nowIso(),
-              display: {
-                type: "action",
-                actionKind: "tool",
-                status: "done",
-                logs: [`发布：${actor.name} 结果摘要.md`],
+              {
+                id: createId("evt"),
+                invocationId,
+                kind: "response",
+                label: "回传结果",
+                at: nowIso(),
+                display: {
+                  type: "output",
+                  content: `${actor.name} 已完成请求，结果已回传到 Project Conversation。`,
+                  attachments: [`${actor.name} 结果摘要.md`],
+                },
               },
-            },
-            {
-              id: createId("evt"),
-              invocationId,
-              kind: "response",
-              label: "回传结果",
-              at: nowIso(),
-              display: {
-                type: "output",
-                content: `${actor.name} 已完成请求，结果已回传到 Project Conversation。`,
-                attachments: [`${actor.name} 结果摘要.md`],
-              },
-            },
-          ];
-          next.threads = next.threads.map((thread) =>
-            thread.id === inv.threadId
-              ? {
-                  ...thread,
-                  messageIds: [...thread.messageIds, replyId],
-                  updatedAt: nowIso(),
-                }
-              : thread
-          );
-          next.sessions = next.sessions.map((session) =>
-            session.id === inv.sessionId
-              ? {
-                  ...session,
-                  lastSummary: `${actor.name} 已回复`,
-                  updatedAt: nowIso(),
-                }
-              : session
-          );
-          next.inbox = [
-            {
-              id: createId("inbox"),
-              type: "agent_reply_ready",
-              title: `${actor.name} 已回复`,
-              body: "结果已回到 Project Conversation，待验收",
-              createdAt: nowIso(),
-              read: false,
-              workspaceId: inv.workspaceId,
-              projectId: inv.projectId,
-              threadId: inv.threadId,
-              messageId: replyId,
-              invocationId,
-              actorId,
-            },
-            ...next.inbox,
-          ];
-
-          const nextQueued = next.invocations
-            .filter(
-              (item) =>
-                item.projectId === inv.projectId &&
-                item.actorId === actorId &&
-                !item.parentInvocationId &&
-                item.status === "queued"
-            )
-            .sort(
-              (a, b) =>
-                new Date(a.startedAt ?? a.id).getTime() -
-                new Date(b.startedAt ?? b.id).getTime()
-            )[0];
-          if (nextQueued) {
-            window.setTimeout(() => {
-              scheduleInvocationProgressRef.current(
-                nextQueued.id,
+            ];
+            next.threads = next.threads.map((thread) =>
+              thread.id === inv.threadId
+                ? {
+                    ...thread,
+                    messageIds: [...thread.messageIds, replyId],
+                    updatedAt: nowIso(),
+                  }
+                : thread,
+            );
+            next.sessions = next.sessions.map((session) =>
+              session.id === inv.sessionId
+                ? {
+                    ...session,
+                    lastSummary: `${actor.name} 已回复`,
+                    updatedAt: nowIso(),
+                  }
+                : session,
+            );
+            next.inbox = [
+              {
+                id: createId("inbox"),
+                type: "agent_reply_ready",
+                title: `${actor.name} 已回复`,
+                body: "结果已回到 Project Conversation，待验收",
+                createdAt: nowIso(),
+                read: false,
+                workspaceId: inv.workspaceId,
+                projectId: inv.projectId,
+                threadId: inv.threadId,
+                messageId: replyId,
+                invocationId,
                 actorId,
-                false
-              );
-            }, 120);
-          }
+              },
+              ...next.inbox,
+            ];
 
-          return next;
-        });
-      }, withDelegation ? 4200 : 2800);
+            const nextQueued = next.invocations
+              .filter(
+                (item) =>
+                  item.projectId === inv.projectId &&
+                  item.actorId === actorId &&
+                  !item.parentInvocationId &&
+                  item.status === "queued",
+              )
+              .sort(
+                (a, b) =>
+                  new Date(a.startedAt ?? a.id).getTime() -
+                  new Date(b.startedAt ?? b.id).getTime(),
+              )[0];
+            if (nextQueued) {
+              window.setTimeout(() => {
+                scheduleInvocationProgressRef.current(
+                  nextQueued.id,
+                  actorId,
+                  false,
+                );
+              }, 120);
+            }
+
+            return next;
+          });
+        },
+        withDelegation ? 4200 : 2800,
+      );
       timersRef.current[`${invocationId}-done`] = completeTimer;
     },
-    []
+    [],
   );
 
   useEffect(() => {
@@ -1444,7 +1499,7 @@ export function ProjectConversationProvider({
       sourceMessage: ProjectMessage,
       actorId: string,
       sessionPolicy: "continue" | "new",
-      attemptNumber: number
+      attemptNumber: number,
     ) => {
       const actor = draft.actors.find((item) => item.id === actorId);
       if (!actor) return null;
@@ -1454,7 +1509,7 @@ export function ProjectConversationProvider({
         (item) =>
           item.threadId === conversationId &&
           item.actorId === actorId &&
-          item.status === "active"
+          item.status === "active",
       );
 
       if (sessionPolicy === "new" || !session) {
@@ -1479,7 +1534,7 @@ export function ProjectConversationProvider({
           item.threadId === conversationId &&
           item.actorId === actorId &&
           !item.parentInvocationId &&
-          (item.status === "running" || item.status === "queued")
+          (item.status === "running" || item.status === "queued"),
       );
       const invocation: AgentInvocation = {
         id: invocationId,
@@ -1507,18 +1562,21 @@ export function ProjectConversationProvider({
               invocationIds: [...item.invocationIds, invocationId],
               updatedAt: nowIso(),
             }
-          : item
+          : item,
       );
 
       return { invocationId, deferred: hasRunningForActor };
     },
-    []
+    [],
   );
 
   const sendMessage = useCallback(
     (payload: SendMessagePayload) => {
-      const project = state.projects.find((item) => item.id === payload.projectId);
-      if (!project) return { ok: false as const, error: "Project 不存在，请刷新后重试" };
+      const project = state.projects.find(
+        (item) => item.id === payload.projectId,
+      );
+      if (!project)
+        return { ok: false as const, error: "Project 不存在，请刷新后重试" };
       if (project.status === "archived") {
         return { ok: false as const, error: "项目已归档，无法发送消息" };
       }
@@ -1526,7 +1584,7 @@ export function ProjectConversationProvider({
         return { ok: false as const, error: "请先选择会话后再发送消息" };
       }
       const conversation = state.threads.find(
-        (item) => item.id === payload.conversationId
+        (item) => item.id === payload.conversationId,
       );
       if (!conversation || conversation.projectId !== project.id) {
         return { ok: false as const, error: "会话不存在或不属于当前 Project" };
@@ -1544,7 +1602,7 @@ export function ProjectConversationProvider({
       const members = state.membersByProject[project.id] ?? [];
       for (const actorId of payload.mentionedActorIds) {
         const member = members.find(
-          (item) => item.kind === "agent" && item.actorId === actorId
+          (item) => item.kind === "agent" && item.actorId === actorId,
         );
         if (!member || member.state === "pending_consent") {
           return {
@@ -1587,7 +1645,7 @@ export function ProjectConversationProvider({
               messageIds: [...thread.messageIds, messageId],
               updatedAt: nowIso(),
             }
-          : thread
+          : thread,
       );
       draft.lastVisitedConversationIds = {
         ...draft.lastVisitedConversationIds,
@@ -1625,7 +1683,7 @@ export function ProjectConversationProvider({
           message,
           actorId,
           "continue",
-          1
+          1,
         );
         if (createdInv) {
           created.push({
@@ -1640,26 +1698,27 @@ export function ProjectConversationProvider({
         draft.messages = draft.messages.map((item) =>
           item.id === messageId
             ? { ...item, invocationIds: created.map((c) => c.invocationId) }
-            : item
+            : item,
         );
       }
 
       // Issue Steward (prototype): propose / auto-create work items; greetings stay chat-only.
       if (payload.mentionedActorIds.length > 0) {
-        const stripped = payload.content
-          .replace(/@[^\s]+/g, "")
-          .trim();
+        const stripped = payload.content.replace(/@[^\s]+/g, "").trim();
         const isGreetingOnly =
           /^(hi|hello|你好|嗨)[!！.。\s]*$/i.test(stripped) ||
           stripped.length === 0;
         if (!isGreetingOnly) {
-          const confidence =
-            /审阅|调研|PRD|报告|怎么看|帮我|实现|输出/.test(payload.content)
-              ? 0.9
-              : 0.6;
+          const confidence = /审阅|调研|PRD|报告|怎么看|帮我|实现|输出/.test(
+            payload.content,
+          )
+            ? 0.9
+            : 0.6;
           const proposalId = createId("proposal");
           const proposedTitle =
-            stripped.length > 28 ? `${stripped.slice(0, 28)}…` : stripped || "跟进事项";
+            stripped.length > 28
+              ? `${stripped.slice(0, 28)}…`
+              : stripped || "跟进事项";
           const proposal: IssueMutationProposal = {
             id: proposalId,
             projectId: project.id,
@@ -1680,7 +1739,7 @@ export function ProjectConversationProvider({
           if (confidence >= 0.85) {
             const issueId = createId("issue");
             const issueCount = draft.issues.filter(
-              (item) => item.projectId === project.id
+              (item) => item.projectId === project.id,
             ).length;
             draft.lastAppliedProposalSnapshot = {
               proposalId,
@@ -1719,12 +1778,12 @@ export function ProjectConversationProvider({
                     issueIds: [...(item.issueIds ?? []), issueId],
                     updatedAt: nowIso(),
                   }
-                : item
+                : item,
             );
             draft.issueProposals = draft.issueProposals.map((item) =>
               item.id === proposalId
                 ? { ...item, dismissed: true, targetIssueId: issueId }
-                : item
+                : item,
             );
             draft.inbox = [
               {
@@ -1758,17 +1817,18 @@ export function ProjectConversationProvider({
       for (const item of created) {
         if (item.deferred) continue;
         const shouldDelegate =
-          item.actorId === "actor-req-analysis" || payload.content.includes("委派");
-        scheduleInvocationProgress(item.invocationId, item.actorId, shouldDelegate);
+          item.actorId === "actor-req-analysis" ||
+          payload.content.includes("委派");
+        scheduleInvocationProgress(
+          item.invocationId,
+          item.actorId,
+          shouldDelegate,
+        );
       }
 
       return { ok: true as const };
     },
-    [
-      createInvocationForAgent,
-      scheduleInvocationProgress,
-      state,
-    ]
+    [createInvocationForAgent, scheduleInvocationProgress, state],
   );
 
   const cancelInvocation = useCallback((invocationId: string) => {
@@ -1786,7 +1846,7 @@ export function ProjectConversationProvider({
           item.id === invocationId &&
           (item.status === "queued" || item.status === "running")
             ? { ...item, status: "cancelled", completedAt: nowIso() }
-            : item
+            : item,
         ),
       };
       if (target) {
@@ -1796,19 +1856,19 @@ export function ProjectConversationProvider({
               item.projectId === target.projectId &&
               item.actorId === target.actorId &&
               !item.parentInvocationId &&
-              item.status === "queued"
+              item.status === "queued",
           )
           .sort(
             (a, b) =>
               new Date(a.startedAt ?? a.id).getTime() -
-              new Date(b.startedAt ?? b.id).getTime()
+              new Date(b.startedAt ?? b.id).getTime(),
           )[0];
         if (queued) {
           window.setTimeout(() => {
             scheduleInvocationProgressRef.current(
               queued.id,
               target.actorId,
-              false
+              false,
             );
           }, 80);
         }
@@ -1819,7 +1879,9 @@ export function ProjectConversationProvider({
 
   const retryInvocation = useCallback(
     (invocationId: string, sessionPolicy: "continue" | "new") => {
-      const current = state.invocations.find((item) => item.id === invocationId);
+      const current = state.invocations.find(
+        (item) => item.id === invocationId,
+      );
       const project = current
         ? state.projects.find((item) => item.id === current.projectId)
         : undefined;
@@ -1835,10 +1897,10 @@ export function ProjectConversationProvider({
             .filter(
               (item) =>
                 item.sourceMessageId === current.sourceMessageId &&
-                item.actorId === current.actorId
+                item.actorId === current.actorId,
             )
             .map((item) => item.attemptNumber),
-          0
+          0,
         ) + 1;
 
       const newInv = createInvocationForAgent(
@@ -1847,7 +1909,7 @@ export function ProjectConversationProvider({
         sourceMessage,
         current.actorId,
         sessionPolicy,
-        attemptNumber
+        attemptNumber,
       );
       if (!newInv) return;
 
@@ -1857,7 +1919,7 @@ export function ProjectConversationProvider({
               ...item,
               invocationIds: [...item.invocationIds, newInv.invocationId],
             }
-          : item
+          : item,
       );
       draft.activeDrawer = state.activeDrawer;
       draft.activeInvocationId = newInv.invocationId;
@@ -1869,7 +1931,7 @@ export function ProjectConversationProvider({
         scheduleInvocationProgress(newInv.invocationId, current.actorId, false);
       }
     },
-    [createInvocationForAgent, scheduleInvocationProgress, state]
+    [createInvocationForAgent, scheduleInvocationProgress, state],
   );
 
   const acceptAgentReply = useCallback(
@@ -1891,21 +1953,22 @@ export function ProjectConversationProvider({
                   reviewedAt: nowIso(),
                 },
               }
-            : item
+            : item,
         );
         appendSystemMessage(
           next,
           project,
           `${getUserById(CURRENT_USER_ID)?.name ?? "成员"}已接受 ${
-            getActorById(message.author.kind === "agent" ? message.author.id : "")
-              ?.name ?? "Agent"
+            getActorById(
+              message.author.kind === "agent" ? message.author.id : "",
+            )?.name ?? "Agent"
           } 的回复`,
-          message.threadId
+          message.threadId,
         );
         return next;
       });
     },
-    [appendSystemMessage]
+    [appendSystemMessage],
   );
 
   const requestAgentChanges = useCallback(
@@ -1947,7 +2010,7 @@ export function ProjectConversationProvider({
                 feedbackMessageId: feedbackId,
               },
             }
-          : item
+          : item,
       );
       draft.messages = [...draft.messages, feedbackMessage];
       draft.threads = draft.threads.map((thread) =>
@@ -1957,7 +2020,7 @@ export function ProjectConversationProvider({
               messageIds: [...thread.messageIds, feedbackId],
               updatedAt: nowIso(),
             }
-          : thread
+          : thread,
       );
 
       const attemptNumber =
@@ -1967,10 +2030,10 @@ export function ProjectConversationProvider({
               (item) =>
                 item.actorId === message.author.id &&
                 (item.sourceMessageId === message.replyToMessageId ||
-                  item.responseMessageId === messageId)
+                  item.responseMessageId === messageId),
             )
             .map((item) => item.attemptNumber),
-          0
+          0,
         ) + 1;
 
       const createdInv = createInvocationForAgent(
@@ -1979,13 +2042,13 @@ export function ProjectConversationProvider({
         feedbackMessage,
         message.author.id,
         "continue",
-        attemptNumber
+        attemptNumber,
       );
       if (createdInv) {
         draft.messages = draft.messages.map((item) =>
           item.id === feedbackId
             ? { ...item, invocationIds: [createdInv.invocationId] }
-            : item
+            : item,
         );
       }
 
@@ -1999,11 +2062,11 @@ export function ProjectConversationProvider({
         scheduleInvocationProgress(
           createdInv.invocationId,
           message.author.id,
-          false
+          false,
         );
       }
     },
-    [createInvocationForAgent, scheduleInvocationProgress, state]
+    [createInvocationForAgent, scheduleInvocationProgress, state],
   );
 
   const resolvePersonalClawConsent = useCallback(
@@ -2015,21 +2078,21 @@ export function ProjectConversationProvider({
           next.membersByProject[projectId] = members.map((item) =>
             item.kind === "agent" && item.actorId === actorId
               ? { ...item, state: "active" }
-              : item
+              : item,
           );
         } else {
           next.membersByProject[projectId] = members.filter(
-            (item) => !(item.kind === "agent" && item.actorId === actorId)
+            (item) => !(item.kind === "agent" && item.actorId === actorId),
           );
           next.projects = next.projects.map((project) =>
             project.id === projectId
               ? {
                   ...project,
                   agentMemberIds: project.agentMemberIds.filter(
-                    (id) => id !== actorId
+                    (id) => id !== actorId,
                   ),
                 }
-              : project
+              : project,
           );
         }
         next.inbox = next.inbox.map((item) =>
@@ -2037,18 +2100,20 @@ export function ProjectConversationProvider({
           item.actorId === actorId &&
           item.type === "personal_claw_consent"
             ? { ...item, read: true }
-            : item
+            : item,
         );
         return next;
       });
     },
-    []
+    [],
   );
 
   const addHumanMember = useCallback((projectId: string, userId: string) => {
     setState((prev) => {
       const members = prev.membersByProject[projectId] ?? [];
-      if (members.some((item) => item.kind === "human" && item.userId === userId)) {
+      if (
+        members.some((item) => item.kind === "human" && item.userId === userId)
+      ) {
         return prev;
       }
       const next = structuredClone(prev);
@@ -2062,7 +2127,7 @@ export function ProjectConversationProvider({
               ...project,
               humanMemberIds: [...project.humanMemberIds, userId],
             }
-          : project
+          : project,
       );
       return next;
     });
@@ -2073,13 +2138,17 @@ export function ProjectConversationProvider({
       const actor = prev.actors.find((item) => item.id === actorId);
       if (!actor) return prev;
       const members = prev.membersByProject[projectId] ?? [];
-      if (members.some((item) => item.kind === "agent" && item.actorId === actorId)) {
+      if (
+        members.some(
+          (item) => item.kind === "agent" && item.actorId === actorId,
+        )
+      ) {
         return prev;
       }
       const next = structuredClone(prev);
       if (actor.type === "personal_claw" && actor.ownerUserId) {
         const hasOwner = members.some(
-          (item) => item.kind === "human" && item.userId === actor.ownerUserId
+          (item) => item.kind === "human" && item.userId === actor.ownerUserId,
         );
         if (!hasOwner) {
           next.membersByProject[projectId] = [
@@ -2095,9 +2164,12 @@ export function ProjectConversationProvider({
             project.id === projectId
               ? {
                   ...project,
-                  humanMemberIds: [...project.humanMemberIds, actor.ownerUserId!],
+                  humanMemberIds: [
+                    ...project.humanMemberIds,
+                    actor.ownerUserId!,
+                  ],
                 }
-              : project
+              : project,
           );
         }
       }
@@ -2124,7 +2196,7 @@ export function ProjectConversationProvider({
               ...project,
               agentMemberIds: [...project.agentMemberIds, actorId],
             }
-          : project
+          : project,
       );
       return next;
     });
@@ -2133,21 +2205,27 @@ export function ProjectConversationProvider({
   const removeMember = useCallback((projectId: string, memberRef: string) => {
     setState((prev) => {
       const next = structuredClone(prev);
-      next.membersByProject[projectId] = (next.membersByProject[projectId] ?? []).filter(
+      next.membersByProject[projectId] = (
+        next.membersByProject[projectId] ?? []
+      ).filter(
         (item) =>
           !(
             (item.kind === "human" && item.userId === memberRef) ||
             (item.kind === "agent" && item.actorId === memberRef)
-          )
+          ),
       );
       next.projects = next.projects.map((project) =>
         project.id === projectId
           ? {
               ...project,
-              humanMemberIds: project.humanMemberIds.filter((id) => id !== memberRef),
-              agentMemberIds: project.agentMemberIds.filter((id) => id !== memberRef),
+              humanMemberIds: project.humanMemberIds.filter(
+                (id) => id !== memberRef,
+              ),
+              agentMemberIds: project.agentMemberIds.filter(
+                (id) => id !== memberRef,
+              ),
             }
-          : project
+          : project,
       );
       return next;
     });
@@ -2159,7 +2237,7 @@ export function ProjectConversationProvider({
       projects: prev.projects.map((project) =>
         project.id === projectId
           ? { ...project, status: "archived", updatedAt: nowIso() }
-          : project
+          : project,
       ),
       activeDrawer: null,
     }));
@@ -2171,7 +2249,7 @@ export function ProjectConversationProvider({
       projects: prev.projects.map((project) =>
         project.id === projectId
           ? { ...project, brief, updatedAt: nowIso() }
-          : project
+          : project,
       ),
     }));
   }, []);
@@ -2186,7 +2264,7 @@ export function ProjectConversationProvider({
               runtimeStatus: "online",
               lastHeartbeatAt: nowIso(),
             }
-          : actor
+          : actor,
       ),
     }));
   }, []);
@@ -2200,7 +2278,7 @@ export function ProjectConversationProvider({
 
       const match =
         trimmed.match(
-          /(?:https?:\/\/github\.com\/)?([^/\s]+)\/([^/\s#?]+?)(?:\.git)?\/?$/i
+          /(?:https?:\/\/github\.com\/)?([^/\s]+)\/([^/\s#?]+?)(?:\.git)?\/?$/i,
         ) ?? trimmed.match(/^([^/\s]+)\/([^/\s]+)$/);
       if (!match) {
         return {
@@ -2222,7 +2300,7 @@ export function ProjectConversationProvider({
           (item) =>
             item.projectId === projectId &&
             item.type === "github_repository" &&
-            item.name.toLowerCase() === name.toLowerCase()
+            item.name.toLowerCase() === name.toLowerCase(),
         );
         if (duplicate) return prev;
 
@@ -2248,14 +2326,14 @@ export function ProjectConversationProvider({
                   workSourceIds: [...item.workSourceIds, sourceId],
                   updatedAt: nowIso(),
                 }
-              : item
+              : item,
           ),
         };
       });
 
       return { ok: true as const };
     },
-    []
+    [],
   );
 
   const addLocalWorkSource = useCallback(
@@ -2272,7 +2350,7 @@ export function ProjectConversationProvider({
 
         const hasLocal = prev.workSources.some(
           (item) =>
-            item.projectId === projectId && item.type === "local_directory"
+            item.projectId === projectId && item.type === "local_directory",
         );
         if (hasLocal) return prev;
 
@@ -2299,14 +2377,14 @@ export function ProjectConversationProvider({
                   workSourceIds: [...item.workSourceIds, sourceId],
                   updatedAt: nowIso(),
                 }
-              : item
+              : item,
           ),
         };
       });
 
       return { ok: true as const };
     },
-    []
+    [],
   );
 
   const removeWorkSource = useCallback(
@@ -2318,102 +2396,116 @@ export function ProjectConversationProvider({
           item.id === projectId
             ? {
                 ...item,
-                workSourceIds: item.workSourceIds.filter((id) => id !== sourceId),
+                workSourceIds: item.workSourceIds.filter(
+                  (id) => id !== sourceId,
+                ),
                 updatedAt: nowIso(),
               }
-            : item
+            : item,
         ),
       }));
     },
-    []
+    [],
   );
 
-  const createIssue = useCallback((payload: CreateIssuePayload) => {
-    const project = state.projects.find((item) => item.id === payload.projectId);
-    if (!project) return null;
-    const conversationId = payload.conversationId;
-    if (conversationId) {
-      const conversation = state.threads.find((item) => item.id === conversationId);
-      if (!conversation || conversation.projectId !== project.id) return null;
-    }
-    const issueId = createId("issue");
-    const key = `${project.name.slice(0, 4).toUpperCase()}-${
-      state.issues.filter((item) => item.projectId === project.id).length + 1
-    }`;
-    const issue: ProjectIssue = {
-      id: issueId,
-      projectId: project.id,
-      key,
-      title: payload.title,
-      summary: payload.summary ?? "",
-      status: "clarifying",
-      conversationId,
-      sourceMessageId: payload.sourceMessageId,
-      relatedMessageIds: payload.sourceMessageId ? [payload.sourceMessageId] : [],
-      referenceIds: [],
-      humanAssigneeIds: payload.humanAssigneeIds,
-      agentAssigneeIds: payload.agentAssigneeIds,
-      invocationIds: [],
-      artifactIds: [],
-      acceptanceCriteria: payload.acceptanceCriteria ?? [],
-      createdBy: { kind: "human", id: CURRENT_USER_ID },
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-      revision: 1,
-    };
-    setState((prev) => ({
-      ...prev,
-      issues: [issue, ...prev.issues],
-      projects: prev.projects.map((item) =>
-        item.id === project.id
-          ? {
-              ...item,
-              issueIds: [...item.issueIds, issueId],
-              updatedAt: nowIso(),
-            }
-          : item
-      ),
-      threads: conversationId
-        ? prev.threads.map((thread) =>
-            thread.id === conversationId
-              ? {
-                  ...thread,
-                  issueIds: [...thread.issueIds, issueId],
-                  updatedAt: nowIso(),
-                }
-              : thread
-          )
-        : prev.threads,
-    }));
-    return issueId;
-  }, [state.issues, state.projects, state.threads]);
+  const createIssue = useCallback(
+    (payload: CreateIssuePayload) => {
+      const project = state.projects.find(
+        (item) => item.id === payload.projectId,
+      );
+      if (!project) return null;
+      const conversationId = payload.conversationId;
+      if (conversationId) {
+        const conversation = state.threads.find(
+          (item) => item.id === conversationId,
+        );
+        if (!conversation || conversation.projectId !== project.id) return null;
+      }
+      const issueId = createId("issue");
+      const key = `${project.name.slice(0, 4).toUpperCase()}-${
+        state.issues.filter((item) => item.projectId === project.id).length + 1
+      }`;
+      const issue: ProjectIssue = {
+        id: issueId,
+        projectId: project.id,
+        key,
+        title: payload.title,
+        summary: payload.summary ?? "",
+        status: "clarifying",
+        conversationId,
+        sourceMessageId: payload.sourceMessageId,
+        relatedMessageIds: payload.sourceMessageId
+          ? [payload.sourceMessageId]
+          : [],
+        referenceIds: [],
+        humanAssigneeIds: payload.humanAssigneeIds,
+        agentAssigneeIds: payload.agentAssigneeIds,
+        invocationIds: [],
+        artifactIds: [],
+        acceptanceCriteria: payload.acceptanceCriteria ?? [],
+        createdBy: { kind: "human", id: CURRENT_USER_ID },
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+        revision: 1,
+      };
+      setState((prev) => ({
+        ...prev,
+        issues: [issue, ...prev.issues],
+        projects: prev.projects.map((item) =>
+          item.id === project.id
+            ? {
+                ...item,
+                issueIds: [...item.issueIds, issueId],
+                updatedAt: nowIso(),
+              }
+            : item,
+        ),
+        threads: conversationId
+          ? prev.threads.map((thread) =>
+              thread.id === conversationId
+                ? {
+                    ...thread,
+                    issueIds: [...thread.issueIds, issueId],
+                    updatedAt: nowIso(),
+                  }
+                : thread,
+            )
+          : prev.threads,
+      }));
+      return issueId;
+    },
+    [state.issues, state.projects, state.threads],
+  );
 
-  const updateIssue = useCallback((issueId: string, patch: IssueUpdatePatch) => {
-    setState((prev) => ({
-      ...prev,
-      issues: prev.issues.map((item) =>
-        item.id === issueId
-          ? {
-              ...item,
-              ...patch,
-              updatedAt: nowIso(),
-              revision: item.revision + 1,
-              completedAt:
-                patch.status === "done" ? nowIso() : item.completedAt,
-              archivedAt:
-                patch.status === "archived" ? nowIso() : item.archivedAt,
-              waitingForCurrentUser:
-                patch.status === "waiting_for_human" ||
-                patch.status === "in_review"
-                  ? item.humanAssigneeIds.includes(CURRENT_USER_ID)
-                  : patch.status
-                    ? false
-                    : item.waitingForCurrentUser,
-            }
-          : item
-      ),
-    }));
-  }, []);
+  const updateIssue = useCallback(
+    (issueId: string, patch: IssueUpdatePatch) => {
+      setState((prev) => ({
+        ...prev,
+        issues: prev.issues.map((item) =>
+          item.id === issueId
+            ? {
+                ...item,
+                ...patch,
+                updatedAt: nowIso(),
+                revision: item.revision + 1,
+                completedAt:
+                  patch.status === "done" ? nowIso() : item.completedAt,
+                archivedAt:
+                  patch.status === "archived" ? nowIso() : item.archivedAt,
+                waitingForCurrentUser:
+                  patch.status === "waiting_for_human" ||
+                  patch.status === "in_review"
+                    ? item.humanAssigneeIds.includes(CURRENT_USER_ID)
+                    : patch.status
+                      ? false
+                      : item.waitingForCurrentUser,
+              }
+            : item,
+        ),
+      }));
+    },
+    [],
+  );
 
   const acceptIssue = useCallback((issueId: string) => {
     setState((prev) => ({
@@ -2429,7 +2521,7 @@ export function ProjectConversationProvider({
               updatedAt: nowIso(),
               revision: item.revision + 1,
             }
-          : item
+          : item,
       ),
     }));
   }, []);
@@ -2448,11 +2540,11 @@ export function ProjectConversationProvider({
                 updatedAt: nowIso(),
                 revision: item.revision + 1,
               }
-            : item
+            : item,
         ),
       }));
     },
-    []
+    [],
   );
 
   const cancelIssue = useCallback((issueId: string) => {
@@ -2467,7 +2559,7 @@ export function ProjectConversationProvider({
               updatedAt: nowIso(),
               revision: item.revision + 1,
             }
-          : item
+          : item,
       ),
     }));
   }, []);
@@ -2485,7 +2577,7 @@ export function ProjectConversationProvider({
               updatedAt: nowIso(),
               revision: item.revision + 1,
             }
-          : item
+          : item,
       ),
     }));
   }, []);
@@ -2495,12 +2587,13 @@ export function ProjectConversationProvider({
       const alreadyBound = prev.sharedToolBindings.some(
         (item) =>
           item.projectId === payload.projectId &&
-          item.publishedResourceVersionId === payload.publishedResourceVersionId
+          item.publishedResourceVersionId ===
+            payload.publishedResourceVersionId,
       );
       if (alreadyBound) return prev;
 
       const catalog = prev.publishedTools.find(
-        (item) => item.versionId === payload.publishedResourceVersionId
+        (item) => item.versionId === payload.publishedResourceVersionId,
       );
       const kind = catalog?.kind ?? payload.resource?.kind;
       const displayName = catalog?.name ?? payload.resource?.displayName;
@@ -2564,7 +2657,7 @@ export function ProjectConversationProvider({
                 ],
                 updatedAt: nowIso(),
               }
-            : item
+            : item,
         ),
       };
     });
@@ -2573,24 +2666,24 @@ export function ProjectConversationProvider({
   const unbindSharedTool = useCallback((bindingId: string) => {
     setState((prev) => {
       const binding = prev.sharedToolBindings.find(
-        (item) => item.id === bindingId
+        (item) => item.id === bindingId,
       );
       if (!binding) return prev;
       return {
         ...prev,
         sharedToolBindings: prev.sharedToolBindings.filter(
-          (item) => item.id !== bindingId
+          (item) => item.id !== bindingId,
         ),
         projects: prev.projects.map((item) =>
           item.id === binding.projectId
             ? {
                 ...item,
                 sharedToolBindingIds: item.sharedToolBindingIds.filter(
-                  (id) => id !== bindingId
+                  (id) => id !== bindingId,
                 ),
                 updatedAt: nowIso(),
               }
-            : item
+            : item,
         ),
       };
     });
@@ -2607,11 +2700,11 @@ export function ProjectConversationProvider({
                 status: enabled ? "active" : "revoked",
                 updatedAt: nowIso(),
               }
-            : item
+            : item,
         ),
       }));
     },
-    []
+    [],
   );
 
   const setProjectSkillEnabled = useCallback(
@@ -2624,16 +2717,18 @@ export function ProjectConversationProvider({
                 ...item,
                 status: enabled ? "active" : "revoked",
               }
-            : item
+            : item,
         ),
       }));
     },
-    []
+    [],
   );
 
   const applyIssueProposal = useCallback((proposalId: string) => {
     setState((prev) => {
-      const proposal = prev.issueProposals.find((item) => item.id === proposalId);
+      const proposal = prev.issueProposals.find(
+        (item) => item.id === proposalId,
+      );
       if (!proposal || proposal.dismissed) return prev;
       const snapshot = {
         proposalId,
@@ -2643,13 +2738,13 @@ export function ProjectConversationProvider({
       const next = structuredClone(prev);
       next.lastAppliedProposalSnapshot = snapshot;
       next.issueProposals = next.issueProposals.map((item) =>
-        item.id === proposalId ? { ...item, dismissed: true } : item
+        item.id === proposalId ? { ...item, dismissed: true } : item,
       );
 
       if (proposal.action === "create") {
         const issueId = createId("issue");
         const project = next.projects.find(
-          (item) => item.id === proposal.projectId
+          (item) => item.id === proposal.projectId,
         );
         if (!project) return prev;
         const issue: ProjectIssue = {
@@ -2680,7 +2775,7 @@ export function ProjectConversationProvider({
                 issueIds: [...item.issueIds, issueId],
                 updatedAt: nowIso(),
               }
-            : item
+            : item,
         );
       } else if (
         (proposal.action === "update" ||
@@ -2720,12 +2815,12 @@ export function ProjectConversationProvider({
                   new Set([
                     ...item.relatedMessageIds,
                     ...proposal.evidenceMessageIds,
-                  ])
+                  ]),
                 ),
                 updatedAt: nowIso(),
                 revision: item.revision + 1,
               }
-            : item
+            : item,
         );
       }
 
@@ -2737,7 +2832,7 @@ export function ProjectConversationProvider({
     setState((prev) => ({
       ...prev,
       issueProposals: prev.issueProposals.map((item) =>
-        item.id === proposalId ? { ...item, dismissed: true } : item
+        item.id === proposalId ? { ...item, dismissed: true } : item,
       ),
     }));
   }, []);
@@ -2751,20 +2846,21 @@ export function ProjectConversationProvider({
         issues: snapshot.issues,
         projects: snapshot.projects,
         issueProposals: prev.issueProposals.map((item) =>
-          item.id === proposalId ? { ...item, dismissed: false } : item
+          item.id === proposalId ? { ...item, dismissed: false } : item,
         ),
         lastAppliedProposalSnapshot: null,
       };
     });
   }, []);
 
-
   const createConversation = useCallback(
     (payload: CreateConversationPayload) => {
-      const project = state.projects.find((item) => item.id === payload.projectId);
+      const project = state.projects.find(
+        (item) => item.id === payload.projectId,
+      );
       if (!project) return null;
       const humanMemberIds = Array.from(
-        new Set([CURRENT_USER_ID, ...payload.humanMemberIds])
+        new Set([CURRENT_USER_ID, ...payload.humanMemberIds]),
       );
       for (const userId of humanMemberIds) {
         if (!project.humanMemberIds.includes(userId)) return null;
@@ -2785,8 +2881,9 @@ export function ProjectConversationProvider({
         if (seenToolIds.has(pick.versionId)) continue;
         seenToolIds.add(pick.versionId);
         const resource =
-          state.publishedTools.find((item) => item.versionId === pick.versionId) ??
-          state.publishedTools.find((item) => item.id === pick.versionId);
+          state.publishedTools.find(
+            (item) => item.versionId === pick.versionId,
+          ) ?? state.publishedTools.find((item) => item.id === pick.versionId);
         conversationTools.push({
           id: createId("ctb"),
           projectId: project.id,
@@ -2852,7 +2949,7 @@ export function ProjectConversationProvider({
                 threadId: item.threadId || conversationId,
                 updatedAt: now,
               }
-            : item
+            : item,
         ),
         lastVisitedConversationIds: {
           ...prev.lastVisitedConversationIds,
@@ -2861,19 +2958,14 @@ export function ProjectConversationProvider({
       }));
       return conversationId;
     },
-    [state.projects, state.publishedTools]
+    [state.projects, state.publishedTools],
   );
 
   const createProject = useCallback(
-    (payload: {
-      name: string;
-      description?: string;
-      ownerUserId: string;
-    }) => {
+    (payload: { name: string; description?: string; ownerUserId: string }) => {
       const projectId = createId("proj");
       const now = nowIso();
-      const workspaceId =
-        state.workspaces[0]?.id ?? "ws-agentfoundry";
+      const workspaceId = state.workspaces[0]?.id ?? "ws-agentfoundry";
       const project: CollaborationProject = {
         id: projectId,
         workspaceId,
@@ -2912,7 +3004,7 @@ export function ProjectConversationProvider({
       }));
       return projectId;
     },
-    [state.workspaces]
+    [state.workspaces],
   );
 
   const bindProjectSkill = useCallback(
@@ -2927,7 +3019,7 @@ export function ProjectConversationProvider({
           (item) =>
             item.projectId === payload.projectId &&
             item.skillId === payload.skillId &&
-            item.status === "active"
+            item.status === "active",
         );
         if (exists) return prev;
         const binding: ProjectSkillBinding = {
@@ -2954,35 +3046,35 @@ export function ProjectConversationProvider({
                   ],
                   updatedAt: nowIso(),
                 }
-              : item
+              : item,
           ),
         };
       });
     },
-    []
+    [],
   );
 
   const unbindProjectSkill = useCallback((bindingId: string) => {
     setState((prev) => {
       const binding = prev.projectSkillBindings.find(
-        (item) => item.id === bindingId
+        (item) => item.id === bindingId,
       );
       if (!binding) return prev;
       return {
         ...prev,
         projectSkillBindings: prev.projectSkillBindings.filter(
-          (item) => item.id !== bindingId
+          (item) => item.id !== bindingId,
         ),
         projects: prev.projects.map((item) =>
           item.id === binding.projectId
             ? {
                 ...item,
                 skillBindingIds: (item.skillBindingIds ?? []).filter(
-                  (id) => id !== bindingId
+                  (id) => id !== bindingId,
                 ),
                 updatedAt: nowIso(),
               }
-            : item
+            : item,
         ),
       };
     });
@@ -3001,7 +3093,7 @@ export function ProjectConversationProvider({
           (item) =>
             item.conversationId === payload.conversationId &&
             item.skillId === payload.skillId &&
-            item.status === "active"
+            item.status === "active",
         );
         if (exists) return prev;
         const binding: ConversationSkillBinding = {
@@ -3025,14 +3117,14 @@ export function ProjectConversationProvider({
         };
       });
     },
-    []
+    [],
   );
 
   const unbindConversationSkill = useCallback((bindingId: string) => {
     setState((prev) => ({
       ...prev,
       conversationSkillBindings: prev.conversationSkillBindings.filter(
-        (item) => item.id !== bindingId
+        (item) => item.id !== bindingId,
       ),
     }));
   }, []);
@@ -3049,18 +3141,18 @@ export function ProjectConversationProvider({
           | "agentBindingIds"
           | "instructions"
         >
-      >
+      >,
     ) => {
       setState((prev) => ({
         ...prev,
         threads: prev.threads.map((item) =>
           item.id === conversationId
             ? { ...item, ...patch, updatedAt: nowIso() }
-            : item
+            : item,
         ),
       }));
     },
-    []
+    [],
   );
 
   const archiveConversation = useCallback((conversationId: string) => {
@@ -3069,7 +3161,7 @@ export function ProjectConversationProvider({
       threads: prev.threads.map((item) =>
         item.id === conversationId
           ? { ...item, archivedAt: nowIso(), updatedAt: nowIso() }
-          : item
+          : item,
       ),
     }));
   }, []);
@@ -3080,16 +3172,14 @@ export function ProjectConversationProvider({
       if (!artifact || artifact.scope === "project") return prev;
       const now = nowIso();
       const nextArtifacts = prev.artifacts.map((item) =>
-        item.id === artifactId
-          ? { ...item, scope: "project" as const }
-          : item
+        item.id === artifactId ? { ...item, scope: "project" as const } : item,
       );
       let nextFiles = prev.files;
       if (artifact.fileNodeId) {
         nextFiles = prev.files.map((item) =>
           item.id === artifact.fileNodeId
             ? { ...item, scope: "project" as const, updatedAt: now }
-            : item
+            : item,
         );
       }
       const conversationId = artifact.sourceConversationId;
@@ -3103,11 +3193,11 @@ export function ProjectConversationProvider({
                 ? {
                     ...thread,
                     conversationFileIds: thread.conversationFileIds.filter(
-                      (id) => id !== artifact.fileNodeId
+                      (id) => id !== artifact.fileNodeId,
                     ),
                     updatedAt: now,
                   }
-                : thread
+                : thread,
             )
           : prev.threads,
         projects: prev.projects.map((project) =>
@@ -3115,13 +3205,13 @@ export function ProjectConversationProvider({
             ? {
                 ...project,
                 projectFileIds: project.projectFileIds.includes(
-                  artifact.fileNodeId
+                  artifact.fileNodeId,
                 )
                   ? project.projectFileIds
                   : [...project.projectFileIds, artifact.fileNodeId],
                 updatedAt: now,
               }
-            : project
+            : project,
         ),
       };
     });
@@ -3132,7 +3222,7 @@ export function ProjectConversationProvider({
       setState((prev) => {
         const issue = prev.issues.find((item) => item.id === issueId);
         const conversation = prev.threads.find(
-          (item) => item.id === conversationId
+          (item) => item.id === conversationId,
         );
         if (!issue || !conversation) return prev;
         if (issue.conversationId) return prev;
@@ -3148,7 +3238,7 @@ export function ProjectConversationProvider({
                   updatedAt: now,
                   revision: item.revision + 1,
                 }
-              : item
+              : item,
           ),
           threads: prev.threads.map((item) =>
             item.id === conversationId
@@ -3159,12 +3249,12 @@ export function ProjectConversationProvider({
                     : [...item.issueIds, issueId],
                   updatedAt: now,
                 }
-              : item
+              : item,
           ),
         };
       });
     },
-    []
+    [],
   );
 
   const unbindIssueFromConversation = useCallback((issueId: string) => {
@@ -3183,7 +3273,7 @@ export function ProjectConversationProvider({
                 updatedAt: now,
                 revision: item.revision + 1,
               }
-            : item
+            : item,
         ),
         threads: prev.threads.map((item) =>
           item.id === conversationId
@@ -3192,7 +3282,7 @@ export function ProjectConversationProvider({
                 issueIds: item.issueIds.filter((id) => id !== issueId),
                 updatedAt: now,
               }
-            : item
+            : item,
         ),
       };
     });
@@ -3203,7 +3293,7 @@ export function ProjectConversationProvider({
       setState((prev) => {
         const issue = prev.issues.find((item) => item.id === issueId);
         const conversation = prev.threads.find(
-          (item) => item.id === conversationId
+          (item) => item.id === conversationId,
         );
         if (!issue || !conversation) return prev;
         if (issue.projectId !== conversation.projectId) return prev;
@@ -3227,12 +3317,12 @@ export function ProjectConversationProvider({
                   referenceIds: [...item.referenceIds, refId],
                   updatedAt: nowIso(),
                 }
-              : item
+              : item,
           ),
         };
       });
     },
-    []
+    [],
   );
 
   const bindConversationTool = useCallback(
@@ -3254,7 +3344,7 @@ export function ProjectConversationProvider({
         const catalog = prev.publishedTools.find(
           (item) =>
             item.versionId === payload.publishedResourceVersionId ||
-            item.id === payload.publishedResourceVersionId
+            item.id === payload.publishedResourceVersionId,
         );
         const resource = payload.resource
           ? {
@@ -3279,7 +3369,7 @@ export function ProjectConversationProvider({
             item.conversationId === payload.conversationId &&
             (item.publishedResourceVersionId === resource.versionId ||
               item.publishedResourceVersionId ===
-                payload.publishedResourceVersionId)
+                payload.publishedResourceVersionId),
         );
         if (exists) return prev;
         const binding: ConversationToolBinding = {
@@ -3300,10 +3390,7 @@ export function ProjectConversationProvider({
         };
         return {
           ...prev,
-          conversationToolBindings: [
-            binding,
-            ...prev.conversationToolBindings,
-          ],
+          conversationToolBindings: [binding, ...prev.conversationToolBindings],
           threads: prev.threads.map((item) =>
             item.id === payload.conversationId
               ? {
@@ -3314,24 +3401,24 @@ export function ProjectConversationProvider({
                   ],
                   updatedAt: nowIso(),
                 }
-              : item
+              : item,
           ),
         };
       });
     },
-    []
+    [],
   );
 
   const unbindConversationTool = useCallback((bindingId: string) => {
     setState((prev) => {
       const binding = prev.conversationToolBindings.find(
-        (item) => item.id === bindingId
+        (item) => item.id === bindingId,
       );
       if (!binding) return prev;
       return {
         ...prev,
         conversationToolBindings: prev.conversationToolBindings.filter(
-          (item) => item.id !== bindingId
+          (item) => item.id !== bindingId,
         ),
         threads: prev.threads.map((item) =>
           item.id === binding.conversationId
@@ -3339,11 +3426,11 @@ export function ProjectConversationProvider({
                 ...item,
                 conversationToolBindingIds:
                   item.conversationToolBindingIds.filter(
-                    (id) => id !== bindingId
+                    (id) => id !== bindingId,
                   ),
                 updatedAt: nowIso(),
               }
-            : item
+            : item,
         ),
       };
     });
@@ -3360,11 +3447,11 @@ export function ProjectConversationProvider({
                 status: enabled ? "active" : "revoked",
                 updatedAt: nowIso(),
               }
-            : item
+            : item,
         ),
       }));
     },
-    []
+    [],
   );
 
   const value = useMemo<ProjectConversationContextValue>(
@@ -3566,9 +3653,8 @@ export function ProjectConversationProvider({
       getSessionByConversationActor,
       rememberVisitedConversation,
       getLastVisitedConversationId,
-    ]
+    ],
   );
-
 
   return (
     <ProjectConversationContext.Provider value={value}>
@@ -3581,7 +3667,7 @@ export function useProjectConversation() {
   const ctx = useContext(ProjectConversationContext);
   if (!ctx) {
     throw new Error(
-      "useProjectConversation must be used within ProjectConversationProvider"
+      "useProjectConversation must be used within ProjectConversationProvider",
     );
   }
   return ctx;

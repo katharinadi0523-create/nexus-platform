@@ -10,6 +10,7 @@ export const PROJECT_CLAW_COLLAB_ID = "proj-claw-collab";
 export const PROJECT_KB_ID = "proj-kb-2";
 export const PROJECT_RESEARCH_ID = "proj-research-agent";
 export const PROJECT_LUNG_IMMUNO_ID = "proj-lung-immunotherapy";
+export const PROJECT_WHEAT_WATER_ID = "proj-wheat-water-saving";
 export const PROJECT_ARCHIVED_DEMO_ID = "proj-archived-demo";
 
 export const CONV_REQ_DISCUSSION = "conv-req-discussion";
@@ -20,6 +21,9 @@ export const CONV_KB = "thread-kb-2";
 export const CONV_RESEARCH = "thread-research";
 export const CONV_RESEARCH_QC = "conv-research-qc";
 export const CONV_RESEARCH_ANALYSIS = "conv-research-analysis";
+export const CONV_AGRI_INGEST = "conv-agri-data-ingest";
+export const CONV_AGRI_MODELING = "conv-agri-modeling";
+export const CONV_AGRI_REPORT = "conv-agri-report";
 export const CONV_ARCHIVED = "thread-archived";
 
 export const PROJECT_CONVERSATION_PROJECTS: CollaborationProject[] = [
@@ -40,8 +44,7 @@ export const PROJECT_CONVERSATION_PROJECTS: CollaborationProject[] = [
     ],
     brief:
       "目标：验证 Project 1:N Conversation、文件 scope、事项看板与两级工具。",
-    instructions:
-      "优先在聚焦会话中推进；事项看板汇聚 Project 全部长期工作。",
+    instructions: "优先在聚焦会话中推进；事项看板汇聚 Project 全部长期工作。",
     humanMemberIds: [
       CURRENT_USER_ID,
       "user-linxiao",
@@ -191,6 +194,60 @@ export const PROJECT_CONVERSATION_PROJECTS: CollaborationProject[] = [
     updatedAt: "2026-07-29T17:00:00+08:00",
   },
   {
+    id: PROJECT_WHEAT_WATER_ID,
+    workspaceId: "ws-research",
+    originWorkspaceId: "ws-research",
+    name: "冬小麦节水灌溉与产量响应研究",
+    description:
+      "基于 24 个田间小区的连续观测，形成可复核的节水灌溉阶段研究报告",
+    status: "active",
+    ownerUserId: CURRENT_USER_ID,
+    threadId: CONV_AGRI_INGEST,
+    conversationIds: [CONV_AGRI_INGEST, CONV_AGRI_MODELING, CONV_AGRI_REPORT],
+    brief:
+      "比较充分灌溉、轻度亏缺和重度亏缺处理下两个冬小麦品种的水分响应、NDVI 与最终产量。约束：特殊格式数据必须保留解析血缘；只有 Human 明确验收后，稳定数据与报告才成为 Project 事实。",
+    instructions:
+      "TOA5 Skill 不猜测设备或小区映射；原始数据、失败输入和临时日志留在产生它们的会话，验收通过的 Artifact 再发布到 Project。",
+    humanMemberIds: [CURRENT_USER_ID, "user-chenhe", "user-zhaoyan"],
+    agentMemberIds: [
+      "actor-ruonan-claw",
+      "actor-field-ingest",
+      "actor-agri-stat",
+      "actor-remote-sensing",
+      "actor-agronomy-literature",
+      "actor-research-writer",
+    ],
+    workSourceIds: ["ws-github-agri", "ws-local-agri"],
+    sharedToolBindingIds: ["stb-agri-python-r"],
+    issueIds: [
+      "issue-agri-101-mapping",
+      "issue-agri-102-toa5",
+      "issue-agri-103-qc",
+      "issue-agri-104-model",
+      "issue-agri-105-ndvi",
+      "issue-agri-106-report",
+      "issue-agri-107-heat",
+    ],
+    projectFileIds: [
+      "file-agri-plot-layout",
+      "file-agri-irrigation-events",
+      "file-agri-raw-v2",
+      "file-agri-schema",
+      "file-agri-parse-report-v2",
+      "file-agri-features",
+      "file-agri-effects",
+      "file-agri-diagnostics",
+      "file-agri-consistency",
+      "file-agri-ndvi-plot",
+      "file-agri-evidence",
+      "file-agri-report-v2",
+      "file-agri-chart-pack",
+    ],
+    pinned: true,
+    createdAt: "2026-07-29T09:00:00+08:00",
+    updatedAt: "2026-07-31T10:00:00+08:00",
+  },
+  {
     id: PROJECT_ARCHIVED_DEMO_ID,
     workspaceId: "ws-agentfoundry",
     originWorkspaceId: "ws-agentfoundry",
@@ -254,10 +311,7 @@ export const PROJECT_CONVERSATION_THREADS: ProjectConversation[] = [
     conversationToolBindingIds: ["ctb-local-dir", "ctb-web-search-dup"],
     messageIds: [],
     issueIds: ["issue-proto-runtime", "issue-proto-mount"],
-    conversationFileIds: [
-      "file-proto-notes",
-      "file-proto-sandbox-log",
-    ],
+    conversationFileIds: ["file-proto-notes", "file-proto-sandbox-log"],
     instructions: "本会话产物默认仅属于当前会话。",
     defaultArtifactScope: "conversation",
     createdByUserId: CURRENT_USER_ID,
@@ -379,18 +433,11 @@ export const PROJECT_CONVERSATION_THREADS: ProjectConversation[] = [
       "actor-research-writer",
       "actor-ruonan-claw",
     ],
-    conversationToolBindingIds: [
-      "ctb-lung-enrichment",
-      "ctb-lung-viz",
-    ],
+    conversationToolBindingIds: ["ctb-lung-enrichment", "ctb-lung-viz"],
     messageIds: [],
     issueIds: ["issue-sci-103-cell-diff", "issue-sci-104-report"],
-    conversationFileIds: [
-      "file-sci-enrichment-debug",
-      "file-sci-draft-layout",
-    ],
-    instructions:
-      "本会话新文件默认公开到 Project，供 Project 其他工作引用。",
+    conversationFileIds: ["file-sci-enrichment-debug", "file-sci-draft-layout"],
+    instructions: "本会话新文件默认公开到 Project，供 Project 其他工作引用。",
     defaultArtifactScope: "project",
     createdByUserId: CURRENT_USER_ID,
     createdAt: "2026-07-28T15:00:00+08:00",
@@ -412,6 +459,96 @@ export const PROJECT_CONVERSATION_THREADS: ProjectConversation[] = [
     createdAt: "2026-06-01T10:00:00+08:00",
     updatedAt: "2026-07-01T10:00:00+08:00",
     archivedAt: "2026-07-01T10:00:00+08:00",
+  },
+  {
+    id: CONV_AGRI_INGEST,
+    workspaceId: "ws-research",
+    projectId: PROJECT_WHEAT_WATER_ID,
+    name: "田间数据接入与质量控制",
+    description: "TOA5 特殊格式解析、设备映射、田间事件与传感器质量控制",
+    humanMemberIds: [CURRENT_USER_ID, "user-chenhe", "user-zhaoyan"],
+    agentBindingIds: [
+      "actor-field-ingest",
+      "actor-agri-stat",
+      "actor-ruonan-claw",
+    ],
+    conversationToolBindingIds: ["ctb-agri-qc"],
+    messageIds: [],
+    issueIds: [
+      "issue-agri-101-mapping",
+      "issue-agri-102-toa5",
+      "issue-agri-103-qc",
+    ],
+    conversationFileIds: [
+      "file-agri-toa5-soil",
+      "file-agri-toa5-met",
+      "file-agri-tob1-irrigation",
+      "file-agri-tob1-error",
+      "file-agri-toa5-irrigation-reexport",
+      "file-agri-channel-map-v1",
+      "file-agri-channel-map-v2",
+      "file-agri-field-events-v2",
+      "file-agri-raw-v1",
+      "file-agri-parse-report-v1",
+    ],
+    instructions:
+      "仪器原始文件、失败文件、详细日志和未映射通道保留在当前会话；默认新文件归属当前会话。",
+    defaultArtifactScope: "conversation",
+    createdByUserId: CURRENT_USER_ID,
+    createdAt: "2026-07-29T09:00:00+08:00",
+    updatedAt: "2026-07-29T21:10:00+08:00",
+    pinned: true,
+  },
+  {
+    id: CONV_AGRI_MODELING,
+    workspaceId: "ws-research",
+    projectId: PROJECT_WHEAT_WATER_ID,
+    name: "灌溉响应建模与遥感复核",
+    description: "处理效应、混合效应模型、无人机 NDVI 与农艺证据",
+    humanMemberIds: [CURRENT_USER_ID, "user-zhaoyan"],
+    agentBindingIds: [
+      "actor-agri-stat",
+      "actor-remote-sensing",
+      "actor-agronomy-literature",
+      "actor-ruonan-claw",
+    ],
+    conversationToolBindingIds: ["ctb-agri-model"],
+    messageIds: [],
+    issueIds: [
+      "issue-agri-104-model",
+      "issue-agri-105-ndvi",
+      "issue-agri-107-heat",
+    ],
+    conversationFileIds: [],
+    instructions:
+      "仅使用已经 Human 验收并发布到 Project 的标准化数据；本会话新产物默认公开到 Project。",
+    defaultArtifactScope: "project",
+    createdByUserId: CURRENT_USER_ID,
+    createdAt: "2026-07-30T09:00:00+08:00",
+    updatedAt: "2026-07-30T13:10:00+08:00",
+  },
+  {
+    id: CONV_AGRI_REPORT,
+    workspaceId: "ws-research",
+    projectId: PROJECT_WHEAT_WATER_ID,
+    name: "结论审阅与阶段报告",
+    description: "审阅限制性结论并编排节水灌溉阶段报告",
+    humanMemberIds: [CURRENT_USER_ID, "user-zhaoyan"],
+    agentBindingIds: [
+      "actor-research-writer",
+      "actor-agronomy-literature",
+      "actor-ruonan-claw",
+    ],
+    conversationToolBindingIds: [],
+    messageIds: [],
+    issueIds: ["issue-agri-106-report"],
+    conversationFileIds: [],
+    instructions:
+      "报告必须显式限定证据范围，并记录 logger 重启、P08 缺口和单期无人机观测等限制。",
+    defaultArtifactScope: "project",
+    createdByUserId: CURRENT_USER_ID,
+    createdAt: "2026-07-31T09:00:00+08:00",
+    updatedAt: "2026-07-31T10:00:00+08:00",
   },
 ];
 
@@ -452,6 +589,25 @@ export const PROJECT_WORK_SOURCES: ProjectWorkSource[] = [
     detail: "github.com/agentfoundry/lung-immuno-markers · main · /analysis",
     access: "read_write",
     availability: "available",
+  },
+  {
+    id: "ws-github-agri",
+    projectId: PROJECT_WHEAT_WATER_ID,
+    type: "github_repository",
+    name: "wheat-water-saving-analysis",
+    detail: "github.com/agentfoundry/wheat-water-saving-analysis · main",
+    access: "read_write",
+    availability: "available",
+  },
+  {
+    id: "ws-local-agri",
+    projectId: PROJECT_WHEAT_WATER_ID,
+    type: "local_directory",
+    name: "田间研究目录",
+    detail: "/research/wheat-water-saving-2026",
+    access: "read_write",
+    availability: "available",
+    runtimeActorId: "actor-agri-stat",
   },
 ];
 
@@ -616,6 +772,47 @@ export const PROJECT_MEMBERS_BY_PROJECT: Record<string, ProjectMember[]> = {
     {
       kind: "agent",
       actorId: "actor-literature",
+      actorType: "platform_claw",
+      state: "active",
+    },
+    {
+      kind: "agent",
+      actorId: "actor-research-writer",
+      actorType: "platform_claw",
+      state: "active",
+    },
+  ],
+  [PROJECT_WHEAT_WATER_ID]: [
+    { kind: "human", userId: CURRENT_USER_ID, role: "owner", state: "active" },
+    { kind: "human", userId: "user-chenhe", role: "member", state: "active" },
+    { kind: "human", userId: "user-zhaoyan", role: "member", state: "active" },
+    {
+      kind: "agent",
+      actorId: "actor-ruonan-claw",
+      actorType: "personal_claw",
+      state: "active",
+    },
+    {
+      kind: "agent",
+      actorId: "actor-field-ingest",
+      actorType: "platform_claw",
+      state: "active",
+    },
+    {
+      kind: "agent",
+      actorId: "actor-agri-stat",
+      actorType: "platform_claw",
+      state: "active",
+    },
+    {
+      kind: "agent",
+      actorId: "actor-remote-sensing",
+      actorType: "platform_claw",
+      state: "active",
+    },
+    {
+      kind: "agent",
+      actorId: "actor-agronomy-literature",
       actorType: "platform_claw",
       state: "active",
     },

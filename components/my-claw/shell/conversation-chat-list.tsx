@@ -7,21 +7,15 @@ import { MessagesSquare, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useProjectConversation } from "@/components/my-claw/project-conversation/project-conversation-provider";
-import { formatRelativeTime } from "@/components/my-claw/project-issues/format";
 
 export function ConversationChatList() {
   const pathname = usePathname();
-  const {
-    state,
-    currentUserId,
-    getMessages,
-    getProject,
-  } = useProjectConversation();
+  const { state, currentUserId, getProject } = useProjectConversation();
   const [query, setQuery] = useState("");
 
   const activeConversationId = useMemo(() => {
     const match = pathname.match(
-      /^\/my-claw\/projects\/[^/]+\/conversations\/([^/]+)/
+      /^\/my-claw\/projects\/[^/]+\/conversations\/([^/]+)/,
     );
     return match?.[1] ?? null;
   }, [pathname]);
@@ -31,14 +25,14 @@ export function ConversationChatList() {
     const activeProjectIds = new Set(
       state.projects
         .filter((project) => project.status === "active")
-        .map((project) => project.id)
+        .map((project) => project.id),
     );
     return state.threads
       .filter(
         (item) =>
           !item.archivedAt &&
           activeProjectIds.has(item.projectId) &&
-          item.humanMemberIds.includes(currentUserId)
+          item.humanMemberIds.includes(currentUserId),
       )
       .filter((item) => {
         if (!q) return true;
@@ -56,13 +50,13 @@ export function ConversationChatList() {
           (inv) =>
             inv.threadId === a.id &&
             (inv.status === "running" || inv.status === "queued") &&
-            !inv.parentInvocationId
+            !inv.parentInvocationId,
         );
         const bRunning = state.invocations.some(
           (inv) =>
             inv.threadId === b.id &&
             (inv.status === "running" || inv.status === "queued") &&
-            !inv.parentInvocationId
+            !inv.parentInvocationId,
         );
         if (aRunning !== bRunning) return aRunning ? -1 : 1;
         return (
@@ -96,56 +90,25 @@ export function ConversationChatList() {
         {conversations.map((conversation) => {
           const href = `/my-claw/projects/${conversation.projectId}/conversations/${conversation.id}`;
           const active = conversation.id === activeConversationId;
-          const project = getProject(conversation.projectId);
-          const messages = getMessages(
-            conversation.projectId,
-            conversation.id
-          );
-          const last = messages[messages.length - 1];
-          const preview =
-            last?.content?.replace(/\s+/g, " ").slice(0, 42) || "暂无消息";
-          const running = state.invocations.some(
-            (inv) =>
-              inv.threadId === conversation.id &&
-              (inv.status === "running" || inv.status === "queued") &&
-              !inv.parentInvocationId
-          );
-
           return (
             <Link
               key={conversation.id}
               href={href}
               className={cn(
-                "flex items-start gap-2 rounded-lg px-2.5 py-2 transition-colors",
+                "flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors",
                 active
                   ? "bg-[#e8f0fb] text-[#2773ff]"
-                  : "text-slate-700 hover:bg-slate-50"
+                  : "text-slate-700 hover:bg-slate-50",
               )}
             >
               <MessagesSquare
                 className={cn(
-                  "mt-0.5 h-4 w-4 shrink-0",
-                  active ? "text-[#2773ff]" : "text-[#5a6779]"
+                  "h-4 w-4 shrink-0",
+                  active ? "text-[#2773ff]" : "text-[#5a6779]",
                 )}
               />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="truncate text-[13px] font-medium">
-                    {conversation.name}
-                  </span>
-                  {running ? (
-                    <span className="shrink-0 rounded bg-[#e8f0fb] px-1 py-0.5 text-[10px] text-[#2773ff]">
-                      运行中
-                    </span>
-                  ) : null}
-                </div>
-                <div className="mt-0.5 truncate text-[11px] text-[#5a6779]">
-                  {project?.name ?? "Project"} · {preview}
-                  {preview.length >= 42 ? "…" : ""}
-                </div>
-              </div>
-              <span className="shrink-0 pt-0.5 text-[10px] text-[#5a6779]">
-                {formatRelativeTime(conversation.updatedAt)}
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+                {conversation.name}
               </span>
             </Link>
           );
