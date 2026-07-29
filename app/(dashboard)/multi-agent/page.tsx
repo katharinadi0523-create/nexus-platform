@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -28,14 +29,24 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import {
+  SecurityLevelBadge,
+} from "@/components/security/security-level-badge";
+import {
   getPublishedMultiAgents,
   removePublishedMultiAgent,
+  upsertPublishedMultiAgent,
   type PublishedMultiAgentItem,
 } from "@/lib/published-multi-agents";
+import {
+  getApprovalActionState,
+  isHighSecurityLevel,
+} from "@/lib/security-level";
+import { cn } from "@/lib/utils";
 
 const ITEMS_PER_PAGE = 20;
 
 export default function MultiAgentListPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
@@ -52,7 +63,8 @@ export default function MultiAgentListPage() {
     return publishedMultiAgents.filter(
       (agent) =>
         agent.name.toLowerCase().includes(query) ||
-        agent.desc.toLowerCase().includes(query)
+        agent.desc.toLowerCase().includes(query) ||
+        agent.securityLevel.includes(searchQuery)
     );
   }, [publishedMultiAgents, searchQuery]);
 
@@ -72,7 +84,32 @@ export default function MultiAgentListPage() {
     toast.success(`已复制：${agent.name}`);
   };
 
+  const handleOpenEdit = (agent: PublishedMultiAgentItem) => {
+    const action = getApprovalActionState(agent.approvalStatus);
+    if (action.configLocked) {
+      toast.info("发布审批中，暂无法进入配置。");
+      return;
+    }
+    router.push(`/multi-agent/create?id=${encodeURIComponent(agent.id)}`);
+  };
+
   const handleDelete = (agent: PublishedMultiAgentItem) => {
+    const action = getApprovalActionState(agent.approvalStatus);
+    if (action.deleteLocked) {
+      toast.info(action.deleteTitle ?? "审批中");
+      return;
+    }
+
+    if (isHighSecurityLevel(agent.securityLevel) && agent.status === "已发布") {
+      upsertPublishedMultiAgent({
+        ...agent,
+        approvalStatus: "delete",
+      });
+      setPublishedMultiAgents(getPublishedMultiAgents());
+      toast.success(`已提交删除审批：${agent.name}，审批通过前仍按当前已发布版本运行。`);
+      return;
+    }
+
     removePublishedMultiAgent(agent.id);
     setPublishedMultiAgents(getPublishedMultiAgents());
     toast.success(`已删除：${agent.name}`);
@@ -148,7 +185,7 @@ export default function MultiAgentListPage() {
       </div>
 
       <section className="overflow-hidden rounded-[6px] border border-slate-200 bg-white">
-        <Table className="min-w-[1080px]">
+        <Table className="min-w-[1180px]">
           <TableHeader className="bg-slate-50">
             <TableRow className="border-slate-200 hover:bg-slate-50">
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">
@@ -156,6 +193,9 @@ export default function MultiAgentListPage() {
               </TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">
                 类型
+              </TableHead>
+              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">
+                密级
               </TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">
                 发布状态
@@ -174,7 +214,7 @@ export default function MultiAgentListPage() {
           <TableBody>
             {paginatedAgents.length === 0 ? (
               <TableRow className="border-0 hover:bg-transparent">
-                <TableCell colSpan={6} className="px-6 py-16 text-center">
+                <TableCell colSpan={7} className="px-6 py-16 text-center">
                   <div className="mx-auto max-w-md space-y-3">
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[6px] border border-slate-200 bg-slate-50 text-slate-500">
                       <Network className="h-5 w-5" />
@@ -192,8 +232,8 @@ export default function MultiAgentListPage() {
               </TableRow>
             ) : (
               paginatedAgents.map((agent) => {
-                const editHref = `/multi-agent/create?id=${encodeURIComponent(agent.id)}`;
                 const isPublished = agent.status === "已发布";
+                const action = getApprovalActionState(agent.approvalStatus);
 
                 return (
                   <TableRow
@@ -205,12 +245,22 @@ export default function MultiAgentListPage() {
                         <div className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-cyan-500 text-white">
                           <Network className="h-4 w-4" />
                         </div>
-                        <Link
-                          href={editHref}
-                          className="text-[15px] font-medium text-slate-900 hover:text-blue-600"
-                        >
-                          {agent.name}
-                        </Link>
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(agent)}
+                            disabled={action.configLocked}
+                            title={action.configTitle ?? agent.name}
+                            className={cn(
+                              "text-left text-[15px] font-medium transition-colors",
+                              action.configLocked
+                                ? "cursor-not-allowed text-slate-400"
+                                : "text-slate-900 hover:text-blue-600"
+                            )}
+                          >
+                            {agent.name}
+                          </button>
+                        </div>
                       </div>
                     </TableCell>
 
@@ -219,6 +269,10 @@ export default function MultiAgentListPage() {
                         <Network className="h-3 w-3" />
                         {agent.type}
                       </span>
+                    </TableCell>
+
+                    <TableCell className="px-4 py-3 align-middle">
+                      <SecurityLevelBadge level={agent.securityLevel} />
                     </TableCell>
 
                     <TableCell className="px-4 py-3 align-middle">
@@ -255,16 +309,29 @@ export default function MultiAgentListPage() {
                         >
                           复制
                         </button>
-                        <Link
-                          href={editHref}
-                          className="text-blue-600 hover:text-blue-700"
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(agent)}
+                          disabled={action.configLocked}
+                          title={action.configTitle ?? "编辑"}
+                          className={cn(
+                            action.configLocked
+                              ? "cursor-not-allowed text-slate-400"
+                              : "text-blue-600 hover:text-blue-700"
+                          )}
                         >
                           编辑
-                        </Link>
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(agent)}
-                          className="text-blue-600 hover:text-blue-700"
+                          disabled={action.deleteLocked}
+                          title={action.deleteTitle ?? "删除"}
+                          className={cn(
+                            action.deleteLocked
+                              ? "cursor-not-allowed text-slate-400"
+                              : "text-blue-600 hover:text-blue-700"
+                          )}
                         >
                           删除
                         </button>

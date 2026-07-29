@@ -85,17 +85,21 @@ interface ImportDocumentDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImport: (documents: KnowledgeDocumentRow[]) => void;
+  /** 当前知识库密级：文件密级默认并锁定为此值 */
+  knowledgeBaseSecurityLevel?: import("@/lib/security-level").SecurityLevel;
 }
 
 export function ImportDocumentDrawer({
   open,
   onOpenChange,
   onImport,
+  knowledgeBaseSecurityLevel = "公开",
 }: ImportDocumentDrawerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [fileKind, setFileKind] = useState<ImportFileKind>("text");
   const [queue, setQueue] = useState<ImportQueueItem[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [securityConfirmed, setSecurityConfirmed] = useState(false);
   const [parsingStrategies, setParsingStrategies] = useState(["文字识别"]);
   const [cleanHeaderFooter, setCleanHeaderFooter] = useState(true);
   const [cleanLogo, setCleanLogo] = useState(false);
@@ -124,6 +128,7 @@ export function ImportDocumentDrawer({
   function resetDraft() {
     setQueue([]);
     setDragging(false);
+    setSecurityConfirmed(false);
     setFileKind("text");
     setParsingStrategies(["文字识别"]);
     setCleanHeaderFooter(true);
@@ -228,6 +233,9 @@ export function ImportDocumentDrawer({
 
   function confirmImport() {
     if (queue.length === 0) return;
+    if (!securityConfirmed) {
+      return;
+    }
     const now = new Date();
     const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
     const importedDocuments = queue.map<KnowledgeDocumentRow>((item, index) => ({
@@ -618,21 +626,43 @@ export function ImportDocumentDrawer({
             </div>
           </section>
         </div>
-        <div className="sticky bottom-0 flex gap-3 border-t border-slate-200 bg-white px-6 py-4">
-          <Button
-            disabled={queue.length === 0}
-            className="rounded bg-blue-600 px-8 hover:bg-blue-700"
-            onClick={confirmImport}
-          >
-            确定
-          </Button>
-          <Button
-            variant="outline"
-            className="rounded px-6"
-            onClick={() => handleOpenChange(false)}
-          >
-            取消
-          </Button>
+        <div className="sticky bottom-0 space-y-3 border-t border-slate-200 bg-white px-6 py-4">
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="mb-2 flex items-center gap-2 text-sm text-slate-700">
+              <span className="text-red-500">*</span>
+              <span>文件密级</span>
+              <span className="inline-flex items-center rounded-[4px] bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                {knowledgeBaseSecurityLevel}
+              </span>
+              <span className="text-xs text-slate-400">（与当前知识库密级一致，不可修改）</span>
+            </div>
+            <label className="flex items-start gap-2 text-sm text-slate-700">
+              <Checkbox
+                checked={securityConfirmed}
+                onCheckedChange={(checked) => setSecurityConfirmed(checked === true)}
+                className="mt-0.5"
+              />
+              <span>
+                我已确认本次上传文件密级为「{knowledgeBaseSecurityLevel}」，与知识库密级保持一致。
+              </span>
+            </label>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              disabled={queue.length === 0 || !securityConfirmed}
+              className="rounded bg-blue-600 px-8 hover:bg-blue-700"
+              onClick={confirmImport}
+            >
+              确定
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded px-6"
+              onClick={() => handleOpenChange(false)}
+            >
+              取消
+            </Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -30,7 +30,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { getAllAgents } from "@/lib/agent-data";
+import {
+  SecurityLevelBadge,
+} from "@/components/security/security-level-badge";
+import { getAllAgents, type AgentProfile } from "@/lib/agent-data";
+import {
+  getApprovalActionState,
+  isHighSecurityLevel,
+  type ApprovalStatus,
+  type SecurityLevel,
+} from "@/lib/security-level";
+import { cn } from "@/lib/utils";
 
 interface Agent {
   id: string;
@@ -39,25 +49,22 @@ interface Agent {
   status: string;
   desc: string;
   updatedAt: string;
+  securityLevel: SecurityLevel;
+  approvalStatus: ApprovalStatus;
 }
 
-function convertAgentProfileToAgent(profile: ReturnType<typeof getAllAgents>[0]): Agent {
+function convertAgentProfileToAgent(profile: AgentProfile): Agent {
   return {
     id: profile.id,
     name: profile.name,
     type: profile.type === "autonomous" ? "自主规划智能体" : "工作流智能体",
-    status: "未发布",
+    status: profile.publishStatus ?? "未发布",
     desc: profile.description,
     updatedAt: profile.updatedAt,
+    securityLevel: profile.securityLevel ?? "公开",
+    approvalStatus: profile.approvalStatus ?? "none",
   };
 }
-
-const AGENTS_STATUS_MAP: Record<string, string> = {
-  "agent-situational": "已发布",
-  "agent-intent-analysis": "已发布",
-  "device-03": "已发布",
-  "anti-fl-07": "已发布",
-};
 
 const ITEMS_PER_PAGE = 20;
 
@@ -66,21 +73,15 @@ export default function AgentPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
-
-  const agents = useMemo(() => {
-    return getAllAgents().map((profile) => {
-      const agent = convertAgentProfileToAgent(profile);
-      if (AGENTS_STATUS_MAP[agent.id]) {
-        agent.status = AGENTS_STATUS_MAP[agent.id];
-      }
-      return agent;
-    });
-  }, []);
+  const [agents, setAgents] = useState<Agent[]>(() =>
+    getAllAgents().map(convertAgentProfileToAgent)
+  );
 
   const filteredAgents = agents.filter(
     (agent) =>
       agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      agent.desc.toLowerCase().includes(searchQuery.toLowerCase())
+      agent.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      agent.securityLevel.includes(searchQuery)
   );
 
   const totalPages = Math.max(1, Math.ceil(filteredAgents.length / itemsPerPage));
@@ -88,6 +89,7 @@ export default function AgentPage() {
   const paginatedAgents = filteredAgents.slice(startIndex, startIndex + itemsPerPage);
 
   const handleRefresh = () => {
+    setAgents(getAllAgents().map(convertAgentProfileToAgent));
     toast.success("刷新成功");
   };
 
@@ -95,7 +97,33 @@ export default function AgentPage() {
     toast.success(`已复制：${agent.name}`);
   };
 
+  const handleOpenEdit = (agent: Agent) => {
+    const action = getApprovalActionState(agent.approvalStatus);
+    if (action.configLocked) {
+      toast.info("发布审批中，暂无法进入配置。");
+      return;
+    }
+    router.push(`/agent/${agent.id}`);
+  };
+
   const handleDelete = (agent: Agent) => {
+    const action = getApprovalActionState(agent.approvalStatus);
+    if (action.deleteLocked) {
+      toast.info(action.deleteTitle ?? "审批中");
+      return;
+    }
+
+    if (isHighSecurityLevel(agent.securityLevel) && agent.status === "已发布") {
+      setAgents((current) =>
+        current.map((row) =>
+          row.id === agent.id ? { ...row, approvalStatus: "delete" } : row
+        )
+      );
+      toast.success(`已提交删除审批：${agent.name}，审批通过前仍按当前已发布版本运行。`);
+      return;
+    }
+
+    setAgents((current) => current.filter((row) => row.id !== agent.id));
     toast.success(`已删除：${agent.name}`);
   };
 
@@ -178,11 +206,12 @@ export default function AgentPage() {
       </div>
 
       <section className="overflow-hidden rounded-[6px] border border-slate-200 bg-white">
-        <Table className="min-w-[1080px]">
+        <Table className="min-w-[1180px]">
           <TableHeader className="bg-slate-50">
             <TableRow className="border-slate-200 hover:bg-slate-50">
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">名称</TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">类型</TableHead>
+              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">密级</TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">发布状态</TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">描述</TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">更新时间</TableHead>
@@ -192,7 +221,7 @@ export default function AgentPage() {
           <TableBody>
             {paginatedAgents.length === 0 ? (
               <TableRow className="border-0 hover:bg-transparent">
-                <TableCell colSpan={6} className="px-6 py-16 text-center">
+                <TableCell colSpan={7} className="px-6 py-16 text-center">
                   <div className="mx-auto max-w-md space-y-3">
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[6px] border border-slate-200 bg-slate-50 text-slate-500">
                       <Search className="h-5 w-5" />
@@ -210,7 +239,7 @@ export default function AgentPage() {
               paginatedAgents.map((agent) => {
                 const isAutonomous = agent.type === "自主规划智能体";
                 const isPublished = agent.status === "已发布";
-                const editHref = `/agent/${agent.id}`;
+                const action = getApprovalActionState(agent.approvalStatus);
 
                 return (
                   <TableRow key={agent.id} className="border-slate-200 bg-white hover:bg-slate-50/40">
@@ -223,12 +252,22 @@ export default function AgentPage() {
                         >
                           <Bot className="h-4 w-4" />
                         </div>
-                        <Link
-                          href={editHref}
-                          className="text-[15px] font-medium text-slate-900 hover:text-blue-600"
-                        >
-                          {agent.name}
-                        </Link>
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(agent)}
+                            disabled={action.configLocked}
+                            title={action.configTitle ?? agent.name}
+                            className={cn(
+                              "text-left text-[15px] font-medium transition-colors",
+                              action.configLocked
+                                ? "cursor-not-allowed text-slate-400"
+                                : "text-slate-900 hover:text-blue-600"
+                            )}
+                          >
+                            {agent.name}
+                          </button>
+                        </div>
                       </div>
                     </TableCell>
 
@@ -247,6 +286,10 @@ export default function AgentPage() {
                         )}
                         {agent.type}
                       </span>
+                    </TableCell>
+
+                    <TableCell className="px-4 py-3 align-middle">
+                      <SecurityLevelBadge level={agent.securityLevel} />
                     </TableCell>
 
                     <TableCell className="px-4 py-3 align-middle">
@@ -279,13 +322,29 @@ export default function AgentPage() {
                         >
                           复制
                         </button>
-                        <Link href={editHref} className="text-blue-600 hover:text-blue-700">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(agent)}
+                          disabled={action.configLocked}
+                          title={action.configTitle ?? "编辑"}
+                          className={cn(
+                            action.configLocked
+                              ? "cursor-not-allowed text-slate-400"
+                              : "text-blue-600 hover:text-blue-700"
+                          )}
+                        >
                           编辑
-                        </Link>
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(agent)}
-                          className="text-blue-600 hover:text-blue-700"
+                          disabled={action.deleteLocked}
+                          title={action.deleteTitle ?? "删除"}
+                          className={cn(
+                            action.deleteLocked
+                              ? "cursor-not-allowed text-slate-400"
+                              : "text-blue-600 hover:text-blue-700"
+                          )}
                         >
                           删除
                         </button>

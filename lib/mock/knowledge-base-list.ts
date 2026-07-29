@@ -1,3 +1,5 @@
+import type { ApprovalStatus, SecurityLevel } from "@/lib/security-level";
+
 export type KnowledgeBaseCreateMethod = "模板创建" | "自定义创建";
 export type KnowledgeBaseStatus = "已启用" | "已停用";
 
@@ -12,6 +14,8 @@ export interface KnowledgeBaseListItem {
   createTime: string;
   description?: string;
   groupName?: string;
+  securityLevel?: SecurityLevel;
+  approvalStatus?: ApprovalStatus;
 }
 
 const CREATED_KB_STORAGE_KEY = "nexus-created-knowledge-bases";
@@ -52,9 +56,12 @@ export interface CreateCustomKnowledgeBaseInput {
   description?: string;
   groupId: string;
   creator?: string;
+  createMethod?: KnowledgeBaseCreateMethod;
+  securityLevel?: SecurityLevel;
+  approvalStatus?: ApprovalStatus;
 }
 
-/** 创建自定义知识库（写入本地存储，便于列表/详情读取） */
+/** 创建知识库（写入本地存储，便于列表/详情读取） */
 export function createCustomKnowledgeBase(
   input: CreateCustomKnowledgeBaseInput
 ): KnowledgeBaseListItem {
@@ -63,7 +70,7 @@ export function createCustomKnowledgeBase(
   const item: KnowledgeBaseListItem = {
     id: `${group.prefix}_${Date.now()}`,
     name: input.name.trim(),
-    createMethod: "自定义创建",
+    createMethod: input.createMethod ?? "自定义创建",
     status: "已启用",
     documentCount: 0,
     updateTime: now,
@@ -71,6 +78,8 @@ export function createCustomKnowledgeBase(
     createTime: now,
     description: input.description?.trim() || undefined,
     groupName: group.groupName,
+    securityLevel: input.securityLevel ?? "公开",
+    approvalStatus: input.approvalStatus ?? "none",
   };
 
   const list = loadCreatedKnowledgeBases();

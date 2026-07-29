@@ -1,16 +1,34 @@
+import type { ApprovalStatus, SecurityLevel } from "@/lib/security-level";
+
 export type ClawType = "运维型" | "销售型" | "审核型" | "办公型" | "研发型";
 export type ClawStatus = "运行中" | "设计中" | "待评审" | "冻结";
 export type ClawPublishStatus = "已发布" | "未发布";
+export type ClawSecurityLevel = SecurityLevel;
+export type ClawApprovalStatus = ApprovalStatus;
+
+export {
+  SECURITY_LEVELS as CLAW_SECURITY_LEVELS,
+  LOW_SECURITY_LEVELS as CLAW_LOW_SECURITY_LEVELS,
+  CURRENT_USER_SECURITY_LEVEL,
+  getSecurityLevelRank,
+  isHighSecurityLevel,
+  isLowSecurityLevel,
+  buildSecurityLevelSelectOptions,
+} from "@/lib/security-level";
 
 export interface ClawHubListItem {
   id: string;
   name: string;
   creator: string;
+  /** 密级 */
+  securityLevel: ClawSecurityLevel;
   type: ClawType;
   scene: string;
   owner: string;
   status: ClawStatus;
   publishStatus: ClawPublishStatus;
+  /** 高密审批中状态，默认 none */
+  approvalStatus?: ClawApprovalStatus;
   model: string;
   updatedAt: string;
   updatedBy: string;
@@ -1065,6 +1083,7 @@ export const clawHubList: ClawHubListItem[] = [
     id: "claw-scientific-research",
     name: "科研 Claw",
     creator: "RowanDI",
+    securityLevel: "内部",
     type: "研发型",
     scene: "科研协作",
     owner: "科研创新中心",
@@ -1079,11 +1098,13 @@ export const clawHubList: ClawHubListItem[] = [
     id: "claw-ops-watch",
     name: "运维值守 Claw",
     creator: "林越",
+    securityLevel: "机密",
     type: "运维型",
     scene: "运维协同",
     owner: "平台运维组",
     status: "运行中",
     publishStatus: "已发布",
+    approvalStatus: "delete",
     model: "Qwen3-32B + MCP",
     updatedAt: "2026-03-28 18:20",
     updatedBy: "RowanDI",
@@ -1093,6 +1114,7 @@ export const clawHubList: ClawHubListItem[] = [
     id: "claw-sales-pilot",
     name: "销售陪练 Claw",
     creator: "苏澄",
+    securityLevel: "公开",
     type: "销售型",
     scene: "售前销售",
     owner: "增长运营组",
@@ -1107,11 +1129,13 @@ export const clawHubList: ClawHubListItem[] = [
     id: "claw-risk-review",
     name: "风控审核 Claw",
     creator: "陈屿",
+    securityLevel: "机密",
     type: "审核型",
     scene: "审批风控",
     owner: "风险管理组",
     status: "待评审",
     publishStatus: "未发布",
+    approvalStatus: "publish",
     model: "Qwen3-32B + 私有知识库",
     updatedAt: "2026-03-26 21:40",
     updatedBy: "唐溪",
@@ -1121,6 +1145,7 @@ export const clawHubList: ClawHubListItem[] = [
     id: "claw-office-assist",
     name: "办公助理 Claw",
     creator: "许珂",
+    securityLevel: "内部",
     type: "办公型",
     scene: "办公协同",
     owner: "行政服务组",
@@ -1135,6 +1160,7 @@ export const clawHubList: ClawHubListItem[] = [
     id: "claw-research-pm",
     name: "研发生命周期 Claw",
     creator: "宋砚",
+    securityLevel: "秘密",
     type: "研发型",
     scene: "研发协作",
     owner: "产品研发组",
@@ -1149,6 +1175,7 @@ export const clawHubList: ClawHubListItem[] = [
     id: "claw-office-shrimp",
     name: "办公虾",
     creator: "顾宁",
+    securityLevel: "公开",
     type: "办公型",
     scene: "智能办公",
     owner: "平台办公服务中心",
@@ -1163,11 +1190,13 @@ export const clawHubList: ClawHubListItem[] = [
     id: "claw-intel-shrimp",
     name: "情报虾",
     creator: "孟川",
+    securityLevel: "机密",
     type: "研发型",
     scene: "情报研判",
     owner: "平台情报分析中心",
     status: "运行中",
     publishStatus: "已发布",
+    approvalStatus: "shelf",
     model: "Qwen3-32B + 本体MCP",
     updatedAt: "2026-04-06 11:05",
     updatedBy: "RowanDI",
@@ -1209,7 +1238,7 @@ export function createDefaultResourceConfig(): ResourceConfig {
 const detailMap: Record<string, ClawDetailData> = {
   "claw-ops-watch": {
     overview: {
-      ...clawHubList[0],
+      ...clawHubList.find((item) => item.id === "claw-ops-watch")!,
       version: "v2.3.1",
       createdAt: "2026-01-12 09:30",
     },
@@ -3310,9 +3339,9 @@ const detailMap: Record<string, ClawDetailData> = {
     ],
   },
   "claw-intel-shrimp": {
-    ...buildFallbackDetail(clawHubList[6]!),
+    ...buildFallbackDetail(clawHubList.find((item) => item.id === "claw-intel-shrimp")!),
     overview: {
-      ...clawHubList[6]!,
+      ...clawHubList.find((item) => item.id === "claw-intel-shrimp")!,
       version: "v2.0.1",
       createdAt: "2026-03-16 14:00",
     },
@@ -4718,17 +4747,24 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
 
 export function createFallbackClawListItem(
   clawId: string,
-  input: Partial<Pick<ClawHubListItem, "name" | "creator" | "model" | "summary" | "updatedAt" | "updatedBy">> = {}
+  input: Partial<
+    Pick<
+      ClawHubListItem,
+      "name" | "creator" | "securityLevel" | "model" | "summary" | "updatedAt" | "updatedBy"
+    >
+  > = {}
 ): ClawHubListItem {
   return {
     id: clawId,
     name: input.name?.trim() || "新建 Claw",
     creator: input.creator?.trim() || "RowanDI",
+    securityLevel: input.securityLevel ?? "公开",
     type: "办公型",
     scene: "通用办公",
     owner: "默认项目组",
     status: "设计中",
     publishStatus: "未发布",
+    approvalStatus: "none",
     model: input.model?.trim() || "Qwen3-32B",
     updatedAt: input.updatedAt?.trim() || "刚刚",
     updatedBy: input.updatedBy?.trim() || input.creator?.trim() || "RowanDI",

@@ -13,13 +13,31 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { createCustomKnowledgeBase } from "@/lib/mock/knowledge-base-list";
+import {
+  getGroupSecurityLevelById,
+  knowledgeBaseGroupsV2,
+} from "@/lib/mock-knowledge-base-v2";
+import {
+  buildSecurityLevelOptionsUpToUser,
+  getSecurityLevelRank,
+  isHighSecurityLevel,
+  type SecurityLevel,
+} from "@/lib/security-level";
 import { cn } from "@/lib/utils";
+
+const ROOT_GROUP_SECURITY = getGroupSecurityLevelById(
+  knowledgeBaseGroupsV2,
+  "all"
+);
 
 const steps = ["定义知识库", "索引配置", "混合检索策略配置"];
 
@@ -194,11 +212,15 @@ function StepOne({
   setName,
   description,
   setDescription,
+  securityLevel,
+  setSecurityLevel,
 }: {
   name: string;
   setName: (value: string) => void;
   description: string;
   setDescription: (value: string) => void;
+  securityLevel: SecurityLevel;
+  setSecurityLevel: (value: SecurityLevel) => void;
 }) {
   return (
     <div className="mx-auto w-full max-w-4xl space-y-7 py-8">
@@ -246,6 +268,22 @@ function StepOne({
           </span>
           <ChevronDown className="h-4 w-4 text-slate-400" />
         </button>
+
+        <FieldLabel required>知识库密级</FieldLabel>
+        <div>
+          <Select
+            value={securityLevel}
+            onValueChange={(value) => setSecurityLevel(value as SecurityLevel)}
+            options={buildSecurityLevelOptionsUpToUser({
+              maxLevel: ROOT_GROUP_SECURITY,
+            })}
+            className="h-10 max-w-xs border-slate-200 bg-white shadow-none focus:ring-0"
+          />
+          <p className="mt-2 text-xs text-slate-500">
+            知识库密级不可高于所属群组密级（当前：{ROOT_GROUP_SECURITY}
+            ）；高密创建将提交审批，通过后方可生效。
+          </p>
+        </div>
 
         <FieldLabel>图标</FieldLabel>
         <div className="flex h-12 w-12 items-center justify-center rounded bg-blue-500 text-white">
@@ -777,9 +815,54 @@ function CreateKnowledgeBaseContent() {
   const [currentStep, setCurrentStep] = useState(isTemplate ? 1 : 1);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [securityLevel, setSecurityLevel] = useState<SecurityLevel>("公开");
   const [selectedEngines, setSelectedEngines] = useState(["fulltext", "semantic"]);
+  const [submitting, setSubmitting] = useState(false);
 
-  const nextDisabled = useMemo(() => currentStep === 1 && name.trim().length === 0, [currentStep, name]);
+  const nextDisabled = useMemo(
+    () =>
+      (currentStep === 1 && name.trim().length === 0) ||
+      (currentStep === 3 && submitting),
+    [currentStep, name, submitting]
+  );
+
+  function handleFinish() {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const highSec = isHighSecurityLevel(securityLevel);
+      if (
+        getSecurityLevelRank(securityLevel) >
+        getSecurityLevelRank(ROOT_GROUP_SECURITY)
+      ) {
+        toast.error(
+          `知识库密级不可高于所属群组密级（${ROOT_GROUP_SECURITY}）。`
+        );
+        setSubmitting(false);
+        return;
+      }
+      const created = createCustomKnowledgeBase({
+        name,
+        description,
+        groupId: "all",
+        createMethod: isTemplate ? "模板创建" : "自定义创建",
+        securityLevel,
+        approvalStatus: highSec ? "create" : "none",
+      });
+      if (highSec) {
+        toast.success(
+          `已提交创建审批：${created.name}，审批通过后方可生效。`
+        );
+        router.push("/knowledge-base");
+        return;
+      }
+      toast.success("知识库创建成功");
+      router.push(`/knowledge-base/${created.id}`);
+    } catch {
+      toast.error("创建失败，请重试");
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col bg-white">
@@ -796,7 +879,16 @@ function CreateKnowledgeBaseContent() {
       </div>
       <Stepper currentStep={currentStep} />
       <div className="min-h-0 flex-1 overflow-auto bg-white px-6">
-        {currentStep === 1 && <StepOne name={name} setName={setName} description={description} setDescription={setDescription} />}
+        {currentStep === 1 && (
+          <StepOne
+            name={name}
+            setName={setName}
+            description={description}
+            setDescription={setDescription}
+            securityLevel={securityLevel}
+            setSecurityLevel={setSecurityLevel}
+          />
+        )}
         {currentStep === 2 && <StepTwo selectedEngines={selectedEngines} setSelectedEngines={setSelectedEngines} />}
         {currentStep === 3 && <StepThree selectedEngines={selectedEngines} />}
       </div>
@@ -805,7 +897,7 @@ function CreateKnowledgeBaseContent() {
           disabled={nextDisabled}
           onClick={() => {
             if (currentStep < 3) setCurrentStep(currentStep + 1);
-            else router.push("/knowledge-base/docstore_JzrYZMN9");
+            else handleFinish();
           }}
           className="rounded bg-blue-600 px-8 hover:bg-blue-700"
         >

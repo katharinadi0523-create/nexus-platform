@@ -22,6 +22,8 @@ export interface LogEntry {
 
 export type AgentType = 'autonomous' | 'workflow';
 
+export type AgentPublishStatus = '已发布' | '未发布';
+
 export interface AgentProfile {
   id: string;
   name: string;
@@ -29,6 +31,12 @@ export interface AgentProfile {
   description: string;
   avatar?: string;
   updatedAt: string;
+  /** 密级，默认公开 */
+  securityLevel?: import('@/lib/security-level').SecurityLevel;
+  /** 发布状态，默认未发布 */
+  publishStatus?: AgentPublishStatus;
+  /** 高密审批状态 */
+  approvalStatus?: import('@/lib/security-level').ApprovalStatus;
 }
 
 // ==========================================
@@ -837,14 +845,19 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     name: '态势感知智能体',
     type: 'autonomous',
     description: '实时分析海面目标的身份与威胁等级，支持本体检索和视觉特征分析。',
-    updatedAt: '2026-02-01 09:15:00'
+    updatedAt: '2026-02-01 09:15:00',
+    securityLevel: '机密',
+    publishStatus: '已发布',
   },
   'agent-intent-analysis': {
     id: 'agent-intent-analysis',
     name: '意图分析智能体',
     type: 'workflow',
     description: '接收 Identity/Behavior 报告，通过实体关联、模式匹配、战例类比三路情报融合，生成意图假设并匹配预案。',
-    updatedAt: '2026-02-02 10:00:00'
+    updatedAt: '2026-02-02 10:00:00',
+    securityLevel: '秘密',
+    publishStatus: '已发布',
+    approvalStatus: 'delete',
   },
 
   // ==========================================
@@ -855,7 +868,10 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     name: 'OSINT开源情报整编',
     type: 'autonomous',
     description: '基于全网开源数据的深度情报挖掘与关联分析。',
-    updatedAt: '2026-01-05 09:15:00'
+    updatedAt: '2026-01-05 09:15:00',
+    securityLevel: '机密',
+    publishStatus: '未发布',
+    approvalStatus: 'publish',
   },
   'code-02': {
     id: 'code-02',
@@ -869,7 +885,9 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     name: '设备维修判断与预测',
     type: 'autonomous',
     description: '基于传感器数据和历史维修记录，智能判断设备故障并预测维护需求。',
-    updatedAt: '2026-01-03 11:00:00'
+    updatedAt: '2026-01-03 11:00:00',
+    securityLevel: '内部',
+    publishStatus: '已发布',
   },
   'knowledge-07': {
     id: 'knowledge-07',
@@ -915,7 +933,9 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     name: '反FL分析智能体',
     type: 'workflow',
     description: '智能分析金融交易数据，识别异常模式和潜在风险。',
-    updatedAt: '2026-01-02 13:30:00'
+    updatedAt: '2026-01-02 13:30:00',
+    securityLevel: '内部',
+    publishStatus: '已发布',
   },
   'analysis-01': {
     id: 'analysis-01',
@@ -978,8 +998,18 @@ const MOCK_LOGS_MAP: Record<string, LogEntry[]> = {
 };
 
 // 获取智能体详情
+export function normalizeAgentProfile(profile: AgentProfile): AgentProfile {
+  return {
+    ...profile,
+    securityLevel: profile.securityLevel ?? '公开',
+    publishStatus: profile.publishStatus ?? '未发布',
+    approvalStatus: profile.approvalStatus ?? 'none',
+  };
+}
+
 export function getAgentById(id: string): AgentProfile | undefined {
-  return MOCK_AGENTS[id];
+  const profile = MOCK_AGENTS[id];
+  return profile ? normalizeAgentProfile(profile) : undefined;
 }
 
 // 获取智能体日志
@@ -990,7 +1020,7 @@ export function getLogsByAgentId(id: string): LogEntry[] {
 // 获取所有智能体列表
 // 确保态势感知智能体和意图分析智能体在前两位
 export function getAllAgents(): AgentProfile[] {
-  const allAgents = Object.values(MOCK_AGENTS);
+  const allAgents = Object.values(MOCK_AGENTS).map(normalizeAgentProfile);
   
   // 分离出需要优先显示的智能体
   const priorityAgents = allAgents.filter(

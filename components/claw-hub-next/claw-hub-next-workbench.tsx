@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { ArrowUpRight, Bot, Plus, RefreshCw, Search, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { AgentBomBadge } from "@/components/claw-hub-next/agent-bom-badge";
-import { AgentMdEditor } from "@/components/claw-hub-next/detail/agent-md-editor";
 import { buildAgentBomTreeFromListItem } from "@/components/claw-hub-next/agent-bom-tree";
 import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
 import { Button } from "@/components/ui/button";
@@ -21,7 +20,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { clawHubList, CLAW_AGENT_MD_PLACEHOLDER, type ClawHubListItem } from "@/lib/mock/claw-hub-next";
+import {
+  buildSecurityLevelSelectOptions,
+  clawHubList,
+  isHighSecurityLevel,
+  type ClawApprovalStatus,
+  type ClawHubListItem,
+  type ClawSecurityLevel,
+} from "@/lib/mock/claw-hub-next";
 import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 
@@ -37,10 +43,33 @@ const STORAGE_VOLUME_OPTIONS = [
 type CreateClawDraft = {
   name: string;
   description: string;
-  agentContent: string;
   primaryModel: string;
   storageVolume: string;
+  securityLevel: ClawSecurityLevel;
 };
+
+function getApprovalStatus(item: ClawHubListItem): ClawApprovalStatus {
+  return item.approvalStatus ?? "none";
+}
+
+function getListActionState(item: ClawHubListItem) {
+  const approval = getApprovalStatus(item);
+  const configLocked = approval === "publish";
+  const deleteLocked = approval === "publish" || approval === "delete";
+
+  return {
+    approval,
+    configLocked,
+    deleteLocked,
+    configTitle: configLocked ? "发布审批中" : "更新配置",
+    deleteTitle:
+      approval === "publish"
+        ? "发布审批中"
+        : approval === "delete"
+          ? "删除审批中"
+          : "删除",
+  };
+}
 
 function PublishStatusBadge({ status }: { status: ClawHubListItem["publishStatus"] }) {
   const isPublished = status === "已发布";
@@ -54,6 +83,25 @@ function PublishStatusBadge({ status }: { status: ClawHubListItem["publishStatus
     >
       <span className={cn("h-1.5 w-1.5 rounded-full", isPublished ? "bg-emerald-500" : "bg-slate-400")} />
       {status}
+    </span>
+  );
+}
+
+function SecurityLevelBadge({ level }: { level: ClawSecurityLevel }) {
+  const tone =
+    level === "公开"
+      ? "bg-slate-100 text-slate-600"
+      : level === "内部"
+        ? "bg-sky-50 text-sky-700"
+        : level === "秘密"
+          ? "bg-amber-50 text-amber-700"
+          : level === "机密"
+            ? "bg-orange-50 text-orange-700"
+            : "bg-rose-50 text-rose-700";
+
+  return (
+    <span className={cn("inline-flex items-center rounded-[4px] px-2 py-1 text-xs font-medium", tone)}>
+      {level}
     </span>
   );
 }
@@ -78,6 +126,7 @@ function buildClawDetailUrl(item: ClawHubListItem) {
   const params = new URLSearchParams({
     name: item.name,
     creator: item.creator,
+    securityLevel: item.securityLevel,
     model: item.model,
     summary: item.summary,
     updatedAt: item.updatedAt,
@@ -87,6 +136,14 @@ function buildClawDetailUrl(item: ClawHubListItem) {
   return `${pathname}?${params.toString()}`;
 }
 
+const EMPTY_CREATE_DRAFT: CreateClawDraft = {
+  name: "",
+  description: "",
+  primaryModel: PRESET_MODEL_IDS[0] ?? "Qwen3-32B",
+  storageVolume: "",
+  securityLevel: "公开",
+};
+
 export function ClawHubNextWorkbench() {
   const router = useRouter();
   const [keyword, setKeyword] = useState("");
@@ -94,13 +151,7 @@ export function ClawHubNextWorkbench() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [publishValidationOpen, setPublishValidationOpen] = useState(false);
   const [publishTarget, setPublishTarget] = useState<ClawHubListItem | null>(null);
-  const [createDraft, setCreateDraft] = useState<CreateClawDraft>({
-    name: "",
-    description: "",
-    agentContent: "",
-    primaryModel: PRESET_MODEL_IDS[0] ?? "Qwen3-32B",
-    storageVolume: "",
-  });
+  const [createDraft, setCreateDraft] = useState<CreateClawDraft>(EMPTY_CREATE_DRAFT);
   const deferredKeyword = useDeferredValue(keyword);
 
   const filteredClaws = useMemo(() => {
@@ -112,7 +163,8 @@ export function ClawHubNextWorkbench() {
         item.name.toLowerCase().includes(normalizedKeyword) ||
         item.creator.toLowerCase().includes(normalizedKeyword) ||
         item.updatedBy.toLowerCase().includes(normalizedKeyword) ||
-        item.summary.toLowerCase().includes(normalizedKeyword);
+        item.summary.toLowerCase().includes(normalizedKeyword) ||
+        item.securityLevel.toLowerCase().includes(normalizedKeyword);
 
       return matchesKeyword;
     });
@@ -125,6 +177,10 @@ export function ClawHubNextWorkbench() {
   }, [filteredClaws, router]);
 
   function handleOpenConfig(item: ClawHubListItem) {
+    if (getApprovalStatus(item) === "publish") {
+      toast.info("发布审批中，暂无法进入配置。");
+      return;
+    }
     router.push(buildClawDetailUrl(item));
   }
 
@@ -134,7 +190,12 @@ export function ClawHubNextWorkbench() {
   }
 
   function handlePublish(item: ClawHubListItem) {
-    if (item.publishStatus === "已发布") {
+    if (getApprovalStatus(item) === "publish") {
+      toast.info("发布审批中，请等待审批结果。");
+      return;
+    }
+
+    if (item.publishStatus === "已发布" && !isHighSecurityLevel(item.securityLevel)) {
       toast.success(`${item.name} 已发布。`);
       return;
     }
@@ -148,35 +209,76 @@ export function ClawHubNextWorkbench() {
       return;
     }
 
+    const target = publishTarget;
+
+    if (isHighSecurityLevel(target.securityLevel)) {
+      setClaws((current) =>
+        current.map((claw) =>
+          claw.id === target.id
+            ? {
+                ...claw,
+                approvalStatus: "publish",
+                updatedAt: formatNow(),
+                updatedBy: CURRENT_OPERATOR,
+              }
+            : claw
+        )
+      );
+      toast.success(`已提交发布审批：${target.name}，审批通过后方可生效。`);
+      setPublishTarget(null);
+      return;
+    }
+
     setClaws((current) =>
       current.map((claw) =>
-        claw.id === publishTarget.id
+        claw.id === target.id
           ? {
               ...claw,
               status: "运行中",
               publishStatus: "已发布",
+              approvalStatus: "none",
               updatedAt: formatNow(),
               updatedBy: CURRENT_OPERATOR,
             }
           : claw
       )
     );
-    toast.success(`已发布：${publishTarget.name}`);
+    toast.success(`已发布：${target.name}`);
     setPublishTarget(null);
   }
 
   function handleDelete(item: ClawHubListItem) {
+    const approval = getApprovalStatus(item);
+    if (approval === "publish" || approval === "delete") {
+      toast.info(approval === "publish" ? "发布审批中" : "删除审批中");
+      return;
+    }
+
+    if (isHighSecurityLevel(item.securityLevel) && item.publishStatus === "已发布") {
+      setClaws((current) =>
+        current.map((claw) =>
+          claw.id === item.id
+            ? {
+                ...claw,
+                approvalStatus: "delete",
+                updatedAt: formatNow(),
+                updatedBy: CURRENT_OPERATOR,
+              }
+            : claw
+        )
+      );
+      toast.success(`已提交删除审批：${item.name}，审批通过前仍按当前已发布版本运行。`);
+      return;
+    }
+
     setClaws((current) => current.filter((claw) => claw.id !== item.id));
     toast.success(`已删除：${item.name}`);
   }
 
   function handleOpenCreateDialog() {
     setCreateDraft({
-      name: "",
-      description: "",
-      agentContent: "",
+      ...EMPTY_CREATE_DRAFT,
       primaryModel: PRESET_MODEL_IDS[0] ?? "Qwen3-32B",
-      storageVolume: "",
     });
     setCreateDialogOpen(true);
   }
@@ -216,6 +318,7 @@ export function ClawHubNextWorkbench() {
       id: `claw-${Date.now()}`,
       name,
       creator: CURRENT_OPERATOR,
+      securityLevel: createDraft.securityLevel,
       type: "办公型",
       scene: "通用办公",
       owner: "默认项目组",
@@ -286,6 +389,7 @@ export function ClawHubNextWorkbench() {
                   <TableRow className="border-slate-200 hover:bg-slate-50">
                     <TableHead className="h-11 px-4 text-sm font-medium text-slate-700">名称</TableHead>
                     <TableHead className="h-11 px-4 text-sm font-medium text-slate-700">创建人</TableHead>
+                    <TableHead className="h-11 px-4 text-sm font-medium text-slate-700">密级</TableHead>
                     <TableHead className="h-11 px-4 text-sm font-medium text-slate-700">发布状态</TableHead>
                     <TableHead className="h-11 px-4 text-sm font-medium text-slate-700">描述</TableHead>
                     <TableHead className="h-11 px-4 text-sm font-medium text-slate-700">更新时间</TableHead>
@@ -295,7 +399,7 @@ export function ClawHubNextWorkbench() {
                 <TableBody>
                   {filteredClaws.length === 0 ? (
                     <TableRow className="border-0 hover:bg-transparent">
-                      <TableCell colSpan={6} className="px-6 py-16 text-center">
+                      <TableCell colSpan={7} className="px-6 py-16 text-center">
                         <div className="mx-auto max-w-md space-y-3">
                           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[6px] border border-slate-200 bg-slate-50 text-slate-500">
                             <Search className="h-5 w-5" />
@@ -308,7 +412,10 @@ export function ClawHubNextWorkbench() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredClaws.map((item) => (
+                    filteredClaws.map((item) => {
+                      const actionState = getListActionState(item);
+                      const approval = actionState.approval;
+                      return (
                       <TableRow key={item.id} className="border-slate-200 bg-white hover:bg-slate-50/40">
                         <TableCell className="px-4 py-4 align-middle">
                           <div className="flex items-center gap-4">
@@ -319,7 +426,14 @@ export function ClawHubNextWorkbench() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenConfig(item)}
-                                className="text-left text-[15px] font-medium text-slate-900 transition-colors hover:text-blue-600"
+                                disabled={actionState.configLocked}
+                                title={actionState.configTitle}
+                                className={cn(
+                                  "text-left text-[15px] font-medium transition-colors",
+                                  actionState.configLocked
+                                    ? "cursor-not-allowed text-slate-400"
+                                    : "text-slate-900 hover:text-blue-600"
+                                )}
                               >
                                 {item.name}
                               </button>
@@ -331,6 +445,10 @@ export function ClawHubNextWorkbench() {
                         </TableCell>
 
                         <TableCell className="px-4 py-4 align-middle text-sm text-slate-700">{item.creator}</TableCell>
+
+                        <TableCell className="px-4 py-4 align-middle">
+                          <SecurityLevelBadge level={item.securityLevel} />
+                        </TableCell>
 
                         <TableCell className="px-4 py-4 align-middle">
                           <PublishStatusBadge status={item.publishStatus} />
@@ -349,16 +467,25 @@ export function ClawHubNextWorkbench() {
                             <button
                               type="button"
                               onClick={() => handleOpenConfig(item)}
-                              className="text-blue-600 transition-colors hover:text-blue-700"
+                              disabled={actionState.configLocked}
+                              title={actionState.configTitle}
+                              className={cn(
+                                "transition-colors",
+                                actionState.configLocked
+                                  ? "cursor-not-allowed text-slate-400"
+                                  : "text-blue-600 hover:text-blue-700"
+                              )}
                             >
                               更新配置
                             </button>
                             <button
                               type="button"
                               onClick={() => handlePublish(item)}
+                              disabled={approval === "publish"}
+                              title={approval === "publish" ? "发布审批中" : "发布"}
                               className={cn(
                                 "transition-colors",
-                                item.publishStatus === "已发布"
+                                item.publishStatus === "已发布" || approval === "publish"
                                   ? "cursor-not-allowed text-slate-400 hover:text-slate-400"
                                   : "text-blue-600 hover:text-blue-700"
                               )}
@@ -368,14 +495,22 @@ export function ClawHubNextWorkbench() {
                             <button
                               type="button"
                               onClick={() => handleDelete(item)}
-                              className="text-blue-600 transition-colors hover:text-blue-700"
+                              disabled={actionState.deleteLocked}
+                              title={actionState.deleteTitle}
+                              className={cn(
+                                "transition-colors",
+                                actionState.deleteLocked
+                                  ? "cursor-not-allowed text-slate-400"
+                                  : "text-blue-600 hover:text-blue-700"
+                              )}
                             >
                               删除
                             </button>
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -388,80 +523,76 @@ export function ClawHubNextWorkbench() {
             <DialogTitle>新建Claw</DialogTitle>
           </DialogHeader>
 
-          <div className="py-2">
-            <section className="space-y-4">
-              <div className="text-base font-semibold text-slate-950">基本信息</div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="create-claw-name">
-                    <span className="text-rose-500">*</span>名称
-                  </Label>
-                  <Input
-                    id="create-claw-name"
-                    value={createDraft.name}
-                    onChange={(event) => handleCreateDraftChange("name", event.target.value)}
-                    placeholder="例如：办公审批虾、运维巡检虾"
-                    className="h-10 border-slate-200 bg-white shadow-none"
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="create-claw-description">
-                    <span className="text-rose-500">*</span>描述
-                  </Label>
-                  <textarea
-                    id="create-claw-description"
-                    value={createDraft.description}
-                    onChange={(event) => handleCreateDraftChange("description", event.target.value)}
-                    placeholder="简要说明这个 Claw 负责什么场景、解决什么问题。"
-                    className="min-h-[92px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-none outline-none focus:border-blue-500"
-                  />
-                </div>
+          <div className="space-y-4 py-2">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="create-claw-name">
+                  <span className="text-rose-500">*</span>名称
+                </Label>
+                <Input
+                  id="create-claw-name"
+                  value={createDraft.name}
+                  onChange={(event) => handleCreateDraftChange("name", event.target.value)}
+                  placeholder="例如：办公审批虾、运维巡检虾"
+                  className="h-10 border-slate-200 bg-white shadow-none"
+                />
               </div>
-            </section>
-
-            <div className="my-6 border-t border-slate-200" />
-
-            <section className="space-y-4">
-              <div className="text-base font-semibold text-slate-950">Agent 设定</div>
-              <AgentMdEditor
-                value={createDraft.agentContent}
-                onChange={(value) => handleCreateDraftChange("agentContent", value)}
-                placeholder={CLAW_AGENT_MD_PLACEHOLDER}
-                minHeightClassName="min-h-[220px]"
-              />
-            </section>
-
-            <div className="my-6 border-t border-slate-200" />
-
-            <section className="space-y-4">
-              <div className="text-base font-semibold text-slate-950">运行配置</div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>
-                    <span className="text-rose-500">*</span>主模型
-                  </Label>
-                  <Select
-                    value={createDraft.primaryModel}
-                    onValueChange={(value) => handleCreateDraftChange("primaryModel", value)}
-                    options={PRESET_MODEL_IDS.map((modelId) => ({ value: modelId, label: modelId }))}
-                    placeholder="选择该 Claw 默认使用的主模型"
-                    className="h-10 border-slate-200 bg-white shadow-none focus:ring-0"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>
-                    <span className="text-rose-500">*</span>存储卷
-                  </Label>
-                  <Select
-                    value={createDraft.storageVolume}
-                    onValueChange={(value) => handleCreateDraftChange("storageVolume", value)}
-                    options={STORAGE_VOLUME_OPTIONS}
-                    placeholder="选择该 Claw 工作空间绑定的存储卷"
-                    className="h-10 border-slate-200 bg-white shadow-none focus:ring-0"
-                  />
-                </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="create-claw-description">
+                  <span className="text-rose-500">*</span>描述
+                </Label>
+                <textarea
+                  id="create-claw-description"
+                  value={createDraft.description}
+                  onChange={(event) => handleCreateDraftChange("description", event.target.value)}
+                  placeholder="简要说明这个 Claw 负责什么场景、解决什么问题。"
+                  className="min-h-[92px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-none outline-none focus:border-blue-500"
+                />
               </div>
-            </section>
+              <div className="space-y-2">
+                <Label>
+                  <span className="text-rose-500">*</span>主模型
+                </Label>
+                <Select
+                  value={createDraft.primaryModel}
+                  onValueChange={(value) => handleCreateDraftChange("primaryModel", value)}
+                  options={PRESET_MODEL_IDS.map((modelId) => ({ value: modelId, label: modelId }))}
+                  placeholder="选择该 Claw 默认使用的主模型"
+                  className="h-10 border-slate-200 bg-white shadow-none focus:ring-0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  <span className="text-rose-500">*</span>存储卷
+                </Label>
+                <Select
+                  value={createDraft.storageVolume}
+                  onValueChange={(value) => handleCreateDraftChange("storageVolume", value)}
+                  options={STORAGE_VOLUME_OPTIONS}
+                  placeholder="选择该 Claw 工作空间绑定的存储卷"
+                  className="h-10 border-slate-200 bg-white shadow-none focus:ring-0"
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>
+                  <span className="text-rose-500">*</span>密级
+                </Label>
+                <Select
+                  value={createDraft.securityLevel}
+                  onValueChange={(value) =>
+                    handleCreateDraftChange("securityLevel", value as ClawSecurityLevel)
+                  }
+                  options={buildSecurityLevelSelectOptions({
+                    currentLevel: "公开",
+                  })}
+                  placeholder="选择密级"
+                  className="h-10 max-w-xs border-slate-200 bg-white shadow-none focus:ring-0"
+                />
+                <p className="text-xs text-slate-400">
+                  公开、内部为低密；秘密及以上为高密。仅可选择不超过当前用户密级的选项。
+                </p>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>

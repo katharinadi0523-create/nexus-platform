@@ -1,10 +1,14 @@
+import type { ApprovalStatus, SecurityLevel } from "@/lib/security-level";
+
 export type PublishedMultiAgentItem = {
   id: string;
   name: string;
   type: "多智能体";
-  status: "已发布";
+  status: "已发布" | "未发布";
   desc: string;
   updatedAt: string;
+  securityLevel: SecurityLevel;
+  approvalStatus?: ApprovalStatus;
 };
 
 /** 已上架到应用广场的多智能体 */
@@ -16,6 +20,7 @@ export type ShelvedMultiAgentItem = {
   agentTypes: string[];
   author: string;
   shelvedAt: string;
+  securityLevel?: SecurityLevel;
 };
 
 const STORAGE_KEY = "nexus-published-multi-agents";
@@ -31,11 +36,47 @@ export const SEED_PUBLISHED_MULTI_AGENTS: PublishedMultiAgentItem[] = [
     status: "已发布",
     desc: "面向科研全流程，协同完成假设生成、文献检索、科研绘图、论文生成与论文审核。",
     updatedAt: "2026-07-11 10:30",
+    securityLevel: "内部",
+  },
+  {
+    id: "multi-agent-intel-fusion",
+    name: "情报融合多智能体",
+    type: "多智能体",
+    status: "已发布",
+    desc: "协同完成多源情报归集、研判与结构化输出。",
+    updatedAt: "2026-07-12 09:20",
+    securityLevel: "机密",
+    approvalStatus: "shelf",
+  },
+  {
+    id: "multi-agent-risk-review",
+    name: "风控审核多智能体",
+    type: "多智能体",
+    status: "未发布",
+    desc: "高密风控场景下的多智能体协同审核草稿。",
+    updatedAt: "2026-07-10 16:40",
+    securityLevel: "机密",
+    approvalStatus: "publish",
   },
 ];
 
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function normalizePublishedMultiAgent(
+  item: Partial<PublishedMultiAgentItem> & Pick<PublishedMultiAgentItem, "id" | "name">
+): PublishedMultiAgentItem {
+  return {
+    id: item.id,
+    name: item.name,
+    type: "多智能体",
+    status: item.status === "未发布" ? "未发布" : "已发布",
+    desc: item.desc ?? "",
+    updatedAt: item.updatedAt ?? "",
+    securityLevel: item.securityLevel ?? "公开",
+    approvalStatus: item.approvalStatus ?? "none",
+  };
 }
 
 function getStoredPublishedMultiAgents(): PublishedMultiAgentItem[] {
@@ -49,7 +90,9 @@ function getStoredPublishedMultiAgents(): PublishedMultiAgentItem[] {
       return [];
     }
     const parsed = JSON.parse(raw) as PublishedMultiAgentItem[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed)
+      ? parsed.map((item) => normalizePublishedMultiAgent(item))
+      : [];
   } catch {
     return [];
   }
@@ -110,15 +153,17 @@ export function getPublishedMultiAgentById(id: string): PublishedMultiAgentItem 
 
 export function upsertPublishedMultiAgent(
   item: Omit<PublishedMultiAgentItem, "type" | "status"> &
-    Partial<Pick<PublishedMultiAgentItem, "type" | "status">>
+    Partial<Pick<PublishedMultiAgentItem, "type" | "status" | "securityLevel" | "approvalStatus">>
 ): PublishedMultiAgentItem {
   const nextItem: PublishedMultiAgentItem = {
     id: item.id,
     name: item.name.trim() || "未命名多智能体",
     type: "多智能体",
-    status: "已发布",
+    status: item.status ?? "已发布",
     desc: item.desc,
     updatedAt: item.updatedAt,
+    securityLevel: item.securityLevel ?? "公开",
+    approvalStatus: item.approvalStatus ?? "none",
   };
 
   const current = getStoredPublishedMultiAgents();
@@ -180,7 +225,7 @@ export function getShelvedMultiAgentById(id: string): ShelvedMultiAgentItem | nu
 
 export function upsertShelvedMultiAgent(
   item: Omit<ShelvedMultiAgentItem, "author" | "shelvedAt"> &
-    Partial<Pick<ShelvedMultiAgentItem, "author" | "shelvedAt">>
+    Partial<Pick<ShelvedMultiAgentItem, "author" | "shelvedAt" | "securityLevel">>
 ): ShelvedMultiAgentItem {
   const nextItem: ShelvedMultiAgentItem = {
     id: item.id,
@@ -190,6 +235,7 @@ export function upsertShelvedMultiAgent(
     agentTypes: item.agentTypes.slice(0, 2),
     author: item.author?.trim() || "@当前用户",
     shelvedAt: item.shelvedAt || formatMultiAgentUpdatedAt(),
+    securityLevel: item.securityLevel ?? "公开",
   };
 
   const current = getShelvedMultiAgents();

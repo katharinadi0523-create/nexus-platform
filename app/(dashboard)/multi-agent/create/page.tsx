@@ -21,6 +21,8 @@ function buildMultiAgentDetail(id: string | null): ClawDetailData {
         id: `multi-agent-${Date.now()}`,
         name: "未命名多智能体",
         publishStatus: "未发布",
+        securityLevel: "公开",
+        approvalStatus: "none",
       },
     };
   }
@@ -46,6 +48,8 @@ function buildMultiAgentDetail(id: string | null): ClawDetailData {
       name: published.name,
       summary: published.desc,
       publishStatus: published.status,
+      securityLevel: published.securityLevel,
+      approvalStatus: published.approvalStatus ?? "none",
     },
   };
 }

@@ -35,9 +35,28 @@ import {
   type KnowledgeBaseListItem,
   type StoredKbDocument,
 } from "@/lib/mock/knowledge-base-list";
-import { type KnowledgeDocumentRow } from "@/lib/mock-knowledge-base-v2";
+import {
+  getGroupSecurityLevelByName,
+  knowledgeBaseGroupsV2,
+  type KnowledgeDocumentRow,
+} from "@/lib/mock-knowledge-base-v2";
 import { HitTestingView } from "@/components/knowledge-base/HitTestingView";
 import { GraphRetrievalDrawer } from "@/components/knowledge-base/GraphRetrievalDrawer";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { SecurityLevelBadge } from "@/components/security/security-level-badge";
+import {
+  buildSecurityLevelSelectOptions,
+  type SecurityLevel,
+} from "@/lib/security-level";
 import { ImportDocumentDrawer } from "@/components/knowledge-base/ImportDocumentDrawer";
 
 type ProcessStatus =
@@ -366,6 +385,7 @@ function KnowledgeBaseDocumentList({
   onDelete,
   onImport,
   onUpdateDocument,
+  knowledgeBaseSecurityLevel = "公开",
 }: {
   knowledgeBaseId: string;
   documents: KbDocument[];
@@ -373,6 +393,7 @@ function KnowledgeBaseDocumentList({
   onDelete: (id: string) => void;
   onImport: (documents: KnowledgeDocumentRow[]) => void;
   onUpdateDocument: (id: string, patch: Partial<KbDocument>) => void;
+  knowledgeBaseSecurityLevel?: SecurityLevel;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [timePreset, setTimePreset] = useState<TimePreset>(null);
@@ -590,6 +611,7 @@ function KnowledgeBaseDocumentList({
         open={importOpen}
         onOpenChange={setImportOpen}
         onImport={onImport}
+        knowledgeBaseSecurityLevel={knowledgeBaseSecurityLevel}
       />
     </div>
   );
@@ -631,10 +653,19 @@ export function TemplateKnowledgeBaseDetail({
     groupName: meta.groupName || "全部群组",
     creator: meta.creator,
     createTime: meta.createTime,
+    securityLevel: (meta.securityLevel ?? "公开") as import("@/lib/security-level").SecurityLevel,
     metadataTags: ["doc_id 1%", "doc_id 1%", "doc_id 1%", "source", "author"],
     documentTags: ["标签", "标签", "标签", "标签", "标签"],
     contentTags: ["标签", "标签", "标签", "标签", "标签"],
   });
+  const [securityChangeOpen, setSecurityChangeOpen] = useState(false);
+  const [securityDraft, setSecurityDraft] = useState({
+    targetLevel: (meta.securityLevel ?? "公开") as import("@/lib/security-level").SecurityLevel,
+    reason: "",
+  });
+  const [approvalStatus, setApprovalStatus] = useState(
+    meta.approvalStatus ?? "none"
+  );
 
   /* eslint-disable react-hooks/set-state-in-effect -- document data is restored from browser localStorage after hydration. */
   useEffect(() => {
@@ -982,6 +1013,39 @@ export function TemplateKnowledgeBaseDetail({
               <div className="text-sm text-slate-900">{basicInfo.groupName}</div>
             </div>
             <div>
+              <div className="mb-1 flex items-center gap-2 text-sm text-slate-500">
+                <span>知识库密级</span>
+                <span className="text-red-500">*</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <SecurityLevelBadge level={basicInfo.securityLevel} />
+                <button
+                  type="button"
+                  disabled={approvalStatus === "securityChange"}
+                  title={
+                    approvalStatus === "securityChange"
+                      ? "密级修改审批中"
+                      : "申请修改密级"
+                  }
+                  onClick={() => {
+                    setSecurityDraft({
+                      targetLevel: basicInfo.securityLevel,
+                      reason: "",
+                    });
+                    setSecurityChangeOpen(true);
+                  }}
+                  className={cn(
+                    "text-xs font-medium",
+                    approvalStatus === "securityChange"
+                      ? "cursor-not-allowed text-slate-400"
+                      : "text-blue-600 hover:text-blue-700"
+                  )}
+                >
+                  修改密级
+                </button>
+              </div>
+            </div>
+            <div>
               <div className="mb-1 text-sm text-slate-500">创建配置</div>
               <div className="text-sm text-slate-900">
                 {isCustom ? "自定义创建" : "模板创建"}
@@ -1023,6 +1087,7 @@ export function TemplateKnowledgeBaseDetail({
           onDelete={handleDeleteDoc}
           onImport={handleImportDocs}
           onUpdateDocument={handleUpdateDoc}
+          knowledgeBaseSecurityLevel={basicInfo.securityLevel}
         />
       </div>
 
@@ -1030,6 +1095,92 @@ export function TemplateKnowledgeBaseDetail({
         open={graphDrawerOpen}
         onOpenChange={setGraphDrawerOpen}
       />
+
+      <Dialog open={securityChangeOpen} onOpenChange={setSecurityChangeOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>申请修改密级</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
+              当前知识库已存在文件。审批通过后，将一并修改当前知识库及库内所有文件的密级。
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              当前知识库密级：
+              <span className="font-medium text-slate-900">{basicInfo.securityLevel}</span>
+            </div>
+            <div className="space-y-2">
+              <Label>
+                <span className="text-rose-500">*</span>目标密级
+              </Label>
+              <Select
+                value={securityDraft.targetLevel}
+                onValueChange={(value) =>
+                  setSecurityDraft((current) => ({
+                    ...current,
+                    targetLevel: value as SecurityLevel,
+                  }))
+                }
+                options={buildSecurityLevelSelectOptions({
+                  currentLevel: basicInfo.securityLevel,
+                  maxLevel: getGroupSecurityLevelByName(
+                    knowledgeBaseGroupsV2,
+                    basicInfo.groupName
+                  ),
+                })}
+                className="h-10 max-w-xs"
+              />
+              <p className="text-xs text-slate-400">
+                知识库密级不可高于所属群组密级。
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="kb-security-reason">
+                <span className="text-rose-500">*</span>申请原因
+              </Label>
+              <Textarea
+                id="kb-security-reason"
+                value={securityDraft.reason}
+                onChange={(event) =>
+                  setSecurityDraft((current) => ({
+                    ...current,
+                    reason: event.target.value,
+                  }))
+                }
+                rows={4}
+                placeholder="请说明修改密级的原因"
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSecurityChangeOpen(false)}>
+              取消
+            </Button>
+            <Button
+              type="button"
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => {
+                if (!securityDraft.reason.trim()) {
+                  toast.error("请填写申请原因。");
+                  return;
+                }
+                if (securityDraft.targetLevel === basicInfo.securityLevel) {
+                  toast.error("请选择与当前不同的目标密级。");
+                  return;
+                }
+                setApprovalStatus("securityChange");
+                setSecurityChangeOpen(false);
+                toast.success(
+                  "已提交密级修改审批。审批通过后，AF 侧将同步更新知识库及库内所有文件密级。"
+                );
+              }}
+            >
+              提交审批
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
