@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  FileText,
   HelpCircle,
   Plus,
   Trash2,
@@ -13,9 +14,18 @@ import {
 import { ModelSelector, type ModelParams } from "@/components/agent-editor/ModelSelector";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -34,32 +44,59 @@ export type RetrievalEngineId =
 
 export type GraphCategoryMode = "system" | "custom";
 
+/** 实体抽取合并方式 */
+export type GraphEntityMergeMode = "exact" | "distance" | "similarity";
+
 export interface GraphNamedItem {
   id: string;
   name: string;
   description: string;
   /** 用户手动添加的同义词，标签展示 */
   synonyms: string[];
+  /** 实体/关系：属性列表（名称、描述、枚举值） */
+  attributes?: GraphEntityAttribute[];
+}
+
+/** 实体/关系属性：名称、描述、枚举值（可多个） */
+export interface GraphEntityAttribute {
+  id: string;
+  name: string;
+  description: string;
+  enumValues: string[];
 }
 
 export interface GraphEntityConfig {
   prompt: string;
   categoryMode: GraphCategoryMode;
   customItems: GraphNamedItem[];
-  /** 将实体名称、描述、枚举值等向量化，用于语义检索 */
-  vectorize: boolean;
-  similarityMerge: number;
+  /** 自定义模式下：是否允许系统在自定义实体之外按需扩充 */
+  allowExpand: boolean;
+  /** 合并方式：精确 / 距离 / 相似度 */
+  mergeMode: GraphEntityMergeMode;
+  /** 距离合并：Score 阈值 0~1，步长 0.1，默认 0.8 */
+  distanceScore: number;
+  /** 相似度合并：处理模型（直接选择具体模型） */
+  similarityModel: string;
 }
 
 export interface GraphRelationConfig {
   prompt: string;
   categoryMode: GraphCategoryMode;
   customItems: GraphNamedItem[];
+  /** 自定义模式下：是否允许系统在自定义关系之外按需扩充 */
+  allowExpand: boolean;
+}
+
+export interface GraphSynonymTermBank {
+  id: string;
+  name: string;
 }
 
 export interface GraphRetrievalConfig {
   model: string;
   modelParams: ModelParams;
+  /** 全局同义词来源：术语库（可多选） */
+  synonymTermBanks: GraphSynonymTermBank[];
   entity: GraphEntityConfig;
   relation: GraphRelationConfig;
 }
@@ -83,65 +120,91 @@ export interface RetrievalConfigState {
 
 const DEFAULT_GRAPH_MODEL = "Qwen3-32B";
 
-function createNamedItem(): GraphNamedItem {
+/** 与语义检索 Embedding / 混合检索 Reranker 模型规范一致 */
+const SIMILARITY_MODEL_OPTIONS = [
+  { value: "bge-m3", label: "bge-m3" },
+  { value: "bge-reranker-v2", label: "bge-reranker-v2" },
+  { value: "bge-reranker-base", label: "bge-reranker-base" },
+] as const;
+
+const MERGE_MODE_OPTIONS: {
+  value: GraphEntityMergeMode;
+  label: string;
+}[] = [
+  { value: "exact", label: "精确" },
+  { value: "distance", label: "距离" },
+  { value: "similarity", label: "相似度" },
+];
+
+function createNamedItem(withAttributes = false): GraphNamedItem {
   return {
     id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: "",
     description: "",
     synonyms: [],
+    ...(withAttributes ? { attributes: [] } : {}),
   };
 }
 
-/** 同义词标签输入：Enter 添加，标签可删除 */
-function SynonymTagInput({
-  synonyms,
+function createEntityAttribute(): GraphEntityAttribute {
+  return {
+    id: `attr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: "",
+    description: "",
+    enumValues: [],
+  };
+}
+
+/** 标签列表输入：Enter 添加，标签可删除（同义词 / 枚举值等） */
+function TagListInput({
+  values,
   onChange,
-  placeholder = "输入同义词后按 Enter 添加",
+  label,
+  placeholder = "输入后按 Enter 添加",
 }: {
-  synonyms: string[];
-  onChange: (synonyms: string[]) => void;
+  values: string[];
+  onChange: (values: string[]) => void;
+  label: string;
   placeholder?: string;
 }) {
   const [draft, setDraft] = useState("");
 
-  const addSynonym = (raw: string) => {
+  const addValue = (raw: string) => {
     const next = raw.trim();
     if (!next) return;
-    if (synonyms.some((s) => s.toLowerCase() === next.toLowerCase())) {
+    if (values.some((s) => s.toLowerCase() === next.toLowerCase())) {
       setDraft("");
       return;
     }
-    onChange([...synonyms, next]);
+    onChange([...values, next]);
     setDraft("");
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      addSynonym(draft);
-    } else if (e.key === "Backspace" && !draft && synonyms.length > 0) {
-      onChange(synonyms.slice(0, -1));
+      addValue(draft);
+    } else if (e.key === "Backspace" && !draft && values.length > 0) {
+      onChange(values.slice(0, -1));
     }
   };
 
   return (
     <div className="space-y-1.5">
-      <div className="text-xs text-slate-500">同义词</div>
+      <div className="text-xs text-slate-500">{label}</div>
       <div className="min-h-[40px] rounded-md border border-slate-200 bg-white px-2 py-1.5">
         <div className="flex flex-wrap items-center gap-1.5">
-          {synonyms.map((synonym) => (
+          {values.map((value) => (
             <Badge
-              key={synonym}
+              key={value}
               variant="secondary"
               className="gap-1 bg-slate-100 px-2 py-0.5 text-xs font-normal text-slate-700 hover:bg-slate-100"
             >
-              {synonym}
+              {value}
               <button
                 type="button"
-                aria-label={`删除同义词 ${synonym}`}
-                onClick={() =>
-                  onChange(synonyms.filter((s) => s !== synonym))
-                }
+                aria-label={`删除 ${label} ${value}`}
+                onClick={() => onChange(values.filter((s) => s !== value))}
                 className="rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
               >
                 <X className="h-3 w-3" />
@@ -152,7 +215,7 @@ function SynonymTagInput({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={synonyms.length === 0 ? placeholder : "继续添加…"}
+            placeholder={values.length === 0 ? placeholder : "继续添加…"}
             className="h-7 min-w-[120px] flex-1 border-0 px-1 shadow-none focus-visible:ring-0"
           />
         </div>
@@ -164,17 +227,21 @@ function SynonymTagInput({
 export const defaultGraphRetrievalConfig: GraphRetrievalConfig = {
   model: DEFAULT_GRAPH_MODEL,
   modelParams: getDefaultModelParams(DEFAULT_GRAPH_MODEL),
+  synonymTermBanks: [],
   entity: {
     prompt: "",
     categoryMode: "system",
     customItems: [],
-    vectorize: false,
-    similarityMerge: 0.8,
+    allowExpand: false,
+    mergeMode: "distance",
+    distanceScore: 0.8,
+    similarityModel: "bge-m3",
   },
   relation: {
     prompt: "",
     categoryMode: "system",
     customItems: [],
+    allowExpand: false,
   },
 };
 
@@ -382,10 +449,12 @@ function SliderWithInput({
   step: number;
   onChange: (value: number) => void;
 }) {
+  const safeValue = Number.isFinite(value) ? value : min;
+
   return (
     <div className="flex items-center gap-4">
       <Slider
-        value={[value]}
+        value={[safeValue]}
         min={min}
         max={max}
         step={step}
@@ -394,7 +463,7 @@ function SliderWithInput({
       />
       <Input
         type="number"
-        value={value}
+        value={safeValue}
         min={min}
         max={max}
         step={step}
@@ -447,15 +516,31 @@ function NamedItemListEditor({
   namePlaceholder = "请输入名称",
   descriptionPlaceholder = "请输入描述",
   addLabel = "添加",
+  showAttributes = false,
 }: {
   items: GraphNamedItem[];
   onChange: (items: GraphNamedItem[]) => void;
   namePlaceholder?: string;
   descriptionPlaceholder?: string;
   addLabel?: string;
+  /** 实体/关系：支持为每项配置多个属性 */
+  showAttributes?: boolean;
 }) {
   const updateItem = (id: string, patch: Partial<GraphNamedItem>) => {
     onChange(items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  };
+
+  const updateAttribute = (
+    itemId: string,
+    attrId: string,
+    patch: Partial<GraphEntityAttribute>
+  ) => {
+    const item = items.find((entry) => entry.id === itemId);
+    if (!item) return;
+    const attributes = (item.attributes ?? []).map((attr) =>
+      attr.id === attrId ? { ...attr, ...patch } : attr
+    );
+    updateItem(itemId, { attributes });
   };
 
   return (
@@ -491,10 +576,88 @@ function NamedItemListEditor({
             }
             className="resize-none"
           />
-          <SynonymTagInput
-            synonyms={item.synonyms ?? []}
+          <TagListInput
+            label="同义词"
+            values={item.synonyms ?? []}
             onChange={(synonyms) => updateItem(item.id, { synonyms })}
+            placeholder="输入同义词后按 Enter 添加"
           />
+
+          {showAttributes && (
+            <div className="space-y-2 border-t border-slate-200/80 pt-2">
+              <div className="text-xs font-medium text-slate-600">属性</div>
+              {(item.attributes ?? []).map((attr) => (
+                <div
+                  key={attr.id}
+                  className="space-y-2 rounded-md border border-slate-200 bg-white p-2.5"
+                >
+                  <div className="flex items-start gap-2">
+                    <Input
+                      value={attr.name}
+                      placeholder="属性名称"
+                      onChange={(e) =>
+                        updateAttribute(item.id, attr.id, {
+                          name: e.target.value,
+                        })
+                      }
+                      className="h-8 flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-slate-400 hover:text-red-500"
+                      onClick={() =>
+                        updateItem(item.id, {
+                          attributes: (item.attributes ?? []).filter(
+                            (entry) => entry.id !== attr.id
+                          ),
+                        })
+                      }
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={attr.description}
+                    placeholder="属性描述"
+                    rows={2}
+                    onChange={(e) =>
+                      updateAttribute(item.id, attr.id, {
+                        description: e.target.value,
+                      })
+                    }
+                    className="resize-none"
+                  />
+                  <TagListInput
+                    label="枚举值"
+                    values={attr.enumValues ?? []}
+                    onChange={(enumValues) =>
+                      updateAttribute(item.id, attr.id, { enumValues })
+                    }
+                    placeholder="输入枚举值后按 Enter 添加"
+                  />
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() =>
+                  updateItem(item.id, {
+                    attributes: [
+                      ...(item.attributes ?? []),
+                      createEntityAttribute(),
+                    ],
+                  })
+                }
+              >
+                <Plus className="h-3 w-3" />
+                添加属性
+              </Button>
+            </div>
+          )}
         </div>
       ))}
       <Button
@@ -502,11 +665,177 @@ function NamedItemListEditor({
         variant="outline"
         size="sm"
         className="gap-1.5"
-        onClick={() => onChange([...items, createNamedItem()])}
+        onClick={() => onChange([...items, createNamedItem(showAttributes)])}
       >
         <Plus className="h-3.5 w-3.5" />
         {addLabel}
       </Button>
+    </div>
+  );
+}
+
+/** 可选术语库列表（对齐术语库管理页 mock） */
+const AVAILABLE_TERM_BANKS: GraphSynonymTermBank[] = [
+  { id: "1", name: "耐糖量测试" },
+  { id: "2", name: "耐糖量测试2" },
+  { id: "3", name: "耐糖量测试耐糖量测试" },
+  { id: "4", name: "耐糖量测试6546" },
+  { id: "5", name: "耐糖量测试/845" },
+  { id: "6", name: "耐糖量测试855" },
+  { id: "term-1", name: "北约军事术语集 2025" },
+  { id: "term-2", name: "电子战缩略语表" },
+];
+
+function TermBankMultiSelectDialog({
+  open,
+  onOpenChange,
+  selected,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  selected: GraphSynonymTermBank[];
+  onConfirm: (items: GraphSynonymTermBank[]) => void;
+}) {
+  const [draftIds, setDraftIds] = useState<string[]>(() =>
+    selected.map((item) => item.id)
+  );
+
+  const syncDraftOnOpen = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setDraftIds(selected.map((item) => item.id));
+    }
+    onOpenChange(nextOpen);
+  };
+
+  const toggleId = (id: string, checked: boolean) => {
+    setDraftIds((current) =>
+      checked
+        ? current.includes(id)
+          ? current
+          : [...current, id]
+        : current.filter((itemId) => itemId !== id)
+    );
+  };
+
+  const handleConfirm = () => {
+    const selectedSet = new Set(draftIds);
+    onConfirm(AVAILABLE_TERM_BANKS.filter((bank) => selectedSet.has(bank.id)));
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={syncDraftOnOpen}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>选择术语库</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-slate-500">
+          可多选术语库作为图谱检索的同义词来源
+        </p>
+        <div className="max-h-[360px] space-y-2 overflow-y-auto py-2">
+          {AVAILABLE_TERM_BANKS.map((bank) => {
+            const checked = draftIds.includes(bank.id);
+            return (
+              <label
+                key={bank.id}
+                className={cn(
+                  "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
+                  checked
+                    ? "border-[#2773ff] bg-[#2773ff]/5"
+                    : "border-slate-200 hover:bg-slate-50"
+                )}
+              >
+                <Checkbox
+                  checked={checked}
+                  onCheckedChange={(value) =>
+                    toggleId(bank.id, value === true)
+                  }
+                />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-100">
+                  <FileText className="h-4 w-4 text-purple-600" />
+                </div>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
+                  {bank.name}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            取消
+          </Button>
+          <Button
+            type="button"
+            className="bg-[#2773ff] hover:bg-[#1f63e6]"
+            onClick={handleConfirm}
+          >
+            确定（已选 {draftIds.length}）
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SynonymTermBankField({
+  items,
+  onChange,
+}: {
+  items: GraphSynonymTermBank[];
+  onChange: (items: GraphSynonymTermBank[]) => void;
+}) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {items.map((item) => (
+          <Badge
+            key={item.id}
+            variant="secondary"
+            className="gap-1 bg-slate-100 px-2 py-1 text-xs font-normal text-slate-700 hover:bg-slate-100"
+          >
+            {item.name}
+            <button
+              type="button"
+              aria-label={`移除术语库 ${item.name}`}
+              onClick={() =>
+                onChange(items.filter((entry) => entry.id !== item.id))
+              }
+              className="rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 border-dashed border-slate-300 text-slate-500 hover:border-[#2773ff] hover:text-[#2773ff]"
+          onClick={() => setDialogOpen(true)}
+          aria-label="添加同义词术语库"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-slate-400">
+          点击「+」选择术语库作为同义词来源
+        </p>
+      ) : null}
+      <TermBankMultiSelectDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        selected={items}
+        onConfirm={onChange}
+      />
     </div>
   );
 }
@@ -771,7 +1100,7 @@ export function RetrievalConfigStep({
             <Label className="text-sm text-slate-700">图谱检索</Label>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white px-4">
-            <CollapseSection title="模型选择" defaultOpen>
+            <CollapseSection title="全局配置" defaultOpen>
               <ConfigField
                 label="模型"
                 tip="用于实体/关系抽取的大模型"
@@ -787,6 +1116,17 @@ export function RetrievalConfigStep({
                     })
                   }
                   onParamsChange={(modelParams) => patchGraph({ modelParams })}
+                />
+              </ConfigField>
+              <ConfigField
+                label="同义词"
+                tip="选择术语库作为图谱检索的同义词来源，支持多选与删除"
+              >
+                <SynonymTermBankField
+                  items={value.graph.synonymTermBanks ?? []}
+                  onChange={(synonymTermBanks) =>
+                    patchGraph({ synonymTermBanks })
+                  }
                 />
               </ConfigField>
             </CollapseSection>
@@ -832,7 +1172,7 @@ export function RetrievalConfigStep({
                           customItems:
                             value.graph.entity.customItems.length > 0
                               ? value.graph.entity.customItems
-                              : [createNamedItem()],
+                              : [createNamedItem(true)],
                         },
                       })
                     }
@@ -842,56 +1182,113 @@ export function RetrievalConfigStep({
                 </div>
               </ConfigField>
 
+              {value.graph.entity.categoryMode === "custom" && (
+                <>
+                  <ConfigField
+                    label="允许扩充"
+                    tip="开启后，除按用户自定义实体字段抽取外，系统还可按需自行扩充实体"
+                  >
+                    <Switch
+                      checked={value.graph.entity.allowExpand ?? false}
+                      onCheckedChange={(allowExpand) =>
+                        patchGraph({
+                          entity: { ...value.graph.entity, allowExpand },
+                        })
+                      }
+                    />
+                  </ConfigField>
+                  <ConfigField
+                    label="自定义实体"
+                    tip="配置实体名称、描述、同义词与属性（属性含名称、描述、枚举值）"
+                  >
+                    <NamedItemListEditor
+                      items={value.graph.entity.customItems}
+                      namePlaceholder="实体名称"
+                      descriptionPlaceholder="实体描述"
+                      addLabel="添加实体"
+                      showAttributes
+                      onChange={(customItems) =>
+                        patchGraph({
+                          entity: { ...value.graph.entity, customItems },
+                        })
+                      }
+                    />
+                  </ConfigField>
+                </>
+              )}
+
               <ConfigField
-                label="向量化"
-                tip="将实体名称、描述、枚举值等进行向量化，后续可用于语义检索"
+                label="合并方式"
+                tip="实体抽取后的去重合并策略：精确匹配、距离阈值或相似度模型"
               >
-                <Switch
-                  checked={value.graph.entity.vectorize}
-                  onCheckedChange={(vectorize) =>
+                <Select
+                  value={value.graph.entity.mergeMode ?? "distance"}
+                  onValueChange={(mergeMode) =>
                     patchGraph({
-                      entity: { ...value.graph.entity, vectorize },
+                      entity: {
+                        ...value.graph.entity,
+                        mergeMode: mergeMode as GraphEntityMergeMode,
+                        distanceScore:
+                          value.graph.entity.distanceScore ?? 0.8,
+                        similarityModel:
+                          value.graph.entity.similarityModel ?? "bge-m3",
+                      },
                     })
                   }
+                  options={MERGE_MODE_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                  className="max-w-xs"
                 />
               </ConfigField>
 
-              {value.graph.entity.categoryMode === "custom" && (
+              {(value.graph.entity.mergeMode ?? "distance") === "distance" ? (
                 <ConfigField
-                  label="自定义实体"
-                  tip="配置实体名称、描述与同义词"
+                  label="Score"
+                  tip="距离低于阈值的实体将合并"
+                  hint="取值范围区间：0 ~ 1.0（步长 0.1）"
                 >
-                  <NamedItemListEditor
-                    items={value.graph.entity.customItems}
-                    namePlaceholder="实体名称"
-                    descriptionPlaceholder="实体描述"
-                    addLabel="添加实体"
-                    onChange={(customItems) =>
+                  <SliderWithInput
+                    value={value.graph.entity.distanceScore ?? 0.8}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    onChange={(distanceScore) =>
                       patchGraph({
-                        entity: { ...value.graph.entity, customItems },
+                        entity: {
+                          ...value.graph.entity,
+                          distanceScore,
+                        },
                       })
                     }
                   />
                 </ConfigField>
-              )}
+              ) : null}
 
-              <ConfigField
-                label="相似度合并"
-                tip="相似度高于阈值的实体将合并"
-                hint="取值范围区间：0 ~ 1.0 (精度 0.01)"
-              >
-                <SliderWithInput
-                  value={value.graph.entity.similarityMerge}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  onChange={(similarityMerge) =>
-                    patchGraph({
-                      entity: { ...value.graph.entity, similarityMerge },
-                    })
-                  }
-                />
-              </ConfigField>
+              {value.graph.entity.mergeMode === "similarity" ? (
+                <ConfigField
+                  label="处理模型"
+                  tip="选择用于相似度合并的 Embedding 或 Reranker 模型"
+                >
+                  <Select
+                    value={value.graph.entity.similarityModel ?? "bge-m3"}
+                    onValueChange={(similarityModel) =>
+                      patchGraph({
+                        entity: {
+                          ...value.graph.entity,
+                          similarityModel,
+                        },
+                      })
+                    }
+                    options={SIMILARITY_MODEL_OPTIONS.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                    className="max-w-xs"
+                  />
+                </ConfigField>
+              ) : null}
             </CollapseSection>
 
             <CollapseSection title="关系抽取">
@@ -935,7 +1332,7 @@ export function RetrievalConfigStep({
                           customItems:
                             value.graph.relation.customItems.length > 0
                               ? value.graph.relation.customItems
-                              : [createNamedItem()],
+                              : [createNamedItem(true)],
                         },
                       })
                     }
@@ -946,22 +1343,38 @@ export function RetrievalConfigStep({
               </ConfigField>
 
               {value.graph.relation.categoryMode === "custom" && (
-                <ConfigField
-                  label="自定义关系"
-                  tip="配置关系名称、描述与同义词"
-                >
-                  <NamedItemListEditor
-                    items={value.graph.relation.customItems}
-                    namePlaceholder="关系名称"
-                    descriptionPlaceholder="关系描述"
-                    addLabel="添加关系"
-                    onChange={(customItems) =>
-                      patchGraph({
-                        relation: { ...value.graph.relation, customItems },
-                      })
-                    }
-                  />
-                </ConfigField>
+                <>
+                  <ConfigField
+                    label="允许扩充"
+                    tip="开启后，除按用户自定义关系字段抽取外，系统还可按需自行扩充关系"
+                  >
+                    <Switch
+                      checked={value.graph.relation.allowExpand ?? false}
+                      onCheckedChange={(allowExpand) =>
+                        patchGraph({
+                          relation: { ...value.graph.relation, allowExpand },
+                        })
+                      }
+                    />
+                  </ConfigField>
+                  <ConfigField
+                    label="自定义关系"
+                    tip="配置关系名称、描述、同义词与属性（属性含名称、描述、枚举值）"
+                  >
+                    <NamedItemListEditor
+                      items={value.graph.relation.customItems}
+                      namePlaceholder="关系名称"
+                      descriptionPlaceholder="关系描述"
+                      addLabel="添加关系"
+                      showAttributes
+                      onChange={(customItems) =>
+                        patchGraph({
+                          relation: { ...value.graph.relation, customItems },
+                        })
+                      }
+                    />
+                  </ConfigField>
+                </>
               )}
             </CollapseSection>
           </div>

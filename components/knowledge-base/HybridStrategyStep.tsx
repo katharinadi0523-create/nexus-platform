@@ -54,7 +54,8 @@ export type ChunkMergeStrategy =
   | "Union"
   | "Intersection"
   | "WeightedMerge"
-  | "RRF";
+  | "RRF"
+  | "RSF";
 
 /** 第二步自定义实体/关系，供图谱检索节点过滤多选 */
 export interface GraphFilterOption {
@@ -1346,6 +1347,7 @@ function StrategyPipelineCanvas({
                       { value: "Intersection", label: "Intersection" },
                       { value: "WeightedMerge", label: "Weighted Merge" },
                       { value: "RRF", label: "RRF" },
+                      { value: "RSF", label: "RSF" },
                     ]}
                   />
                 </div>
