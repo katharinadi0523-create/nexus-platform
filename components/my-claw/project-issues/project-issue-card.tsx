@@ -14,8 +14,21 @@ interface ProjectIssueCardProps {
 }
 
 export function ProjectIssueCard({ issue, onOpen }: ProjectIssueCardProps) {
-  const { getUser, getActor } = useProjectConversation();
-  const isRework = issue.status === "changes_requested";
+  const { getUser, getActor, getConversation, canAccessConversation, currentUserId } =
+    useProjectConversation();
+
+  let primaryLabel = "尚未绑定";
+  if (issue.conversationId) {
+    if (canAccessConversation(issue.conversationId, currentUserId)) {
+      primaryLabel =
+        getConversation(issue.conversationId)?.name ?? "主会话";
+    } else {
+      primaryLabel = "无权访问";
+    }
+  }
+
+  const displayStatus =
+    issue.status === "changes_requested" ? "in_progress" : issue.status;
 
   return (
     <button
@@ -35,7 +48,7 @@ export function ProjectIssueCard({ issue, onOpen }: ProjectIssueCardProps) {
             {issue.title}
           </h3>
         </div>
-        <IssueStatusBadge status={issue.status} className="shrink-0" />
+        <IssueStatusBadge status={displayStatus} className="shrink-0" />
       </div>
 
       {issue.summary ? (
@@ -45,14 +58,12 @@ export function ProjectIssueCard({ issue, onOpen }: ProjectIssueCardProps) {
       ) : null}
 
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <span className="rounded bg-[#f0f4f8] px-1.5 py-0.5 text-[10px] text-[#5a6779]">
+          主会话：{primaryLabel}
+        </span>
         {issue.waitingForCurrentUser ? (
           <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
             等待我
-          </span>
-        ) : null}
-        {isRework ? (
-          <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-medium text-orange-700">
-            返工
           </span>
         ) : null}
         {issue.artifactIds.length > 0 ? (

@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     },
   });
 
-  const cookieOptions = getSessionCookieOptions();
+  const cookieOptions = getSessionCookieOptions(request);
   response.cookies.set(cookieOptions.name, token, cookieOptions);
 
   return response;

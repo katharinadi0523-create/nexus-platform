@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   BOARD_COLUMNS,
   getBoardColumnForIssue,
@@ -8,20 +8,29 @@ import {
   type ProjectIssue,
 } from "@/lib/mock/my-claw/project-issues";
 import { useProjectConversation } from "@/components/my-claw/project-conversation/project-conversation-provider";
+import { CreateProjectIssueDialog } from "./create-project-issue-dialog";
 import { ProjectIssueCard } from "./project-issue-card";
 import { ProjectIssueColumn } from "./project-issue-column";
 
 interface ProjectIssueBoardProps {
   projectId: string;
   onOpenIssue: (issueId: string) => void;
+  conversationIdFilter?: string | null;
 }
 
 export function ProjectIssueBoard({
   projectId,
   onOpenIssue,
+  conversationIdFilter = null,
 }: ProjectIssueBoardProps) {
-  const { getIssues, state } = useProjectConversation();
-  const issues = getIssues(projectId);
+  const { getIssues, state, getProject } = useProjectConversation();
+  const [createOpen, setCreateOpen] = useState(false);
+  const project = getProject(projectId);
+  const issues = getIssues(projectId).filter((issue) =>
+    conversationIdFilter
+      ? issue.conversationId === conversationIdFilter
+      : true
+  );
 
   const columns = useMemo(() => {
     const map = new Map<BoardColumnId, ProjectIssue[]>();
@@ -48,7 +57,7 @@ export function ProjectIssueBoard({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f8f9fb]">
-      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden px-4 py-3">
         <div className="flex h-full min-h-[420px] gap-3">
           {BOARD_COLUMNS.map((columnId) => {
             const list = columns.get(columnId) ?? [];
@@ -57,6 +66,12 @@ export function ProjectIssueBoard({
                 key={columnId}
                 columnId={columnId}
                 count={list.length}
+                onCreate={
+                  columnId === "clarifying"
+                    ? () => setCreateOpen(true)
+                    : undefined
+                }
+                createDisabled={project?.status === "archived"}
               >
                 {list.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-[#e2e8f0] bg-white/50 px-2 py-6 text-center text-[11px] text-[#5a6779]">
@@ -76,6 +91,12 @@ export function ProjectIssueBoard({
           })}
         </div>
       </div>
+      <CreateProjectIssueDialog
+        projectId={projectId}
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={onOpenIssue}
+      />
     </div>
   );
 }

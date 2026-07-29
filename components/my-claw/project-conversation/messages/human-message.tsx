@@ -5,6 +5,7 @@ import type { ProjectMessage } from "@/lib/mock/my-claw/project-conversation";
 import { useProjectConversation } from "../project-conversation-provider";
 import { ActorAvatar } from "../shared/actor-avatar";
 import { InlineExecutionStatus } from "./inline-execution-status";
+import { MessageIssueActions } from "./message-issue-actions";
 
 interface HumanMessageProps {
   message: ProjectMessage;
@@ -27,7 +28,7 @@ export function HumanMessage({
   const { getUser, getActor, getMessages, getFiles } = useProjectConversation();
   const author =
     message.author.kind === "human" ? getUser(message.author.id) : undefined;
-  const projectMessages = getMessages(message.projectId);
+  const projectMessages = getMessages(message.projectId, message.threadId);
   const quoted = projectMessages.filter((item) =>
     message.quotedMessageIds.includes(item.id)
   );
@@ -66,16 +67,19 @@ export function HumanMessage({
         <span className="text-[11px] text-[#5a6779]">
           {formatTime(message.createdAt)}
         </span>
-        {onQuote ? (
-          <button
-            type="button"
-            onClick={() => onQuote(message)}
-            className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[#5a6779] opacity-0 transition-opacity hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100"
-          >
-            <Quote className="h-3 w-3" />
-            引用
-          </button>
-        ) : null}
+        <div className="ml-auto flex items-center gap-0.5">
+          <MessageIssueActions message={message} />
+          {onQuote ? (
+            <button
+              type="button"
+              onClick={() => onQuote(message)}
+              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-[#5a6779] opacity-0 transition-opacity hover:bg-slate-100 hover:text-slate-700 group-hover:opacity-100"
+            >
+              <Quote className="h-3 w-3" />
+              引用
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {quoted.length > 0 ? (

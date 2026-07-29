@@ -11,7 +11,7 @@ const STATUS_STYLES: Record<ProjectIssueStatus, string> = {
   in_progress: "bg-orange-50 text-orange-700",
   waiting_for_human: "bg-amber-50 text-amber-700",
   in_review: "bg-emerald-50 text-emerald-700",
-  changes_requested: "bg-orange-50 text-orange-800",
+  changes_requested: "bg-orange-50 text-orange-700",
   blocked: "bg-sky-50 text-sky-700",
   done: "bg-blue-50 text-blue-700",
   cancelled: "bg-slate-100 text-slate-500",

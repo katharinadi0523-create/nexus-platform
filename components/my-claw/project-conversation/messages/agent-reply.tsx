@@ -104,7 +104,7 @@ export function AgentReply({ message, highlighted }: AgentReplyProps) {
   const actor =
     message.author.kind === "agent" ? getActor(message.author.id) : undefined;
   const replyTo = message.replyToMessageId
-    ? getMessages(message.projectId).find(
+    ? getMessages(message.projectId, message.threadId).find(
         (item) => item.id === message.replyToMessageId
       )
     : undefined;

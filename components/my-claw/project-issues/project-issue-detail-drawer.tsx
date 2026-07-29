@@ -10,12 +10,18 @@ import { useProjectConversation } from "@/components/my-claw/project-conversatio
 import { ActorAvatar } from "@/components/my-claw/project-conversation/shared/actor-avatar";
 import { DrawerShell } from "@/components/my-claw/project-conversation/shared/drawer-shell";
 import { IssueStatusBadge } from "./issue-status-badge";
+import { IssuePrimaryConversation } from "./issue-primary-conversation";
 import { formatRelativeTime } from "./format";
+import { WorkspaceEntryIcon } from "@/components/claw-hub-next/detail/workspace-section";
+import { FileDetailDrawer } from "@/components/my-claw/project-files/file-detail-drawer";
+import { FileRowActions } from "@/components/my-claw/project-files/file-row-actions";
+import { toast } from "sonner";
 
 interface ProjectIssueDetailDrawerProps {
   issueId: string;
   onClose: () => void;
   onJumpToMessage?: (messageId: string) => void;
+  onOpenConversation?: (conversationId: string, messageId?: string) => void;
 }
 
 const STATUS_OPTIONS: ProjectIssueStatus[] = [
@@ -34,14 +40,18 @@ export function ProjectIssueDetailDrawer({
   issueId,
   onClose,
   onJumpToMessage,
+  onOpenConversation,
 }: ProjectIssueDetailDrawerProps) {
   const {
     getIssue,
     getUser,
     getActor,
-    getInvocation,
     getArtifacts,
     getMessages,
+    getVisibleConversations,
+    canAccessConversation,
+    currentUserId,
+    bindIssueToConversation,
     acceptIssue,
     requestIssueChanges,
     cancelIssue,
@@ -52,20 +62,43 @@ export function ProjectIssueDetailDrawer({
   const issue = getIssue(issueId);
   const [feedback, setFeedback] = useState("");
   const [showFeedback, setShowFeedback] = useState(false);
+  const [detailFileId, setDetailFileId] = useState<string | null>(null);
 
   const messages = useMemo(() => {
     if (!issue) return [];
-    const all = getMessages(issue.projectId);
+    if (
+      issue.conversationId &&
+      !canAccessConversation(issue.conversationId, currentUserId)
+    ) {
+      return [];
+    }
+    const all = getMessages(issue.projectId, issue.conversationId);
     return issue.relatedMessageIds
       .map((id) => all.find((item) => item.id === id))
       .filter(Boolean);
-  }, [getMessages, issue]);
+  }, [canAccessConversation, currentUserId, getMessages, issue]);
+
+  const bindable = useMemo(() => {
+    if (!issue || issue.conversationId) return [];
+    return getVisibleConversations(issue.projectId, currentUserId).map(
+      (item) => item.id
+    );
+  }, [currentUserId, getVisibleConversations, issue]);
 
   if (!issue) {
     return (
       <DrawerShell title="事项详情" onClose={onClose}>
         <p className="text-[13px] text-[#5a6779]">事项不存在或已移除</p>
       </DrawerShell>
+    );
+  }
+
+  if (detailFileId) {
+    return (
+      <FileDetailDrawer
+        fileId={detailFileId}
+        onClose={() => setDetailFileId(null)}
+      />
     );
   }
 
@@ -129,7 +162,13 @@ export function ProjectIssueDetailDrawer({
             {issue.title}
           </h3>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <IssueStatusBadge status={issue.status} />
+            <IssueStatusBadge
+              status={
+                issue.status === "changes_requested"
+                  ? "in_progress"
+                  : issue.status
+              }
+            />
             <span className="text-[11px] text-[#5a6779]">
               更新于 {formatRelativeTime(issue.updatedAt)}
             </span>
@@ -145,6 +184,15 @@ export function ProjectIssueDetailDrawer({
             </p>
           ) : null}
         </section>
+
+        <IssuePrimaryConversation
+          issueId={issue.id}
+          bindableConversationIds={bindable}
+          onBind={(conversationId) =>
+            bindIssueToConversation(issue.id, conversationId)
+          }
+          onOpenConversation={onOpenConversation}
+        />
 
         <section>
           <div className="mb-1.5 text-[11px] font-medium text-[#5a6779]">
@@ -274,7 +322,12 @@ export function ProjectIssueDetailDrawer({
           <div className="mb-1.5 text-[11px] font-medium text-[#5a6779]">
             关联消息
           </div>
-          {messages.length === 0 ? (
+          {issue.conversationId &&
+          !canAccessConversation(issue.conversationId, currentUserId) ? (
+            <p className="text-[12px] text-[#5a6779]">
+              无权访问主会话，不展示来源消息原文。
+            </p>
+          ) : messages.length === 0 ? (
             <p className="text-[12px] text-[#5a6779]">暂无关联消息</p>
           ) : (
             <ul className="space-y-1">
@@ -302,44 +355,60 @@ export function ProjectIssueDetailDrawer({
 
         <section>
           <div className="mb-1.5 text-[11px] font-medium text-[#5a6779]">
-            Invocations
+            文件
           </div>
-          {issue.invocationIds.length === 0 ? (
-            <p className="text-[12px] text-[#5a6779]">暂无执行</p>
+          {artifacts.length === 0 ? (
+            <p className="text-[12px] text-[#5a6779]">暂无文件</p>
           ) : (
             <ul className="space-y-1">
-              {issue.invocationIds.map((id) => {
-                const inv = getInvocation(id);
-                if (!inv) return null;
+              {artifacts.map((item) => {
+                const fileName = (() => {
+                  if (item.name.includes(".")) return item.name;
+                  switch (item.kind) {
+                    case "commit":
+                      return `${item.name}.diff`;
+                    case "pull_request":
+                      return `${item.name}.pr.md`;
+                    case "data":
+                      return `${item.name}.csv`;
+                    case "link":
+                    case "preview":
+                      return `${item.name}.url`;
+                    default:
+                      return `${item.name}.md`;
+                  }
+                })();
                 return (
                   <li
-                    key={id}
-                    className="rounded-md border border-[#eef2f6] px-2.5 py-2 text-[12px] text-slate-700"
+                    key={item.id}
+                    className="flex items-center gap-2.5 rounded-md border border-[#eef2f6] px-2.5 py-2"
                   >
-                    {inv.summary} · {inv.status}
+                    <WorkspaceEntryIcon
+                      entry={{ kind: "file", name: fileName }}
+                      className="h-5 w-5"
+                    />
+                    <div className="min-w-0 flex-1 truncate text-[12px] font-medium text-slate-800">
+                      {fileName}
+                    </div>
+                    <FileRowActions
+                      fileName={fileName}
+                      onPreview={() =>
+                        toast.message(`预览 ${fileName}（原型占位）`)
+                      }
+                      onDownload={() =>
+                        toast.success(`已开始下载 ${fileName}`)
+                      }
+                      onDetails={() => {
+                        if (item.fileNodeId) {
+                          setDetailFileId(item.fileNodeId);
+                        } else {
+                          toast.message("该产物暂无关联文件节点");
+                        }
+                      }}
+                    />
                   </li>
                 );
               })}
-            </ul>
-          )}
-        </section>
-
-        <section>
-          <div className="mb-1.5 text-[11px] font-medium text-[#5a6779]">
-            Artifacts
-          </div>
-          {artifacts.length === 0 ? (
-            <p className="text-[12px] text-[#5a6779]">暂无产物</p>
-          ) : (
-            <ul className="space-y-1">
-              {artifacts.map((item) => (
-                <li
-                  key={item.id}
-                  className="rounded-md border border-[#eef2f6] px-2.5 py-2 text-[12px] text-slate-700"
-                >
-                  {item.name}
-                </li>
-              ))}
             </ul>
           )}
         </section>

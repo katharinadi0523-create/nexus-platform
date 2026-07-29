@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import { useSearchParams } from "next/navigation";
-import { ProjectConversationPage } from "@/components/my-claw/project-conversation/project-conversation-page";
+import { ProjectOverviewPage } from "@/components/my-claw/project-overview/project-overview-page";
 
 interface ProjectRoutePageProps {
   params: Promise<{
@@ -13,15 +13,13 @@ interface ProjectRoutePageProps {
 export default function ProjectRoutePage({ params }: ProjectRoutePageProps) {
   const { projectId } = use(params);
   const searchParams = useSearchParams();
-  const messageId = searchParams.get("message");
   const issueId = searchParams.get("issue");
   const viewParam = searchParams.get("view");
-  const view = viewParam === "issues" ? "issues" : "conversation";
+  const view = viewParam === "issues" ? "issues" : "overview";
 
   return (
-    <ProjectConversationPage
+    <ProjectOverviewPage
       projectId={projectId}
-      messageId={messageId}
       issueId={issueId}
       view={view}
     />

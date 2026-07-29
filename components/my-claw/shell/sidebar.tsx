@@ -20,7 +20,7 @@ import { GlobalInboxNavItem } from "@/components/my-claw/project-conversation/gl
 import { MY_CLAW_SETTINGS_NAV } from "./nav-items";
 import { SessionList } from "./session-list";
 import { MyWorkNavItem } from "./my-work-nav-item";
-import { ProjectChatList } from "./project-chat-list";
+import { ProjectList } from "./project-list";
 
 function isNavActive(pathname: string, href: string) {
   if (href === "/my-claw") {
@@ -72,11 +72,11 @@ export function MyClawSidebar() {
 
         <div className="shrink-0 px-3 pb-1 pt-3">
           <div className="px-0.5 text-[11px] font-medium text-[#5a6779]">
-            Project Chat
+            Project
           </div>
         </div>
-        <div className="flex min-h-0 basis-0 flex-1 flex-col overflow-hidden">
-          <ProjectChatList />
+        <div className="flex min-h-0 basis-[58%] flex-1 flex-col overflow-hidden">
+          <ProjectList />
         </div>
       </div>
 

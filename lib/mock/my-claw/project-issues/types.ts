@@ -24,8 +24,14 @@ export interface ProjectIssue {
   title: string;
   summary: string;
   status: ProjectIssueStatus;
+  /**
+   * At most one primary Conversation.
+   * Empty when created from the board before session collaboration starts.
+   */
+  conversationId?: string;
   sourceMessageId?: string;
   relatedMessageIds: string[];
+  referenceIds: string[];
   humanAssigneeIds: string[];
   agentAssigneeIds: string[];
   invocationIds: string[];
@@ -43,6 +49,16 @@ export interface ProjectIssue {
   completedAt?: string;
   archivedAt?: string;
   revision: number;
+}
+
+export interface IssueReference {
+  id: string;
+  projectId: string;
+  issueId: string;
+  conversationId: string;
+  messageId: string;
+  createdByUserId: string;
+  createdAt: string;
 }
 
 export interface IssueMutationProposal {
@@ -76,7 +92,7 @@ export const PROJECT_ISSUE_STATUS_LABELS: Record<ProjectIssueStatus, string> = {
   in_progress: "进行中",
   waiting_for_human: "等待 Human",
   in_review: "待验收",
-  changes_requested: "返工中",
+  changes_requested: "进行中",
   blocked: "已阻塞",
   done: "已完成",
   cancelled: "已取消",

@@ -10,6 +10,7 @@ import { MentionPicker, type MentionTarget } from "./mention-picker";
 
 interface ProjectComposerProps {
   projectId: string;
+  conversationId: string;
   quotedMessage?: ProjectMessage | null;
   onClearQuote?: () => void;
   disabled?: boolean;
@@ -17,6 +18,7 @@ interface ProjectComposerProps {
 
 export function ProjectComposer({
   projectId,
+  conversationId,
   quotedMessage,
   onClearQuote,
   disabled,
@@ -26,6 +28,7 @@ export function ProjectComposer({
     getMembers,
     getUser,
     getActor,
+    getConversation,
     sendMessage,
   } = useProjectConversation();
 
@@ -37,7 +40,17 @@ export function ProjectComposer({
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const members = getMembers(projectId);
+  const conversation = getConversation(conversationId);
+  const projectMembers = getMembers(projectId);
+  const members = useMemo(() => {
+    if (!conversation) return projectMembers;
+    return projectMembers.filter((member) => {
+      if (member.kind === "human") {
+        return conversation.humanMemberIds.includes(member.userId);
+      }
+      return conversation.agentBindingIds.includes(member.actorId);
+    });
+  }, [conversation, projectMembers]);
   const project = state.projects.find((item) => item.id === projectId);
   const isArchived = project?.status === "archived";
 
@@ -109,6 +122,7 @@ export function ProjectComposer({
 
     const result = sendMessage({
       projectId,
+      conversationId,
       content: trimmed,
       mentionedHumanIds,
       mentionedActorIds,

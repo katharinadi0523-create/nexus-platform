@@ -24,7 +24,6 @@ export function AddProjectToolDialog({
 
   const handleConfirm = (selections: ToolConfigSelection[]) => {
     for (const selection of selections) {
-      if (selection.kind !== "mcp" && selection.kind !== "plugin") continue;
       const versionId = `${selection.id}-v1`;
       bindSharedTool({
         projectId,
@@ -49,8 +48,8 @@ export function AddProjectToolDialog({
       open={open}
       onOpenChange={onOpenChange}
       onConfirm={handleConfirm}
-      allowedKinds={["mcp", "plugin"]}
-      title="添加共享工具"
+      allowedKinds={["mcp", "plugin", "workflow", "ontology_action"]}
+      title="配置插件"
       confirmLabel="添加到 Project"
     />
   );
