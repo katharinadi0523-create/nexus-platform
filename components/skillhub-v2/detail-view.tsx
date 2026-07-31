@@ -457,12 +457,6 @@ function OverviewTab({
               <dt className="text-slate-500">创建人</dt>
               <dd className="font-medium text-slate-700">{skill.owner}</dd>
             </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-slate-500">运行时</dt>
-              <dd className="font-medium text-slate-700">
-                {skill.runtimeSnapshot.status === "ready" ? "已装配" : "未试运行"}
-              </dd>
-            </div>
           </dl>
         </div>
       </aside>

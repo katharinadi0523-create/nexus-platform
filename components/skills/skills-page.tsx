@@ -166,6 +166,8 @@ interface SkillTemplate {
 interface MySkill {
   id: string;
   name: string;
+  /** 中文展示名；技能名称 name 为英文 */
+  displayName: string;
   description: string;
   usageInstructions?: string;
   originalName?: string;
@@ -380,6 +382,7 @@ function cloneFiles(files: SkillFile[], prefix: string) {
 function createMySkill(input: {
   id: string;
   name: string;
+  displayName?: string;
   description: string;
   usageInstructions?: string;
   originalName?: string;
@@ -406,6 +409,7 @@ function createMySkill(input: {
   return {
     id: input.id,
     name: input.name,
+    displayName: input.displayName ?? input.name,
     description: input.description,
     usageInstructions: input.usageInstructions,
     originalName: input.originalName,
@@ -455,6 +459,7 @@ const initialMySkills: MySkill[] = [
   createMySkill({
     id: "my-xlsx",
     name: "xlsx",
+    displayName: "表格治理助手",
     description:
       "为表格治理团队定制的 xlsx 技能，补充了数据清洗、公式检查与财务字段说明。",
     category: "数据分析",
@@ -475,7 +480,8 @@ const initialMySkills: MySkill[] = [
   }),
   createMySkill({
     id: "ops-summary",
-    name: "运营简报生成器",
+    name: "ops-weekly-brief",
+    displayName: "运营简报生成器",
     description: "面向每周经营复盘的内部技能草稿，聚焦周报结构化整理与摘要输出。",
     category: "通讯协作",
     tags: ["周报", "运营"],
@@ -523,7 +529,8 @@ description: "沉淀经营周报模板与摘要规范。"
   }),
   createMySkill({
     id: "ai-gov-writing",
-    name: "AI产线公文写作",
+    name: "ai-official-writing",
+    displayName: "AI产线公文写作",
     description:
       "面向 AI 产线项目周报、立项请示、阶段汇报和会议通知的公文写作技能，统一结构、语气和审批口径。",
     category: "通讯协作",
@@ -605,7 +612,8 @@ description: "为 AI 产线项目生成规范、正式、可审批的公文与�
   }),
   createMySkill({
     id: "research-evidence-extractor",
-    name: "科研文献证据抽取",
+    name: "research-evidence-extractor",
+    displayName: "科研文献证据抽取",
     description:
       "面向农业科研论文与实验记录，抽取物种、样本、实验条件、关键结论和来源证据，输出可追溯的结构化结果。",
     category: "数据分析",
@@ -618,8 +626,8 @@ description: "为 AI 产线项目生成规范、正式、可审批的公文与�
     version: "1.1",
     publishedVersion: "1.0",
     releaseNotes: "补充实验条件归一化规则，当前为尚未发布的管理版本。",
-    createdBy: "科研数据组",
-    updatedBy: "科研数据组",
+    createdBy: "李柯岩",
+    updatedBy: "李柯岩",
     linkedCECClaws: [CEC_CLAW_INSTANCE],
     files: [
       createFile(
@@ -671,7 +679,8 @@ description: "从科研文献和实验记录中抽取结构化结论与来源证
   }),
   createMySkill({
     id: "fastq-parser",
-    name: "FASTQ解析",
+    name: "fastq-parser",
+    displayName: "FASTQ解析",
     description:
       "按解析流水线对 FASTQ 测序文件做确定性解析：本体匹配格式与工具、解码与 QC、生成带来源证据的元数据，并写入可追溯血缘后入库。",
     category: "数据分析",
@@ -684,8 +693,8 @@ description: "从科研文献和实验记录中抽取结构化结论与来源证
     publishedVersion: "1.0",
     releaseNotes:
       "首版对齐解析流水线：上传→本体→Skill→解析/QC→元数据→入库血缘，保证确定性与重试幂等。",
-    createdBy: "科研数据组",
-    updatedBy: "科研数据组",
+    createdBy: "李柯岩",
+    updatedBy: "李柯岩",
     linkedCECClaws: [CEC_CLAW_INSTANCE],
     files: [
       createFile(
@@ -845,7 +854,8 @@ GATTTGGGGTTCAAAGCAGTATCGATCAAATAGTAAATCCATTTGTTCAACTCACAGTTT
   }),
   createMySkill({
     id: "mcp-sync-assistant",
-    name: "MCP接口联调助手",
+    name: "mcp-sync-assistant",
+    displayName: "MCP接口联调助手",
     description:
       "帮助研发团队沉淀 MCP 服务联调脚本、接口约定和问题排查记录，适合多系统联调阶段快速复用。",
     category: "开发工具",
@@ -905,7 +915,8 @@ description: "沉淀 MCP 联调流程、检查单和问题记录。"
   }),
   createMySkill({
     id: "quality-review-assistant",
-    name: "质检审校助手",
+    name: "quality-review-assistant",
+    displayName: "质检审校助手",
     description:
       "用于对外材料、项目方案和交付文档进行一致性检查、敏感词审校和格式复核，适合上线前最后一轮质检。",
     category: "安全合规",
@@ -1865,6 +1876,7 @@ export function SkillsPage({
     return {
       id: selectedMySkillDetail.id,
       name: selectedMySkillDetail.name,
+      displayName: selectedMySkillDetail.displayName,
       description: selectedMySkillDetail.description,
       owner: selectedMySkillDetail.createdBy,
       updatedAt: selectedMySkillDetail.updatedAt,
@@ -1963,7 +1975,7 @@ export function SkillsPage({
     }
 
     return scopedSkills.filter((skill) =>
-      [skill.name, skill.description, skill.category, skill.tags.join(" ")]
+      [skill.name, skill.displayName, skill.description, skill.category, skill.tags.join(" ")]
         .join(" ")
         .toLowerCase()
         .includes(query)
@@ -2230,7 +2242,7 @@ export function SkillsPage({
       fileName: "",
     });
     setReleaseRemoteImportLoading(false);
-    setReleaseDisplayNameInput(skill.name);
+    setReleaseDisplayNameInput(skill.displayName || skill.name);
     setReleaseDisplayDescriptionInput(skill.description);
     setReleaseNotesInput(skill.releaseNotes ?? "");
     setReleaseScope(skill.publishScope ?? "org");
@@ -2257,7 +2269,7 @@ export function SkillsPage({
     }
 
     const nextVersion = isPublishRelease ? "1.0" : updateVersionInput.trim();
-    const nextDisplayName = releaseDisplayNameInput.trim() || skill.name;
+    const nextDisplayName = releaseDisplayNameInput.trim() || skill.displayName || skill.name;
     const nextDisplayDescription = releaseDisplayDescriptionInput.trim() || skill.description;
     const nextReleaseNotes = isPublishRelease ? "" : releaseNotesInput.trim();
 
@@ -4384,6 +4396,7 @@ source_url: "${parsedUrl.toString()}"
                       createMySkill({
                         id: created.id,
                         name: created.name,
+                        displayName: created.displayName ?? created.name,
                         description: created.description,
                         usageInstructions: created.usageInstructions,
                         category: "数据分析",
@@ -4631,7 +4644,7 @@ source_url: "${parsedUrl.toString()}"
                         filteredMySkills.map((skill, rowIndex) => {
                           const audienceCategory = mapEditorCategoryToAudienceCategory(skill.category);
                           const SkillIcon = getMarketplaceSkillIcon({
-                            name: skill.name,
+                            name: `${skill.name} ${skill.displayName}`,
                             audienceCategory,
                           });
                           const statusMeta = getSkillStatusMeta(skill.status);
@@ -4665,7 +4678,9 @@ source_url: "${parsedUrl.toString()}"
                                     >
                                       {skill.name}
                                     </button>
-                                    <div className="text-xs text-slate-500">{skill.id}</div>
+                                    <div className="text-xs text-slate-500">
+                                      {skill.displayName !== skill.name ? skill.displayName : skill.id}
+                                    </div>
                                   </div>
                                 </div>
                               </TableCell>

@@ -2,7 +2,7 @@ import type { SkillFile } from "./types";
 
 /** AI 创建 mock：上传本地尚无解析 Skill 的新格式（GFF） */
 export const CREATE_SKILL_ID_PREFIX = "gff-parser";
-export const CREATE_SKILL_NAME = "GFF解析";
+export const CREATE_SKILL_NAME = "gff-parser";
 export const CREATE_SKILL_DISPLAY_NAME = "GFF解析";
 export const CREATE_SKILL_SAMPLE = "samples/genes.gff";
 export const CREATE_SKILL_DESCRIPTION =

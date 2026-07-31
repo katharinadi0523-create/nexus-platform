@@ -51,6 +51,8 @@ import {
 export interface SkillHubV2Seed {
   id: string;
   name: string;
+  /** 中文展示名；缺省时回退 name */
+  displayName?: string;
   description: string;
   owner: string;
   updatedAt: string;
@@ -69,6 +71,7 @@ interface SkillHubV2WorkbenchProps {
   onSkillCreated?: (skill: {
     id: string;
     name: string;
+    displayName: string;
     description: string;
     usageInstructions: string;
     files: SkillFile[];
@@ -259,7 +262,7 @@ function createSeedRecord(seed: SkillHubV2Seed): SkillRecord {
   return {
     id: seed.id,
     name: seed.name,
-    displayName: seed.name,
+    displayName: seed.displayName ?? existingBaseline?.displayName ?? seed.name,
     description: seed.description,
     owner: seed.owner,
     updatedAt: seed.updatedAt,
@@ -600,6 +603,7 @@ export function SkillHubV2Workbench({
       onSkillCreated?.({
         id: skill.id,
         name: skill.name,
+        displayName: skill.displayName,
         description: skill.description,
         usageInstructions: skill.usageInstructions,
         files,

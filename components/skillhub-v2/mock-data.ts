@@ -99,7 +99,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
   {
     id: "ppt-master",
     name: "ppt_master",
-    displayName: "PPT Master",
+    displayName: "PPT 演示文稿",
     description: "AI-driven multi-format SVG 演示文稿生成技能，支持品牌模板、结构规划和可编辑产物。",
     owner: "邸若楠",
     updatedAt: "2026-07-24 10:16",
@@ -234,7 +234,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
   },
   {
     id: "ai-tone",
-    name: "文章去AI味工具",
+    name: "ai-tone-cleaner",
     displayName: "文章去 AI 味工具",
     description: "降低文本中的模板化 AI 写作痕迹，保留事实与原有表达意图。",
     owner: "sunli01",
@@ -299,11 +299,11 @@ export const INITIAL_SKILLS: SkillRecord[] = [
   },
   {
     id: "fastq-parser",
-    name: "FASTQ解析",
+    name: "fastq-parser",
     displayName: "FASTQ解析",
     description:
       "按解析流水线对 FASTQ 测序文件做确定性解析：本体匹配、解码与 QC、元数据生成、入库与血缘。",
-    owner: "科研数据组",
+    owner: "李柯岩",
     updatedAt: "2026-07-27 14:20",
     status: "published",
     currentVersionId: "fastq-v10",
