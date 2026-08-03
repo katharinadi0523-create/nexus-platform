@@ -49,6 +49,16 @@ export const SEED_PUBLISHED_MULTI_AGENTS: PublishedMultiAgentItem[] = [
     approvalStatus: "shelf",
   },
   {
+    id: "multi-agent-ops-watch",
+    name: "运维值守多智能体",
+    type: "多智能体",
+    status: "已发布",
+    desc: "高密运维场景下的协同值守与告警处置。",
+    updatedAt: "2026-07-11 11:05",
+    securityLevel: "机密",
+    approvalStatus: "unshelf",
+  },
+  {
     id: "multi-agent-risk-review",
     name: "风控审核多智能体",
     type: "多智能体",

@@ -878,7 +878,10 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     name: 'CodeMaster 架构师',
     type: 'autonomous',
     description: '专注于代码审查、重构建议和技术方案设计。',
-    updatedAt: '2026-01-07 10:30:00'
+    updatedAt: '2026-01-07 10:30:00',
+    securityLevel: '秘密',
+    publishStatus: '已发布',
+    approvalStatus: 'unshelf',
   },
   'device-03': {
     id: 'device-03',

@@ -100,7 +100,7 @@ export default function AgentPage() {
   const handleOpenEdit = (agent: Agent) => {
     const action = getApprovalActionState(agent.approvalStatus);
     if (action.configLocked) {
-      toast.info("发布审批中，暂无法进入配置。");
+      toast.info(action.configTitle ?? "审批中，暂无法进入配置。");
       return;
     }
     router.push(`/agent/${agent.id}`);

@@ -7,6 +7,7 @@ export type ApprovalStatus =
   | "create"
   | "publish"
   | "shelf"
+  | "unshelf"
   | "delete"
   | "securityChange";
 
@@ -117,31 +118,59 @@ export function buildSecurityLevelOptionsUpToUser(params?: {
   });
 }
 
+/**
+ * 列表/详情审批锁：
+ * - 发布审批中：不可删除、不可再次发布
+ * - 上架审批中：不可发布、删除、再次上架
+ * - 下架审批中：不可删除、再次下架
+ * - 删除审批中：不可编辑、删除
+ * - 创建审批中（知识库等）：不可编辑、删除
+ */
 export function getApprovalActionState(approval: ApprovalStatus = "none") {
-  const configLocked = approval === "publish" || approval === "create";
+  const configLocked = approval === "delete" || approval === "create";
+  const publishLocked = approval === "publish" || approval === "shelf";
+  const shelfLocked = approval === "shelf";
+  const unshelfLocked = approval === "unshelf";
   const deleteLocked =
-    approval === "publish" || approval === "delete" || approval === "create";
+    approval === "publish" ||
+    approval === "shelf" ||
+    approval === "unshelf" ||
+    approval === "delete" ||
+    approval === "create";
 
   return {
     approval,
     configLocked,
+    publishLocked,
+    shelfLocked,
+    unshelfLocked,
     deleteLocked,
     configTitle:
-      approval === "create"
-        ? "资源审批中"
-        : approval === "publish"
-          ? "发布审批中"
+      approval === "delete"
+        ? "删除审批中"
+        : approval === "create"
+          ? "资源审批中"
           : undefined,
-    deleteTitle:
-      approval === "create"
-        ? "资源审批中"
-        : approval === "publish"
-          ? "发布审批中"
-          : approval === "delete"
-            ? "删除审批中"
-            : undefined,
-    shelfLocked: approval === "shelf",
+    publishTitle:
+      approval === "publish"
+        ? "发布审批中"
+        : approval === "shelf"
+          ? "上架审批中"
+          : undefined,
     shelfTitle: approval === "shelf" ? "上架审批中" : undefined,
+    unshelfTitle: approval === "unshelf" ? "下架审批中" : undefined,
+    deleteTitle:
+      approval === "publish"
+        ? "发布审批中"
+        : approval === "shelf"
+          ? "上架审批中"
+          : approval === "unshelf"
+            ? "下架审批中"
+            : approval === "delete"
+              ? "删除审批中"
+              : approval === "create"
+                ? "资源审批中"
+                : undefined,
     securityChangeLocked: approval === "securityChange",
     securityChangeTitle:
       approval === "securityChange" ? "密级修改审批中" : undefined,

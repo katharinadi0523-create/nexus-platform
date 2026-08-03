@@ -1202,6 +1202,22 @@ export const clawHubList: ClawHubListItem[] = [
     updatedBy: "RowanDI",
     summary: "负责竞品动态、行业政策、多源情报归集与结构化简报输出。",
   },
+  {
+    id: "claw-plaza-unshelf",
+    name: "广场下架审批 Claw",
+    creator: "孟川",
+    securityLevel: "机密",
+    type: "办公型",
+    scene: "办公协同",
+    owner: "平台产品组",
+    status: "运行中",
+    publishStatus: "已发布",
+    approvalStatus: "unshelf",
+    model: "Qwen3-32B",
+    updatedAt: "2026-04-06 12:10",
+    updatedBy: "RowanDI",
+    summary: "演示下架审批中：不可删除、不可再次下架。",
+  },
 ];
 
 export function createDefaultResourceConfig(): ResourceConfig {

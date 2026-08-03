@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { FileText, Info, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,6 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
   type KnowledgeDocumentRow,
@@ -40,6 +41,18 @@ const documentTagOptions = [
   "培训材料",
 ];
 const contentTagOptions = ["奶茶", "门店经营", "供应商", "定价", "售后"];
+
+const SEMANTIC_LIKE_CHUNK_OPTIONS = [
+  "智能切片",
+  "按常见标识符切分",
+  "按长度切分",
+  "按语义切分",
+  "按页切分",
+  "按分隔符递归切分",
+  "自定义正则切分",
+  "按句子切分",
+  "按层级切分",
+] as const;
 
 function formatFileSize(size: number) {
   if (size >= 1024 * 1024) {
@@ -107,10 +120,12 @@ export function ImportDocumentDrawer({
   const [contentClean, setContentClean] = useState(true);
   const [qualityAnalysis, setQualityAnalysis] = useState(false);
   const [autoChunk, setAutoChunk] = useState(true);
-  const [semanticChunk, setSemanticChunk] = useState("智能切片");
-  const [fulltextChunk, setFulltextChunk] = useState("智能切片");
-  const [pageIndexChunk, setPageIndexChunk] = useState("按层级切分");
-  const [graphChunk, setGraphChunk] = useState("按句子切分");
+  const [semanticChunks, setSemanticChunks] = useState<string[]>(["智能切片"]);
+  const [semanticChunkFixedLength, setSemanticChunkFixedLength] = useState(800);
+  const [fulltextChunks, setFulltextChunks] = useState<string[]>(["智能切片"]);
+  const [pageIndexChunks, setPageIndexChunks] = useState<string[]>(["按层级切分"]);
+  const [graphChunks, setGraphChunks] = useState<string[]>(["智能切片"]);
+  const [graphChunkFixedLength, setGraphChunkFixedLength] = useState(800);
   const [metadataFields, setMetadataFields] = useState<MetadataFieldDraft[]>([
     {
       id: "metadata-source",
@@ -137,10 +152,12 @@ export function ImportDocumentDrawer({
     setContentClean(true);
     setQualityAnalysis(false);
     setAutoChunk(true);
-    setSemanticChunk("智能切片");
-    setFulltextChunk("智能切片");
-    setPageIndexChunk("按层级切分");
-    setGraphChunk("按句子切分");
+    setSemanticChunks(["智能切片"]);
+    setSemanticChunkFixedLength(800);
+    setFulltextChunks(["智能切片"]);
+    setPageIndexChunks(["按层级切分"]);
+    setGraphChunks(["智能切片"]);
+    setGraphChunkFixedLength(800);
     setMetadataFields([
       {
         id: "metadata-source",
@@ -178,6 +195,19 @@ export function ImportDocumentDrawer({
         return next.length === 0 ? current : next;
       }
       return [...current, strategy];
+    });
+  }
+
+  function toggleChunkStrategy(
+    setter: Dispatch<SetStateAction<string[]>>,
+    option: string
+  ) {
+    setter((current) => {
+      if (current.includes(option)) {
+        const next = current.filter((item) => item !== option);
+        return next.length === 0 ? current : next;
+      }
+      return [...current, option];
     });
   }
 
@@ -458,59 +488,103 @@ export function ImportDocumentDrawer({
                 [
                   {
                     name: "语义检索",
-                    value: semanticChunk,
-                    setValue: setSemanticChunk,
-                    options: [
-                      "智能切片",
-                      "按常见标识符切分",
-                      "按页切分",
-                      "自定义正则切分",
-                      "按层级切分",
-                    ],
+                    values: semanticChunks,
+                    setValues: setSemanticChunks,
+                    options: [...SEMANTIC_LIKE_CHUNK_OPTIONS],
+                    fixedLength: semanticChunks.includes("按长度切分")
+                      ? {
+                          value: semanticChunkFixedLength,
+                          setValue: setSemanticChunkFixedLength,
+                        }
+                      : null,
                   },
                   {
                     name: "全文检索",
-                    value: fulltextChunk,
-                    setValue: setFulltextChunk,
+                    values: fulltextChunks,
+                    setValues: setFulltextChunks,
                     options: [
                       "智能切片",
                       "按常见标识符切分",
+                      "按长度切分",
+                      "按语义切分",
                       "按页切分",
+                      "按分隔符递归切分",
                       "自定义正则切分",
+                      "按句子切分",
                       "按层级切分",
                     ],
                   },
                   {
                     name: "PageIndex 检索",
-                    value: pageIndexChunk,
-                    setValue: setPageIndexChunk,
+                    values: pageIndexChunks,
+                    setValues: setPageIndexChunks,
                     options: ["按层级切分"],
                   },
                   {
                     name: "图谱检索",
-                    value: graphChunk,
-                    setValue: setGraphChunk,
-                    options: ["按句子切分"],
+                    values: graphChunks,
+                    setValues: setGraphChunks,
+                    options: [...SEMANTIC_LIKE_CHUNK_OPTIONS],
+                    fixedLength: graphChunks.includes("按长度切分")
+                      ? {
+                          value: graphChunkFixedLength,
+                          setValue: setGraphChunkFixedLength,
+                        }
+                      : null,
                   },
                 ] as const
               ).map((config) => (
                 <div key={config.name} className="contents">
                   <span className="text-sm text-slate-700">{config.name}</span>
-                  <div className="flex border border-slate-200">
-                    <span className="flex w-28 items-center justify-center border-r border-slate-200 text-sm text-slate-700">
-                      <span className="mr-1 text-red-500">*</span>选择策略
-                    </span>
-                    <div className="flex flex-1">
-                      {config.options.map((option) => (
-                        <ToggleStrategyButton
-                          key={option}
-                          selected={config.value === option}
-                          onClick={() => config.setValue(option)}
-                        >
-                          {option}
-                        </ToggleStrategyButton>
-                      ))}
+                  <div className="space-y-3">
+                    <div className="flex border border-slate-200">
+                      <span className="flex w-28 shrink-0 items-center justify-center border-r border-slate-200 text-sm text-slate-700">
+                        <span className="mr-1 text-red-500">*</span>选择策略
+                      </span>
+                      <div className="flex flex-1 flex-wrap">
+                        {config.options.map((option) => (
+                          <ToggleStrategyButton
+                            key={option}
+                            selected={config.values.includes(option)}
+                            onClick={() =>
+                              toggleChunkStrategy(config.setValues, option)
+                            }
+                          >
+                            {option}
+                          </ToggleStrategyButton>
+                        ))}
+                      </div>
                     </div>
+                    {"fixedLength" in config && config.fixedLength ? (
+                      <div className="flex items-center gap-4 rounded border border-slate-200 bg-slate-50/60 px-4 py-3">
+                        <span className="shrink-0 text-sm text-slate-700">固定长度</span>
+                        <Slider
+                          value={[config.fixedLength.value]}
+                          min={300}
+                          max={1500}
+                          step={1}
+                          onValueChange={(vals) =>
+                            config.fixedLength?.setValue(vals[0] ?? 800)
+                          }
+                          className="max-w-md flex-1 [&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
+                        />
+                        <Input
+                          type="number"
+                          value={config.fixedLength.value}
+                          min={300}
+                          max={1500}
+                          step={1}
+                          onChange={(event) => {
+                            const next = Number(event.target.value);
+                            if (Number.isNaN(next)) return;
+                            config.fixedLength?.setValue(
+                              Math.min(1500, Math.max(300, next))
+                            );
+                          }}
+                          className="h-8 w-20"
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ))}

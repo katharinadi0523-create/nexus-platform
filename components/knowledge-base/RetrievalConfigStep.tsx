@@ -1199,11 +1199,11 @@ export function RetrievalConfigStep({
                   </ConfigField>
                   <ConfigField
                     label="自定义实体"
-                    tip="配置实体名称、描述、同义词与属性（属性含名称、描述、枚举值）"
+                    tip="配置实体类型、描述、同义词与属性（属性含名称、描述、枚举值）"
                   >
                     <NamedItemListEditor
                       items={value.graph.entity.customItems}
-                      namePlaceholder="实体名称"
+                      namePlaceholder="实体类型"
                       descriptionPlaceholder="实体描述"
                       addLabel="添加实体"
                       showAttributes

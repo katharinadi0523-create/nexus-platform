@@ -24,10 +24,10 @@ import {
   buildSecurityLevelSelectOptions,
   clawHubList,
   isHighSecurityLevel,
-  type ClawApprovalStatus,
   type ClawHubListItem,
   type ClawSecurityLevel,
 } from "@/lib/mock/claw-hub-next";
+import { getApprovalActionState } from "@/lib/security-level";
 import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 
@@ -48,27 +48,8 @@ type CreateClawDraft = {
   securityLevel: ClawSecurityLevel;
 };
 
-function getApprovalStatus(item: ClawHubListItem): ClawApprovalStatus {
+function getApprovalStatus(item: ClawHubListItem) {
   return item.approvalStatus ?? "none";
-}
-
-function getListActionState(item: ClawHubListItem) {
-  const approval = getApprovalStatus(item);
-  const configLocked = approval === "publish";
-  const deleteLocked = approval === "publish" || approval === "delete";
-
-  return {
-    approval,
-    configLocked,
-    deleteLocked,
-    configTitle: configLocked ? "发布审批中" : "更新配置",
-    deleteTitle:
-      approval === "publish"
-        ? "发布审批中"
-        : approval === "delete"
-          ? "删除审批中"
-          : "删除",
-  };
 }
 
 function PublishStatusBadge({ status }: { status: ClawHubListItem["publishStatus"] }) {
@@ -177,8 +158,9 @@ export function ClawHubNextWorkbench() {
   }, [filteredClaws, router]);
 
   function handleOpenConfig(item: ClawHubListItem) {
-    if (getApprovalStatus(item) === "publish") {
-      toast.info("发布审批中，暂无法进入配置。");
+    const action = getApprovalActionState(getApprovalStatus(item));
+    if (action.configLocked) {
+      toast.info(action.configTitle ?? "审批中，暂无法进入配置。");
       return;
     }
     router.push(buildClawDetailUrl(item));
@@ -190,8 +172,9 @@ export function ClawHubNextWorkbench() {
   }
 
   function handlePublish(item: ClawHubListItem) {
-    if (getApprovalStatus(item) === "publish") {
-      toast.info("发布审批中，请等待审批结果。");
+    const action = getApprovalActionState(getApprovalStatus(item));
+    if (action.publishLocked) {
+      toast.info(action.publishTitle ?? "审批中，暂不可发布。");
       return;
     }
 
@@ -248,9 +231,9 @@ export function ClawHubNextWorkbench() {
   }
 
   function handleDelete(item: ClawHubListItem) {
-    const approval = getApprovalStatus(item);
-    if (approval === "publish" || approval === "delete") {
-      toast.info(approval === "publish" ? "发布审批中" : "删除审批中");
+    const action = getApprovalActionState(getApprovalStatus(item));
+    if (action.deleteLocked) {
+      toast.info(action.deleteTitle ?? "审批中");
       return;
     }
 
@@ -413,8 +396,7 @@ export function ClawHubNextWorkbench() {
                     </TableRow>
                   ) : (
                     filteredClaws.map((item) => {
-                      const actionState = getListActionState(item);
-                      const approval = actionState.approval;
+                      const actionState = getApprovalActionState(getApprovalStatus(item));
                       return (
                       <TableRow key={item.id} className="border-slate-200 bg-white hover:bg-slate-50/40">
                         <TableCell className="px-4 py-4 align-middle">
@@ -427,7 +409,7 @@ export function ClawHubNextWorkbench() {
                                 type="button"
                                 onClick={() => handleOpenConfig(item)}
                                 disabled={actionState.configLocked}
-                                title={actionState.configTitle}
+                                title={actionState.configTitle ?? item.name}
                                 className={cn(
                                   "text-left text-[15px] font-medium transition-colors",
                                   actionState.configLocked
@@ -468,7 +450,7 @@ export function ClawHubNextWorkbench() {
                               type="button"
                               onClick={() => handleOpenConfig(item)}
                               disabled={actionState.configLocked}
-                              title={actionState.configTitle}
+                              title={actionState.configTitle ?? "更新配置"}
                               className={cn(
                                 "transition-colors",
                                 actionState.configLocked
@@ -481,11 +463,19 @@ export function ClawHubNextWorkbench() {
                             <button
                               type="button"
                               onClick={() => handlePublish(item)}
-                              disabled={approval === "publish"}
-                              title={approval === "publish" ? "发布审批中" : "发布"}
+                              disabled={
+                                actionState.publishLocked || item.publishStatus === "已发布"
+                              }
+                              title={
+                                actionState.publishLocked
+                                  ? actionState.publishTitle
+                                  : item.publishStatus === "已发布"
+                                    ? "已发布"
+                                    : "发布"
+                              }
                               className={cn(
                                 "transition-colors",
-                                item.publishStatus === "已发布" || approval === "publish"
+                                actionState.publishLocked || item.publishStatus === "已发布"
                                   ? "cursor-not-allowed text-slate-400 hover:text-slate-400"
                                   : "text-blue-600 hover:text-blue-700"
                               )}
@@ -496,7 +486,7 @@ export function ClawHubNextWorkbench() {
                               type="button"
                               onClick={() => handleDelete(item)}
                               disabled={actionState.deleteLocked}
-                              title={actionState.deleteTitle}
+                              title={actionState.deleteTitle ?? "删除"}
                               className={cn(
                                 "transition-colors",
                                 actionState.deleteLocked

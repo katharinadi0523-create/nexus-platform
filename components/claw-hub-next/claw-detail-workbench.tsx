@@ -132,6 +132,7 @@ import {
   type ToolProtectionRuleItem,
   buildKnowledgeAssetsFromLegacy,
 } from "@/lib/mock/claw-hub-next";
+import { getApprovalActionState } from "@/lib/security-level";
 import { ModelSelector, type ModelParams } from "@/components/agent-editor/ModelSelector";
 import { PRESET_MODEL_IDS, getDefaultModelParams, type ModelParamKey } from "@/lib/model-schemas";
 import {
@@ -856,6 +857,7 @@ export function ClawDetailWorkbench({
   );
   const isApiEffective = isPublished && apiPublishEffective;
   const canConfirmShelf = shelfAgentTypes.length > 0;
+  const approvalAction = getApprovalActionState(approvalStatus);
 
   useEffect(() => {
     const element = splitContainerRef.current;
@@ -1332,8 +1334,8 @@ export function ClawDetailWorkbench({
   }
 
   function handlePublish() {
-    if (approvalStatus === "publish") {
-      toast.info("发布审批中，请等待审批结果。");
+    if (approvalAction.publishLocked) {
+      toast.info(approvalAction.publishTitle ?? "审批中，暂不可发布。");
       return;
     }
     setPublishPanelOpen(false);
@@ -1407,8 +1409,8 @@ export function ClawDetailWorkbench({
   }
 
   function handleOpenShelfDialog() {
-    if (approvalStatus === "shelf") {
-      toast.info("上架审批中，请等待审批结果。");
+    if (approvalAction.shelfLocked) {
+      toast.info(approvalAction.shelfTitle ?? "上架审批中，请等待审批结果。");
       return;
     }
 
@@ -1419,6 +1421,39 @@ export function ClawDetailWorkbench({
 
     setPublishPanelOpen(false);
     setShelfDialogOpen(true);
+  }
+
+  function handleUnshelf() {
+    if (approvalAction.unshelfLocked) {
+      toast.info(approvalAction.unshelfTitle ?? "下架审批中，请等待审批结果。");
+      return;
+    }
+
+    if (plazaStatus !== "已上架") {
+      toast.info("当前未上架，无需下架。");
+      return;
+    }
+
+    if (isHighSecurityLevel(securityLevel)) {
+      setApprovalStatus("unshelf");
+      if (isMultiAgentMode) {
+        upsertPublishedMultiAgent({
+          id: detail.overview.id || `multi-agent-${Date.now()}`,
+          name: entityName.trim() || detail.overview.name,
+          desc: entityDescription.trim() || detail.overview.summary,
+          updatedAt: formatMultiAgentUpdatedAt(),
+          securityLevel,
+          approvalStatus: "unshelf",
+          status: publishStatus === "已发布" ? "已发布" : "未发布",
+        });
+      }
+      toast.success("已提交下架审批，审批通过后方可生效。");
+      return;
+    }
+
+    setPlazaStatus("未上架");
+    setApprovalStatus("none");
+    toast.success("已从智能体广场下架。");
   }
 
   function handleToggleShelfAgentType(agentType: string) {
@@ -1813,12 +1848,8 @@ export function ClawDetailWorkbench({
                 <Button
                   type="button"
                   size="sm"
-                  disabled={!isMultiAgentMode && approvalStatus === "publish"}
-                  title={
-                    !isMultiAgentMode && approvalStatus === "publish"
-                      ? "发布审批中"
-                      : undefined
-                  }
+                  disabled={approvalAction.publishLocked}
+                  title={approvalAction.publishTitle}
                   className={cn(
                     isMultiAgentMode
                       ? "h-9 rounded-md bg-blue-600 px-3.5 text-sm font-medium text-white shadow-none hover:bg-blue-700"
@@ -1878,25 +1909,44 @@ export function ClawDetailWorkbench({
                         />
                         <CircleHelp className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={!isPublished || approvalStatus === "shelf"}
-                        title={
-                          approvalStatus === "shelf"
-                            ? "上架审批中"
-                            : !isPublished
-                              ? "请先发布"
-                              : plazaStatus === "已上架"
-                                ? "变更上架"
-                                : "上架"
-                        }
-                        className="h-7 rounded-[4px] border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
-                        onClick={handleOpenShelfDialog}
-                      >
-                        {plazaStatus === "已上架" ? "变更" : "上架"}
-                      </Button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {plazaStatus === "已上架" ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={approvalAction.unshelfLocked}
+                            title={
+                              approvalAction.unshelfLocked
+                                ? approvalAction.unshelfTitle
+                                : "下架"
+                            }
+                            className="h-7 rounded-[4px] border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                            onClick={handleUnshelf}
+                          >
+                            下架
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!isPublished || approvalAction.shelfLocked}
+                          title={
+                            approvalAction.shelfLocked
+                              ? approvalAction.shelfTitle
+                              : !isPublished
+                                ? "请先发布"
+                                : plazaStatus === "已上架"
+                                  ? "变更上架"
+                                  : "上架"
+                          }
+                          className="h-7 rounded-[4px] border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                          onClick={handleOpenShelfDialog}
+                        >
+                          {plazaStatus === "已上架" ? "变更" : "上架"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>

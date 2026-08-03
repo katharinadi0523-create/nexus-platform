@@ -20,6 +20,7 @@ import {
 import {
   buildSecurityLevelSelectOptions,
   isHighSecurityLevel,
+  getApprovalActionState,
   type ApprovalStatus,
   type SecurityLevel,
 } from "@/lib/security-level";
@@ -188,8 +189,9 @@ export default function AgentDetailPage() {
   }, [agentProfile]);
 
   function handlePublish() {
-    if (approvalStatus === "publish") {
-      toast.info("发布审批中，请等待审批结果。");
+    const action = getApprovalActionState(approvalStatus);
+    if (action.publishLocked) {
+      toast.info(action.publishTitle ?? "审批中，暂不可发布。");
       return;
     }
 
@@ -318,8 +320,8 @@ export default function AgentDetailPage() {
             protectionTypes={["policy", "lexicon"]}
           />
           <Button
-            disabled={approvalStatus === "publish"}
-            title={approvalStatus === "publish" ? "发布审批中" : "发布"}
+            disabled={getApprovalActionState(approvalStatus).publishLocked}
+            title={getApprovalActionState(approvalStatus).publishTitle ?? "发布"}
             onClick={handlePublish}
             className="rounded-2xl bg-slate-900 px-4 text-white shadow-[0_18px_40px_-24px_rgba(15,23,42,0.8)] hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
