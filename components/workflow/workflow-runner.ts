@@ -182,6 +182,12 @@ function getMockOutput(node: Node): any {
 
   // Agent节点
   if (nodeType === "agent") {
+    if (node.data?.availabilityStatus === "agent-disabled") {
+      throw new Error(
+        node.data?.runtimeError ||
+          "引用的智能体已停用，当前节点无法调用，请重新配置后再运行。"
+      );
+    }
     return {
       answer: "智能体生成的回答",
       ruleIntervention: "",
@@ -651,9 +657,12 @@ export async function executeWorkflow(
     }
 
     const endedAt = Date.now();
+    const hasFailedNode = Object.values(nodeResults).some(
+      (nodeResult) => nodeResult.status === "failed"
+    );
 
     return {
-      status: "success",
+      status: hasFailedNode ? "failed" : "success",
       startedAt,
       endedAt,
       nodeResults,

@@ -75,12 +75,27 @@ interface SkillHubV2WorkbenchProps {
   }) => void;
 }
 
-function getNextVersionLabel(version = "v1.0") {
-  const [major = 1, minor = 0] = version
+function toSequentialVersionLabel(version?: string) {
+  const normalized = version?.trim() ?? "";
+  const sequentialMatch = normalized.match(/^v(\d+)$/i);
+  if (sequentialMatch) {
+    return `V${Math.max(1, Number.parseInt(sequentialMatch[1], 10))}`;
+  }
+
+  const [major = 1, minor = 0] = normalized
     .replace(/^v/i, "")
     .split(".")
     .map((value) => Number.parseInt(value, 10));
-  return `v${Number.isFinite(major) ? major : 1}.${(Number.isFinite(minor) ? minor : 0) + 1}`;
+  if (Number.isFinite(major) && Number.isFinite(minor)) {
+    return major === 1 ? `V${Math.max(1, minor + 1)}` : `V${Math.max(1, major)}`;
+  }
+
+  return "V1";
+}
+
+function getNextVersionLabel(version = "V1") {
+  const current = Number.parseInt(toSequentialVersionLabel(version).slice(1), 10);
+  return `V${current + 1}`;
 }
 
 function getDefaultBoundDependencies(skillId: string): SkillRecord["dependencies"] {
@@ -183,9 +198,9 @@ function getDefaultTrialSample(skillId: string) {
 }
 
 function createSeedRecord(seed: SkillHubV2Seed): SkillRecord {
-  const currentVersionLabel = seed.version ? `v${seed.version.replace(/^v/i, "")}` : "v1.0";
+  const currentVersionLabel = toSequentialVersionLabel(seed.version);
   const publishedVersionLabel = seed.publishedVersion
-    ? `v${seed.publishedVersion.replace(/^v/i, "")}`
+    ? toSequentialVersionLabel(seed.publishedVersion)
     : seed.status === "published"
       ? currentVersionLabel
       : undefined;
@@ -196,12 +211,8 @@ function createSeedRecord(seed: SkillHubV2Seed): SkillRecord {
   /** 发布版本 = 当前版本：线上已装配，试运行与依赖默认就绪，无需再走一遍 */
   const isPublishedCurrent = Boolean(publishedVersionId) && publishedVersionId === currentVersionId;
   const existingBaseline = INITIAL_SKILLS.find((item) => item.id === seed.id);
-  const [major, minor] = currentVersionLabel
-    .replace(/^v/i, "")
-    .split(".")
-    .map((value) => Number.parseInt(value, 10));
-  const previousVersion =
-    Number.isFinite(minor) && minor > 0 ? `v${major}.${minor - 1}` : `v${Math.max(major - 1, 0)}.9`;
+  const currentVersionNumber = Number.parseInt(currentVersionLabel.slice(1), 10);
+  const previousVersion = currentVersionNumber > 1 ? `V${currentVersionNumber - 1}` : undefined;
   const versionHistory: SkillVersion[] = [
     {
       id: currentVersionId,
@@ -237,7 +248,7 @@ function createSeedRecord(seed: SkillHubV2Seed): SkillRecord {
           },
         ]
       : []),
-    ...(previousVersion !== publishedVersionLabel && previousVersion !== currentVersionLabel
+    ...(previousVersion && previousVersion !== publishedVersionLabel && previousVersion !== currentVersionLabel
       ? [
           {
             id: `${seed.id}-${previousVersion}`,
@@ -389,6 +400,46 @@ export function SkillHubV2Workbench({
     toast.success("已导出技能包与绑定的运行时快照");
   }
 
+  async function exportSkillVersion(skillId: string, versionId: string) {
+    const skill = skills.find((item) => item.id === skillId);
+    const version = skill?.versions.find((item) => item.id === versionId);
+    if (!skill || !version) {
+      toast.error("未找到需要下载的历史版本");
+      return;
+    }
+
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
+    version.files.forEach((file) => zip.file(file.path, file.content));
+    zip.file(
+      "version.json",
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          skillId: skill.id,
+          skillName: skill.name,
+          displayName: skill.displayName,
+          versionId: version.id,
+          version: version.version,
+          status: version.status,
+          releaseNotes: version.releaseNotes,
+          createdAt: version.createdAt,
+          createdBy: version.createdBy,
+        },
+        null,
+        2
+      )
+    );
+
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${skill.name}-${version.version}.zip`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    toast.success(`已开始下载 ${version.version}`);
+  }
   function handleImport() {
     const valid = importMode === "url" ? importUrl.trim().length > 0 : importFileName.length > 0;
     if (!valid) {
@@ -455,7 +506,7 @@ export function SkillHubV2Workbench({
 
     const version: SkillVersion = {
       id: `${name}-v10`,
-      version: "v1.0",
+      version: "V1",
       createdAt: "2026-07-24 11:30",
       createdBy: "邸若楠",
       source: "import",
@@ -480,7 +531,7 @@ export function SkillHubV2Workbench({
       dependencies: [],
       runtimeSnapshot: {
         id: `pending-${name}`,
-        boundVersion: "v1.0",
+        boundVersion: "V1",
         status: "not-run",
       },
     };
@@ -488,7 +539,7 @@ export function SkillHubV2Workbench({
     setImportOpen(false);
     setImportUrl("");
     setImportFileName("");
-    toast.success("导入成功，已生成 v1.0 草稿");
+    toast.success("导入成功，已生成 V1 草稿");
     openDetail(skill.id, "dependencies");
   }
 
@@ -544,7 +595,7 @@ export function SkillHubV2Workbench({
       }));
       const version: SkillVersion = {
         id: `${CREATE_SKILL_ID_PREFIX}-v10-${timestamp}`,
-        version: "v1.0",
+        version: "V1",
         createdAt: "2026-07-27 15:20",
         createdBy: "邸若楠",
         source: "ai-create",
@@ -571,7 +622,7 @@ export function SkillHubV2Workbench({
         dependencies: [],
         runtimeSnapshot: {
           id: `pending-${CREATE_SKILL_ID_PREFIX}`,
-          boundVersion: "v1.0",
+          boundVersion: "V1",
           status: "not-run",
           sample: CREATE_SKILL_SAMPLE,
         },
@@ -583,7 +634,7 @@ export function SkillHubV2Workbench({
         skillName: skill.name,
         source: "conversation",
         status: "pending-confirmation",
-        outputVersion: "v1.0 草稿",
+        outputVersion: "V1 草稿",
         request: input.request,
         createdAt: "2026-07-27 15:20",
         evidence: skill.versions[0]?.evidence ?? [CREATE_SKILL_SAMPLE],
@@ -604,7 +655,7 @@ export function SkillHubV2Workbench({
         usageInstructions: skill.usageInstructions,
         files,
       });
-      toast.success("已保存为 v1.0 草稿，新技能已加入技能列表");
+      toast.success("已保存为 V1 草稿，新技能已加入技能列表");
       setScreen({ kind: "detail", skillId: skill.id, tab: "overview" });
       return;
     }
@@ -612,8 +663,7 @@ export function SkillHubV2Workbench({
     const target = skills.find((skill) => skill.id === input.skillId);
     if (!target) return;
     const currentVersion = getCurrentManagedVersion(target);
-    const currentNumber = Number.parseInt(currentVersion?.version.replace(/\D/g, "") || "10", 10);
-    const nextVersionLabel = `v${Math.floor(currentNumber / 10)}.${(currentNumber % 10) + 1}`;
+    const nextVersionLabel = getNextVersionLabel(currentVersion?.version);
     const nextVersion: SkillVersion = {
       id: `${target.id}-${nextVersionLabel}-${timestamp}`,
       version: nextVersionLabel,
@@ -676,7 +726,7 @@ export function SkillHubV2Workbench({
 
     const timestamp = Date.now();
     const currentVersion = getCurrentManagedVersion(target);
-    const currentVersionLabel = currentVersion?.version ?? "v1.0";
+    const currentVersionLabel = currentVersion?.version ?? "V1";
     const nextVersionLabel = getNextVersionLabel(currentVersionLabel);
     const nextVersion: SkillVersion = {
       id: `${target.id}-${nextVersionLabel}-manual-${timestamp}`,
@@ -730,7 +780,7 @@ export function SkillHubV2Workbench({
               : getDefaultBoundDependencies(skill.id),
           runtimeSnapshot: {
             id: `rt-snap-${skill.id}-${Date.now().toString().slice(-4)}`,
-            boundVersion: getCurrentManagedVersion(skill)?.version ?? "v1.0",
+            boundVersion: getCurrentManagedVersion(skill)?.version ?? "V1",
             status: "ready",
             assembledAt: "2026-07-24 11:42",
             sample: skill.runtimeSnapshot.sample ?? getDefaultTrialSample(skill.id),
@@ -761,11 +811,7 @@ export function SkillHubV2Workbench({
     }
     const timestamp = Date.now();
     const currentVersion = getCurrentManagedVersion(rollbackSkill);
-    const currentNumber = Number.parseInt(
-      currentVersion?.version.replace(/\D/g, "") || "10",
-      10
-    );
-    const nextVersionLabel = `v${Math.floor(currentNumber / 10)}.${(currentNumber % 10) + 1}`;
+    const nextVersionLabel = getNextVersionLabel(currentVersion?.version);
     const rollbackRecord: SkillVersion = {
       ...rollbackVersion,
       id: `${rollbackSkill.id}-${nextVersionLabel}-rollback-${timestamp}`,
@@ -857,12 +903,10 @@ export function SkillHubV2Workbench({
           }
           publishLabel={activeSkill.status === "reviewing" ? "审核中" : "提交发布"}
           onExport={() => exportSkill(activeSkill.id)}
+          onDownloadVersion={(versionId) => exportSkillVersion(activeSkill.id, versionId)}
           onRunAssembly={() => setScreen({ kind: "trial-run", skillId: activeSkill.id })}
           onSaveManualVersion={(draft) => handleSaveManualVersion(activeSkill.id, draft)}
-          onRollback={(versionId) => {
-            setRollbackTarget({ skillId: activeSkill.id, versionId });
-            setRollbackConfirmation("");
-          }}
+
         />
       ) : null}
 
@@ -893,7 +937,7 @@ export function SkillHubV2Workbench({
             <DialogDescription>
               {importTargetSkill
                 ? `更新内容将写入「${importTargetSkill.name}」的更新草稿，不会直接覆盖当前发布版本。`
-                : "导入只携带代码；保存为 v1.0 草稿后，通过试运行完成依赖装配。"}
+                : "导入只携带代码；保存为 V1 草稿后，通过试运行完成依赖装配。"}
             </DialogDescription>
           </DialogHeader>
           <RadioGroup

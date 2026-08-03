@@ -31,6 +31,7 @@ export type MultiAgentOrchestrationPanelProps = {
   subAgents: CapabilityAgentItem[];
   onAddSubAgent: () => void;
   onRemoveSubAgent: (agentId: string) => void;
+  readOnly?: boolean;
 };
 
 /**
@@ -45,6 +46,7 @@ export function MultiAgentOrchestrationPanel({
   subAgents,
   onAddSubAgent,
   onRemoveSubAgent,
+  readOnly = false,
 }: MultiAgentOrchestrationPanelProps) {
   const [treeExpanded, setTreeExpanded] = useState(true);
   const [pendingDeleteAgent, setPendingDeleteAgent] = useState<CapabilityAgentItem | null>(null);
@@ -127,9 +129,10 @@ export function MultiAgentOrchestrationPanel({
               <button
                 type="button"
                 onClick={onAddSubAgent}
+                disabled={readOnly}
                 aria-label="添加子智能体"
                 title="添加子智能体"
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-all hover:bg-blue-50 hover:text-blue-600 group-hover:opacity-100"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-all hover:bg-blue-50 hover:text-blue-600 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>
@@ -167,9 +170,10 @@ export function MultiAgentOrchestrationPanel({
                       <button
                         type="button"
                         onClick={() => setPendingDeleteAgent(agent)}
+                        disabled={readOnly}
                         aria-label={`删除 ${agent.name}`}
                         title="删除子智能体"
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-all hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 opacity-0 transition-all hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>

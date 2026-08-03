@@ -1465,42 +1465,36 @@ function getMySkillSourceText(skill: Pick<MySkill, "source">) {
       : "空白创建";
 }
 
+function getSkillVersionNumber(version?: string) {
+  const normalized = version?.trim() ?? "";
+  const sequentialMatch = normalized.match(/^v(\d+)$/i);
+  if (sequentialMatch) {
+    return Math.max(1, Number.parseInt(sequentialMatch[1], 10));
+  }
+
+  const [major = 1, minor = 0] = normalized
+    .replace(/^v/i, "")
+    .split(".")
+    .map((segment) => Number.parseInt(segment, 10));
+  return major === 1 && Number.isFinite(minor)
+    ? Math.max(1, minor + 1)
+    : Math.max(1, Number.isFinite(major) ? major : 1);
+}
+
 function formatSkillVersion(version?: string) {
-  return `v${version ?? "1.0"}`;
+  return `V${getSkillVersionNumber(version)}`;
 }
 
 function isValidVersion(version: string) {
-  return /^\d+(?:\.\d+){1,2}$/.test(version.trim());
+  return /^V[1-9]\d*$/i.test(version.trim());
 }
 
 function compareVersions(left: string, right: string) {
-  const leftParts = left.split(".").map((segment) => Number(segment));
-  const rightParts = right.split(".").map((segment) => Number(segment));
-  const maxLength = Math.max(leftParts.length, rightParts.length);
-
-  for (let index = 0; index < maxLength; index += 1) {
-    const leftValue = leftParts[index] ?? 0;
-    const rightValue = rightParts[index] ?? 0;
-
-    if (leftValue !== rightValue) {
-      return leftValue - rightValue;
-    }
-  }
-
-  return 0;
+  return getSkillVersionNumber(left) - getSkillVersionNumber(right);
 }
 
 function suggestNextVersion(version?: string) {
-  const currentVersion = version?.trim() || "1.0";
-  if (!isValidVersion(currentVersion)) {
-    return "1.1";
-  }
-
-  const segments = currentVersion.split(".").map((segment) => Number(segment));
-  const lastIndex = segments.length - 1;
-  segments[lastIndex] += 1;
-
-  return segments.join(".");
+  return `V${getSkillVersionNumber(version) + 1}`;
 }
 
 function hasPublishedHistory(
@@ -1778,7 +1772,7 @@ export function SkillsPage({
     [deleteTargetSkillId, mySkills]
   );
 
-  const updateCurrentVersion = updateTargetSkill?.version ?? "1.0";
+  const updateCurrentVersion = updateTargetSkill?.version ?? "V1";
   const isPublishRelease = releaseMode === "publish";
   const updateVersionError = useMemo(() => {
     if (!updateTargetSkill) {
@@ -1791,18 +1785,18 @@ export function SkillsPage({
     }
 
     if (!isValidVersion(nextVersion)) {
-      return "版本号格式需为 1.1 或 1.1.2";
+      return "版本号由系统按 V1、V2、V3……自动递增";
     }
 
     if (isPublishRelease) {
-      if (compareVersions(nextVersion, "1.0") < 0) {
-        return `首次发布请填写不低于${formatSkillVersion("1.0")}的版本号`;
+      if (compareVersions(nextVersion, "V1") < 0) {
+        return `首次发布版本不得低于${formatSkillVersion("V1")}的版本号`;
       }
       return "";
     }
 
     if (compareVersions(nextVersion, updateCurrentVersion) <= 0) {
-      return `请填写高于${formatSkillVersion(updateCurrentVersion)}的版本号`;
+      return `版本号必须高于${formatSkillVersion(updateCurrentVersion)}`;
     }
 
     return "";
@@ -2214,11 +2208,7 @@ export function SkillsPage({
     setUpdateTargetSkillId(skillId);
     setReleaseMode(nextMode);
     setUpdateVersionInput(
-      nextMode === "publish"
-        ? isValidVersion(skill.version ?? "") && compareVersions(skill.version ?? "1.0", "1.0") >= 0
-          ? (skill.version ?? "1.0")
-          : "1.0"
-        : suggestNextVersion(skill.version)
+      nextMode === "publish" ? "V1" : suggestNextVersion(skill.version)
     );
     setReleaseImportMode("local");
     setReleaseImportUrlSource("github");
@@ -4931,7 +4921,7 @@ source_url: "${parsedUrl.toString()}"
                         </DialogTitle>
                         <DialogDescription className="text-sm leading-6 text-slate-500">
                           {isPublishRelease
-                            ? "补充展示信息、发布范围与 技能类型。首次发布将默认以 v1.0 提交审核。"
+                            ? "补充展示信息、发布范围与 技能类型。首次发布将默认以 V1 提交审核。"
                             : "补充展示信息、版本、发布说明与发布配置。提交后会进入审核中状态。"}
                         </DialogDescription>
                       </DialogHeader>
@@ -5119,8 +5109,8 @@ source_url: "${parsedUrl.toString()}"
                                 <Input
                                   id="skill-update-version"
                                   value={updateVersionInput}
-                                  onChange={(event) => setUpdateVersionInput(event.target.value)}
-                                  placeholder="例如 1.1 或 1.1.2"
+                                  readOnly
+                                  placeholder="系统自动生成"
                                   aria-invalid={Boolean(updateVersionError)}
                                   className={cn(
                                     "h-11 rounded-2xl bg-white/95",
@@ -5136,7 +5126,7 @@ source_url: "${parsedUrl.toString()}"
                                   )}
                                 >
                                   {updateVersionError ||
-                                    `当前版本 ${formatSkillVersion(updateCurrentVersion)}，支持 \`1.1\` 或 \`1.1.2\` 这类格式。`}
+                                    `当前版本 ${formatSkillVersion(updateCurrentVersion)}，新版本由系统自动递增。`}
                                 </p>
                               </div>
 

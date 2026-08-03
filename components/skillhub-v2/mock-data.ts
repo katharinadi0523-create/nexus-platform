@@ -111,7 +111,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     versions: [
       version({
         id: "ppt-v13",
-        version: "v1.3",
+        version: "V4",
         source: "ai-optimize",
         status: "draft",
         baseVersionId: "ppt-v12",
@@ -121,7 +121,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
       }),
       version({
         id: "ppt-v12",
-        version: "v1.2",
+        version: "V3",
         createdAt: "2026-07-10 09:20",
         source: "import",
         status: "published",
@@ -140,14 +140,14 @@ export const INITIAL_SKILLS: SkillRecord[] = [
       }),
       version({
         id: "ppt-v11",
-        version: "v1.1",
+        version: "V2",
         createdAt: "2026-07-05 15:40",
         source: "rollback",
-        releaseNotes: "由 v1.0 回滚生成，恢复稳定模板。",
+        releaseNotes: "由 V1 回滚生成，恢复稳定模板。",
       }),
       version({
         id: "ppt-v10",
-        version: "v1.0",
+        version: "V1",
         createdAt: "2026-07-01 11:10",
         source: "import",
         releaseNotes: "首次导入。",
@@ -191,7 +191,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     ],
     runtimeSnapshot: {
       id: "rt-snap-ppt-v13",
-      boundVersion: "v1.3",
+      boundVersion: "V4",
       status: "ready",
       assembledAt: "2026-07-24 10:08",
       sample: "tests/",
@@ -211,7 +211,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     versions: [
       version({
         id: "scholar-v10",
-        version: "v1.0",
+        version: "V1",
         status: "draft",
         source: "import",
         releaseNotes: "从 GitHub 导入的初始草稿。",
@@ -228,7 +228,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     ],
     runtimeSnapshot: {
       id: "pending-scholar",
-      boundVersion: "v1.0",
+      boundVersion: "V1",
       status: "not-run",
     },
   },
@@ -246,7 +246,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     versions: [
       version({
         id: "tone-v10",
-        version: "v1.0",
+        version: "V1",
         status: "draft",
         source: "ai-create",
         releaseNotes: "AI 创建的首版草稿。",
@@ -255,7 +255,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     dependencies: [],
     runtimeSnapshot: {
       id: "pending-tone",
-      boundVersion: "v1.0",
+      boundVersion: "V1",
       status: "not-run",
     },
   },
@@ -273,7 +273,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     versions: [
       version({
         id: "rna-v10",
-        version: "v1.0",
+        version: "V1",
         status: "draft",
         source: "ai-create",
         releaseNotes: "待确认的 AI 创建草稿。",
@@ -291,7 +291,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     ],
     runtimeSnapshot: {
       id: "rt-rna-v10",
-      boundVersion: "v1.0",
+      boundVersion: "V1",
       status: "ready",
       assembledAt: "2026-07-24 09:58",
       sample: "samples/rice_expression.csv",
@@ -314,7 +314,7 @@ export const INITIAL_SKILLS: SkillRecord[] = [
     versions: [
       version({
         id: "fastq-v10",
-        version: "v1.0",
+        version: "V1",
         status: "published",
         source: "ai-create",
         releaseNotes: "对齐解析流水线：上传→本体→Skill→解析/QC→元数据→入库血缘。",
@@ -408,7 +408,7 @@ def decode_and_qc(file_asset, operator):
     ],
     runtimeSnapshot: {
       id: "rt-fastq-v10",
-      boundVersion: "v1.0",
+      boundVersion: "V1",
       status: "ready",
       assembledAt: "2026-07-27 14:18",
       sample: "samples/SRR000001.fastq",
@@ -441,7 +441,7 @@ export const INITIAL_WORK_ORDERS: SkillWorkOrder[] = [
     skillName: "rna-expr-parser",
     source: "conversation",
     status: "pending-confirmation",
-    outputVersion: "v1.0 草稿",
+    outputVersion: "V1 草稿",
     request: "帮我建一个能分析水稻 RNA 表达数据的 Skill。",
     createdAt: "2026-07-24 10:02",
     evidence: ["样本 rice_expression.csv"],
@@ -459,7 +459,7 @@ export const INITIAL_WORK_ORDERS: SkillWorkOrder[] = [
     skillName: "ppt_master",
     source: "conversation",
     status: "completed",
-    outputVersion: "v1.3",
+    outputVersion: "V4",
     request: "缺表头时按位置推断列，并补单元测试。",
     createdAt: "2026-07-24 09:45",
     evidence: ["失败运行 TASK-2079"],

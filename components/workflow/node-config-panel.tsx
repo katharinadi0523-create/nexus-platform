@@ -24,6 +24,7 @@ interface NodeConfigPanelProps {
   onClose: () => void;
   nodes?: Node[];
   edges?: Edge[];
+  readOnly?: boolean;
 }
 
 const getNodeIcon = (type: string | undefined) => {
@@ -134,6 +135,7 @@ export function NodeConfigPanel({
   onClose,
   nodes = [],
   edges = [],
+  readOnly = false,
 }: NodeConfigPanelProps) {
   if (!selectedNode) return null;
 
@@ -162,7 +164,7 @@ export function NodeConfigPanel({
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <fieldset disabled={readOnly} className="flex-1 overflow-y-auto border-0 p-4 disabled:[&_input]:bg-slate-100 disabled:[&_textarea]:bg-slate-100 disabled:[&_button]:opacity-60">
         {selectedNode.type === "start" && (
           <StartNodeConfig
             nodeData={selectedNode.data}
@@ -283,7 +285,7 @@ export function NodeConfigPanel({
             edges={edges}
           />
         )}
-      </div>
+      </fieldset>
     </div>
   );
 }
