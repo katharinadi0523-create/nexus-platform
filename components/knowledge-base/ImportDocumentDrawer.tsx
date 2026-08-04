@@ -126,6 +126,7 @@ export function ImportDocumentDrawer({
   const [pageIndexChunks, setPageIndexChunks] = useState<string[]>(["按层级切分"]);
   const [graphChunks, setGraphChunks] = useState<string[]>(["智能切片"]);
   const [graphChunkFixedLength, setGraphChunkFixedLength] = useState(800);
+  const [activeDisambiguation, setActiveDisambiguation] = useState(false);
   const [metadataFields, setMetadataFields] = useState<MetadataFieldDraft[]>([
     {
       id: "metadata-source",
@@ -158,6 +159,7 @@ export function ImportDocumentDrawer({
     setPageIndexChunks(["按层级切分"]);
     setGraphChunks(["智能切片"]);
     setGraphChunkFixedLength(800);
+    setActiveDisambiguation(false);
     setMetadataFields([
       {
         id: "metadata-source",
@@ -588,6 +590,26 @@ export function ImportDocumentDrawer({
                   </div>
                 </div>
               ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-6 flex items-center gap-1 font-semibold text-slate-950">
+              图谱构建 <Info className="h-3.5 w-3.5 text-slate-400" />
+            </h3>
+            <div className="grid grid-cols-[110px_1fr] items-start gap-x-4 gap-y-2">
+              <span className="flex items-center gap-1 pt-0.5 text-sm text-slate-700">
+                主动消歧
+              </span>
+              <div className="space-y-2">
+                <Switch
+                  checked={activeDisambiguation}
+                  onCheckedChange={setActiveDisambiguation}
+                />
+                <p className="text-xs leading-relaxed text-slate-400">
+                  请谨慎选择，开启后将可能用当前上传文档提取的信息更新替换已有的节点信息
+                </p>
+              </div>
             </div>
           </section>
 

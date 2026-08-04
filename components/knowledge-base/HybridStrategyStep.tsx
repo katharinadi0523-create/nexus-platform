@@ -57,6 +57,14 @@ export type ChunkMergeStrategy =
   | "RRF"
   | "RSF";
 
+/** Weighted Merge / RSF：各前置内容检索器权重（每项 0.0~1.0，互不影响） */
+export interface MergeWeightItem {
+  id: string;
+  /** 展示名称（后续可对流程图前置内容检索器） */
+  label: string;
+  weight: number;
+}
+
 /** 第二步自定义实体/关系，供图谱检索节点过滤多选 */
 export interface GraphFilterOption {
   id: string;
@@ -72,6 +80,7 @@ export interface StrategyBusinessNode {
     exactMatch?: boolean;
     semanticMatch?: boolean;
     engine?: string;
+    /** 内容检索器 / 内容合并器：Top K */
     topK?: number;
     /** 图谱检索：最大跳数 1~10，默认 3 */
     maxHops?: number;
@@ -87,8 +96,12 @@ export interface StrategyBusinessNode {
     score?: number;
     /** 内容合并器：合并策略 */
     mergeStrategy?: ChunkMergeStrategy;
-    /** Weighted Merge 时 graph 权重 0~1，默认 0.7（vector 为 1-ratio） */
-    weightedMergeGraphRatio?: number;
+    /** RRF / RSF：平滑常数 K，范围 10~100，默认 60 */
+    rrfK?: number;
+    /** RSF：得分权重，范围 0.0~1.0，默认 0.5 */
+    rsfScoreWeight?: number;
+    /** Weighted Merge / RSF：各前置内容检索器权重列表，每项范围 0.0~1.0 */
+    mergeWeights?: MergeWeightItem[];
     rankModel?: string;
     rankTopK?: number;
   };
@@ -103,10 +116,36 @@ export const defaultGraphRetrieverConfig = {
   score: 0.3,
 };
 
+/** 占位：后续改为流程图中前置「内容检索器」节点；每项默认 1.0 */
+export const defaultMergeWeights: MergeWeightItem[] = [
+  { id: "retriever-1", label: "内容检索器1", weight: 1.0 },
+  { id: "retriever-vector", label: "内容检索器-向量", weight: 1.0 },
+  { id: "retriever-graph", label: "内容检索器-图谱", weight: 1.0 },
+];
+
 export const defaultMergerConfig = {
   mergeStrategy: "RRF" as ChunkMergeStrategy,
-  weightedMergeGraphRatio: 0.7,
+  rrfK: 60,
+  rsfScoreWeight: 0.5,
+  mergeWeights: defaultMergeWeights,
+  topK: 10,
 };
+
+function roundWeight(value: number): number {
+  return Math.round(Math.min(1, Math.max(0, value)) * 10) / 10;
+}
+
+/** 仅更新单项权重，范围 0.0~1.0，不联动其他项 */
+function updateMergeWeights(
+  items: MergeWeightItem[],
+  changedId: string,
+  nextWeight: number
+): MergeWeightItem[] {
+  const clamped = roundWeight(nextWeight);
+  return items.map((item) =>
+    item.id === changedId ? { ...item, weight: clamped } : item
+  );
+}
 
 /** 流水线中的一层：同层多个节点为并列关系 */
 export interface PipelineStage {
@@ -222,7 +261,12 @@ function createBusinessNode(
       topK: 10,
     };
   } else if (kind === "merger") {
-    base.config = { ...defaultMergerConfig };
+    base.config = {
+      ...defaultMergerConfig,
+      mergeWeights: defaultMergeWeights.map((item) => ({
+        ...item,
+      })),
+    };
   } else {
     base.config = {
       rankModel: "bge-reranker-v2",
@@ -1337,9 +1381,14 @@ function StrategyPipelineCanvas({
                     onValueChange={(mergeStrategy) =>
                       updateSelectedConfig({
                         mergeStrategy: mergeStrategy as ChunkMergeStrategy,
-                        weightedMergeGraphRatio:
-                          selected.node.config.weightedMergeGraphRatio ??
-                          defaultMergerConfig.weightedMergeGraphRatio,
+                        rrfK:
+                          selected.node.config.rrfK ?? defaultMergerConfig.rrfK,
+                        rsfScoreWeight:
+                          selected.node.config.rsfScoreWeight ??
+                          defaultMergerConfig.rsfScoreWeight,
+                        mergeWeights:
+                          selected.node.config.mergeWeights ??
+                          defaultMergerConfig.mergeWeights,
                       })
                     }
                     options={[
@@ -1352,60 +1401,151 @@ function StrategyPipelineCanvas({
                   />
                 </div>
 
-                {(selected.node.config.mergeStrategy || "RRF") ===
-                  "WeightedMerge" && (
+                {(["RRF", "RSF"] as ChunkMergeStrategy[]).includes(
+                  (selected.node.config.mergeStrategy ||
+                    "RRF") as ChunkMergeStrategy
+                ) && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label className="text-sm text-slate-700">K 值</Label>
+                      <HelpTip content="K 越大，越削弱排名差异；K 越小，越强调排名靠前的结果。范围 10~100。" />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Slider
+                        value={[
+                          selected.node.config.rrfK ?? defaultMergerConfig.rrfK,
+                        ]}
+                        min={10}
+                        max={100}
+                        step={1}
+                        onValueChange={(vals) =>
+                          updateSelectedConfig({
+                            rrfK: vals[0] ?? defaultMergerConfig.rrfK,
+                          })
+                        }
+                        className="flex-1 [&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
+                      />
+                      <Input
+                        type="number"
+                        min={10}
+                        max={100}
+                        step={1}
+                        className="h-8 w-16"
+                        value={
+                          selected.node.config.rrfK ?? defaultMergerConfig.rrfK
+                        }
+                        onChange={(e) => {
+                          const raw = Number(e.target.value);
+                          if (Number.isNaN(raw)) return;
+                          updateSelectedConfig({
+                            rrfK: Math.min(100, Math.max(10, Math.round(raw))),
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {selected.node.config.mergeStrategy === "RSF" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1">
+                      <Label className="text-sm text-slate-700">得分权重</Label>
+                      <HelpTip content="RSF 中得分权重，范围 0.0~1.0，默认 0.5。" />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Slider
+                        value={[
+                          selected.node.config.rsfScoreWeight ??
+                            defaultMergerConfig.rsfScoreWeight,
+                        ]}
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        onValueChange={(vals) =>
+                          updateSelectedConfig({
+                            rsfScoreWeight: roundWeight(
+                              vals[0] ?? defaultMergerConfig.rsfScoreWeight
+                            ),
+                          })
+                        }
+                        className="flex-1 [&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
+                      />
+                      <span className="w-8 shrink-0 text-right text-xs tabular-nums text-slate-500">
+                        {(
+                          selected.node.config.rsfScoreWeight ??
+                          defaultMergerConfig.rsfScoreWeight
+                        ).toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {(selected.node.config.mergeStrategy === "WeightedMerge" ||
+                  selected.node.config.mergeStrategy === "RSF") && (
                   <div className="space-y-2">
                     <div className="flex items-center gap-1">
                       <Label className="text-sm text-slate-700">
                         Merge 比例
                       </Label>
-                      <HelpTip content="Weighted Merge 中 vector 与 graph 的权重比例。" />
+                      <HelpTip content="为各前置内容检索器配置权重，每项范围 0.0~1.0，默认 1.0。" />
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span>
-                          vector{" "}
-                          {Math.round(
-                            (1 -
-                              (selected.node.config.weightedMergeGraphRatio ??
-                                0.7)) *
-                              100
-                          )}
-                          %
-                        </span>
-                        <span>
-                          graph{" "}
-                          {Math.round(
-                            (selected.node.config.weightedMergeGraphRatio ??
-                              0.7) * 100
-                          )}
-                          %
-                        </span>
-                      </div>
-                      <Slider
-                        value={[
-                          Math.round(
-                            (selected.node.config.weightedMergeGraphRatio ??
-                              0.7) * 100
-                          ),
-                        ]}
-                        min={0}
-                        max={100}
-                        step={1}
-                        onValueChange={(vals) =>
-                          updateSelectedConfig({
-                            weightedMergeGraphRatio: (vals[0] ?? 70) / 100,
-                          })
-                        }
-                        className="[&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
-                      />
-                      <div className="flex justify-between text-[10px] text-slate-400">
-                        <span>vector</span>
-                        <span>graph</span>
-                      </div>
+                    <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50/60 p-2.5">
+                      {(
+                        selected.node.config.mergeWeights ?? defaultMergeWeights
+                      ).map((item) => (
+                        <div key={item.id} className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div
+                              className="min-w-0 truncate text-sm text-slate-700"
+                              title={item.label}
+                            >
+                              {item.label}
+                            </div>
+                            <span className="shrink-0 text-xs tabular-nums text-slate-500">
+                              {item.weight.toFixed(1)}
+                            </span>
+                          </div>
+                          <Slider
+                            value={[item.weight]}
+                            min={0}
+                            max={1}
+                            step={0.1}
+                            onValueChange={(vals) => {
+                              const current =
+                                selected.node.config.mergeWeights ??
+                                defaultMergeWeights;
+                              updateSelectedConfig({
+                                mergeWeights: updateMergeWeights(
+                                  current,
+                                  item.id,
+                                  vals[0] ?? 1
+                                ),
+                              });
+                            }}
+                            className="[&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
+                          />
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
+
+                <div className="space-y-2">
+                  <Label className="text-sm text-slate-700">Top K</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={
+                      selected.node.config.topK ?? defaultMergerConfig.topK
+                    }
+                    onChange={(e) =>
+                      updateSelectedConfig({
+                        topK: Number(e.target.value) || 1,
+                      })
+                    }
+                  />
+                </div>
               </>
             )}
 

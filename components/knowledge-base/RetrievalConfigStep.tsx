@@ -47,22 +47,35 @@ export type GraphCategoryMode = "system" | "custom";
 /** 实体抽取合并方式 */
 export type GraphEntityMergeMode = "exact" | "distance" | "similarity";
 
+/** 同义词条目：一个 key 对应多个 value */
+export interface GraphSynonymPair {
+  id: string;
+  key: string;
+  values: string[];
+}
+
 export interface GraphNamedItem {
   id: string;
   name: string;
   description: string;
-  /** 用户手动添加的同义词，标签展示 */
-  synonyms: string[];
-  /** 实体/关系：属性列表（名称、描述、枚举值） */
+  /** 实体同义词（key → 多个 value） */
+  synonyms: GraphSynonymPair[];
+  /** 合并方式：选自已勾选的合并策略 */
+  mergeMode?: GraphEntityMergeMode;
+  /** 实体：属性列表（名称、描述、同义词、枚举值、合并方式） */
   attributes?: GraphEntityAttribute[];
 }
 
-/** 实体/关系属性：名称、描述、枚举值（可多个） */
+/** 实体属性：名称、描述、同义词、枚举值、合并方式 */
 export interface GraphEntityAttribute {
   id: string;
   name: string;
   description: string;
+  /** 属性同义词（key → 多个 value） */
+  synonyms: GraphSynonymPair[];
   enumValues: string[];
+  /** 合并方式：选自已勾选的合并策略 */
+  mergeMode?: GraphEntityMergeMode;
 }
 
 export interface GraphEntityConfig {
@@ -71,18 +84,23 @@ export interface GraphEntityConfig {
   customItems: GraphNamedItem[];
   /** 自定义模式下：是否允许系统在自定义实体之外按需扩充 */
   allowExpand: boolean;
-  /** 合并方式：精确 / 距离 / 相似度 */
-  mergeMode: GraphEntityMergeMode;
-  /** 距离合并：Score 阈值 0~1，步长 0.1，默认 0.8 */
-  distanceScore: number;
-  /** 相似度合并：处理模型（直接选择具体模型） */
-  similarityModel: string;
+}
+
+/** 自定义关系：名称、描述、前置/后置实体 */
+export interface GraphRelationItem {
+  id: string;
+  name: string;
+  description: string;
+  /** 前置实体（引用自定义实体 id） */
+  sourceEntityId: string;
+  /** 后置实体（引用自定义实体 id） */
+  targetEntityId: string;
 }
 
 export interface GraphRelationConfig {
   prompt: string;
   categoryMode: GraphCategoryMode;
-  customItems: GraphNamedItem[];
+  customItems: GraphRelationItem[];
   /** 自定义模式下：是否允许系统在自定义关系之外按需扩充 */
   allowExpand: boolean;
 }
@@ -97,6 +115,14 @@ export interface GraphRetrievalConfig {
   modelParams: ModelParams;
   /** 全局同义词来源：术语库（可多选） */
   synonymTermBanks: GraphSynonymTermBank[];
+  /** 合并策略（可多选：精确 / 距离 / 相似度；配置于实体抽取自定义模式） */
+  mergeStrategies: GraphEntityMergeMode[];
+  /** 距离合并 Score */
+  mergeDistanceScore: number;
+  /** 相似度合并处理模型 */
+  mergeSimilarityModel: string;
+  /** 相似度合并 Score */
+  mergeSimilarityScore: number;
   entity: GraphEntityConfig;
   relation: GraphRelationConfig;
 }
@@ -136,35 +162,83 @@ const MERGE_MODE_OPTIONS: {
   { value: "similarity", label: "相似度" },
 ];
 
-function createNamedItem(withAttributes = false): GraphNamedItem {
+function createSynonymPair(): GraphSynonymPair {
+  return {
+    id: `syn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    key: "",
+    values: [],
+  };
+}
+
+function createNamedItem(
+  withAttributes = false,
+  defaultMergeMode: GraphEntityMergeMode = "exact"
+): GraphNamedItem {
   return {
     id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: "",
     description: "",
     synonyms: [],
+    mergeMode: defaultMergeMode,
     ...(withAttributes ? { attributes: [] } : {}),
   };
 }
 
-function createEntityAttribute(): GraphEntityAttribute {
+function createRelationItem(): GraphRelationItem {
+  return {
+    id: `rel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: "",
+    description: "",
+    sourceEntityId: "",
+    targetEntityId: "",
+  };
+}
+
+function createEntityAttribute(
+  defaultMergeMode: GraphEntityMergeMode = "exact"
+): GraphEntityAttribute {
   return {
     id: `attr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: "",
     description: "",
+    synonyms: [],
     enumValues: [],
+    mergeMode: defaultMergeMode,
   };
 }
 
-/** 标签列表输入：Enter 添加，标签可删除（同义词 / 枚举值等） */
+function resolveMergeMode(
+  current: GraphEntityMergeMode | undefined,
+  strategies: GraphEntityMergeMode[]
+): GraphEntityMergeMode {
+  const available = strategies.length > 0 ? strategies : (["exact"] as GraphEntityMergeMode[]);
+  if (current && available.includes(current)) return current;
+  return available[0] ?? "exact";
+}
+
+function buildMergeModeSelectOptions(strategies: GraphEntityMergeMode[]) {
+  const available = strategies.length > 0 ? strategies : (["exact"] as GraphEntityMergeMode[]);
+  return MERGE_MODE_OPTIONS.filter((option) => available.includes(option.value)).map(
+    (option) => ({
+      value: option.value,
+      label: option.label,
+    })
+  );
+}
+
+/** 标签列表输入：Enter 添加，标签可删除（同义词 value / 枚举值等） */
 function TagListInput({
   values,
   onChange,
   label,
+  description,
   placeholder = "输入后按 Enter 添加",
 }: {
   values: string[];
   onChange: (values: string[]) => void;
-  label: string;
+  label?: string;
+  /** 字段说明文案 */
+  description?: string;
   placeholder?: string;
 }) {
   const [draft, setDraft] = useState("");
@@ -191,7 +265,16 @@ function TagListInput({
 
   return (
     <div className="space-y-1.5">
-      <div className="text-xs text-slate-500">{label}</div>
+      {label || description ? (
+        <div className="space-y-0.5">
+          {label ? <div className="text-xs text-slate-500">{label}</div> : null}
+          {description ? (
+            <div className="text-[11px] leading-relaxed text-slate-400">
+              {description}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="min-h-[40px] rounded-md border border-slate-200 bg-white px-2 py-1.5">
         <div className="flex flex-wrap items-center gap-1.5">
           {values.map((value) => (
@@ -203,7 +286,7 @@ function TagListInput({
               {value}
               <button
                 type="button"
-                aria-label={`删除 ${label} ${value}`}
+                aria-label={`删除${label ? ` ${label}` : ""} ${value}`}
                 onClick={() => onChange(values.filter((s) => s !== value))}
                 className="rounded-full p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
               >
@@ -224,18 +307,90 @@ function TagListInput({
   );
 }
 
+/** 同义词 Key-Value 编辑：支持多组 key，每组多个 value */
+function SynonymKeyValueEditor({
+  pairs,
+  onChange,
+  label = "同义词",
+}: {
+  pairs: GraphSynonymPair[];
+  onChange: (pairs: GraphSynonymPair[]) => void;
+  label?: string;
+}) {
+  const updatePair = (id: string, patch: Partial<GraphSynonymPair>) => {
+    onChange(pairs.map((pair) => (pair.id === id ? { ...pair, ...patch } : pair)));
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="space-y-2">
+        {pairs.map((pair) => (
+          <div
+            key={pair.id}
+            className="space-y-2 rounded-md border border-slate-200 bg-white p-2.5"
+          >
+            <div className="flex items-center gap-2">
+              <div className="shrink-0 text-xs text-slate-400">Key</div>
+              <Input
+                value={pair.key}
+                placeholder="请输入同义词 Key"
+                onChange={(e) => updatePair(pair.id, { key: e.target.value })}
+                className="h-8 flex-1"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 text-slate-400 hover:text-red-500"
+                onClick={() =>
+                  onChange(pairs.filter((entry) => entry.id !== pair.id))
+                }
+                aria-label="删除同义词组"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="mt-2.5 shrink-0 text-xs text-slate-400">Value</div>
+              <div className="min-w-0 flex-1">
+                <TagListInput
+                  values={pair.values}
+                  onChange={(values) => updatePair(pair.id, { values })}
+                  placeholder="输入 Value 后按 Enter 添加"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 gap-1 text-xs"
+        onClick={() => onChange([...pairs, createSynonymPair()])}
+      >
+        <Plus className="h-3 w-3" />
+        添加同义词
+      </Button>
+    </div>
+  );
+}
+
 export const defaultGraphRetrievalConfig: GraphRetrievalConfig = {
   model: DEFAULT_GRAPH_MODEL,
   modelParams: getDefaultModelParams(DEFAULT_GRAPH_MODEL),
   synonymTermBanks: [],
+  mergeStrategies: ["exact"],
+  mergeDistanceScore: 0.8,
+  mergeSimilarityModel: "bge-m3",
+  mergeSimilarityScore: 0.8,
   entity: {
     prompt: "",
     categoryMode: "system",
     customItems: [],
     allowExpand: false,
-    mergeMode: "distance",
-    distanceScore: 0.8,
-    similarityModel: "bge-m3",
   },
   relation: {
     prompt: "",
@@ -517,15 +672,30 @@ function NamedItemListEditor({
   descriptionPlaceholder = "请输入描述",
   addLabel = "添加",
   showAttributes = false,
+  showAttributeSynonyms = false,
+  showMergeMode = false,
+  mergeStrategies = ["exact"],
+  preferredMergeMode,
 }: {
   items: GraphNamedItem[];
   onChange: (items: GraphNamedItem[]) => void;
   namePlaceholder?: string;
   descriptionPlaceholder?: string;
   addLabel?: string;
-  /** 实体/关系：支持为每项配置多个属性 */
+  /** 实体：支持为每项配置多个属性 */
   showAttributes?: boolean;
+  /** 属性内是否展示同义词（自定义实体开启） */
+  showAttributeSynonyms?: boolean;
+  /** 是否展示合并方式（自定义实体） */
+  showMergeMode?: boolean;
+  /** 可选合并策略：来自合并策略配置已勾选项 */
+  mergeStrategies?: GraphEntityMergeMode[];
+  /** 新建项默认合并方式 */
+  preferredMergeMode?: GraphEntityMergeMode;
 }) {
+  const mergeOptions = buildMergeModeSelectOptions(mergeStrategies);
+  const defaultMergeMode = resolveMergeMode(preferredMergeMode, mergeStrategies);
+
   const updateItem = (id: string, patch: Partial<GraphNamedItem>) => {
     onChange(items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   };
@@ -545,7 +715,9 @@ function NamedItemListEditor({
 
   return (
     <div className="space-y-3">
-      {items.map((item) => (
+      {items.map((item) => {
+        const itemMergeMode = resolveMergeMode(item.mergeMode, mergeStrategies);
+        return (
         <div
           key={item.id}
           className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3"
@@ -576,17 +748,36 @@ function NamedItemListEditor({
             }
             className="resize-none"
           />
-          <TagListInput
-            label="同义词"
-            values={item.synonyms ?? []}
+          <SynonymKeyValueEditor
+            pairs={item.synonyms ?? []}
             onChange={(synonyms) => updateItem(item.id, { synonyms })}
-            placeholder="输入同义词后按 Enter 添加"
           />
+          {showMergeMode ? (
+            <div className="space-y-1.5">
+              <div className="text-xs text-slate-500">合并方式</div>
+              <Select
+                value={itemMergeMode}
+                onValueChange={(mergeMode) =>
+                  updateItem(item.id, {
+                    mergeMode: mergeMode as GraphEntityMergeMode,
+                  })
+                }
+                options={mergeOptions}
+                placeholder="请选择合并方式"
+                className="h-8 max-w-xs"
+              />
+            </div>
+          ) : null}
 
           {showAttributes && (
             <div className="space-y-2 border-t border-slate-200/80 pt-2">
               <div className="text-xs font-medium text-slate-600">属性</div>
-              {(item.attributes ?? []).map((attr) => (
+              {(item.attributes ?? []).map((attr) => {
+                const attrMergeMode = resolveMergeMode(
+                  attr.mergeMode,
+                  mergeStrategies
+                );
+                return (
                 <div
                   key={attr.id}
                   className="space-y-2 rounded-md border border-slate-200 bg-white p-2.5"
@@ -629,16 +820,42 @@ function NamedItemListEditor({
                     }
                     className="resize-none"
                   />
+                  {showAttributeSynonyms ? (
+                    <SynonymKeyValueEditor
+                      pairs={attr.synonyms ?? []}
+                      onChange={(synonyms) =>
+                        updateAttribute(item.id, attr.id, { synonyms })
+                      }
+                    />
+                  ) : null}
                   <TagListInput
                     label="枚举值"
+                    description="若添加枚举值，系统只会从填写的枚举值中选择作为属性值"
                     values={attr.enumValues ?? []}
                     onChange={(enumValues) =>
                       updateAttribute(item.id, attr.id, { enumValues })
                     }
                     placeholder="输入枚举值后按 Enter 添加"
                   />
+                  {showMergeMode ? (
+                    <div className="space-y-1.5">
+                      <div className="text-xs text-slate-500">合并方式</div>
+                      <Select
+                        value={attrMergeMode}
+                        onValueChange={(mergeMode) =>
+                          updateAttribute(item.id, attr.id, {
+                            mergeMode: mergeMode as GraphEntityMergeMode,
+                          })
+                        }
+                        options={mergeOptions}
+                        placeholder="请选择合并方式"
+                        className="h-8 max-w-xs"
+                      />
+                    </div>
+                  ) : null}
                 </div>
-              ))}
+                );
+              })}
               <Button
                 type="button"
                 variant="outline"
@@ -648,7 +865,7 @@ function NamedItemListEditor({
                   updateItem(item.id, {
                     attributes: [
                       ...(item.attributes ?? []),
-                      createEntityAttribute(),
+                      createEntityAttribute(defaultMergeMode),
                     ],
                   })
                 }
@@ -659,16 +876,132 @@ function NamedItemListEditor({
             </div>
           )}
         </div>
+        );
+      })}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="gap-1.5"
+        onClick={() =>
+          onChange([
+            ...items,
+            createNamedItem(showAttributes, defaultMergeMode),
+          ])
+        }
+      >
+        <Plus className="h-3.5 w-3.5" />
+        {addLabel}
+      </Button>
+    </div>
+  );
+}
+
+function RelationItemListEditor({
+  items,
+  onChange,
+  entityOptions,
+}: {
+  items: GraphRelationItem[];
+  onChange: (items: GraphRelationItem[]) => void;
+  entityOptions: Array<{ value: string; label: string }>;
+}) {
+  const updateItem = (id: string, patch: Partial<GraphRelationItem>) => {
+    onChange(items.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  };
+
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div
+          key={item.id}
+          className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3"
+        >
+          <div className="flex items-start gap-2">
+            <Input
+              value={item.name}
+              placeholder="关系名称"
+              onChange={(e) => updateItem(item.id, { name: e.target.value })}
+              className="h-8 flex-1"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-slate-400 hover:text-red-500"
+              onClick={() => onChange(items.filter((entry) => entry.id !== item.id))}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+          <Textarea
+            value={item.description}
+            placeholder="关系描述"
+            rows={2}
+            onChange={(e) =>
+              updateItem(item.id, { description: e.target.value })
+            }
+            className="resize-none"
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <div className="text-xs text-slate-500">
+                <span className="text-red-500">*</span>前置实体
+              </div>
+              <Select
+                value={
+                  entityOptions.some((opt) => opt.value === item.sourceEntityId)
+                    ? item.sourceEntityId
+                    : undefined
+                }
+                onValueChange={(sourceEntityId) =>
+                  updateItem(item.id, { sourceEntityId })
+                }
+                placeholder={
+                  entityOptions.length === 0
+                    ? "请先配置自定义实体"
+                    : "请选择前置实体"
+                }
+                options={entityOptions}
+                disabled={entityOptions.length === 0}
+                className="h-8"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-xs text-slate-500">
+                <span className="text-red-500">*</span>后置实体
+              </div>
+              <Select
+                value={
+                  entityOptions.some((opt) => opt.value === item.targetEntityId)
+                    ? item.targetEntityId
+                    : undefined
+                }
+                onValueChange={(targetEntityId) =>
+                  updateItem(item.id, { targetEntityId })
+                }
+                placeholder={
+                  entityOptions.length === 0
+                    ? "请先配置自定义实体"
+                    : "请选择后置实体"
+                }
+                options={entityOptions}
+                disabled={entityOptions.length === 0}
+                className="h-8"
+              />
+            </div>
+          </div>
+        </div>
       ))}
       <Button
         type="button"
         variant="outline"
         size="sm"
         className="gap-1.5"
-        onClick={() => onChange([...items, createNamedItem(showAttributes)])}
+        onClick={() => onChange([...items, createRelationItem()])}
       >
         <Plus className="h-3.5 w-3.5" />
-        {addLabel}
+        添加关系
       </Button>
     </div>
   );
@@ -871,6 +1204,13 @@ export function RetrievalConfigStep({
   const patchGraph = (next: Partial<GraphRetrievalConfig>) => {
     patch("graph", { ...value.graph, ...next });
   };
+
+  const relationEntityOptions = value.graph.entity.customItems
+    .filter((item) => item.name.trim())
+    .map((item) => ({
+      value: item.id,
+      label: item.name.trim(),
+    }));
 
   return (
     <div className="w-full max-w-5xl space-y-6">
@@ -1164,7 +1504,11 @@ export function RetrievalConfigStep({
                   </OptionPill>
                   <OptionPill
                     selected={value.graph.entity.categoryMode === "custom"}
-                    onClick={() =>
+                    onClick={() => {
+                      const defaultMerge = resolveMergeMode(
+                        undefined,
+                        value.graph.mergeStrategies ?? ["exact"]
+                      );
                       patchGraph({
                         entity: {
                           ...value.graph.entity,
@@ -1172,10 +1516,10 @@ export function RetrievalConfigStep({
                           customItems:
                             value.graph.entity.customItems.length > 0
                               ? value.graph.entity.customItems
-                              : [createNamedItem(true)],
+                              : [createNamedItem(true, defaultMerge)],
                         },
-                      })
-                    }
+                      });
+                    }}
                   >
                     自定义
                   </OptionPill>
@@ -1184,6 +1528,119 @@ export function RetrievalConfigStep({
 
               {value.graph.entity.categoryMode === "custom" && (
                 <>
+                  <ConfigField
+                    label="合并策略配置"
+                    tip="可多选精确、距离、相似度合并策略；选中后下方展示对应配置项"
+                  >
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap gap-2">
+                        {MERGE_MODE_OPTIONS.map((option) => {
+                          const selected = (
+                            value.graph.mergeStrategies ?? ["exact"]
+                          ).includes(option.value);
+                          return (
+                            <OptionPill
+                              key={option.value}
+                              selected={selected}
+                              onClick={() => {
+                                const current =
+                                  value.graph.mergeStrategies ?? ["exact"];
+                                const next = selected
+                                  ? current.filter(
+                                      (item) => item !== option.value
+                                    )
+                                  : [...current, option.value];
+                                if (next.length === 0) return;
+                                patchGraph({
+                                  mergeStrategies: next,
+                                  mergeDistanceScore:
+                                    value.graph.mergeDistanceScore ?? 0.8,
+                                  mergeSimilarityModel:
+                                    value.graph.mergeSimilarityModel ??
+                                    "bge-m3",
+                                  mergeSimilarityScore:
+                                    value.graph.mergeSimilarityScore ?? 0.8,
+                                });
+                              }}
+                            >
+                              {option.label}
+                            </OptionPill>
+                          );
+                        })}
+                      </div>
+
+                      {(value.graph.mergeStrategies ?? ["exact"]).includes(
+                        "distance"
+                      ) ? (
+                        <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50/60 px-3 py-3">
+                          <div className="text-xs font-medium text-slate-600">
+                            距离
+                          </div>
+                          <ConfigField
+                            label="Score"
+                            tip="距离低于阈值的实体将合并"
+                            hint="取值范围区间：0 ~ 1.0（步长 0.1）"
+                          >
+                            <SliderWithInput
+                              value={value.graph.mergeDistanceScore ?? 0.8}
+                              min={0}
+                              max={1}
+                              step={0.1}
+                              onChange={(mergeDistanceScore) =>
+                                patchGraph({ mergeDistanceScore })
+                              }
+                            />
+                          </ConfigField>
+                        </div>
+                      ) : null}
+
+                      {(value.graph.mergeStrategies ?? ["exact"]).includes(
+                        "similarity"
+                      ) ? (
+                        <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50/60 px-3 py-3">
+                          <div className="text-xs font-medium text-slate-600">
+                            相似度
+                          </div>
+                          <ConfigField
+                            label="处理模型"
+                            tip="选择用于相似度合并的 Embedding 或 Reranker 模型"
+                          >
+                            <Select
+                              value={
+                                value.graph.mergeSimilarityModel ?? "bge-m3"
+                              }
+                              onValueChange={(mergeSimilarityModel) =>
+                                patchGraph({ mergeSimilarityModel })
+                              }
+                              options={SIMILARITY_MODEL_OPTIONS.map(
+                                (option) => ({
+                                  value: option.value,
+                                  label: option.label,
+                                })
+                              )}
+                              className="max-w-xs"
+                            />
+                          </ConfigField>
+                          <ConfigField
+                            label="Score"
+                            tip="相似度高于阈值的实体将合并"
+                            hint="取值范围区间：0 ~ 1.0（步长 0.1）"
+                          >
+                            <SliderWithInput
+                              value={value.graph.mergeSimilarityScore ?? 0.8}
+                              min={0}
+                              max={1}
+                              step={0.1}
+                              onChange={(mergeSimilarityScore) =>
+                                patchGraph({ mergeSimilarityScore })
+                              }
+                            />
+                          </ConfigField>
+                        </div>
+                      ) : null}
+                    </div>
+                  </ConfigField>
+
                   <ConfigField
                     label="允许扩充"
                     tip="开启后，除按用户自定义实体字段抽取外，系统还可按需自行扩充实体"
@@ -1199,7 +1656,7 @@ export function RetrievalConfigStep({
                   </ConfigField>
                   <ConfigField
                     label="自定义实体"
-                    tip="配置实体类型、描述、同义词与属性（属性含名称、描述、枚举值）"
+                    tip="配置实体类型、描述、同义词、合并方式与属性"
                   >
                     <NamedItemListEditor
                       items={value.graph.entity.customItems}
@@ -1207,6 +1664,13 @@ export function RetrievalConfigStep({
                       descriptionPlaceholder="实体描述"
                       addLabel="添加实体"
                       showAttributes
+                      showAttributeSynonyms
+                      showMergeMode
+                      mergeStrategies={value.graph.mergeStrategies ?? ["exact"]}
+                      preferredMergeMode={resolveMergeMode(
+                        undefined,
+                        value.graph.mergeStrategies ?? ["exact"]
+                      )}
                       onChange={(customItems) =>
                         patchGraph({
                           entity: { ...value.graph.entity, customItems },
@@ -1216,79 +1680,6 @@ export function RetrievalConfigStep({
                   </ConfigField>
                 </>
               )}
-
-              <ConfigField
-                label="合并方式"
-                tip="实体抽取后的去重合并策略：精确匹配、距离阈值或相似度模型"
-              >
-                <Select
-                  value={value.graph.entity.mergeMode ?? "distance"}
-                  onValueChange={(mergeMode) =>
-                    patchGraph({
-                      entity: {
-                        ...value.graph.entity,
-                        mergeMode: mergeMode as GraphEntityMergeMode,
-                        distanceScore:
-                          value.graph.entity.distanceScore ?? 0.8,
-                        similarityModel:
-                          value.graph.entity.similarityModel ?? "bge-m3",
-                      },
-                    })
-                  }
-                  options={MERGE_MODE_OPTIONS.map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                  }))}
-                  className="max-w-xs"
-                />
-              </ConfigField>
-
-              {(value.graph.entity.mergeMode ?? "distance") === "distance" ? (
-                <ConfigField
-                  label="Score"
-                  tip="距离低于阈值的实体将合并"
-                  hint="取值范围区间：0 ~ 1.0（步长 0.1）"
-                >
-                  <SliderWithInput
-                    value={value.graph.entity.distanceScore ?? 0.8}
-                    min={0}
-                    max={1}
-                    step={0.1}
-                    onChange={(distanceScore) =>
-                      patchGraph({
-                        entity: {
-                          ...value.graph.entity,
-                          distanceScore,
-                        },
-                      })
-                    }
-                  />
-                </ConfigField>
-              ) : null}
-
-              {value.graph.entity.mergeMode === "similarity" ? (
-                <ConfigField
-                  label="处理模型"
-                  tip="选择用于相似度合并的 Embedding 或 Reranker 模型"
-                >
-                  <Select
-                    value={value.graph.entity.similarityModel ?? "bge-m3"}
-                    onValueChange={(similarityModel) =>
-                      patchGraph({
-                        entity: {
-                          ...value.graph.entity,
-                          similarityModel,
-                        },
-                      })
-                    }
-                    options={SIMILARITY_MODEL_OPTIONS.map((option) => ({
-                      value: option.value,
-                      label: option.label,
-                    }))}
-                    className="max-w-xs"
-                  />
-                </ConfigField>
-              ) : null}
             </CollapseSection>
 
             <CollapseSection title="关系抽取">
@@ -1332,7 +1723,7 @@ export function RetrievalConfigStep({
                           customItems:
                             value.graph.relation.customItems.length > 0
                               ? value.graph.relation.customItems
-                              : [createNamedItem(true)],
+                              : [createRelationItem()],
                         },
                       })
                     }
@@ -1359,14 +1750,11 @@ export function RetrievalConfigStep({
                   </ConfigField>
                   <ConfigField
                     label="自定义关系"
-                    tip="配置关系名称、描述、同义词与属性（属性含名称、描述、枚举值）"
+                    tip="配置关系名称、描述，并选择前置实体与后置实体（来自上方已配置的自定义实体）"
                   >
-                    <NamedItemListEditor
+                    <RelationItemListEditor
                       items={value.graph.relation.customItems}
-                      namePlaceholder="关系名称"
-                      descriptionPlaceholder="关系描述"
-                      addLabel="添加关系"
-                      showAttributes
+                      entityOptions={relationEntityOptions}
                       onChange={(customItems) =>
                         patchGraph({
                           relation: { ...value.graph.relation, customItems },
