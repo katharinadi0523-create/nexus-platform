@@ -15,7 +15,6 @@ import {
   Cpu,
   Eye,
   EyeOff,
-  GitCompareArrows,
   FileStack,
   FileText,
   FolderOpen,
@@ -41,7 +40,6 @@ import {
 import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
 import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
-import { AgentVersionComposition } from "@/components/agent/agent-version-composition";
 import { AgentAvailabilityControl } from "@/components/agent/agent-availability-control";
 import { AgentVersionPublishDialog } from "@/components/agent/agent-version-publish-dialog";
 import {
@@ -569,9 +567,7 @@ export function ClawDetailWorkbench({
     [detail.overview.id, detail.overview.name, detail.overview.publishStatus, isMultiAgentMode]
   );
   const [versions, setVersions] = useState(initialVersionHistory);
-  const [versionTotalCount, setVersionTotalCount] = useState(initialVersionHistory.length);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
-  const [compositionOpen, setCompositionOpen] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [restoredDraft, setRestoredDraft] = useState<RestoredAgentDraft | null>({ sourceLabel: "", issues: [] });
@@ -1336,13 +1332,11 @@ export function ClawDetailWorkbench({
 
   function handleSelectVersion(versionId: string | null) {
     setSelectedVersionId(versionId);
-    setCompositionOpen(false);
     setActiveSection("core");
   }
 
   function returnToCurrentDraft() {
     setSelectedVersionId(null);
-    setCompositionOpen(false);
     setActiveSection("core");
   }
 
@@ -1357,13 +1351,7 @@ export function ClawDetailWorkbench({
     toast.success(`${selectedVersion.label} \u5df2\u8fd8\u539f\u4e3a\u5f53\u524d\u8349\u7a3f`);
   }
 
-  function handleDeleteVersion(versionId: string) {
-    const deleted = versions.find((version) => version.id === versionId);
-    setVersions((current) => current.filter((version) => version.id !== versionId));
-    setVersionTotalCount((count) => Math.max(0, count - 1));
-    if (selectedVersionId === versionId) returnToCurrentDraft();
-    toast.success(`${deleted?.label ?? "\u7248\u672c"} \u5df2\u5220\u9664`);
-  }
+
   function handleVersionAvailabilityChange(
     versionId: string,
     status: AgentVersionRecord["availabilityStatus"]
@@ -1446,7 +1434,6 @@ export function ClawDetailWorkbench({
     }
 
     setVersions((current) => [newVersion, ...current.map((version) => ({ ...version, isLatest: false }))]);
-    setVersionTotalCount((count) => count + 1);
     setPublishStatus("已发布");
     setApiPublishEffective(true);
     setRestoredDraft({ sourceLabel: "", issues: [] });
@@ -1712,21 +1699,7 @@ export function ClawDetailWorkbench({
             >
               <History className="h-4 w-4" />
             </Button>
-            {isHistorical ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setCompositionOpen(true);
-                  setVersionHistoryOpen(false);
-                }}
-                className="h-9 gap-2 rounded-md border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-600 shadow-none hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-              >
-                <GitCompareArrows className="h-4 w-4" />
-                版本对比
-              </Button>
-            ) : null}
+
             <Button
               type="button"
               size="sm"
@@ -3318,23 +3291,12 @@ export function ClawDetailWorkbench({
           ) : null}
         </div>
       </Tabs>
-      {compositionOpen && isHistorical && selectedVersion ? (
-        <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/35 p-3 backdrop-blur-[2px]">
-          <div className="flex max-h-full w-full max-w-[520px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <AgentVersionComposition
-              versions={versions}
-              initialBaselineVersionId={selectedVersion.id}
-              onClose={() => setCompositionOpen(false)}
-            />
-          </div>
-        </div>
-      ) : null}
+
       </div>
       <AgentVersionHistoryDrawer
         open={versionHistoryOpen}
         versions={versions}
         entityLabel={isMultiAgentMode ? "该多智能体" : "该 Claw"}
-        versionTotalCount={versionTotalCount}
         selectedVersionId={selectedVersionId}
         restoredDraft={restoredDraft}
         restoreConfirmOpen={restoreConfirmOpen}
@@ -3343,7 +3305,6 @@ export function ClawDetailWorkbench({
         onRestoreRequest={() => setRestoreConfirmOpen(true)}
         onRestoreConfirmChange={setRestoreConfirmOpen}
         onRestoreConfirm={handleRestoreConfirm}
-        onDeleteVersion={handleDeleteVersion}
         onVersionAvailabilityChange={handleVersionAvailabilityChange}
       />
       <Dialog open={shelfDialogOpen} onOpenChange={setShelfDialogOpen}>

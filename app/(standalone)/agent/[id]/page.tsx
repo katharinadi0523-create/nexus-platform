@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, GitCompareArrows, History, Rocket } from "lucide-react";
+import { AlertTriangle, ArrowLeft, History, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +22,6 @@ import {
   AgentVersionHistoryDrawer,
   type RestoredAgentDraft,
 } from "@/components/agent/agent-version-history-drawer";
-import { AgentVersionComposition } from "@/components/agent/agent-version-composition";
 import { AgentAvailabilityControl } from "@/components/agent/agent-availability-control";
 import { getAgentById } from "@/lib/agent-data";
 import { AGENT_VERSION_HISTORY, buildVersionCompositionData, type AgentVersionRecord } from "@/lib/mock/agent-version-management";
@@ -169,11 +168,9 @@ export default function AgentDetailPage() {
       ...buildVersionCompositionData(snapshot, version.resources, version.label),
     };
   }));
-  const [versionTotalCount, setVersionTotalCount] = useState(AGENT_VERSION_HISTORY.length);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [versionDetailMode, setVersionDetailMode] = useState(false);
   const [versionView, setVersionView] = useState<"config" | "logs">("config");
-  const [compositionOpen, setCompositionOpen] = useState(false);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [restoredDraft, setRestoredDraft] = useState<RestoredAgentDraft | null>({ sourceLabel: "", issues: [] });
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
@@ -197,7 +194,6 @@ export default function AgentDetailPage() {
       setSelectedVersionId(null);
       setVersionDetailMode(false);
       setVersionView("config");
-      setCompositionOpen(false);
       setActiveTab("config");
       return;
     }
@@ -208,7 +204,6 @@ export default function AgentDetailPage() {
     setSelectedVersionId(versionId);
     setVersionDetailMode(true);
     setVersionView("config");
-      setCompositionOpen(false);
     setActiveTab("config");
   };
 
@@ -216,7 +211,6 @@ export default function AgentDetailPage() {
     setSelectedVersionId(null);
     setVersionDetailMode(false);
     setVersionView("config");
-      setCompositionOpen(false);
     setActiveTab("config");
   };
 
@@ -232,7 +226,6 @@ export default function AgentDetailPage() {
     setSelectedVersionId(null);
     setVersionDetailMode(false);
     setVersionView("config");
-      setCompositionOpen(false);
     setActiveTab("config");
     toast.success(`${selectedVersion.label} 已还原为当前草稿`);
   };
@@ -276,21 +269,11 @@ export default function AgentDetailPage() {
     };
 
     setVersions((current) => [newVersion, ...current.map((version) => ({ ...version, isLatest: false }))]);
-    setVersionTotalCount((count) => count + 1);
     setRestoredDraft({ sourceLabel: "", issues: [] });
     setVersionDescription("");
     setPublishDialogOpen(false);
     setHistoryOpen(true);
     toast.success(`${nextVersionLabel} \u53d1\u5e03\u6210\u529f`);
-  };
-  const handleDeleteVersion = (versionId: string) => {
-    const deleted = versions.find((version) => version.id === versionId);
-    setVersions((current) => current.filter((version) => version.id !== versionId));
-    setVersionTotalCount((count) => Math.max(0, count - 1));
-    if (selectedVersionId === versionId) {
-      returnToCurrentDraft();
-    }
-    toast.success(`${deleted?.label ?? "版本"} 已删除`);
   };
 
   const handleVersionAvailabilityChange = (
@@ -422,20 +405,7 @@ export default function AgentDetailPage() {
               <TooltipContent>版本历史</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          {isHistorical ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setCompositionOpen(true);
-                setHistoryOpen(false);
-              }}
-              className="h-10 gap-2 rounded-xl border-slate-200 bg-white px-3 text-slate-700 shadow-sm hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-            >
-              <GitCompareArrows className="h-4 w-4" />
-              版本对比
-            </Button>
-          ) : null}
+
           <Button
             disabled={isHistorical}
             title={isHistorical ? "\u5386\u53f2\u7248\u672c\u4e0d\u53ef\u53d1\u5e03" : undefined}
@@ -500,17 +470,6 @@ export default function AgentDetailPage() {
           )}
         </div>
 
-        {compositionOpen && isVersionContext && selectedVersion ? (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/35 p-3 backdrop-blur-[2px]">
-            <div className="flex max-h-full w-full max-w-[520px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-              <AgentVersionComposition
-                versions={versions}
-                initialBaselineVersionId={selectedVersion.id}
-                onClose={() => setCompositionOpen(false)}
-              />
-            </div>
-          </div>
-        ) : null}
       </main>
 
       <Dialog
@@ -575,7 +534,6 @@ export default function AgentDetailPage() {
         open={historyOpen}
         versions={versions}
         entityLabel="该智能体"
-        versionTotalCount={versionTotalCount}
         selectedVersionId={selectedVersionId}
         restoredDraft={restoredDraft}
         restoreConfirmOpen={restoreConfirmOpen}
@@ -584,7 +542,6 @@ export default function AgentDetailPage() {
         onRestoreRequest={() => setRestoreConfirmOpen(true)}
         onRestoreConfirmChange={setRestoreConfirmOpen}
         onRestoreConfirm={handleRestoreConfirm}
-        onDeleteVersion={handleDeleteVersion}
         onVersionAvailabilityChange={handleVersionAvailabilityChange}
       />
     </div>
