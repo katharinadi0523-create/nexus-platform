@@ -120,12 +120,13 @@ export function ImportDocumentDrawer({
   const [contentClean, setContentClean] = useState(true);
   const [qualityAnalysis, setQualityAnalysis] = useState(false);
   const [autoChunk, setAutoChunk] = useState(true);
+  /** 图文混排：仅在选中图片相关解析策略时展示，默认开启 */
+  const [mixedImageText, setMixedImageText] = useState(true);
   const [semanticChunks, setSemanticChunks] = useState<string[]>(["智能切片"]);
   const [semanticChunkFixedLength, setSemanticChunkFixedLength] = useState(800);
   const [fulltextChunks, setFulltextChunks] = useState<string[]>(["智能切片"]);
   const [pageIndexChunks, setPageIndexChunks] = useState<string[]>(["按层级切分"]);
-  const [graphChunks, setGraphChunks] = useState<string[]>(["智能切片"]);
-  const [graphChunkFixedLength, setGraphChunkFixedLength] = useState(800);
+  const [graphChunks, setGraphChunks] = useState<string[]>(["按句子切分"]);
   const [activeDisambiguation, setActiveDisambiguation] = useState(false);
   const [metadataFields, setMetadataFields] = useState<MetadataFieldDraft[]>([
     {
@@ -141,6 +142,10 @@ export function ImportDocumentDrawer({
   const accept =
     fileKind === "text" ? ".doc,.docx,.pdf,.txt" : ".xls,.xlsx,.csv";
 
+  const showMixedImageText =
+    parsingStrategies.includes("图片文字识别(OCR)") ||
+    parsingStrategies.includes("图片解析");
+
   function resetDraft() {
     setQueue([]);
     setDragging(false);
@@ -153,12 +158,12 @@ export function ImportDocumentDrawer({
     setContentClean(true);
     setQualityAnalysis(false);
     setAutoChunk(true);
+    setMixedImageText(true);
     setSemanticChunks(["智能切片"]);
     setSemanticChunkFixedLength(800);
     setFulltextChunks(["智能切片"]);
     setPageIndexChunks(["按层级切分"]);
-    setGraphChunks(["智能切片"]);
-    setGraphChunkFixedLength(800);
+    setGraphChunks(["按句子切分"]);
     setActiveDisambiguation(false);
     setMetadataFields([
       {
@@ -486,6 +491,20 @@ export function ImportDocumentDrawer({
             <div className="grid grid-cols-[110px_1fr] gap-x-4 gap-y-5">
               <span className="text-sm text-slate-700">自动切片</span>
               <Switch checked={autoChunk} onCheckedChange={setAutoChunk} />
+              {showMixedImageText ? (
+                <>
+                  <span className="pt-0.5 text-sm text-slate-700">图文混排</span>
+                  <div className="space-y-2">
+                    <Switch
+                      checked={mixedImageText}
+                      onCheckedChange={setMixedImageText}
+                    />
+                    <p className="text-xs leading-relaxed text-slate-400">
+                      开启后，图片将作为切片内容一并保存
+                    </p>
+                  </div>
+                </>
+              ) : null}
               {(
                 [
                   {
@@ -526,13 +545,7 @@ export function ImportDocumentDrawer({
                     name: "图谱检索",
                     values: graphChunks,
                     setValues: setGraphChunks,
-                    options: [...SEMANTIC_LIKE_CHUNK_OPTIONS],
-                    fixedLength: graphChunks.includes("按长度切分")
-                      ? {
-                          value: graphChunkFixedLength,
-                          setValue: setGraphChunkFixedLength,
-                        }
-                      : null,
+                    options: ["按句子切分"],
                   },
                 ] as const
               ).map((config) => (

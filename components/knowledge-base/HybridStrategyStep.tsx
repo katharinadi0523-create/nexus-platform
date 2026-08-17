@@ -79,6 +79,8 @@ export interface StrategyBusinessNode {
     filterMode?: string;
     exactMatch?: boolean;
     semanticMatch?: boolean;
+    /** 内容检索器：输入文档数量，范围 1~20，默认 5 */
+    inputDocCount?: number;
     engine?: string;
     /** 内容检索器 / 内容合并器：Top K */
     topK?: number;
@@ -257,6 +259,7 @@ function createBusinessNode(
     };
   } else if (kind === "retriever") {
     base.config = {
+      inputDocCount: 5,
       engine: "fulltext",
       topK: 10,
     };
@@ -1130,6 +1133,27 @@ function StrategyPipelineCanvas({
 
             {selected.node.kind === "retriever" && (
               <>
+                <div className="space-y-2">
+                  <Label className="text-sm text-slate-700">输入文档数量</Label>
+                  <div className="flex items-center gap-3">
+                    <Slider
+                      value={[selected.node.config.inputDocCount ?? 5]}
+                      min={1}
+                      max={20}
+                      step={1}
+                      onValueChange={(vals) =>
+                        updateSelectedConfig({
+                          inputDocCount: vals[0] ?? 5,
+                        })
+                      }
+                      className="flex-1 [&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
+                    />
+                    <span className="w-8 shrink-0 text-right text-xs tabular-nums text-slate-500">
+                      {selected.node.config.inputDocCount ?? 5}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label className="text-sm text-slate-700">检索引擎</Label>
                   <Select
