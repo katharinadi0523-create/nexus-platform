@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, History, Rocket } from "lucide-react";
 import { toast } from "sonner";
@@ -34,6 +34,7 @@ interface AgentDetailData {
   prompt: string;
   openingStatement: string;
   suggestedQuestions: string[];
+  workflows?: Array<{ id: string; name: string; description?: string; updateTime?: string }>;
   plugins?: unknown;
   ontologies?: Array<{ id: string; name: string; description?: string }>;
   terminologies?: Array<{ id: string; name: string }>;
@@ -89,6 +90,20 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
     prompt: "你是一个设备维修专家，能够分析传感器数据并预测故障...",
     openingStatement: "你好，我是设备维修助手。请提供传感器数据，我将为您分析设备状态。",
     suggestedQuestions: ["?????????", "????????"],
+    workflows: [
+      {
+        id: "workflow-device-inspection",
+        name: "设备巡检工作流",
+        description: "执行设备巡检、异常识别与维修建议生成。",
+        updateTime: "2026-08-18 15:08:26",
+      },
+      {
+        id: "workflow-device-alert",
+        name: "设备告警联动工作流",
+        description: "联动告警通知与设备处置流程。",
+        updateTime: "2026-07-26 11:42:08",
+      },
+    ],
     plugins: ["Sensor Data Analyzer"],
     mockReply: "正在分析传感器数据... 检测到异常模式。建议在 48 小时内进行维护检查。",
   },
@@ -152,6 +167,7 @@ export default function AgentDetailPage() {
   const agentData = agentId ? AGENTS_DETAIL_DATA[agentId] || null : null;
   const agentProfile = agentId ? getAgentById(agentId) : null;
   const isWorkflow = agentProfile?.type === "workflow";
+  const entityLabel = isWorkflow ? "工作流智能体" : "智能体";
   const initialObjectName = isWorkflow ? "演示数据处理工作流智能体" : "演示设备运维智能体";
   const [activeTab, setActiveTab] = useState<"config" | "logs">("config");
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -164,6 +180,7 @@ export default function AgentDetailPage() {
     };
     return {
       ...version,
+      listingStatus: isWorkflow ? "未上架" as const : version.listingStatus,
       snapshot,
       ...buildVersionCompositionData(snapshot, version.resources, version.label),
     };
@@ -173,9 +190,12 @@ export default function AgentDetailPage() {
   const [versionView, setVersionView] = useState<"config" | "logs">("config");
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [restoredDraft, setRestoredDraft] = useState<RestoredAgentDraft | null>({ sourceLabel: "", issues: [] });
+  const [restoreToDraftVersion, setRestoreToDraftVersion] = useState<string | null>(null);
+  const currentDraftConfigRef = useRef<unknown>(null);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [versionDescription, setVersionDescription] = useState("");
   const [entityDisabled, setEntityDisabled] = useState(false);
+  const batchDisabledVersionIds = useRef<Set<string>>(new Set());
 
   const initialDisplayName = agentData?.name || agentProfile?.name || "加载中...";
   const [displayName, setDisplayName] = useState(initialDisplayName);
@@ -190,6 +210,7 @@ export default function AgentDetailPage() {
   const nextVersionLabel = `V${nextVersionNumber}`;
 
   const handleSelectVersion = (versionId: string | null) => {
+    setRestoreToDraftVersion(null);
     if (versionId === null) {
       setSelectedVersionId(null);
       setVersionDetailMode(false);
@@ -208,6 +229,7 @@ export default function AgentDetailPage() {
   };
 
   const returnToCurrentDraft = () => {
+    setRestoreToDraftVersion(null);
     setSelectedVersionId(null);
     setVersionDetailMode(false);
     setVersionView("config");
@@ -219,8 +241,10 @@ export default function AgentDetailPage() {
     const restored: RestoredAgentDraft = {
       sourceLabel: selectedVersion.label,
       issues: selectedVersion.restoreIssues ?? [],
+      notice: `${selectedVersion.label} 已还原为当前草稿`,
     };
     setRestoredDraft(restored);
+    setRestoreToDraftVersion(selectedVersion.label);
     setRestoreConfirmOpen(false);
     setHistoryOpen(false);
     setSelectedVersionId(null);
@@ -230,13 +254,35 @@ export default function AgentDetailPage() {
     toast.success(`${selectedVersion.label} 已还原为当前草稿`);
   };
 
+  const handleHistoricalReferenceAction = (action: "update" | "reconfigure") => {
+    if (!selectedVersion) return;
+    setRestoredDraft({
+      sourceLabel: selectedVersion.label,
+      issues: selectedVersion.restoreIssues ?? [],
+      notice: `${selectedVersion.label} 已复制到当前草稿`,
+    });
+    setRestoreToDraftVersion(selectedVersion.label);
+    setHistoryOpen(false);
+    setSelectedVersionId(null);
+    setVersionDetailMode(false);
+    setVersionView("config");
+    setActiveTab("config");
+    toast.success(
+      action === "update"
+        ? `${selectedVersion.label} 已复制到当前草稿，请确认引用更新`
+        : `${selectedVersion.label} 已复制到当前草稿，请重新配置引用`
+    );
+  };
+
   const handlePublishConfirm = () => {
     const description = versionDescription.trim();
     if (!description || isHistorical) return;
     const sourceVersion = versions.find((version) => version.isLatest) ?? versions[0];
     if (!sourceVersion) return;
 
-    const publishedAt = new Date().toLocaleString("zh-CN", { hour12: false }).replaceAll("/", "-");
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const publishedAt = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
     const versionSlug = nextVersionLabel.toLowerCase();
     const resources = sourceVersion.resources.map((resource) => ({ ...resource, change: "未变化" as const }));
     const snapshot = {
@@ -259,12 +305,17 @@ export default function AgentDetailPage() {
       isLatest: true,
       referenceCount: 0,
       availabilityStatus: "启用",
+      listingStatus: "未上架",
       description,
       publisher: "\u7528\u6237A",
       publishedAt,
       versionId: `demo-version-agent-001-${versionSlug}`,
       snapshot,
       ...composition,
+      configSnapshot: {
+        ...composition.configSnapshot,
+        editorState: currentDraftConfigRef.current,
+      },
       resources,
     };
 
@@ -288,20 +339,59 @@ export default function AgentDetailPage() {
     );
     toast.success(`${target?.label ?? "版本"} 已${status === "停用" ? "停用" : "重新启用"}`);
   };
+
+  const handleEntityDisabledChange = (disabled: boolean) => {
+    if (disabled) {
+      const ids = versions
+        .filter((version) => version.availabilityStatus === "启用")
+        .map((version) => version.id);
+      batchDisabledVersionIds.current = new Set(ids);
+      setVersions((current) => current.map((version) => (
+        ids.includes(version.id) ? { ...version, availabilityStatus: "停用" as const } : version
+      )));
+    } else {
+      const ids = batchDisabledVersionIds.current;
+      setVersions((current) => current.map((version) => (
+        ids.has(version.id) ? { ...version, availabilityStatus: "启用" as const } : version
+      )));
+      batchDisabledVersionIds.current = new Set();
+    }
+    setEntityDisabled(disabled);
+    toast.success(disabled ? `${entityLabel}已停用` : `${entityLabel}已重新启用`);
+  };
   const renderAgentConfig = () => (
     <div
       aria-readonly={isHistorical}
       className={isHistorical
-        ? "h-full w-full bg-slate-50 [&_input]:!border-slate-200 [&_input]:!bg-slate-100 [&_input]:!text-slate-500 [&_select]:!border-slate-200 [&_select]:!bg-slate-100 [&_select]:!text-slate-500 [&_textarea]:!border-slate-200 [&_textarea]:!bg-slate-100 [&_textarea]:!text-slate-500 [&_[contenteditable='true']]:!bg-slate-100 [&_[contenteditable='true']]:!text-slate-500"
+        ? "h-full w-full bg-slate-50 [&_button:disabled]:cursor-not-allowed [&_input:disabled]:cursor-not-allowed [&_input]:!border-slate-200 [&_input]:!bg-slate-100 [&_input]:!text-slate-500 [&_select:disabled]:cursor-not-allowed [&_select]:!border-slate-200 [&_select]:!bg-slate-100 [&_select]:!text-slate-500 [&_textarea:disabled]:cursor-not-allowed [&_textarea]:!border-slate-200 [&_textarea]:!bg-slate-100 [&_textarea]:!text-slate-500 [&_[contenteditable='true']]:!cursor-not-allowed [&_[contenteditable='true']]:!bg-slate-100 [&_[contenteditable='true']]:!text-slate-500"
         : "h-full w-full"}
     >
       {isWorkflow ? (
-        <WorkflowEditor agentId={agentId} readOnly={isHistorical} />
+        <WorkflowEditor
+          agentId={agentId}
+          readOnly={isHistorical}
+          snapshotVersion={isHistorical ? selectedVersion?.label ?? null : null}
+          showReferenceAlerts={!isHistorical}
+          historicalConfigSnapshot={selectedVersion?.configSnapshot.editorState}
+          restoreToDraftVersion={restoreToDraftVersion}
+          onDraftSnapshotChange={(snapshot) => {
+            currentDraftConfigRef.current = snapshot;
+          }}
+          onOpenNodeConfig={() => setHistoryOpen(false)}
+          onRequestDraftAction={handleHistoricalReferenceAction}
+        />
       ) : (
         <fieldset disabled={isHistorical} className="h-full w-full min-w-0 border-0 p-0">
           <AutonomousEditor
             agentId={agentId}
             initialAgentData={agentData || undefined}
+            snapshotVersion={isHistorical ? selectedVersion?.label ?? null : null}
+            showReferenceAlerts={!isHistorical}
+            historicalConfigSnapshot={selectedVersion?.configSnapshot.editorState}
+            restoreToDraftVersion={restoreToDraftVersion}
+            onDraftSnapshotChange={(snapshot) => {
+              currentDraftConfigRef.current = snapshot;
+            }}
             onNameChange={setDisplayName}
           />
         </fieldset>
@@ -380,13 +470,12 @@ export default function AgentDetailPage() {
             protectionTypes={["policy", "lexicon"]}
           />
           <AgentAvailabilityControl
-            entityLabel="该智能体"
+            entityLabel={entityLabel}
             disabled={entityDisabled}
-            onDisabledChange={(disabled) => {
-              setEntityDisabled(disabled);
-              toast.success(disabled ? "该智能体已停用" : "该智能体已重新启用");
-            }}
-          />          <TooltipProvider delayDuration={200}>
+            hasListedVersion={versions.some((version) => version.listingStatus === "已上架")}
+            onDisabledChange={handleEntityDisabledChange}
+          />
+          <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -435,7 +524,7 @@ export default function AgentDetailPage() {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <div className="flex items-center gap-2 font-medium">
               <AlertTriangle className="h-4 w-4" />
-              {restoredDraft.sourceLabel} {"\u5df2\u8fd8\u539f\u4e3a\u5f53\u524d\u8349\u7a3f"}
+              {restoredDraft.notice ?? `${restoredDraft.sourceLabel} 已还原为当前草稿`}
             </div>
             <span className="text-amber-800">{restoredDraft.issues.length} {"\u9879\u8d44\u6e90\u5f85\u5904\u7406"}</span>
             {restoredDraft.issues.map((issue) => (
@@ -514,7 +603,7 @@ export default function AgentDetailPage() {
             </div>
 
             <div className="rounded-md bg-blue-50 px-3 py-2.5 text-xs leading-5 text-blue-800">
-              {"\u53d1\u5e03\u6210\u529f\u540e\u5c06\u751f\u6210\u65b0\u7684\u7248\u672c\u8bb0\u5f55\uff0c\u5e76\u8bb0\u5f55\u53d1\u5e03\u65f6\u95f4\u3001\u53d1\u5e03\u4eba\u548c\u7248\u672c ID\u3002\u5f53\u524d\u8349\u7a3f\u5185\u5bb9\u5c06\u4f5c\u4e3a"} {nextVersionLabel} {"\u4e0a\u7ebf\u3002"}
+              {"\u53d1\u5e03\u6210\u529f\u540e\u5c06\u751f\u6210\u65b0\u7684\u7248\u672c\u8bb0\u5f55\uff0c\u5e76\u8bb0\u5f55\u53d1\u5e03\u65f6\u95f4\u3001\u53d1\u5e03\u4eba\u548c\u7248\u672c ID\u3002\u5f53\u524d\u8349\u7a3f\u5185\u5bb9\u5c06\u4f5c\u4e3a"} {nextVersionLabel} {"\u53d1\u5e03\u3002"}
             </div>
           </div>
 
@@ -533,9 +622,9 @@ export default function AgentDetailPage() {
       <AgentVersionHistoryDrawer
         open={historyOpen}
         versions={versions}
-        entityLabel="该智能体"
         selectedVersionId={selectedVersionId}
         restoredDraft={restoredDraft}
+        entityDisabled={entityDisabled}
         restoreConfirmOpen={restoreConfirmOpen}
         onOpenChange={setHistoryOpen}
         onSelectVersion={handleSelectVersion}

@@ -25,6 +25,7 @@ interface NodeConfigPanelProps {
   nodes?: Node[];
   edges?: Edge[];
   readOnly?: boolean;
+  onRequestDraftAction?: (action: "update" | "reconfigure") => void;
 }
 
 const getNodeIcon = (type: string | undefined) => {
@@ -136,6 +137,7 @@ export function NodeConfigPanel({
   nodes = [],
   edges = [],
   readOnly = false,
+  onRequestDraftAction,
 }: NodeConfigPanelProps) {
   if (!selectedNode) return null;
 
@@ -164,7 +166,10 @@ export function NodeConfigPanel({
       </div>
 
       {/* Body */}
-      <fieldset disabled={readOnly} className="flex-1 overflow-y-auto border-0 p-4 disabled:[&_input]:bg-slate-100 disabled:[&_textarea]:bg-slate-100 disabled:[&_button]:opacity-60">
+      <fieldset
+        disabled={readOnly && selectedNode.type !== "agent"}
+        className="flex-1 overflow-y-auto border-0 p-4 disabled:[&_button]:cursor-not-allowed disabled:[&_button]:opacity-60 disabled:[&_input]:cursor-not-allowed disabled:[&_input]:bg-slate-100 disabled:[&_select]:cursor-not-allowed disabled:[&_textarea]:cursor-not-allowed disabled:[&_textarea]:bg-slate-100"
+      >
         {selectedNode.type === "start" && (
           <StartNodeConfig
             nodeData={selectedNode.data}
@@ -247,6 +252,8 @@ export function NodeConfigPanel({
             currentNodeId={selectedNode.id}
             nodes={nodes}
             edges={edges}
+            readOnly={readOnly}
+            onRequestDraftAction={onRequestDraftAction}
           />
         )}
         {selectedNode.type === "branch" && (

@@ -21,15 +21,26 @@ import {
 interface AgentAvailabilityControlProps {
   entityLabel: string;
   disabled: boolean;
+  hasListedVersion: boolean;
   onDisabledChange: (disabled: boolean) => void;
 }
 
 export function AgentAvailabilityControl({
   entityLabel,
   disabled,
+  hasListedVersion,
   onDisabledChange,
 }: AgentAvailabilityControlProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [stopBlockedOpen, setStopBlockedOpen] = useState(false);
+
+  const requestAvailabilityChange = () => {
+    if (!disabled && hasListedVersion) {
+      setStopBlockedOpen(true);
+      return;
+    }
+    setConfirmOpen(true);
+  };
 
   const confirmChange = () => {
     onDisabledChange(!disabled);
@@ -50,9 +61,9 @@ export function AgentAvailabilityControl({
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44 rounded-md p-1">
+        <DropdownMenuContent align="end" className="w-48 rounded-md p-1">
           <DropdownMenuItem
-            onSelect={() => setConfirmOpen(true)}
+            onSelect={requestAvailabilityChange}
             className="cursor-pointer rounded"
           >
             {disabled ? <Power className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
@@ -67,8 +78,8 @@ export function AgentAvailabilityControl({
             <DialogTitle>{disabled ? `重新启用${entityLabel}？` : `停用${entityLabel}？`}</DialogTitle>
             <DialogDescription className="pt-2 leading-6 text-slate-600">
               {disabled
-                ? `重新启用后，${entityLabel}及其可用版本可以再次被其他资源引用和调用。`
-                : `停用后，${entityLabel}将停止被其他资源引用和调用；已发布版本及历史记录仍会保留。`}
+                ? "重新启用后，本次整体停用的版本将恢复被引用和调用；此前单独停用的版本保持不变。"
+                : `停用后，${entityLabel}下当前可用版本将停止被引用和调用，历史记录继续保留。`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -79,6 +90,21 @@ export function AgentAvailabilityControl({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={stopBlockedOpen} onOpenChange={setStopBlockedOpen}>
+        <DialogContent className="max-w-[460px] rounded-lg">
+          <DialogHeader>
+            <DialogTitle>暂不能停用{entityLabel}</DialogTitle>
+            <DialogDescription className="pt-2 leading-6 text-slate-600">
+              该资源仍有版本处于上架状态。请先完成下架，再停用{entityLabel}。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setStopBlockedOpen(false)} className="rounded-md bg-blue-600 text-white hover:bg-blue-700">我知道了</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </>
   );
 }

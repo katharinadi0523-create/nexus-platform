@@ -16,11 +16,9 @@ interface AgentNodeData {
   latestVersionDescription?: string;
   hasVersionUpdate?: boolean;
   versionUpdateDismissed?: boolean;
-  versionAutoSwitched?: boolean;
-  previousVersion?: string;
-  versionSwitchMessage?: string;
-  versionSwitchedAt?: string;
-  availabilityStatus?: "available" | "agent-disabled";
+  ignoredVersion?: string;
+  showReferenceAlerts?: boolean;
+  availabilityStatus?: "available" | "version-disabled" | "agent-disabled";
   agentUnavailableMessage?: string;
   runtimeError?: string;
 }
@@ -31,26 +29,25 @@ export function AgentNode(props: NodeProps<AgentNodeData>) {
   const inputVariables = data?.inputVariables || [];
   const outputVariables = data?.outputVariables || [];
   const agentDisabled = data?.availabilityStatus === "agent-disabled";
+  const versionDisabled = data?.availabilityStatus === "version-disabled";
+  const unavailable = agentDisabled || versionDisabled;
+  const hasPendingVersionUpdate = Boolean(
+    data?.showReferenceAlerts &&
+      data?.hasVersionUpdate &&
+      data.latestVersion !== data.ignoredVersion
+  );
 
   return (
     <div className="relative">
-      {agentDisabled ? (
+      {data?.showReferenceAlerts && unavailable ? (
         <span
-          title="引用的智能体已停用"
-          aria-label="引用的智能体已停用"
+          title="引用资源已停用，请重新配置"
+          aria-label="引用资源已停用，请重新配置"
           className="absolute -right-3 -top-3 z-20 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-rose-500 text-white shadow-sm"
         >
           <CircleAlert className="h-4 w-4" />
         </span>
-      ) : data?.versionAutoSwitched ? (
-        <span
-          title="原引用版本已停用，已自动切换"
-          aria-label="原引用版本已停用，已自动切换"
-          className="absolute -right-3 -top-3 z-20 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-blue-600 text-white shadow-sm"
-        >
-          <CircleAlert className="h-4 w-4" />
-        </span>
-      ) : data?.hasVersionUpdate ? (
+      ) : hasPendingVersionUpdate ? (
         <span
           title="存在可用新版本"
           aria-label="存在可用新版本"
@@ -62,7 +59,7 @@ export function AgentNode(props: NodeProps<AgentNodeData>) {
       <BaseNode
         icon={Bot}
         label="智能体"
-        color={agentDisabled ? "red" : "blue"}
+        color={unavailable ? "red" : "blue"}
         showTargetHandle={true}
         showSourceHandle={false}
         {...props}
@@ -74,13 +71,15 @@ export function AgentNode(props: NodeProps<AgentNodeData>) {
               智能体
             </div>
             {hasAgent ? (
-              <div className={`flex items-center gap-2 rounded px-2 py-1.5 ${agentDisabled ? "bg-rose-50" : "bg-slate-50/50"}`}>
-                <div className={`flex h-4 w-4 items-center justify-center rounded ${agentDisabled ? "bg-rose-100" : "bg-blue-100"}`}>
-                  <div className={`h-2 w-2 rounded-sm ${agentDisabled ? "bg-rose-500" : "bg-blue-600"}`} />
+              <div className={`flex items-center gap-2 rounded px-2 py-1.5 ${unavailable ? "bg-rose-50" : "bg-slate-50/50"}`}>
+                <div className={`flex h-4 w-4 items-center justify-center rounded ${unavailable ? "bg-rose-100" : "bg-blue-100"}`}>
+                  <div className={`h-2 w-2 rounded-sm ${unavailable ? "bg-rose-500" : "bg-blue-600"}`} />
                 </div>
-                <span className={`text-xs ${agentDisabled ? "text-rose-700" : "text-slate-700"}`}>{data.agentName}</span>
-                {agentDisabled ? (
-                  <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">不可用</span>
+                <span className={`text-xs ${unavailable ? "text-rose-700" : "text-slate-700"}`}>{data.agentName}</span>
+                {unavailable ? (
+                  <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                    已停用
+                  </span>
                 ) : null}
                 {data.currentVersion ? (
                   <span className="ml-auto rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">

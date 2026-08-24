@@ -42,6 +42,13 @@ import { getWorkflowByAgentId } from "@/lib/mock/workflow-data";
 interface WorkflowEditorProps {
   agentId: string;
   readOnly?: boolean;
+  snapshotVersion?: string | null;
+  showReferenceAlerts?: boolean;
+  historicalConfigSnapshot?: unknown;
+  restoreToDraftVersion?: string | null;
+  onDraftSnapshotChange?: (snapshot: { nodes: Node[]; edges: Edge[] }) => void;
+  onOpenNodeConfig?: () => void;
+  onRequestDraftAction?: (action: "update" | "reconfigure") => void;
 }
 
 // 定义节点类型
@@ -109,22 +116,20 @@ const initialNodes: Node[] = [
     },
   },
   {
-    id: "agent-version-auto-switch-demo",
+    id: "agent-version-disabled-demo",
     type: "agent",
     position: { x: 700, y: 350 },
     data: {
-      description: "合同审查（引用版本已自动切换）",
+      description: "合同审查",
       agentId: "contract-review-agent",
       agentName: "合同审查智能体",
-      previousVersion: "V1",
-      currentVersion: "V2",
+      currentVersion: "V1",
       latestVersion: "V2",
       latestVersionDescription: "优化合同条款识别与风险提示",
-      versionAutoSwitched: true,
-      versionSwitchMessage: "原引用版本 V1 已停用，系统已自动切换至最新可用版本 V2。",
-      versionSwitchedAt: "2026-08-03 10:30:12",
       hasVersionUpdate: false,
-      availabilityStatus: "available",
+      availabilityStatus: "version-disabled",
+      agentUnavailableMessage: "引用资源已停用，请重新配置。",
+      runtimeError: "引用版本 V1 已停用，当前节点无法调用，请重新配置后再运行。",
       inputVariables: [{ name: "query", type: "string" }],
       outputVariables: [{ name: "answer", type: "String" }],
     },
@@ -134,7 +139,7 @@ const initialNodes: Node[] = [
     type: "agent",
     position: { x: 700, y: 640 },
     data: {
-      description: "设备诊断（引用智能体已停用）",
+      description: "设备诊断",
       agentId: "legacy-device-agent",
       agentName: "旧版设备诊断智能体",
       currentVersion: "V3",
@@ -166,14 +171,24 @@ const initialNodes: Node[] = [
 const initialEdges: Edge[] = [
   { id: "e1", source: "start-1", target: "knowledge-1", type: "smoothstep", animated: true },
   { id: "e2", source: "knowledge-1", target: "agent-version-demo", type: "smoothstep", animated: true },
-  { id: "e3", source: "knowledge-1", target: "agent-version-auto-switch-demo", type: "smoothstep", animated: true },
+  { id: "e3", source: "knowledge-1", target: "agent-version-disabled-demo", type: "smoothstep", animated: true },
   { id: "e4", source: "knowledge-1", target: "agent-disabled-demo", type: "smoothstep", animated: true },
   { id: "e5", source: "agent-version-demo", target: "llm-1", type: "smoothstep", animated: true },
-  { id: "e6", source: "agent-version-auto-switch-demo", target: "llm-1", type: "smoothstep", animated: true },
+  { id: "e6", source: "agent-version-disabled-demo", target: "llm-1", type: "smoothstep", animated: true },
   { id: "e7", source: "agent-disabled-demo", target: "llm-1", type: "smoothstep", animated: true },
   { id: "e8", source: "llm-1", target: "end-1", type: "smoothstep", animated: true },
 ];
-export function WorkflowEditor({ agentId, readOnly = false }: WorkflowEditorProps) {
+export function WorkflowEditor({
+  agentId,
+  readOnly = false,
+  snapshotVersion = null,
+  showReferenceAlerts = true,
+  historicalConfigSnapshot,
+  restoreToDraftVersion = null,
+  onDraftSnapshotChange,
+  onOpenNodeConfig,
+  onRequestDraftAction,
+}: WorkflowEditorProps) {
   // 根据 agentId 加载工作流数据，如果没有则使用默认值
   const workflowData = agentId ? getWorkflowByAgentId(agentId) : null;
   const defaultNodes = workflowData?.nodes || initialNodes;
@@ -186,6 +201,11 @@ export function WorkflowEditor({ agentId, readOnly = false }: WorkflowEditorProp
   const [basicConfigOpen, setBasicConfigOpen] = useState(false);
   const [runResult, setRunResult] = useState<FlowRuntimeResult | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const draftSnapshotRef = useRef<{ nodes: Node[]; edges: Edge[] }>({
+    nodes: defaultNodes.map((node) => ({ ...node, position: { ...node.position }, data: { ...node.data } })),
+    edges: defaultEdges.map((edge) => ({ ...edge, data: edge.data ? { ...edge.data } : edge.data })),
+  });
+  const previousSnapshotVersionRef = useRef<string | null>(snapshotVersion);
 
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
 
@@ -198,10 +218,69 @@ export function WorkflowEditor({ agentId, readOnly = false }: WorkflowEditorProp
     }
   }, [agentId, setNodes, setEdges]);
 
-  const selectedNode = useMemo(
-    () => nodes.find((node) => node.id === selectedNodeId) || null,
-    [nodes, selectedNodeId]
-  );
+  // 当前草稿和各历史版本使用彼此独立的画布数据。进入历史版本时先保存
+  // 当前草稿，再从该历史版本的固化快照重新加载；返回草稿时恢复原草稿。
+  useEffect(() => {
+    const previousSnapshotVersion = previousSnapshotVersionRef.current;
+
+    if (!previousSnapshotVersion && snapshotVersion) {
+      draftSnapshotRef.current = {
+        nodes: nodes.map((node) => ({ ...node, position: { ...node.position }, data: { ...node.data } })),
+        edges: edges.map((edge) => ({ ...edge, data: edge.data ? { ...edge.data } : edge.data })),
+      };
+    }
+
+    if (snapshotVersion) {
+      const storedSnapshot = historicalConfigSnapshot as { nodes?: Node[]; edges?: Edge[] } | undefined;
+      const frozenWorkflow = agentId ? getWorkflowByAgentId(agentId) : null;
+      const frozenNodes = storedSnapshot?.nodes || frozenWorkflow?.nodes || initialNodes;
+      const frozenEdges = storedSnapshot?.edges || frozenWorkflow?.edges || initialEdges;
+      setNodes(
+        frozenNodes.map((node) => ({
+          ...node,
+          position: { ...node.position },
+          data: { ...node.data, snapshotVersion },
+        }))
+      );
+      setEdges(
+        frozenEdges.map((edge) => ({
+          ...edge,
+          data: edge.data ? { ...edge.data } : edge.data,
+        }))
+      );
+    } else if (previousSnapshotVersion && restoreToDraftVersion !== previousSnapshotVersion) {
+      setNodes(
+        draftSnapshotRef.current.nodes.map((node) => ({
+          ...node,
+          position: { ...node.position },
+          data: { ...node.data },
+        }))
+      );
+      setEdges(
+        draftSnapshotRef.current.edges.map((edge) => ({
+          ...edge,
+          data: edge.data ? { ...edge.data } : edge.data,
+        }))
+      );
+    }
+
+    setSelectedNodeId(null);
+    previousSnapshotVersionRef.current = snapshotVersion;
+  }, [agentId, historicalConfigSnapshot, restoreToDraftVersion, snapshotVersion, setEdges, setNodes]);
+
+  useEffect(() => {
+    if (snapshotVersion) return;
+    draftSnapshotRef.current = {
+      nodes: nodes.map((node) => ({ ...node, position: { ...node.position }, data: { ...node.data } })),
+      edges: edges.map((edge) => ({ ...edge, data: edge.data ? { ...edge.data } : edge.data })),
+    };
+    onDraftSnapshotChange?.(draftSnapshotRef.current);
+  }, [edges, nodes, onDraftSnapshotChange, snapshotVersion]);
+
+  const selectedNode = useMemo(() => {
+    const node = nodes.find((item) => item.id === selectedNodeId) || null;
+    return node ? { ...node, data: { ...node.data, showReferenceAlerts } } : null;
+  }, [nodes, selectedNodeId, showReferenceAlerts]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -212,7 +291,8 @@ export function WorkflowEditor({ agentId, readOnly = false }: WorkflowEditorProp
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
-  }, []);
+    onOpenNodeConfig?.();
+  }, [onOpenNodeConfig]);
 
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null);
@@ -319,7 +399,10 @@ export function WorkflowEditor({ agentId, readOnly = false }: WorkflowEditorProp
         {/* React Flow Canvas */}
         <div className="absolute inset-0">
           <ReactFlow
-            nodes={nodes}
+            nodes={nodes.map((node) => ({
+              ...node,
+              data: { ...node.data, showReferenceAlerts },
+            }))}
             edges={edges}
             onNodesChange={readOnly ? undefined : onNodesChange}
             onEdgesChange={readOnly ? undefined : onEdgesChange}
@@ -414,6 +497,7 @@ export function WorkflowEditor({ agentId, readOnly = false }: WorkflowEditorProp
             nodes={nodes}
             edges={edges}
             readOnly={readOnly}
+            onRequestDraftAction={onRequestDraftAction}
           />
         )}
 

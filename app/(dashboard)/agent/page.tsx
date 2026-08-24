@@ -30,6 +30,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getAllAgents } from "@/lib/agent-data";
 
 interface Agent {
@@ -55,9 +63,13 @@ function convertAgentProfileToAgent(profile: ReturnType<typeof getAllAgents>[0])
 const AGENTS_STATUS_MAP: Record<string, string> = {
   "agent-situational": "已发布",
   "agent-intent-analysis": "已发布",
+  "code-02": "已发布",
   "device-03": "已发布",
   "anti-fl-07": "已发布",
 };
+
+// 原型演示：该资源已经完成“停用整个资源”，其全部发布版本均不可被引用或调用。
+const ALL_VERSIONS_DISABLED_AGENT_IDS = new Set(["code-02"]);
 
 const ITEMS_PER_PAGE = 20;
 
@@ -66,8 +78,12 @@ export default function AgentPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
+  const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null);
+  const [deleteBlockedOpen, setDeleteBlockedOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [removedAgentIds, setRemovedAgentIds] = useState<string[]>([]);
 
-  const agents = useMemo(() => {
+  const allAgents = useMemo(() => {
     return getAllAgents().map((profile) => {
       const agent = convertAgentProfileToAgent(profile);
       if (AGENTS_STATUS_MAP[agent.id]) {
@@ -76,6 +92,7 @@ export default function AgentPage() {
       return agent;
     });
   }, []);
+  const agents = allAgents.filter((agent) => !removedAgentIds.includes(agent.id));
 
   const filteredAgents = agents.filter(
     (agent) =>
@@ -96,7 +113,20 @@ export default function AgentPage() {
   };
 
   const handleDelete = (agent: Agent) => {
-    toast.success(`已删除：${agent.name}`);
+    setDeleteTarget(agent);
+    if (agent.status === "已发布" && !ALL_VERSIONS_DISABLED_AGENT_IDS.has(agent.id)) {
+      setDeleteBlockedOpen(true);
+      return;
+    }
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    setRemovedAgentIds((current) => [...current, deleteTarget.id]);
+    setDeleteConfirmOpen(false);
+    toast.success(`已删除：${deleteTarget.name}`);
+    setDeleteTarget(null);
   };
 
   const handlePageChange = (page: number) => {
@@ -210,6 +240,7 @@ export default function AgentPage() {
               paginatedAgents.map((agent) => {
                 const isAutonomous = agent.type === "自主规划智能体";
                 const isPublished = agent.status === "已发布";
+                const areAllVersionsDisabled = ALL_VERSIONS_DISABLED_AGENT_IDS.has(agent.id);
                 const editHref = `/agent/${agent.id}`;
 
                 return (
@@ -250,16 +281,24 @@ export default function AgentPage() {
                     </TableCell>
 
                     <TableCell className="px-4 py-3 align-middle">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-[4px] px-2 py-1 text-xs font-medium ${
-                          isPublished ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <span
-                          className={`h-1.5 w-1.5 rounded-full ${isPublished ? "bg-emerald-500" : "bg-slate-400"}`}
-                        />
-                        {agent.status}
-                      </span>
+                          className={`inline-flex items-center gap-1.5 rounded-[4px] px-2 py-1 text-xs font-medium ${
+                            isPublished ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${isPublished ? "bg-emerald-500" : "bg-slate-400"}`}
+                          />
+                          {agent.status}
+                        </span>
+                        {areAllVersionsDisabled && (
+                          <span className="inline-flex items-center gap-1.5 rounded-[4px] bg-rose-50 px-2 py-1 text-xs font-medium text-rose-600">
+                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                            全部版本已停用
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
 
                     <TableCell className="max-w-[360px] whitespace-normal px-4 py-3 align-middle text-sm leading-6 text-slate-600">
@@ -380,6 +419,43 @@ export default function AgentPage() {
           </div>
         </div>
       )}
+
+      <Dialog open={deleteBlockedOpen} onOpenChange={setDeleteBlockedOpen}>
+        <DialogContent className="max-w-[480px] rounded-lg">
+          <DialogHeader>
+            <DialogTitle>暂不能删除{deleteTarget?.name ? `「${deleteTarget.name}」` : "该资源"}</DialogTitle>
+            <DialogDescription className="pt-2 leading-6 text-slate-600">
+              该资源仍有可用版本。请先停用整个资源，确认全部版本停止被引用和调用后，再从列表删除。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setDeleteBlockedOpen(false)} className="rounded-md bg-blue-600 text-white hover:bg-blue-700">
+              我知道了
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-[480px] rounded-lg">
+          <DialogHeader>
+            <DialogTitle>删除{deleteTarget?.name ? `「${deleteTarget.name}」` : "该资源"}？</DialogTitle>
+            <DialogDescription className="pt-2 leading-6 text-slate-600">
+              {deleteTarget && ALL_VERSIONS_DISABLED_AGENT_IDS.has(deleteTarget.id)
+                ? "该资源的全部发布版本均已停用。删除后，当前草稿、全部历史版本及相关配置将被永久移除，且无法恢复。"
+                : "删除后，当前草稿、全部历史版本及相关配置将被永久移除，且无法恢复。"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} className="rounded-md">
+              取消
+            </Button>
+            <Button onClick={confirmDelete} className="rounded-md bg-rose-600 text-white hover:bg-rose-700">
+              确认删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

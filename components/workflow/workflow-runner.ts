@@ -182,6 +182,12 @@ function getMockOutput(node: Node): any {
 
   // Agent节点
   if (nodeType === "agent") {
+    if (node.data?.availabilityStatus === "version-disabled") {
+      throw new Error(
+        node.data?.runtimeError ||
+          "引用版本已停用，当前节点无法调用，请重新配置后再运行。"
+      );
+    }
     if (node.data?.availabilityStatus === "agent-disabled") {
       throw new Error(
         node.data?.runtimeError ||

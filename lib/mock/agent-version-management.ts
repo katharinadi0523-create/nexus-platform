@@ -1,6 +1,7 @@
 export type AgentTraceabilityStatus = "完整可追溯" | "基础可追溯" | "追溯受限";
 export type AgentResourceChange = "新增" | "移除" | "变化" | "未变化";
 export type AgentVersionAvailability = "启用" | "停用";
+export type AgentVersionListingStatus = "已上架" | "未上架";
 
 export interface AgentRestoreIssue {
   resourceId: string;
@@ -30,6 +31,8 @@ export interface AgentConfigSnapshot {
   frozenAt: string;
   immutable: true;
   resourceStableIds: string[];
+  /** 发布时由对应编辑器固化的完整配置，仅用于只读查看和还原。 */
+  editorState?: unknown;
 }
 
 export interface AgentCompositionNodeRecord {
@@ -69,6 +72,7 @@ export interface AgentVersionRecord {
   isReferenced?: boolean;
   referenceCount?: number;
   availabilityStatus: AgentVersionAvailability;
+  listingStatus: AgentVersionListingStatus;
   description: string;
   publisher: string;
   publishedAt: string;
@@ -287,6 +291,7 @@ function createVersion({
   isReferenced,
   referenceCount,
   availabilityStatus = "启用",
+  listingStatus = "未上架",
   restoreIssues,
 }: {
   label: string;
@@ -298,6 +303,7 @@ function createVersion({
   isReferenced?: boolean;
   referenceCount?: number;
   availabilityStatus?: AgentVersionAvailability;
+  listingStatus?: AgentVersionListingStatus;
   restoreIssues?: AgentRestoreIssue[];
 }): AgentVersionRecord {
   const versionSlug = label.toLowerCase().replace(".", "-");
@@ -310,6 +316,7 @@ function createVersion({
     isReferenced,
     referenceCount: referenceCount ?? (isReferenced ? 1 : 0),
     availabilityStatus,
+    listingStatus,
     description,
     publisher: "用户A",
     publishedAt,
@@ -353,15 +360,16 @@ export const AGENT_VERSION_HISTORY: AgentVersionRecord[] = [
     isLatest: true,
     isReferenced: true,
     referenceCount: 3,
+    listingStatus: "已上架",
     description: "完善知识检索策略与设备案例覆盖",
-    publishedAt: "2026-07-28 16:35",
+    publishedAt: "2026-07-28 16:35:08",
     frozenAt: "2026-07-28 16:34:42",
     resources: RESOURCES_V4,
   }),
   createVersion({
     label: "V11",
     description: "优化设备故障分析结果格式",
-    publishedAt: "2026-07-27 18:10",
+    publishedAt: "2026-07-27 18:10:12",
     frozenAt: "2026-07-27 18:09:36",
     resources: buildResources(["demo-kb-device-case-001"], { "demo-core-file-agent-md-001": "内容指纹 sha256:demo-9c31" }),
   }),
@@ -370,28 +378,28 @@ export const AGENT_VERSION_HISTORY: AgentVersionRecord[] = [
     isReferenced: true,
     referenceCount: 2,
     description: "更新安全规程知识内容",
-    publishedAt: "2026-07-27 10:42",
+    publishedAt: "2026-07-27 10:42:06",
     frozenAt: "2026-07-27 10:41:28",
     resources: buildResources(["demo-kb-device-case-001"], { "demo-kb-safety-manual-001": "内容指纹 sha256:demo-14ae" }),
   }),
   createVersion({
     label: "V9",
     description: "调整模型推理参数配置",
-    publishedAt: "2026-07-26 17:18",
+    publishedAt: "2026-07-26 17:18:33",
     frozenAt: "2026-07-26 17:17:43",
     resources: buildResources(["demo-kb-device-case-001"], { "demo-model-qwen3-32b-001": "模型版本 demo-2026.06" }),
   }),
   createVersion({
     label: "V8",
     description: "补充设备运维本体字段",
-    publishedAt: "2026-07-26 14:03",
+    publishedAt: "2026-07-26 14:03:09",
     frozenAt: "2026-07-26 14:02:22",
     resources: buildResources(["demo-kb-device-case-001"], { "demo-ontology-device-001": "配置指纹 cfg:demo-38b1" }),
   }),
   createVersion({
     label: "V7",
     description: "更新文档解析插件配置",
-    publishedAt: "2026-07-26 09:26",
+    publishedAt: "2026-07-26 09:26:51",
     frozenAt: "2026-07-26 09:25:44",
     resources: buildResources(["demo-kb-device-case-001"], { "demo-plugin-document-parser-001": "配置指纹 cfg:demo-61f0" }),
   }),
@@ -399,21 +407,21 @@ export const AGENT_VERSION_HISTORY: AgentVersionRecord[] = [
     label: "V6",
     availabilityStatus: "停用",
     description: "调整 MCP 服务授权范围",
-    publishedAt: "2026-07-25 18:46",
+    publishedAt: "2026-07-25 18:46:03",
     frozenAt: "2026-07-25 18:45:31",
     resources: buildResources(["demo-kb-device-case-001"], { "demo-mcp-device-service-001": "授权状态：待更新" }),
   }),
   createVersion({
     label: "V5",
     description: "优化数据分析工具参数",
-    publishedAt: "2026-07-25 16:12",
+    publishedAt: "2026-07-25 16:12:24",
     frozenAt: "2026-07-25 16:11:39",
     resources: buildResources(["demo-kb-device-case-001", "demo-ontology-device-001"], { "demo-tool-data-analyzer-001": "配置指纹 cfg:demo-447b" }),
   }),
   createVersion({
     label: "V4",
     description: "修订角色指令边界说明",
-    publishedAt: "2026-07-25 13:55",
+    publishedAt: "2026-07-25 13:55:16",
     frozenAt: "2026-07-25 13:54:47",
     resources: buildResources(["demo-kb-device-case-001", "demo-ontology-device-001"], { "demo-core-file-agent-md-001": "内容指纹 sha256:demo-83ce" }),
   }),
@@ -422,14 +430,14 @@ export const AGENT_VERSION_HISTORY: AgentVersionRecord[] = [
     isReferenced: true,
     referenceCount: 1,
     description: "调整角色指令和数据分析工具配置",
-    publishedAt: "2026-07-25 11:20",
+    publishedAt: "2026-07-25 11:20:00",
     frozenAt: "2026-07-25 11:19:26",
     resources: RESOURCES_V3,
   }),
   createVersion({
     label: "V2",
     description: "补充设备运维知识与工具配置",
-    publishedAt: "2026-07-22 09:15",
+    publishedAt: "2026-07-22 09:15:07",
     frozenAt: "2026-07-22 09:14:31",
     resources: RESOURCES_V2,
     restoreIssues: [
@@ -450,7 +458,7 @@ export const AGENT_VERSION_HISTORY: AgentVersionRecord[] = [
   createVersion({
     label: "V1",
     description: "首次发布演示智能体",
-    publishedAt: "2026-07-18 14:06",
+    publishedAt: "2026-07-18 14:06:19",
     frozenAt: "2026-07-18 14:05:38",
     resources: RESOURCES_V1,
   }),

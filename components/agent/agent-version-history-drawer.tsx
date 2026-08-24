@@ -23,14 +23,15 @@ import { cn } from "@/lib/utils";
 export interface RestoredAgentDraft {
   sourceLabel: string;
   issues: AgentRestoreIssue[];
+  notice?: string;
 }
 
 interface AgentVersionHistoryDrawerProps {
   open: boolean;
   versions: AgentVersionRecord[];
-  entityLabel: string;
   selectedVersionId: string | null;
   restoredDraft: RestoredAgentDraft | null;
+  entityDisabled: boolean;
   restoreConfirmOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectVersion: (versionId: string | null) => void;
@@ -43,9 +44,9 @@ interface AgentVersionHistoryDrawerProps {
 export function AgentVersionHistoryDrawer({
   open,
   versions,
-  entityLabel,
   selectedVersionId,
   restoredDraft,
+  entityDisabled,
   restoreConfirmOpen,
   onOpenChange,
   onSelectVersion,
@@ -57,7 +58,7 @@ export function AgentVersionHistoryDrawer({
 
   const [availabilityCandidateId, setAvailabilityCandidateId] = useState<string | null>(null);
   const [availabilityConfirmOpen, setAvailabilityConfirmOpen] = useState(false);
-  const [lastAvailableBlockedOpen, setLastAvailableBlockedOpen] = useState(false);
+  const [listedVersionBlockedOpen, setListedVersionBlockedOpen] = useState(false);
   const selectedVersion = versions.find((version) => version.id === selectedVersionId) ?? null;
   const availabilityCandidate = versions.find((version) => version.id === availabilityCandidateId) ?? null;
   const availableVersionCount = versions.filter((version) => version.availabilityStatus === "启用").length;
@@ -66,8 +67,8 @@ export function AgentVersionHistoryDrawer({
     const target = versions.find((version) => version.id === versionId);
     if (!target) return;
     setAvailabilityCandidateId(versionId);
-    if (target.availabilityStatus === "启用" && availableVersionCount <= 1) {
-      setLastAvailableBlockedOpen(true);
+    if (target.availabilityStatus === "启用" && target.listingStatus === "已上架") {
+      setListedVersionBlockedOpen(true);
       return;
     }
     setAvailabilityConfirmOpen(true);
@@ -140,8 +141,8 @@ export function AgentVersionHistoryDrawer({
                   </span>
                 </div>
                 <p className="mt-2 text-xs leading-5 text-slate-600">
-                  {restoredDraft.issues.length
-                    ? `${restoredDraft.sourceLabel} \u5df2\u8fd8\u539f\u4e3a\u5f53\u524d\u8349\u7a3f\u3002${restoredDraft.issues.length} \u9879\u8d44\u6e90\u5f85\u5904\u7406\u3002`
+                  {restoredDraft.notice
+                    ? `${restoredDraft.notice}${restoredDraft.issues.length ? `，${restoredDraft.issues.length} 项资源待处理` : ""}。`
                     : "\u5f53\u524d\u81ea\u52a8\u4fdd\u5b58\u8349\u7a3f\uff0c\u53d1\u5e03\u540e\u751f\u6210\u65b0\u7684\u7248\u672c\u8bb0\u5f55\u3002"}
                 </p>
               </button>
@@ -175,40 +176,46 @@ export function AgentVersionHistoryDrawer({
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-slate-950">{version.label}</span>
                       {version.isLatest ? (
-                        <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600">最新</span>
+                        <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600">最新发布</span>
+                      ) : null}
+                      {version.listingStatus === "已上架" ? (
+                        <span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
+                          已上架
+                        </span>
                       ) : null}
                       {version.availabilityStatus === "停用" ? (
                         <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">已停用</span>
                       ) : null}
                     </div>
-                    <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-700">{version.description}</p>
+                    <p title={version.description} className="mt-2 line-clamp-2 text-sm leading-5 text-slate-700">{version.description}</p>
                     <div className="mt-3 space-y-1 text-xs text-slate-500">
                       <p>{version.publisher} · {version.publishedAt}</p>
                       <p>版本 ID：{version.versionId}</p>
                     </div>
                   </button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`${version.label} 更多操作`}
-                        className="absolute right-2 top-2 h-8 w-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36 rounded-md p-1">
-                      <DropdownMenuItem
-                        onSelect={() => requestAvailabilityChange(version.id)}
-                        className="cursor-pointer rounded"
-                      >
-                        {version.availabilityStatus === "启用" ? <Ban className="h-4 w-4" /> : <Power className="h-4 w-4" />}
-                        {version.availabilityStatus === "启用" ? "停用版本" : "重新启用"}
-                      </DropdownMenuItem>
-
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {!entityDisabled && (version.availabilityStatus === "停用" || availableVersionCount > 1) ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`${version.label} 更多操作`}
+                          className="absolute right-2 top-2 h-8 w-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-36 rounded-md p-1">
+                        <DropdownMenuItem
+                          onSelect={() => requestAvailabilityChange(version.id)}
+                          className="cursor-pointer rounded"
+                        >
+                          {version.availabilityStatus === "启用" ? <Ban className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                          {version.availabilityStatus === "启用" ? "停用版本" : "重新启用"}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
                 </div>
               );
             })}
@@ -253,7 +260,7 @@ export function AgentVersionHistoryDrawer({
             </DialogTitle>
             <DialogDescription className="pt-2 leading-6 text-slate-600">
               {availabilityCandidate?.availabilityStatus === "启用"
-                ? "停用后，该版本将不能被其他资源引用和调用；已发布版本及历史记录仍会保留。"
+                ? "停用后，该版本不能再被引用或调用；已有引用关系保留并显示不可用，不会自动切换到其他版本。"
                 : "启用后，该版本可重新被其他资源引用和调用。"}
             </DialogDescription>
           </DialogHeader>
@@ -266,16 +273,16 @@ export function AgentVersionHistoryDrawer({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={lastAvailableBlockedOpen} onOpenChange={setLastAvailableBlockedOpen}>
+      <Dialog open={listedVersionBlockedOpen} onOpenChange={setListedVersionBlockedOpen}>
         <DialogContent className="max-w-[460px] rounded-lg">
           <DialogHeader>
-            <DialogTitle>该版本是最后一个可用版本</DialogTitle>
+            <DialogTitle>暂不能停用该版本</DialogTitle>
             <DialogDescription className="pt-2 leading-6 text-slate-600">
-              当前版本不能单独停用。如需停止该对象被其他资源引用和调用，请停用{entityLabel}。
+              该版本仍处于上架状态。请先完成下架，再停用该版本。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={() => setLastAvailableBlockedOpen(false)} className="rounded-md bg-blue-600 text-white hover:bg-blue-700">我知道了</Button>
+            <Button onClick={() => setListedVersionBlockedOpen(false)} className="rounded-md bg-blue-600 text-white hover:bg-blue-700">我知道了</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

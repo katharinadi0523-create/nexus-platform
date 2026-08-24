@@ -574,6 +574,7 @@ export function ClawDetailWorkbench({
   const [versionPublishOpen, setVersionPublishOpen] = useState(false);
   const [versionDescription, setVersionDescription] = useState("");
   const [entityDisabled, setEntityDisabled] = useState(false);
+  const batchDisabledVersionIds = useRef<string[]>([]);
   const selectedVersion = versions.find((version) => version.id === selectedVersionId) ?? null;
   const isHistorical = selectedVersion !== null;
   const nextVersionNumber = versions.reduce((highest, version) => {
@@ -1346,6 +1347,7 @@ export function ClawDetailWorkbench({
     setRestoredDraft({
       sourceLabel: selectedVersion.label,
       issues: selectedVersion.restoreIssues?.map((issue) => ({ ...issue })) ?? [],
+      notice: `${selectedVersion.label} 已还原为当前草稿`,
     });
     returnToCurrentDraft();
     toast.success(`${selectedVersion.label} \u5df2\u8fd8\u539f\u4e3a\u5f53\u524d\u8349\u7a3f`);
@@ -1414,6 +1416,7 @@ export function ClawDetailWorkbench({
       isReferenced: false,
       referenceCount: 0,
       availabilityStatus: "启用",
+      listingStatus: "未上架",
       description,
       publisher: "用户A",
       publishedAt,
@@ -1680,8 +1683,27 @@ export function ClawDetailWorkbench({
             <AgentAvailabilityControl
               entityLabel={isMultiAgentMode ? "该多智能体" : "该 Claw"}
               disabled={entityDisabled}
+              hasListedVersion={versions.some((version) => version.listingStatus === "已上架")}
               onDisabledChange={(disabled) => {
                 setEntityDisabled(disabled);
+                if (disabled) {
+                  batchDisabledVersionIds.current = versions
+                    .filter((version) => version.availabilityStatus === "启用")
+                    .map((version) => version.id);
+                  setVersions((current) =>
+                    current.map((version) => ({ ...version, availabilityStatus: "停用" }))
+                  );
+                } else {
+                  const restoreIds = new Set(batchDisabledVersionIds.current);
+                  setVersions((current) =>
+                    current.map((version) =>
+                      restoreIds.has(version.id)
+                        ? { ...version, availabilityStatus: "启用" }
+                        : version
+                    )
+                  );
+                  batchDisabledVersionIds.current = [];
+                }
                 toast.success(disabled ? `${entityLabel}已停用` : `${entityLabel}已重新启用`);
               }}
             />
@@ -1917,7 +1939,7 @@ export function ClawDetailWorkbench({
             className={cn(
               "min-h-0 min-w-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-5",
               isHistorical && configSection !== "logs" &&
-                "[&_button:disabled]:cursor-not-allowed [&_button:disabled]:border-slate-200 [&_button:disabled]:bg-slate-100 [&_button:disabled]:text-slate-400 [&_input]:!border-slate-200 [&_input]:!bg-slate-100 [&_input]:!text-slate-500 [&_select]:!border-slate-200 [&_select]:!bg-slate-100 [&_select]:!text-slate-500 [&_textarea]:!border-slate-200 [&_textarea]:!bg-slate-100 [&_textarea]:!text-slate-500"
+                "[&_button:disabled]:cursor-not-allowed [&_button:disabled]:border-slate-200 [&_button:disabled]:bg-slate-100 [&_button:disabled]:text-slate-400 [&_input:disabled]:cursor-not-allowed [&_input]:!border-slate-200 [&_input]:!bg-slate-100 [&_input]:!text-slate-500 [&_select:disabled]:cursor-not-allowed [&_select]:!border-slate-200 [&_select]:!bg-slate-100 [&_select]:!text-slate-500 [&_textarea:disabled]:cursor-not-allowed [&_textarea]:!border-slate-200 [&_textarea]:!bg-slate-100 [&_textarea]:!text-slate-500"
             )}
           >
           <TabsContent value="status" className="mt-0">
@@ -3296,7 +3318,7 @@ export function ClawDetailWorkbench({
       <AgentVersionHistoryDrawer
         open={versionHistoryOpen}
         versions={versions}
-        entityLabel={isMultiAgentMode ? "该多智能体" : "该 Claw"}
+        entityDisabled={entityDisabled}
         selectedVersionId={selectedVersionId}
         restoredDraft={restoredDraft}
         restoreConfirmOpen={restoreConfirmOpen}
