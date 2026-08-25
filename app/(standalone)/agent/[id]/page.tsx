@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, History, Rocket } from "lucide-react";
 import { toast } from "sonner";
@@ -450,14 +450,6 @@ export default function AgentDetailPage() {
       )}
     </div>
   );
-
-  useEffect(() => {
-    if (!agentProfile) return;
-    setPublishStatus(agentProfile.publishStatus ?? "未发布");
-    setSecurityLevel(agentProfile.securityLevel ?? "公开");
-    setApprovalStatus(agentProfile.approvalStatus ?? "none");
-    setDraftSecurityLevel(agentProfile.securityLevel ?? "公开");
-  }, [agentProfile]);
 
   function handleOpenPublishDialog() {
     const action = getApprovalActionState(approvalStatus);
