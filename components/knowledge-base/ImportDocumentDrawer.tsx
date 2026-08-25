@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { FileText, Info, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,6 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
   type KnowledgeDocumentRow,
@@ -40,6 +41,18 @@ const documentTagOptions = [
   "培训材料",
 ];
 const contentTagOptions = ["奶茶", "门店经营", "供应商", "定价", "售后"];
+
+const SEMANTIC_LIKE_CHUNK_OPTIONS = [
+  "智能切片",
+  "按常见标识符切分",
+  "按长度切分",
+  "按语义切分",
+  "按页切分",
+  "按分隔符递归切分",
+  "自定义正则切分",
+  "按句子切分",
+  "按层级切分",
+] as const;
 
 function formatFileSize(size: number) {
   if (size >= 1024 * 1024) {
@@ -85,17 +98,21 @@ interface ImportDocumentDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImport: (documents: KnowledgeDocumentRow[]) => void;
+  /** 当前知识库密级：文件密级默认并锁定为此值 */
+  knowledgeBaseSecurityLevel?: import("@/lib/security-level").SecurityLevel;
 }
 
 export function ImportDocumentDrawer({
   open,
   onOpenChange,
   onImport,
+  knowledgeBaseSecurityLevel = "公开",
 }: ImportDocumentDrawerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [fileKind, setFileKind] = useState<ImportFileKind>("text");
   const [queue, setQueue] = useState<ImportQueueItem[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [securityConfirmed, setSecurityConfirmed] = useState(false);
   const [parsingStrategies, setParsingStrategies] = useState(["文字识别"]);
   const [cleanHeaderFooter, setCleanHeaderFooter] = useState(true);
   const [cleanLogo, setCleanLogo] = useState(false);
@@ -103,10 +120,14 @@ export function ImportDocumentDrawer({
   const [contentClean, setContentClean] = useState(true);
   const [qualityAnalysis, setQualityAnalysis] = useState(false);
   const [autoChunk, setAutoChunk] = useState(true);
-  const [semanticChunk, setSemanticChunk] = useState("智能切片");
-  const [fulltextChunk, setFulltextChunk] = useState("智能切片");
-  const [pageIndexChunk, setPageIndexChunk] = useState("按层级切分");
-  const [graphChunk, setGraphChunk] = useState("按句子切分");
+  /** 图文混排：仅在选中图片相关解析策略时展示，默认开启 */
+  const [mixedImageText, setMixedImageText] = useState(true);
+  const [semanticChunks, setSemanticChunks] = useState<string[]>(["智能切片"]);
+  const [semanticChunkFixedLength, setSemanticChunkFixedLength] = useState(800);
+  const [fulltextChunks, setFulltextChunks] = useState<string[]>(["智能切片"]);
+  const [pageIndexChunks, setPageIndexChunks] = useState<string[]>(["按层级切分"]);
+  const [graphChunks, setGraphChunks] = useState<string[]>(["按句子切分"]);
+  const [activeDisambiguation, setActiveDisambiguation] = useState(false);
   const [metadataFields, setMetadataFields] = useState<MetadataFieldDraft[]>([
     {
       id: "metadata-source",
@@ -121,9 +142,14 @@ export function ImportDocumentDrawer({
   const accept =
     fileKind === "text" ? ".doc,.docx,.pdf,.txt" : ".xls,.xlsx,.csv";
 
+  const showMixedImageText =
+    parsingStrategies.includes("图片文字识别(OCR)") ||
+    parsingStrategies.includes("图片解析");
+
   function resetDraft() {
     setQueue([]);
     setDragging(false);
+    setSecurityConfirmed(false);
     setFileKind("text");
     setParsingStrategies(["文字识别"]);
     setCleanHeaderFooter(true);
@@ -132,10 +158,13 @@ export function ImportDocumentDrawer({
     setContentClean(true);
     setQualityAnalysis(false);
     setAutoChunk(true);
-    setSemanticChunk("智能切片");
-    setFulltextChunk("智能切片");
-    setPageIndexChunk("按层级切分");
-    setGraphChunk("按句子切分");
+    setMixedImageText(true);
+    setSemanticChunks(["智能切片"]);
+    setSemanticChunkFixedLength(800);
+    setFulltextChunks(["智能切片"]);
+    setPageIndexChunks(["按层级切分"]);
+    setGraphChunks(["按句子切分"]);
+    setActiveDisambiguation(false);
     setMetadataFields([
       {
         id: "metadata-source",
@@ -173,6 +202,19 @@ export function ImportDocumentDrawer({
         return next.length === 0 ? current : next;
       }
       return [...current, strategy];
+    });
+  }
+
+  function toggleChunkStrategy(
+    setter: Dispatch<SetStateAction<string[]>>,
+    option: string
+  ) {
+    setter((current) => {
+      if (current.includes(option)) {
+        const next = current.filter((item) => item !== option);
+        return next.length === 0 ? current : next;
+      }
+      return [...current, option];
     });
   }
 
@@ -228,6 +270,9 @@ export function ImportDocumentDrawer({
 
   function confirmImport() {
     if (queue.length === 0) return;
+    if (!securityConfirmed) {
+      return;
+    }
     const now = new Date();
     const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
     const importedDocuments = queue.map<KnowledgeDocumentRow>((item, index) => ({
@@ -446,66 +491,138 @@ export function ImportDocumentDrawer({
             <div className="grid grid-cols-[110px_1fr] gap-x-4 gap-y-5">
               <span className="text-sm text-slate-700">自动切片</span>
               <Switch checked={autoChunk} onCheckedChange={setAutoChunk} />
+              {showMixedImageText ? (
+                <>
+                  <span className="pt-0.5 text-sm text-slate-700">图文混排</span>
+                  <div className="space-y-2">
+                    <Switch
+                      checked={mixedImageText}
+                      onCheckedChange={setMixedImageText}
+                    />
+                    <p className="text-xs leading-relaxed text-slate-400">
+                      开启后，图片将作为切片内容一并保存
+                    </p>
+                  </div>
+                </>
+              ) : null}
               {(
                 [
                   {
                     name: "语义检索",
-                    value: semanticChunk,
-                    setValue: setSemanticChunk,
-                    options: [
-                      "智能切片",
-                      "按常见标识符切分",
-                      "按页切分",
-                      "自定义正则切分",
-                      "按层级切分",
-                    ],
+                    values: semanticChunks,
+                    setValues: setSemanticChunks,
+                    options: [...SEMANTIC_LIKE_CHUNK_OPTIONS],
+                    fixedLength: semanticChunks.includes("按长度切分")
+                      ? {
+                          value: semanticChunkFixedLength,
+                          setValue: setSemanticChunkFixedLength,
+                        }
+                      : null,
                   },
                   {
                     name: "全文检索",
-                    value: fulltextChunk,
-                    setValue: setFulltextChunk,
+                    values: fulltextChunks,
+                    setValues: setFulltextChunks,
                     options: [
                       "智能切片",
                       "按常见标识符切分",
+                      "按长度切分",
+                      "按语义切分",
                       "按页切分",
+                      "按分隔符递归切分",
                       "自定义正则切分",
+                      "按句子切分",
                       "按层级切分",
                     ],
                   },
                   {
                     name: "PageIndex 检索",
-                    value: pageIndexChunk,
-                    setValue: setPageIndexChunk,
+                    values: pageIndexChunks,
+                    setValues: setPageIndexChunks,
                     options: ["按层级切分"],
                   },
                   {
                     name: "图谱检索",
-                    value: graphChunk,
-                    setValue: setGraphChunk,
+                    values: graphChunks,
+                    setValues: setGraphChunks,
                     options: ["按句子切分"],
                   },
                 ] as const
               ).map((config) => (
                 <div key={config.name} className="contents">
                   <span className="text-sm text-slate-700">{config.name}</span>
-                  <div className="flex border border-slate-200">
-                    <span className="flex w-28 items-center justify-center border-r border-slate-200 text-sm text-slate-700">
-                      <span className="mr-1 text-red-500">*</span>选择策略
-                    </span>
-                    <div className="flex flex-1">
-                      {config.options.map((option) => (
-                        <ToggleStrategyButton
-                          key={option}
-                          selected={config.value === option}
-                          onClick={() => config.setValue(option)}
-                        >
-                          {option}
-                        </ToggleStrategyButton>
-                      ))}
+                  <div className="space-y-3">
+                    <div className="flex border border-slate-200">
+                      <span className="flex w-28 shrink-0 items-center justify-center border-r border-slate-200 text-sm text-slate-700">
+                        <span className="mr-1 text-red-500">*</span>选择策略
+                      </span>
+                      <div className="flex flex-1 flex-wrap">
+                        {config.options.map((option) => (
+                          <ToggleStrategyButton
+                            key={option}
+                            selected={config.values.includes(option)}
+                            onClick={() =>
+                              toggleChunkStrategy(config.setValues, option)
+                            }
+                          >
+                            {option}
+                          </ToggleStrategyButton>
+                        ))}
+                      </div>
                     </div>
+                    {"fixedLength" in config && config.fixedLength ? (
+                      <div className="flex items-center gap-4 rounded border border-slate-200 bg-slate-50/60 px-4 py-3">
+                        <span className="shrink-0 text-sm text-slate-700">固定长度</span>
+                        <Slider
+                          value={[config.fixedLength.value]}
+                          min={300}
+                          max={1500}
+                          step={1}
+                          onValueChange={(vals) =>
+                            config.fixedLength?.setValue(vals[0] ?? 800)
+                          }
+                          className="max-w-md flex-1 [&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
+                        />
+                        <Input
+                          type="number"
+                          value={config.fixedLength.value}
+                          min={300}
+                          max={1500}
+                          step={1}
+                          onChange={(event) => {
+                            const next = Number(event.target.value);
+                            if (Number.isNaN(next)) return;
+                            config.fixedLength?.setValue(
+                              Math.min(1500, Math.max(300, next))
+                            );
+                          }}
+                          className="h-8 w-20"
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-6 flex items-center gap-1 font-semibold text-slate-950">
+              图谱构建 <Info className="h-3.5 w-3.5 text-slate-400" />
+            </h3>
+            <div className="grid grid-cols-[110px_1fr] items-start gap-x-4 gap-y-2">
+              <span className="flex items-center gap-1 pt-0.5 text-sm text-slate-700">
+                主动消歧
+              </span>
+              <div className="space-y-2">
+                <Switch
+                  checked={activeDisambiguation}
+                  onCheckedChange={setActiveDisambiguation}
+                />
+                <p className="text-xs leading-relaxed text-slate-400">
+                  请谨慎选择，开启后将可能用当前上传文档提取的信息更新替换已有的节点信息
+                </p>
+              </div>
             </div>
           </section>
 
@@ -618,21 +735,43 @@ export function ImportDocumentDrawer({
             </div>
           </section>
         </div>
-        <div className="sticky bottom-0 flex gap-3 border-t border-slate-200 bg-white px-6 py-4">
-          <Button
-            disabled={queue.length === 0}
-            className="rounded bg-blue-600 px-8 hover:bg-blue-700"
-            onClick={confirmImport}
-          >
-            确定
-          </Button>
-          <Button
-            variant="outline"
-            className="rounded px-6"
-            onClick={() => handleOpenChange(false)}
-          >
-            取消
-          </Button>
+        <div className="sticky bottom-0 space-y-3 border-t border-slate-200 bg-white px-6 py-4">
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="mb-2 flex items-center gap-2 text-sm text-slate-700">
+              <span className="text-red-500">*</span>
+              <span>文件密级</span>
+              <span className="inline-flex items-center rounded-[4px] bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                {knowledgeBaseSecurityLevel}
+              </span>
+              <span className="text-xs text-slate-400">（与当前知识库密级一致，不可修改）</span>
+            </div>
+            <label className="flex items-start gap-2 text-sm text-slate-700">
+              <Checkbox
+                checked={securityConfirmed}
+                onCheckedChange={(checked) => setSecurityConfirmed(checked === true)}
+                className="mt-0.5"
+              />
+              <span>
+                我已确认本次上传文件密级为「{knowledgeBaseSecurityLevel}」，与知识库密级保持一致。
+              </span>
+            </label>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              disabled={queue.length === 0 || !securityConfirmed}
+              className="rounded bg-blue-600 px-8 hover:bg-blue-700"
+              onClick={confirmImport}
+            >
+              确定
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded px-6"
+              onClick={() => handleOpenChange(false)}
+            >
+              取消
+            </Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

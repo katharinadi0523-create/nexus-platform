@@ -1,10 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  FileStack,
-  Settings2,
-} from "lucide-react";
+import { FileStack, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProjectConversation } from "./project-conversation-provider";
 import { ActorAvatar } from "./shared/actor-avatar";
@@ -24,7 +21,7 @@ export function ProjectConversationHeader({
     getConversation,
     getUser,
     getActor,
-    getConversationFiles,
+    getConversationProducedFiles,
     openDrawer,
   } = useProjectConversation();
 
@@ -39,7 +36,8 @@ export function ProjectConversationHeader({
   const agents = conversation.agentBindingIds
     .map((id) => getActor(id))
     .filter(Boolean);
-  const conversationFileCount = getConversationFiles(conversationId).length;
+  const conversationFileCount =
+    getConversationProducedFiles(conversationId).length;
 
   return (
     <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[#eef2f6] bg-white px-5 py-3.5">
@@ -98,7 +96,7 @@ export function ProjectConversationHeader({
           className="flex items-center gap-1 rounded-lg px-1.5 py-1 text-[12px] text-[#5a6779] transition-colors hover:bg-[#f8f9fb]"
         >
           <FileStack className="h-3.5 w-3.5" />
-          会话文件 {conversationFileCount}
+          会话产物 {conversationFileCount}
         </button>
 
         <Button

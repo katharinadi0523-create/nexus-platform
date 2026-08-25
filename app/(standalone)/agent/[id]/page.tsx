@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, History, Rocket } from "lucide-react";
 import { toast } from "sonner";
@@ -13,8 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { AgentLogsView } from "@/components/agent/agent-logs-view";
 import { WorkflowEditor } from "@/components/workflow/workflow-editor";
 import { AutonomousEditor } from "@/components/agent/autonomous-editor";
@@ -26,6 +28,17 @@ import { AgentAvailabilityControl } from "@/components/agent/agent-availability-
 import { getAgentById } from "@/lib/agent-data";
 import { AGENT_VERSION_HISTORY, buildVersionCompositionData, type AgentVersionRecord } from "@/lib/mock/agent-version-management";
 import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBadge";
+import {
+  SecurityLevelBadge,
+} from "@/components/security/security-level-badge";
+import {
+  buildSecurityLevelSelectOptions,
+  isHighSecurityLevel,
+  getApprovalActionState,
+  type ApprovalStatus,
+  type SecurityLevel,
+} from "@/lib/security-level";
+import { cn } from "@/lib/utils";
 
 interface AgentDetailData {
   type: "autonomous" | "workflow";
@@ -89,7 +102,7 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
     description: "基于传感器数据和历史维修记录，预测设备故障概率。",
     prompt: "你是一个设备维修专家，能够分析传感器数据并预测故障...",
     openingStatement: "你好，我是设备维修助手。请提供传感器数据，我将为您分析设备状态。",
-    suggestedQuestions: ["?????????", "????????"],
+    suggestedQuestions: ["分析当前传感器读数", "预测设备故障概率"],
     workflows: [
       {
         id: "workflow-device-inspection",
@@ -113,7 +126,7 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
     description: "自动化数据清洗和预处理工作流，支持多数据源输入和标准化输出。",
     prompt: "这是一个工作流智能体，通过可视化流程节点执行数据处理任务。",
     openingStatement: "欢迎使用数据清洗工作流。请提供数据源，我将自动执行清洗流程。",
-    suggestedQuestions: ["????????", "???????"],
+    suggestedQuestions: ["开始数据清洗流程", "查看工作流配置"],
     plugins: ["Data Processor", "Schema Validator"],
     mockReply: "工作流已启动。正在执行数据清洗步骤... [步骤 1/5] 数据读取完成。",
   },
@@ -154,9 +167,10 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
         actionId: "action-transit-update-threat",
       },
     ],
-    mockReply: "我可以进行实时态势分析和威胁评估。请提供目标信息（如位置、特征等），我会：\n1. 通过本体检索关联情报对象\n2. 进行身份识别和融合\n3. 调用视觉模型分析目标状态\n4. 综合评估威胁等级并生成研判报告。",
+    mockReply:
+      "我可以进行实时态势分析和威胁评估。请提供目标信息（如位置、特征等），我会：\n1. 通过本体检索关联情报对象\n2. 进行身份识别和融合\n3. 调用视觉模型分析目标状态\n4. 综合评估威胁等级并生成研判报告。",
   },
-};
+} satisfies Record<string, AgentDetailData>;
 
 
 
@@ -200,6 +214,26 @@ export default function AgentDetailPage() {
   const initialDisplayName = agentData?.name || agentProfile?.name || "加载中...";
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const selectedVersion = versions.find((version) => version.id === selectedVersionId) ?? null;
+  const [publishStatus, setPublishStatus] = useState<"已发布" | "未发布">(
+    agentProfile?.publishStatus ?? "未发布"
+  );
+  const [securityLevel, setSecurityLevel] = useState<SecurityLevel>(
+    agentProfile?.securityLevel ?? "公开"
+  );
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>(
+    agentProfile?.approvalStatus ?? "none"
+  );
+  const [securityChangeOpen, setSecurityChangeOpen] = useState(false);
+  const [securityChangeDraft, setSecurityChangeDraft] = useState({
+    targetLevel: (agentProfile?.securityLevel ?? "公开") as SecurityLevel,
+    reason: "",
+  });
+  const [draftSecurityOpen, setDraftSecurityOpen] = useState(false);
+  const [draftSecurityLevel, setDraftSecurityLevel] = useState<SecurityLevel>(
+    agentProfile?.securityLevel ?? "公开"
+  );
+
+  const isPublished = publishStatus === "已发布";
 
   const isHistorical = Boolean(versionDetailMode && selectedVersion);
   const isVersionContext = Boolean(versionDetailMode && selectedVersion);
@@ -277,6 +311,22 @@ export default function AgentDetailPage() {
   const handlePublishConfirm = () => {
     const description = versionDescription.trim();
     if (!description || isHistorical) return;
+    const approvalAction = getApprovalActionState(approvalStatus);
+    if (approvalAction.publishLocked) {
+      toast.info(approvalAction.publishTitle ?? "审批中，暂不可发布。");
+      return;
+    }
+    if (isHighSecurityLevel(securityLevel)) {
+      setApprovalStatus("publish");
+      setPublishDialogOpen(false);
+      setVersionDescription("");
+      toast.success(
+        isPublished
+          ? `已提交发布审批：${displayName}，审批通过前仍按当前已发布版本运行。`
+          : `已提交发布审批：${displayName}，审批通过后方可生效。`
+      );
+      return;
+    }
     const sourceVersion = versions.find((version) => version.isLatest) ?? versions[0];
     if (!sourceVersion) return;
 
@@ -324,6 +374,8 @@ export default function AgentDetailPage() {
     setVersionDescription("");
     setPublishDialogOpen(false);
     setHistoryOpen(true);
+    setPublishStatus("已发布");
+    setApprovalStatus("none");
     toast.success(`${nextVersionLabel} \u53d1\u5e03\u6210\u529f`);
   };
 
@@ -399,10 +451,48 @@ export default function AgentDetailPage() {
     </div>
   );
 
+  useEffect(() => {
+    if (!agentProfile) return;
+    setPublishStatus(agentProfile.publishStatus ?? "未发布");
+    setSecurityLevel(agentProfile.securityLevel ?? "公开");
+    setApprovalStatus(agentProfile.approvalStatus ?? "none");
+    setDraftSecurityLevel(agentProfile.securityLevel ?? "公开");
+  }, [agentProfile]);
+
+  function handleOpenPublishDialog() {
+    const action = getApprovalActionState(approvalStatus);
+    if (action.publishLocked) {
+      toast.info(action.publishTitle ?? "审批中，暂不可发布。");
+      return;
+    }
+    setPublishDialogOpen(true);
+  }
+
+  function handleSubmitSecurityChange() {
+    const reason = securityChangeDraft.reason.trim();
+    if (!reason) {
+      toast.error("请填写申请原因。");
+      return;
+    }
+    if (securityChangeDraft.targetLevel === securityLevel) {
+      toast.error("请选择与当前不同的目标密级。");
+      return;
+    }
+    setApprovalStatus("securityChange");
+    setSecurityChangeOpen(false);
+    toast.success("已提交密级修改审批，审批通过后方可生效。");
+  }
+
+  function handleSaveDraftSecurity() {
+    setSecurityLevel(draftSecurityLevel);
+    setDraftSecurityOpen(false);
+    toast.success("密级已更新。");
+  }
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[linear-gradient(180deg,#fbfcfe_0%,#f5f7fb_45%,#eef4ff_100%)]">
       <header className="relative flex h-20 flex-none items-center justify-between border-b border-slate-200/80 bg-white/80 px-6 backdrop-blur">
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 items-center gap-4">
           <Button
             variant="ghost"
             className="gap-2 rounded-2xl border border-slate-200 bg-white px-3 shadow-sm hover:bg-slate-50 hover:text-slate-900"
@@ -412,8 +502,49 @@ export default function AgentDetailPage() {
             <span className="text-sm font-medium">返回</span>
           </Button>
           <div className="h-6 w-px bg-border" />
-          <div>
-            <span className="text-base font-semibold text-slate-950">{displayName}</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="truncate text-base font-semibold text-slate-950">{displayName}</span>
+            <span
+              className={cn(isPublished && "cursor-not-allowed opacity-70")}
+              title={isPublished ? "已发布密级已锁定" : undefined}
+            >
+              <SecurityLevelBadge
+                level={securityLevel}
+                className={isPublished ? "bg-slate-100 text-slate-400" : undefined}
+              />
+            </span>
+            {isPublished ? (
+              <button
+                type="button"
+                disabled={approvalStatus === "securityChange"}
+                title={
+                  approvalStatus === "securityChange" ? "密级修改审批中" : "申请修改密级"
+                }
+                onClick={() => {
+                  setSecurityChangeDraft({ targetLevel: securityLevel, reason: "" });
+                  setSecurityChangeOpen(true);
+                }}
+                className={cn(
+                  "text-xs font-medium",
+                  approvalStatus === "securityChange"
+                    ? "cursor-not-allowed text-slate-400"
+                    : "text-blue-600 hover:text-blue-700"
+                )}
+              >
+                修改
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftSecurityLevel(securityLevel);
+                  setDraftSecurityOpen(true);
+                }}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                调整密级
+              </button>
+            )}
           </div>
         </div>
 
@@ -496,10 +627,10 @@ export default function AgentDetailPage() {
           </TooltipProvider>
 
           <Button
-            disabled={isHistorical}
-            title={isHistorical ? "\u5386\u53f2\u7248\u672c\u4e0d\u53ef\u53d1\u5e03" : undefined}
-            onClick={() => setPublishDialogOpen(true)}
-            className="rounded-2xl bg-slate-900 px-4 text-white shadow-[0_18px_40px_-24px_rgba(15,23,42,0.8)] hover:bg-slate-800 disabled:bg-slate-300"
+            disabled={isHistorical || getApprovalActionState(approvalStatus).publishLocked}
+            title={isHistorical ? "\u5386\u53f2\u7248\u672c\u4e0d\u53ef\u53d1\u5e03" : getApprovalActionState(approvalStatus).publishTitle ?? "发布"}
+            onClick={handleOpenPublishDialog}
+            className="rounded-2xl bg-slate-900 px-4 text-white shadow-[0_18px_40px_-24px_rgba(15,23,42,0.8)] hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Rocket className="h-4 w-4" />
             发布
@@ -615,6 +746,93 @@ export default function AgentDetailPage() {
               className="rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300"
             >
               {"\u786e\u8ba4\u53d1\u5e03"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={draftSecurityOpen} onOpenChange={setDraftSecurityOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>调整密级</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Label>
+              <span className="text-rose-500">*</span>密级
+            </Label>
+            <Select
+              value={draftSecurityLevel}
+              onValueChange={(value) => setDraftSecurityLevel(value as SecurityLevel)}
+              options={buildSecurityLevelSelectOptions({ currentLevel: securityLevel })}
+              className="h-10 max-w-xs"
+            />
+            <p className="text-xs text-slate-400">禁止降密，且不可超过当前用户密级。</p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDraftSecurityOpen(false)}>
+              取消
+            </Button>
+            <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" onClick={handleSaveDraftSecurity}>
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={securityChangeOpen} onOpenChange={setSecurityChangeOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>申请修改密级</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              当前密级：<span className="font-medium text-slate-900">{securityLevel}</span>
+            </div>
+            <div className="space-y-2">
+              <Label>
+                <span className="text-rose-500">*</span>目标密级
+              </Label>
+              <Select
+                value={securityChangeDraft.targetLevel}
+                onValueChange={(value) =>
+                  setSecurityChangeDraft((current) => ({
+                    ...current,
+                    targetLevel: value as SecurityLevel,
+                  }))
+                }
+                options={buildSecurityLevelSelectOptions({ currentLevel: securityLevel })}
+                className="h-10 max-w-xs"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="agent-security-reason">
+                <span className="text-rose-500">*</span>申请原因
+              </Label>
+              <Textarea
+                id="agent-security-reason"
+                value={securityChangeDraft.reason}
+                onChange={(event) =>
+                  setSecurityChangeDraft((current) => ({
+                    ...current,
+                    reason: event.target.value,
+                  }))
+                }
+                rows={4}
+                placeholder="请说明修改密级的原因"
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSecurityChangeOpen(false)}>
+              取消
+            </Button>
+            <Button
+              type="button"
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              onClick={handleSubmitSecurityChange}
+            >
+              提交审批
             </Button>
           </DialogFooter>
         </DialogContent>

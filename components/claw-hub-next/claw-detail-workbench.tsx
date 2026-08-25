@@ -26,6 +26,7 @@ import {
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
+  Pencil,
   Plus,
   RadioTower,
   RefreshCw,
@@ -116,16 +117,20 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   AGENT_RELATION_SELECT_OPTIONS,
   AUTOMATED_TASK_DELIVERY_CHANNELS,
+  buildSecurityLevelSelectOptions,
+  isHighSecurityLevel,
   type AutomatedTaskDeliveryChannel,
   type AgentRelationItem,
   type AgentRelationKind,
   type CapabilityScope,
+  type ClawApprovalStatus,
   type ClawAutomatedTaskExecutionItem,
   type ClawAutomatedTaskExecutionStatus,
   type ClawAutomatedTaskItem,
   type ClawAutomatedTaskRecentResult,
   type ClawDetailData,
   type ClawCapabilityConfig,
+  type ClawSecurityLevel,
   type ConversationAuditItem,
   type ConversationUsageChannel,
   type KnowledgeScope,
@@ -133,6 +138,7 @@ import {
   type ToolProtectionRuleItem,
   buildKnowledgeAssetsFromLegacy,
 } from "@/lib/mock/claw-hub-next";
+import { getApprovalActionState } from "@/lib/security-level";
 import { ModelSelector, type ModelParams } from "@/components/agent-editor/ModelSelector";
 import { PRESET_MODEL_IDS, getDefaultModelParams, type ModelParamKey } from "@/lib/model-schemas";
 import { createEntityVersionHistory } from "@/lib/mock/entity-version-management";
@@ -582,6 +588,23 @@ export function ClawDetailWorkbench({
     return Number.isInteger(parsed) ? Math.max(highest, parsed) : highest;
   }, 0) + 1;
   const nextVersionLabel = `V${nextVersionNumber}`;
+  const [securityLevel, setSecurityLevel] = useState<ClawSecurityLevel>(
+    detail.overview.securityLevel ?? "公开"
+  );
+  const [approvalStatus, setApprovalStatus] = useState<ClawApprovalStatus>(
+    detail.overview.approvalStatus ?? "none"
+  );
+  const [basicInfoDialogOpen, setBasicInfoDialogOpen] = useState(false);
+  const [basicInfoDraft, setBasicInfoDraft] = useState({
+    name: detail.overview.name,
+    description: detail.overview.summary,
+    securityLevel: (detail.overview.securityLevel ?? "公开") as ClawSecurityLevel,
+  });
+  const [securityChangeDialogOpen, setSecurityChangeDialogOpen] = useState(false);
+  const [securityChangeDraft, setSecurityChangeDraft] = useState({
+    targetLevel: (detail.overview.securityLevel ?? "公开") as ClawSecurityLevel,
+    reason: "",
+  });
   const [subAgentConfigEnabled, setSubAgentConfigEnabled] = useState(
     () => isMultiAgentMode || detail.capabilityConfig.agents.claw.length > 0
   );
@@ -855,6 +878,7 @@ export function ClawDetailWorkbench({
   const isPublished = publishStatus === "已发布";
   const isApiEffective = isPublished && apiPublishEffective;
   const canConfirmShelf = shelfAgentTypes.length > 0;
+  const approvalAction = getApprovalActionState(approvalStatus);
 
   useEffect(() => {
     const element = splitContainerRef.current;
@@ -1367,6 +1391,10 @@ export function ClawDetailWorkbench({
     toast.success(`${target?.label ?? "版本"} 已${status === "停用" ? "停用" : "重新启用"}`);
   }
   function handlePublish() {
+    if (approvalAction.publishLocked) {
+      toast.info(approvalAction.publishTitle ?? "审批中，暂不可发布。");
+      return;
+    }
     setPublishPanelOpen(false);
     window.setTimeout(() => {
       setPublishValidationOpen(true);
@@ -1382,6 +1410,7 @@ export function ClawDetailWorkbench({
     const description = versionDescription.trim();
     if (!description || isHistorical) return;
 
+    const wasPublished = publishStatus === "已发布";
     const publishedName = entityName.trim() || detail.overview.name;
     const kind = isMultiAgentMode ? "multi-agent" : "claw";
     const idPrefix = isMultiAgentMode ? "multi-agent" : "claw";
@@ -1428,17 +1457,54 @@ export function ClawDetailWorkbench({
     };
 
     if (isMultiAgentMode) {
+      if (isHighSecurityLevel(securityLevel)) {
+        setApprovalStatus("publish");
+        setVersionPublishOpen(false);
+        setVersionDescription("");
+        upsertPublishedMultiAgent({
+          id: detail.overview.id || `multi-agent-${Date.now()}`,
+          name: publishedName,
+          desc: entityDescription.trim() || detail.overview.summary,
+          updatedAt: formatMultiAgentUpdatedAt(),
+          securityLevel,
+          approvalStatus: "publish",
+          status: wasPublished ? "已发布" : "未发布",
+        });
+        toast.success(
+          wasPublished
+            ? `已提交发布审批：${publishedName}，审批通过前仍按当前已发布版本运行。`
+            : `已提交发布审批：${publishedName}，审批通过后方可生效。`
+        );
+        return;
+      }
+
       upsertPublishedMultiAgent({
         id: detail.overview.id || `multi-agent-${Date.now()}`,
         name: publishedName,
         desc: entityDescription.trim() || detail.overview.summary,
         updatedAt: formatMultiAgentUpdatedAt(),
+        securityLevel,
+        approvalStatus: "none",
+        status: "已发布",
       });
+    }
+
+    if (!isMultiAgentMode && isHighSecurityLevel(securityLevel)) {
+      setApprovalStatus("publish");
+      setVersionPublishOpen(false);
+      setVersionDescription("");
+      toast.success(
+        wasPublished
+          ? `已提交发布审批：${publishedName}，审批通过前仍按当前已发布版本运行。`
+          : `已提交发布审批：${publishedName}，审批通过后方可生效。`
+      );
+      return;
     }
 
     setVersions((current) => [newVersion, ...current.map((version) => ({ ...version, isLatest: false }))]);
     setPublishStatus("已发布");
     setApiPublishEffective(true);
+    setApprovalStatus("none");
     setRestoredDraft({ sourceLabel: "", issues: [] });
     setVersionDescription("");
     setVersionPublishOpen(false);
@@ -1447,6 +1513,11 @@ export function ClawDetailWorkbench({
   }
 
   function handleOpenShelfDialog() {
+    if (approvalAction.shelfLocked) {
+      toast.info(approvalAction.shelfTitle ?? "上架审批中，请等待审批结果。");
+      return;
+    }
+
     if (!isPublished) {
       toast.info(`请先发布 ${entityLabel}，再上架到智能体广场。`);
       return;
@@ -1454,6 +1525,39 @@ export function ClawDetailWorkbench({
 
     setPublishPanelOpen(false);
     setShelfDialogOpen(true);
+  }
+
+  function handleUnshelf() {
+    if (approvalAction.unshelfLocked) {
+      toast.info(approvalAction.unshelfTitle ?? "下架审批中，请等待审批结果。");
+      return;
+    }
+
+    if (plazaStatus !== "已上架") {
+      toast.info("当前未上架，无需下架。");
+      return;
+    }
+
+    if (isHighSecurityLevel(securityLevel)) {
+      setApprovalStatus("unshelf");
+      if (isMultiAgentMode) {
+        upsertPublishedMultiAgent({
+          id: detail.overview.id || `multi-agent-${Date.now()}`,
+          name: entityName.trim() || detail.overview.name,
+          desc: entityDescription.trim() || detail.overview.summary,
+          updatedAt: formatMultiAgentUpdatedAt(),
+          securityLevel,
+          approvalStatus: "unshelf",
+          status: publishStatus === "已发布" ? "已发布" : "未发布",
+        });
+      }
+      toast.success("已提交下架审批，审批通过后方可生效。");
+      return;
+    }
+
+    setPlazaStatus("未上架");
+    setApprovalStatus("none");
+    toast.success("已从智能体广场下架。");
   }
 
   function handleToggleShelfAgentType(agentType: string) {
@@ -1479,12 +1583,30 @@ export function ClawDetailWorkbench({
 
     if (isMultiAgentMode) {
       const shelvedName = entityName.trim() || detail.overview.name;
+
+      if (isHighSecurityLevel(securityLevel)) {
+        setApprovalStatus("shelf");
+        setShelfDialogOpen(false);
+        upsertPublishedMultiAgent({
+          id: detail.overview.id || `multi-agent-${Date.now()}`,
+          name: shelvedName,
+          desc: entityDescription.trim() || detail.overview.summary,
+          updatedAt: formatMultiAgentUpdatedAt(),
+          securityLevel,
+          approvalStatus: "shelf",
+          status: publishStatus === "已发布" ? "已发布" : "未发布",
+        });
+        toast.success("已提交上架审批，审批通过后方可生效。");
+        return;
+      }
+
       upsertShelvedMultiAgent({
         id: detail.overview.id || `multi-agent-${Date.now()}`,
         name: shelvedName,
         description: entityDescription.trim() || detail.overview.summary,
         releaseMode: shelfReleaseMode,
         agentTypes: shelfAgentTypes,
+        securityLevel,
       });
       // 上架前若未发布，一并写入已发布列表，保证广场可回链编辑
       if (publishStatus !== "已发布") {
@@ -1493,19 +1615,105 @@ export function ClawDetailWorkbench({
           name: shelvedName,
           desc: entityDescription.trim() || detail.overview.summary,
           updatedAt: formatMultiAgentUpdatedAt(),
+          securityLevel,
+          approvalStatus: "none",
+          status: "已发布",
         });
         setPublishStatus("已发布");
         setApiPublishEffective(true);
       }
+      setPlazaStatus("已上架");
+      setShelfDialogOpen(false);
+      toast.success(
+        `已上架到应用广场：${shelfReleaseMode} / ${shelfAgentTypes.join("、")}`
+      );
+      return;
+    }
+
+    if (isHighSecurityLevel(securityLevel)) {
+      setApprovalStatus("shelf");
+      setShelfDialogOpen(false);
+      toast.success("已提交上架审批，审批通过后方可生效。");
+      return;
     }
 
     setPlazaStatus("已上架");
     setShelfDialogOpen(false);
+    setApprovalStatus("none");
     toast.success(
-      isMultiAgentMode
-        ? `已上架到应用广场：${shelfReleaseMode} / ${shelfAgentTypes.join("、")}`
-        : `已上架到智能体广场：${shelfReleaseMode} / ${shelfAgentTypes.join("、")}`
+      `已上架到智能体广场：${shelfReleaseMode} / ${shelfAgentTypes.join("、")}`
     );
+  }
+
+  function handleOpenBasicInfoDialog() {
+    setBasicInfoDraft({
+      name: entityName,
+      description: entityDescription,
+      securityLevel,
+    });
+    setBasicInfoDialogOpen(true);
+  }
+
+  function handleSaveBasicInfo() {
+    const name = basicInfoDraft.name.trim();
+    const description = basicInfoDraft.description.trim();
+
+    if (!name) {
+      toast.error(`请填写${entityLabel}名称。`);
+      return;
+    }
+
+    if (!description) {
+      toast.error(`请填写${entityLabel}描述。`);
+      return;
+    }
+
+    setEntityName(name);
+    setEntityDescription(description);
+    if (!isPublished) {
+      setSecurityLevel(basicInfoDraft.securityLevel);
+    }
+    setBasicInfoDialogOpen(false);
+    toast.success("基本信息已更新。");
+  }
+
+  function handleOpenSecurityChangeDialog() {
+    if (approvalStatus === "securityChange") {
+      toast.info("密级修改审批中，请等待审批结果。");
+      return;
+    }
+    setSecurityChangeDraft({
+      targetLevel: securityLevel,
+      reason: "",
+    });
+    setSecurityChangeDialogOpen(true);
+  }
+
+  function handleSubmitSecurityChange() {
+    const reason = securityChangeDraft.reason.trim();
+    if (!reason) {
+      toast.error("请填写申请原因。");
+      return;
+    }
+    if (securityChangeDraft.targetLevel === securityLevel) {
+      toast.error("请选择与当前不同的目标密级。");
+      return;
+    }
+
+    setApprovalStatus("securityChange");
+    if (isMultiAgentMode) {
+      upsertPublishedMultiAgent({
+        id: detail.overview.id || `multi-agent-${Date.now()}`,
+        name: entityName.trim() || detail.overview.name,
+        desc: entityDescription.trim() || detail.overview.summary,
+        updatedAt: formatMultiAgentUpdatedAt(),
+        securityLevel,
+        approvalStatus: "securityChange",
+        status: publishStatus === "已发布" ? "已发布" : "未发布",
+      });
+    }
+    setSecurityChangeDialogOpen(false);
+    toast.success("已提交密级修改审批，审批通过后方可生效。");
   }
 
   function handleSubAgentConfigToggle(enabled: boolean) {
@@ -1640,7 +1848,7 @@ export function ClawDetailWorkbench({
           </Link>
           {isMultiAgentMode ? (
             <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <Input
                   value={entityName}
                   onChange={(event) => setEntityName(event.target.value)}
@@ -1650,6 +1858,47 @@ export function ClawDetailWorkbench({
                   className="h-8 max-w-[420px] min-w-[160px] truncate rounded-md border-transparent bg-transparent px-1.5 text-lg font-semibold text-slate-950 shadow-none hover:border-slate-200 hover:bg-white focus-visible:border-blue-300 focus-visible:bg-white focus-visible:ring-blue-100"
                 />
                 <MultiAgentStatusBadge published={isPublished} />
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-[4px] px-2 py-1 text-xs font-medium",
+                    isPublished
+                      ? "cursor-not-allowed bg-slate-100 text-slate-400"
+                      : isHighSecurityLevel(securityLevel)
+                        ? "bg-orange-50 text-orange-700"
+                        : "bg-slate-100 text-slate-600"
+                  )}
+                  title={isPublished ? "已发布密级已锁定" : undefined}
+                >
+                  {securityLevel}
+                </span>
+                {isPublished ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenSecurityChangeDialog}
+                    disabled={approvalStatus === "securityChange"}
+                    title={
+                      approvalStatus === "securityChange"
+                        ? "密级修改审批中"
+                        : "申请修改密级"
+                    }
+                    className={cn(
+                      "text-xs font-medium transition-colors",
+                      approvalStatus === "securityChange"
+                        ? "cursor-not-allowed text-slate-400"
+                        : "text-blue-600 hover:text-blue-700"
+                    )}
+                  >
+                    修改
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleOpenBasicInfoDialog}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    调整密级
+                  </button>
+                )}
               </div>
               <Input
                 value={entityDescription}
@@ -1665,6 +1914,48 @@ export function ClawDetailWorkbench({
               <h1 className="min-w-0 truncate text-xl font-semibold text-slate-950">
                 {entityName || detail.overview.name}
               </h1>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                onClick={handleOpenBasicInfoDialog}
+                aria-label="编辑 Claw 基本信息"
+                title={isPublished ? "编辑名称与描述" : "编辑名称、描述与密级"}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-[4px] px-2 py-1 text-xs font-medium",
+                  isPublished
+                    ? "cursor-not-allowed bg-slate-100 text-slate-400"
+                    : isHighSecurityLevel(securityLevel)
+                      ? "bg-orange-50 text-orange-700"
+                      : "bg-slate-100 text-slate-600"
+                )}
+                title={isPublished ? "已发布密级已锁定" : undefined}
+              >
+                {securityLevel}
+              </span>
+              {isPublished ? (
+                <button
+                  type="button"
+                  onClick={handleOpenSecurityChangeDialog}
+                  disabled={approvalStatus === "securityChange"}
+                  title={
+                    approvalStatus === "securityChange" ? "密级修改审批中" : "申请修改密级"
+                  }
+                  className={cn(
+                    "text-xs font-medium transition-colors",
+                    approvalStatus === "securityChange"
+                      ? "cursor-not-allowed text-slate-400"
+                      : "text-blue-600 hover:text-blue-700"
+                  )}
+                >
+                  修改
+                </button>
+              ) : null}
               {isPublished ? <ClawPublishedBadge /> : null}
               <div className="ml-1 flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3">
                 <span className="text-xs font-medium text-slate-500">多智能体</span>
@@ -1749,7 +2040,8 @@ export function ClawDetailWorkbench({
                 <Button
                   type="button"
                   size="sm"
-                  disabled={isHistorical}
+                  disabled={isHistorical || approvalAction.publishLocked}
+                  title={isHistorical ? "历史版本不可发布" : approvalAction.publishTitle}
                   className={cn(
                     isMultiAgentMode
                       ? "h-9 rounded-md bg-blue-600 px-3.5 text-sm font-medium text-white shadow-none hover:bg-blue-700"
@@ -1809,16 +2101,44 @@ export function ClawDetailWorkbench({
                         />
                         <CircleHelp className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={!isPublished}
-                        className="h-7 rounded-[4px] border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
-                        onClick={handleOpenShelfDialog}
-                      >
-                        {plazaStatus === "已上架" ? "变更" : "上架"}
-                      </Button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {plazaStatus === "已上架" ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={approvalAction.unshelfLocked}
+                            title={
+                              approvalAction.unshelfLocked
+                                ? approvalAction.unshelfTitle
+                                : "下架"
+                            }
+                            className="h-7 rounded-[4px] border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                            onClick={handleUnshelf}
+                          >
+                            下架
+                          </Button>
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={!isPublished || approvalAction.shelfLocked}
+                          title={
+                            approvalAction.shelfLocked
+                              ? approvalAction.shelfTitle
+                              : !isPublished
+                                ? "请先发布"
+                                : plazaStatus === "已上架"
+                                  ? "变更上架"
+                                  : "上架"
+                          }
+                          className="h-7 rounded-[4px] border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 shadow-none hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+                          onClick={handleOpenShelfDialog}
+                        >
+                          {plazaStatus === "已上架" ? "变更" : "上架"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1951,8 +2271,12 @@ export function ClawDetailWorkbench({
                       <Bot className="h-7 w-7" />
                     </div>
                     <div>
-                      <div className="text-2xl font-semibold text-slate-950">{detail.overview.name}</div>
-                      <div className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">{detail.overview.summary}</div>
+                      <div className="text-2xl font-semibold text-slate-950">
+                        {entityName || detail.overview.name}
+                      </div>
+                      <div className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+                        {entityDescription || detail.overview.summary}
+                      </div>
                     </div>
                   </div>
 
@@ -1965,11 +2289,15 @@ export function ClawDetailWorkbench({
                 <div className="mt-6 grid gap-4 md:grid-cols-3">
                   <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-4">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Name</div>
-                    <div className="mt-3 text-base font-semibold text-slate-950">{detail.overview.name}</div>
+                    <div className="mt-3 text-base font-semibold text-slate-950">
+                      {entityName || detail.overview.name}
+                    </div>
                   </div>
                   <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-4">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Description</div>
-                    <div className="mt-3 text-sm leading-7 text-slate-600">{detail.overview.summary}</div>
+                    <div className="mt-3 text-sm leading-7 text-slate-600">
+                      {entityDescription || detail.overview.summary}
+                    </div>
                   </div>
                   <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-4">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">创建时间</div>
@@ -3313,7 +3641,6 @@ export function ClawDetailWorkbench({
           ) : null}
         </div>
       </Tabs>
-
       </div>
       <AgentVersionHistoryDrawer
         open={versionHistoryOpen}
@@ -3329,6 +3656,158 @@ export function ClawDetailWorkbench({
         onRestoreConfirm={handleRestoreConfirm}
         onVersionAvailabilityChange={handleVersionAvailabilityChange}
       />
+      <Dialog open={basicInfoDialogOpen} onOpenChange={setBasicInfoDialogOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>
+              {isMultiAgentMode && !isPublished ? "调整密级与基本信息" : "编辑基本信息"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="claw-basic-name">
+                <span className="text-rose-500">*</span>名称
+              </Label>
+              <Input
+                id="claw-basic-name"
+                value={basicInfoDraft.name}
+                onChange={(event) =>
+                  setBasicInfoDraft((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder="请输入 Claw 名称"
+                className="h-10 border-slate-200 bg-white shadow-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="claw-basic-description">
+                <span className="text-rose-500">*</span>描述
+              </Label>
+              <Textarea
+                id="claw-basic-description"
+                value={basicInfoDraft.description}
+                onChange={(event) =>
+                  setBasicInfoDraft((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
+                placeholder="请输入 Claw 描述"
+                rows={4}
+                className="resize-none border-slate-200 bg-white shadow-none"
+              />
+            </div>
+            {!isPublished ? (
+              <div className="space-y-2">
+                <Label>
+                  <span className="text-rose-500">*</span>密级
+                </Label>
+                <Select
+                  value={basicInfoDraft.securityLevel}
+                  onValueChange={(value) =>
+                    setBasicInfoDraft((current) => ({
+                      ...current,
+                      securityLevel: value as ClawSecurityLevel,
+                    }))
+                  }
+                  options={buildSecurityLevelSelectOptions({
+                    currentLevel: securityLevel,
+                  })}
+                  placeholder="选择密级"
+                  className="h-10 max-w-xs border-slate-200 bg-white shadow-none focus:ring-0"
+                />
+                <p className="text-xs text-slate-400">
+                  禁止降密：仅可选择不低于当前密级、且不超过用户密级的选项。
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                已发布资源密级已锁定为「{securityLevel}」，如需调整请点击标题旁的「修改」申请审批。
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setBasicInfoDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              type="button"
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              onClick={handleSaveBasicInfo}
+            >
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={securityChangeDialogOpen} onOpenChange={setSecurityChangeDialogOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>申请修改密级</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              当前密级：<span className="font-medium text-slate-900">{securityLevel}</span>
+            </div>
+            <div className="space-y-2">
+              <Label>
+                <span className="text-rose-500">*</span>目标密级
+              </Label>
+              <Select
+                value={securityChangeDraft.targetLevel}
+                onValueChange={(value) =>
+                  setSecurityChangeDraft((current) => ({
+                    ...current,
+                    targetLevel: value as ClawSecurityLevel,
+                  }))
+                }
+                options={buildSecurityLevelSelectOptions({
+                  currentLevel: securityLevel,
+                })}
+                placeholder="选择目标密级"
+                className="h-10 max-w-xs border-slate-200 bg-white shadow-none focus:ring-0"
+              />
+              <p className="text-xs text-slate-400">禁止降密，且不可超过当前用户密级。</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="claw-security-change-reason">
+                <span className="text-rose-500">*</span>申请原因
+              </Label>
+              <Textarea
+                id="claw-security-change-reason"
+                value={securityChangeDraft.reason}
+                onChange={(event) =>
+                  setSecurityChangeDraft((current) => ({
+                    ...current,
+                    reason: event.target.value,
+                  }))
+                }
+                placeholder="请说明修改密级的原因"
+                rows={4}
+                className="resize-none border-slate-200 bg-white shadow-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSecurityChangeDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              onClick={handleSubmitSecurityChange}
+            >
+              提交审批
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={shelfDialogOpen} onOpenChange={setShelfDialogOpen}>
         <DialogContent className="gap-0 p-0 sm:max-w-[600px]">
           <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">

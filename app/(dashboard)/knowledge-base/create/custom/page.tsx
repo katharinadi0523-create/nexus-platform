@@ -22,6 +22,16 @@ import {
   type RetrievalStrategy,
 } from "@/components/knowledge-base/HybridStrategyStep";
 import { createCustomKnowledgeBase } from "@/lib/mock/knowledge-base-list";
+import {
+  getGroupSecurityLevelById,
+  knowledgeBaseGroupsV2,
+} from "@/lib/mock-knowledge-base-v2";
+import {
+  buildSecurityLevelOptionsUpToUser,
+  getSecurityLevelRank,
+  isHighSecurityLevel,
+  type SecurityLevel,
+} from "@/lib/security-level";
 
 const STEPS = [
   { id: 1, title: "定义知识库" },
@@ -29,11 +39,31 @@ const STEPS = [
   { id: 3, title: "混合检索策略配置" },
 ] as const;
 
-const mockGroups = [
-  { value: "all", label: "全部群组" },
-  { value: "tianjin", label: "全部群组/天津纪委知识库" },
-  { value: "test1", label: "全部群组/测试群组1" },
-  { value: "migration", label: "全部群组/迁移知识库" },
+const mockGroups: Array<{
+  value: string;
+  label: string;
+  securityLevel: SecurityLevel;
+}> = [
+  {
+    value: "all",
+    label: "全部群组",
+    securityLevel: getGroupSecurityLevelById(knowledgeBaseGroupsV2, "all"),
+  },
+  {
+    value: "tianjin",
+    label: "全部群组/天津纪委知识库",
+    securityLevel: "机密",
+  },
+  {
+    value: "test1",
+    label: "全部群组/测试群组1",
+    securityLevel: "内部",
+  },
+  {
+    value: "migration",
+    label: "全部群组/迁移知识库",
+    securityLevel: "公开",
+  },
 ];
 
 const NAME_PATTERN = /^[a-zA-Z\u4e00-\u9fa5][a-zA-Z0-9\u4e00-\u9fa5_.-]*$/;
@@ -93,6 +123,7 @@ export default function CreateCustomKnowledgeBasePage() {
   const [name, setName] = useState("知识库_1");
   const [description, setDescription] = useState("");
   const [groupId, setGroupId] = useState("all");
+  const [securityLevel, setSecurityLevel] = useState<SecurityLevel>("公开");
   const [nameTouched, setNameTouched] = useState(false);
   const [groupTouched, setGroupTouched] = useState(false);
   const [retrievalConfig, setRetrievalConfig] = useState<RetrievalConfigState>(
@@ -133,6 +164,20 @@ export default function CreateCustomKnowledgeBasePage() {
     if (!groupId) return "请选择所属群组";
     return "";
   }, [groupId]);
+
+  const parentGroupSecurityLevel = useMemo(() => {
+    return (
+      mockGroups.find((group) => group.value === groupId)?.securityLevel ?? "公开"
+    );
+  }, [groupId]);
+
+  const securityOptions = useMemo(
+    () =>
+      buildSecurityLevelOptionsUpToUser({
+        maxLevel: parentGroupSecurityLevel,
+      }),
+    [parentGroupSecurityLevel]
+  );
 
   const handleCancel = () => {
     router.push("/knowledge-base");
@@ -190,15 +235,34 @@ export default function CreateCustomKnowledgeBasePage() {
 
     // 第三步：确认创建
     if (submitting) return;
+    if (
+      getSecurityLevelRank(securityLevel) >
+      getSecurityLevelRank(parentGroupSecurityLevel)
+    ) {
+      toast.error(
+        `知识库密级不可高于所属群组密级（${parentGroupSecurityLevel}）。`
+      );
+      return;
+    }
     setSubmitting(true);
     try {
+      const highSec = isHighSecurityLevel(securityLevel);
       const created = createCustomKnowledgeBase({
         name,
         description,
         groupId,
+        securityLevel,
+        approvalStatus: highSec ? "create" : "none",
       });
-      toast.success("自定义知识库创建成功，请上传文档进行 RAG 解析切片");
-      router.push(`/knowledge-base/${created.id}`);
+      if (highSec) {
+        toast.success(
+          `已提交创建审批：${created.name}，审批通过后方可生效。`
+        );
+        router.push("/knowledge-base");
+      } else {
+        toast.success("自定义知识库创建成功，请上传文档进行 RAG 解析切片");
+        router.push(`/knowledge-base/${created.id}`);
+      }
     } catch {
       toast.error("创建失败，请重试");
       setSubmitting(false);
@@ -291,6 +355,14 @@ export default function CreateCustomKnowledgeBasePage() {
                 onValueChange={(value) => {
                   setGroupId(value);
                   setGroupTouched(true);
+                  const nextCeiling =
+                    mockGroups.find((group) => group.value === value)
+                      ?.securityLevel ?? "公开";
+                  setSecurityLevel((current) =>
+                    getSecurityLevelRank(current) > getSecurityLevelRank(nextCeiling)
+                      ? nextCeiling
+                      : current
+                  );
                 }}
                 options={mockGroups}
                 placeholder="请选择所属群组"
@@ -301,6 +373,24 @@ export default function CreateCustomKnowledgeBasePage() {
               {groupTouched && groupError && (
                 <p className="text-xs text-red-500">{groupError}</p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-1">
+                <Label className="text-sm text-slate-700">知识库密级</Label>
+                <span className="text-red-500">*</span>
+              </div>
+              <Select
+                value={securityLevel}
+                onValueChange={(value) => setSecurityLevel(value as SecurityLevel)}
+                options={securityOptions}
+                placeholder="选择密级"
+                className="h-10 max-w-xs"
+              />
+              <p className="text-xs text-slate-400">
+                知识库密级不可高于所属群组密级（当前群组：{parentGroupSecurityLevel}
+                ），且不超过项目角色密级。高密创建将提交审批。
+              </p>
             </div>
 
             <div className="space-y-2">
