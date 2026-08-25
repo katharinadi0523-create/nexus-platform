@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   Bot,
   CalendarClock,
@@ -18,6 +19,7 @@ import {
   FileText,
   FolderOpen,
   GripVertical,
+  History,
   Loader2,
   MessageSquareText,
   PanelLeftClose,
@@ -39,8 +41,12 @@ import {
 import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
 import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
-import { AgentBomBadge } from "@/components/claw-hub-next/agent-bom-badge";
-import { buildAgentBomTreeFromDetail } from "@/components/claw-hub-next/agent-bom-tree";
+import { AgentAvailabilityControl } from "@/components/agent/agent-availability-control";
+import { AgentVersionPublishDialog } from "@/components/agent/agent-version-publish-dialog";
+import {
+  AgentVersionHistoryDrawer,
+  type RestoredAgentDraft,
+} from "@/components/agent/agent-version-history-drawer";
 import { ClawKnowledgeAssetsSection } from "@/components/claw-hub-next/detail/claw-knowledge-assets-section";
 import { ClawAgentResourceSection } from "@/components/claw-hub-next/detail/agent-resource-section";
 import { ClawCoreConfigSection } from "@/components/claw-hub-next/detail/core-config-section";
@@ -135,6 +141,8 @@ import {
 import { getApprovalActionState } from "@/lib/security-level";
 import { ModelSelector, type ModelParams } from "@/components/agent-editor/ModelSelector";
 import { PRESET_MODEL_IDS, getDefaultModelParams, type ModelParamKey } from "@/lib/model-schemas";
+import { createEntityVersionHistory } from "@/lib/mock/entity-version-management";
+import { buildVersionCompositionData, type AgentVersionRecord } from "@/lib/mock/agent-version-management";
 import {
   formatMultiAgentUpdatedAt,
   getShelvedMultiAgentById,
@@ -166,7 +174,7 @@ const CLAW_AGENT_TYPE_OPTIONS = [
   "软件开发",
   "项目管理",
   "市场营销",
-  "销售",
+  "市场营销",
   "质量测试",
   "战略分析",
   "科研实验",
@@ -549,10 +557,37 @@ export function ClawDetailWorkbench({
 }: ClawDetailWorkbenchProps) {
   const isMultiAgentMode = mode === "multi-agent";
   const entityLabel = isMultiAgentMode ? "多智能体" : "Claw";
-  const router = useRouter();
+
   const [activeSection, setActiveSection] = useState<DetailSectionKey>("core");
   const [entityName, setEntityName] = useState(detail.overview.name);
   const [entityDescription, setEntityDescription] = useState(detail.overview.summary);
+  const initialVersionHistory = useMemo(
+    () =>
+      detail.overview.publishStatus === "\u5df2\u53d1\u5e03"
+        ? createEntityVersionHistory({
+            kind: isMultiAgentMode ? "multi-agent" : "claw",
+            objectId: detail.overview.id,
+            objectName: detail.overview.name,
+          })
+        : [],
+    [detail.overview.id, detail.overview.name, detail.overview.publishStatus, isMultiAgentMode]
+  );
+  const [versions, setVersions] = useState(initialVersionHistory);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
+  const [restoredDraft, setRestoredDraft] = useState<RestoredAgentDraft | null>({ sourceLabel: "", issues: [] });
+  const [versionPublishOpen, setVersionPublishOpen] = useState(false);
+  const [versionDescription, setVersionDescription] = useState("");
+  const [entityDisabled, setEntityDisabled] = useState(false);
+  const batchDisabledVersionIds = useRef<string[]>([]);
+  const selectedVersion = versions.find((version) => version.id === selectedVersionId) ?? null;
+  const isHistorical = selectedVersion !== null;
+  const nextVersionNumber = versions.reduce((highest, version) => {
+    const parsed = Number(version.label.replace(/^V/, ""));
+    return Number.isInteger(parsed) ? Math.max(highest, parsed) : highest;
+  }, 0) + 1;
+  const nextVersionLabel = `V${nextVersionNumber}`;
   const [securityLevel, setSecurityLevel] = useState<ClawSecurityLevel>(
     detail.overview.securityLevel ?? "公开"
   );
@@ -570,7 +605,7 @@ export function ClawDetailWorkbench({
     targetLevel: (detail.overview.securityLevel ?? "公开") as ClawSecurityLevel,
     reason: "",
   });
-  const [subAgentConfigEnabled] = useState(
+  const [subAgentConfigEnabled, setSubAgentConfigEnabled] = useState(
     () => isMultiAgentMode || detail.capabilityConfig.agents.claw.length > 0
   );
 
@@ -582,22 +617,21 @@ export function ClawDetailWorkbench({
       "knowledge",
       "agents",
     ]);
-    return CLAW_DETAIL_NAV_GROUPS.map((group) => ({
-      ...group,
-      items: group.items
+    return CLAW_DETAIL_NAV_GROUPS.map((group) => {
+      const items = group.items
         .filter((item) => !(isMultiAgentMode && multiAgentHiddenNavKeys.has(item.value)))
         .map((item) => {
           if (item.value === "core") {
             return {
               ...item,
-              label: isMultiAgentMode ? "多智能体配置" : `${entityLabel}配置`,
+              label: isMultiAgentMode ? "\u591a\u667a\u80fd\u4f53\u914d\u7f6e" : `${entityLabel}\u914d\u7f6e`,
             };
           }
           return item;
-        }),
-    })).filter((group) => group.items.length > 0);
+        });
+      return { ...group, items };
+    }).filter((group) => group.items.length > 0);
   }, [isMultiAgentMode, entityLabel]);
-
   const automatedTaskPanelItems = useMemo(
     () => [
       {
@@ -700,6 +734,7 @@ export function ClawDetailWorkbench({
   const [agentRelations, setAgentRelations] = useState<AgentRelationItem[]>(() => [...detail.agentRelations]);
   const [agentRelationDraft, setAgentRelationDraft] = useState<AgentRelationItem | null>(null);
   const splitContainerRef = useRef<HTMLDivElement | null>(null);
+  const historicalConfigRef = useRef<HTMLDivElement | null>(null);
 
   const relationSelectOptions = useMemo(
     () => AGENT_RELATION_SELECT_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label })),
@@ -841,20 +876,6 @@ export function ClawDetailWorkbench({
   const activeLogEvent =
     selectedLogSessionEvents.find((event) => event.id === selectedLogEventId) ?? selectedLogSessionEvents[0] ?? null;
   const isPublished = publishStatus === "已发布";
-  const agentBomTree = useMemo(
-    () =>
-      buildAgentBomTreeFromDetail(
-        {
-          ...detail,
-          capabilityConfig,
-          knowledgeAssets,
-          securityManagement,
-          resourceConfig: detail.resourceConfig,
-        },
-        entityLabel
-      ),
-    [detail, capabilityConfig, knowledgeAssets, securityManagement, entityLabel]
-  );
   const isApiEffective = isPublished && apiPublishEffective;
   const canConfirmShelf = shelfAgentTypes.length > 0;
   const approvalAction = getApprovalActionState(approvalStatus);
@@ -1333,6 +1354,42 @@ export function ClawDetailWorkbench({
     toast.success("已删除。");
   }
 
+
+  function handleSelectVersion(versionId: string | null) {
+    setSelectedVersionId(versionId);
+    setActiveSection("core");
+  }
+
+  function returnToCurrentDraft() {
+    setSelectedVersionId(null);
+    setActiveSection("core");
+  }
+
+  function handleRestoreConfirm() {
+    if (!selectedVersion) return;
+    setRestoreConfirmOpen(false);
+    setRestoredDraft({
+      sourceLabel: selectedVersion.label,
+      issues: selectedVersion.restoreIssues?.map((issue) => ({ ...issue })) ?? [],
+      notice: `${selectedVersion.label} 已还原为当前草稿`,
+    });
+    returnToCurrentDraft();
+    toast.success(`${selectedVersion.label} \u5df2\u8fd8\u539f\u4e3a\u5f53\u524d\u8349\u7a3f`);
+  }
+
+
+  function handleVersionAvailabilityChange(
+    versionId: string,
+    status: AgentVersionRecord["availabilityStatus"]
+  ) {
+    const target = versions.find((version) => version.id === versionId);
+    setVersions((current) =>
+      current.map((version) =>
+        version.id === versionId ? { ...version, availabilityStatus: status } : version
+      )
+    );
+    toast.success(`${target?.label ?? "版本"} 已${status === "停用" ? "停用" : "重新启用"}`);
+  }
   function handlePublish() {
     if (approvalAction.publishLocked) {
       toast.info(approvalAction.publishTitle ?? "审批中，暂不可发布。");
@@ -1345,13 +1402,65 @@ export function ClawDetailWorkbench({
   }
 
   function handlePublishValidationPassed() {
+    setPublishValidationOpen(false);
+    window.setTimeout(() => setVersionPublishOpen(true), 120);
+  }
+
+  function handleVersionPublishConfirm() {
+    const description = versionDescription.trim();
+    if (!description || isHistorical) return;
+
     const wasPublished = publishStatus === "已发布";
     const publishedName = entityName.trim() || detail.overview.name;
+    const kind = isMultiAgentMode ? "multi-agent" : "claw";
+    const idPrefix = isMultiAgentMode ? "multi-agent" : "claw";
+    const sourceVersion =
+      versions.find((version) => version.isLatest) ??
+      versions[0] ??
+      createEntityVersionHistory({ kind, objectId: detail.overview.id, objectName: publishedName })[0];
+    if (!sourceVersion) return;
+
+    const publishedAt = new Date().toLocaleString("zh-CN", { hour12: false }).replaceAll("/", "-");
+    const versionSlug = nextVersionLabel.toLowerCase();
+    const resources = sourceVersion.resources.map((resource) => ({ ...resource, change: "未变化" as const }));
+    const snapshot = {
+      ...sourceVersion.snapshot,
+      snapshotId: `demo-snapshot-${idPrefix}-001-${versionSlug}`,
+      objectId: detail.overview.id,
+      objectName: publishedName,
+      objectType: isMultiAgentMode ? "多智能体" as const : "Claw" as const,
+      releaseRecord: `${nextVersionLabel} / demo-release-${idPrefix}-001-${versionSlug}`,
+      publisher: "用户A",
+      frozenAt: publishedAt,
+      publishedAt,
+      resourceCount: resources.length,
+      categoryCount: new Set(resources.map((resource) => resource.category)).size,
+    };
+    const composition = buildVersionCompositionData(snapshot, resources, nextVersionLabel);
+    const newVersion: AgentVersionRecord = {
+      ...sourceVersion,
+      id: `${idPrefix}-version-${versionSlug}`,
+      label: nextVersionLabel,
+      isLatest: true,
+      isReferenced: false,
+      referenceCount: 0,
+      availabilityStatus: "启用",
+      listingStatus: "未上架",
+      description,
+      publisher: "用户A",
+      publishedAt,
+      versionId: `demo-version-${idPrefix}-001-${versionSlug}`,
+      restoreIssues: undefined,
+      snapshot,
+      ...composition,
+      resources,
+    };
 
     if (isMultiAgentMode) {
       if (isHighSecurityLevel(securityLevel)) {
         setApprovalStatus("publish");
-        setPublishValidationOpen(false);
+        setVersionPublishOpen(false);
+        setVersionDescription("");
         upsertPublishedMultiAgent({
           id: detail.overview.id || `multi-agent-${Date.now()}`,
           name: publishedName,
@@ -1378,18 +1487,12 @@ export function ClawDetailWorkbench({
         approvalStatus: "none",
         status: "已发布",
       });
-      setPublishStatus("已发布");
-      setApiPublishEffective(true);
-      setApprovalStatus("none");
-      setPublishValidationOpen(false);
-      toast.success(`已发布：${publishedName}`);
-      router.push("/multi-agent");
-      return;
     }
 
-    if (isHighSecurityLevel(securityLevel)) {
+    if (!isMultiAgentMode && isHighSecurityLevel(securityLevel)) {
       setApprovalStatus("publish");
-      setPublishValidationOpen(false);
+      setVersionPublishOpen(false);
+      setVersionDescription("");
       toast.success(
         wasPublished
           ? `已提交发布审批：${publishedName}，审批通过前仍按当前已发布版本运行。`
@@ -1398,14 +1501,15 @@ export function ClawDetailWorkbench({
       return;
     }
 
+    setVersions((current) => [newVersion, ...current.map((version) => ({ ...version, isLatest: false }))]);
     setPublishStatus("已发布");
     setApiPublishEffective(true);
     setApprovalStatus("none");
-    if (wasPublished) {
-      toast.success(`校验通过：${publishedName}，API 调用已生效。`);
-      return;
-    }
-    toast.success(`已发布：${publishedName}，API 调用已生效。`);
+    setRestoredDraft({ sourceLabel: "", issues: [] });
+    setVersionDescription("");
+    setVersionPublishOpen(false);
+    setVersionHistoryOpen(true);
+    toast.success(`${nextVersionLabel} 发布成功`);
   }
 
   function handleOpenShelfDialog() {
@@ -1612,6 +1716,14 @@ export function ClawDetailWorkbench({
     toast.success("已提交密级修改审批，审批通过后方可生效。");
   }
 
+  function handleSubAgentConfigToggle(enabled: boolean) {
+    setSubAgentConfigEnabled(enabled);
+    if (!enabled && activeSection === "agents") {
+      setActiveSection("core");
+    }
+    toast.success(enabled ? "已开启子智能体配置" : "已关闭子智能体配置，已有配置将保留");
+  }
+
   function handleAddOrchestrationSubAgent() {
     setCapabilityConfig((current) => {
       const nextIndex = current.agents.claw.length + 1;
@@ -1673,6 +1785,31 @@ export function ClawDetailWorkbench({
   }
 
   const configSection = activeSection === "chat" ? "core" : activeSection;
+  useEffect(() => {
+    const root = historicalConfigRef.current;
+    if (!root) return;
+
+    const controls = root.querySelectorAll<
+      HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >("button, input, select, textarea");
+    const shouldLock = isHistorical && configSection !== "logs";
+
+    controls.forEach((control) => {
+      if (shouldLock) {
+        if (!control.disabled) control.dataset.versionReadonly = "true";
+        control.disabled = true;
+        if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) {
+          control.readOnly = true;
+        }
+      } else if (control.dataset.versionReadonly === "true") {
+        control.disabled = false;
+        if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) {
+          control.readOnly = false;
+        }
+        delete control.dataset.versionReadonly;
+      }
+    });
+  }, [configSection, isHistorical, selectedOrchestrationNodeId]);
   const compactDebugSplit = debugOpen && splitWidth > 0 && splitWidth < DEBUG_SPLIT_COLLAPSE_WIDTH;
   const debugPaneWidth =
     debugOpen && !compactDebugSplit && splitWidth > 0
@@ -1715,6 +1852,7 @@ export function ClawDetailWorkbench({
                 <Input
                   value={entityName}
                   onChange={(event) => setEntityName(event.target.value)}
+                  disabled={isHistorical}
                   placeholder="请输入多智能体名称"
                   aria-label="多智能体名称"
                   className="h-8 max-w-[420px] min-w-[160px] truncate rounded-md border-transparent bg-transparent px-1.5 text-lg font-semibold text-slate-950 shadow-none hover:border-slate-200 hover:bg-white focus-visible:border-blue-300 focus-visible:bg-white focus-visible:ring-blue-100"
@@ -1765,6 +1903,7 @@ export function ClawDetailWorkbench({
               <Input
                 value={entityDescription}
                 onChange={(event) => setEntityDescription(event.target.value)}
+                disabled={isHistorical}
                 placeholder="请输入多智能体描述"
                 aria-label="多智能体描述"
                 className="mt-0.5 h-7 max-w-[640px] truncate rounded-md border-transparent bg-transparent px-1.5 text-sm text-slate-500 shadow-none hover:border-slate-200 hover:bg-white focus-visible:border-blue-300 focus-visible:bg-white focus-visible:ring-blue-100"
@@ -1818,10 +1957,62 @@ export function ClawDetailWorkbench({
                 </button>
               ) : null}
               {isPublished ? <ClawPublishedBadge /> : null}
-              {isPublished ? <AgentBomBadge tree={agentBomTree} versionLabel={detail.overview.version} /> : null}
+              <div className="ml-1 flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3">
+                <span className="text-xs font-medium text-slate-500">多智能体</span>
+                <Switch
+                  checked={subAgentConfigEnabled}
+                  onCheckedChange={handleSubAgentConfigToggle}
+                  disabled={isHistorical}
+                  aria-label="启用多智能体配置"
+                  title={subAgentConfigEnabled ? "关闭后将不能配置子智能体" : "开启后可配置子智能体"}
+                  className="data-[state=checked]:bg-blue-600"
+                />
+              </div>
             </div>
           )}
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            <AgentAvailabilityControl
+              entityLabel={isMultiAgentMode ? "该多智能体" : "该 Claw"}
+              disabled={entityDisabled}
+              hasListedVersion={versions.some((version) => version.listingStatus === "已上架")}
+              onDisabledChange={(disabled) => {
+                setEntityDisabled(disabled);
+                if (disabled) {
+                  batchDisabledVersionIds.current = versions
+                    .filter((version) => version.availabilityStatus === "启用")
+                    .map((version) => version.id);
+                  setVersions((current) =>
+                    current.map((version) => ({ ...version, availabilityStatus: "停用" }))
+                  );
+                } else {
+                  const restoreIds = new Set(batchDisabledVersionIds.current);
+                  setVersions((current) =>
+                    current.map((version) =>
+                      restoreIds.has(version.id)
+                        ? { ...version, availabilityStatus: "启用" }
+                        : version
+                    )
+                  );
+                  batchDisabledVersionIds.current = [];
+                }
+                toast.success(disabled ? `${entityLabel}已停用` : `${entityLabel}已重新启用`);
+              }}
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              aria-label={"\u7248\u672c\u5386\u53f2"}
+              title={"\u7248\u672c\u5386\u53f2"}
+              onClick={() => setVersionHistoryOpen((open) => !open)}
+              className={cn(
+                "h-9 w-9 rounded-md border-slate-300 bg-white text-slate-600 shadow-none hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700",
+                versionHistoryOpen && "border-blue-400 bg-blue-50 text-blue-700"
+              )}
+            >
+              <History className="h-4 w-4" />
+            </Button>
+
             <Button
               type="button"
               size="sm"
@@ -1839,6 +2030,7 @@ export function ClawDetailWorkbench({
                     )
               )}
               onClick={handleToggleDebugPanel}
+              disabled={isHistorical}
             >
               {isMultiAgentMode ? null : <MessageSquareText className="size-[18px]" />}
               {isMultiAgentMode ? "预览与调试" : "对话调试"}
@@ -1848,8 +2040,8 @@ export function ClawDetailWorkbench({
                 <Button
                   type="button"
                   size="sm"
-                  disabled={approvalAction.publishLocked}
-                  title={approvalAction.publishTitle}
+                  disabled={isHistorical || approvalAction.publishLocked}
+                  title={isHistorical ? "历史版本不可发布" : approvalAction.publishTitle}
                   className={cn(
                     isMultiAgentMode
                       ? "h-9 rounded-md bg-blue-600 px-3.5 text-sm font-medium text-white shadow-none hover:bg-blue-700"
@@ -1956,6 +2148,36 @@ export function ClawDetailWorkbench({
         </div>
       </section>
 
+      {isHistorical && selectedVersion ? (
+        <div className="flex min-h-11 shrink-0 items-center justify-between gap-4 border-b border-blue-200 bg-blue-50 px-6 py-2 text-sm text-blue-800">
+          <span>{"\u5f53\u524d\u6b63\u5728\u67e5\u770b\u5386\u53f2\u7248\u672c\uff08"}{selectedVersion.label}{"\uff09\uff0c\u914d\u7f6e\u4e0d\u53ef\u7f16\u8f91\u3002"}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={returnToCurrentDraft}
+            className="h-8 shrink-0 rounded-md text-blue-700 hover:bg-blue-100 hover:text-blue-800"
+          >
+            {"\u8fd4\u56de\u5f53\u524d\u8349\u7a3f"}
+          </Button>
+        </div>
+      ) : restoredDraft?.issues.length ? (
+        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-6 py-3 text-sm text-amber-900">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="flex items-center gap-2 font-medium">
+              <AlertTriangle className="h-4 w-4" />
+              {restoredDraft.sourceLabel} {"\u5df2\u8fd8\u539f\u4e3a\u5f53\u524d\u8349\u7a3f"}
+            </div>
+            <span className="text-amber-800">{restoredDraft.issues.length} {"\u9879\u8d44\u6e90\u5f85\u5904\u7406"}</span>
+            {restoredDraft.issues.map((issue) => (
+              <span key={issue.resourceId} className="rounded border border-amber-200 bg-white/70 px-2 py-1 text-xs">
+                {issue.resourceName} {"\u00b7"} {issue.reason === "\u8d44\u6e90\u5df2\u5220\u9664" ? "\u5df2\u5220\u9664" : issue.reason === "\u9700\u8981\u91cd\u65b0\u6388\u6743" ? "\u9700\u91cd\u65b0\u6388\u6743" : issue.reason}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="relative min-h-0 flex-1 overflow-hidden">
       <Tabs
         value={configSection}
         onValueChange={(value) => {
@@ -1963,7 +2185,7 @@ export function ClawDetailWorkbench({
           if (nextSection === "agents" && !subAgentConfigEnabled) return;
           setActiveSection(nextSection);
         }}
-        className="min-h-0 flex-1 gap-0 overflow-hidden"
+        className="h-full min-h-0 gap-0 overflow-hidden"
       >
         <div ref={splitContainerRef} className="flex min-h-0 flex-1 overflow-hidden">
           <div
@@ -2026,14 +2248,18 @@ export function ClawDetailWorkbench({
               onSelectNode={setSelectedOrchestrationNodeId}
               rootLabel={mainAgentName || "主智能体"}
               subAgents={capabilityConfig.agents.claw}
-              onAddSubAgent={handleAddOrchestrationSubAgent}
-              onRemoveSubAgent={handleRemoveOrchestrationSubAgent}
+              onAddSubAgent={isHistorical ? () => undefined : handleAddOrchestrationSubAgent}
+              onRemoveSubAgent={isHistorical ? () => undefined : handleRemoveOrchestrationSubAgent}
+              readOnly={isHistorical}
             />
           ) : null}
           <div
+            ref={historicalConfigRef}
+            aria-readonly={isHistorical}
             className={cn(
-              "min-h-0 min-w-0 flex-1",
-              "overflow-y-auto bg-slate-50 px-5 py-5"
+              "min-h-0 min-w-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-5",
+              isHistorical && configSection !== "logs" &&
+                "[&_button:disabled]:cursor-not-allowed [&_button:disabled]:border-slate-200 [&_button:disabled]:bg-slate-100 [&_button:disabled]:text-slate-400 [&_input:disabled]:cursor-not-allowed [&_input]:!border-slate-200 [&_input]:!bg-slate-100 [&_input]:!text-slate-500 [&_select:disabled]:cursor-not-allowed [&_select]:!border-slate-200 [&_select]:!bg-slate-100 [&_select]:!text-slate-500 [&_textarea:disabled]:cursor-not-allowed [&_textarea]:!border-slate-200 [&_textarea]:!bg-slate-100 [&_textarea]:!text-slate-500"
             )}
           >
           <TabsContent value="status" className="mt-0">
@@ -2081,6 +2307,7 @@ export function ClawDetailWorkbench({
               </div>
             </SectionCard>
           </TabsContent>
+
 
           <TabsContent value="core" className="mt-0">
             {isMultiAgentMode ? (
@@ -2383,7 +2610,6 @@ export function ClawDetailWorkbench({
             <SectionCard>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-sm text-slate-500">
-                  当前共接入
                   <span className="mx-2 font-semibold text-slate-950">
                     {distributionChannels.filter((item) => item.status === "已接入").length}
                   </span>
@@ -3415,6 +3641,21 @@ export function ClawDetailWorkbench({
           ) : null}
         </div>
       </Tabs>
+      </div>
+      <AgentVersionHistoryDrawer
+        open={versionHistoryOpen}
+        versions={versions}
+        entityDisabled={entityDisabled}
+        selectedVersionId={selectedVersionId}
+        restoredDraft={restoredDraft}
+        restoreConfirmOpen={restoreConfirmOpen}
+        onOpenChange={setVersionHistoryOpen}
+        onSelectVersion={handleSelectVersion}
+        onRestoreRequest={() => setRestoreConfirmOpen(true)}
+        onRestoreConfirmChange={setRestoreConfirmOpen}
+        onRestoreConfirm={handleRestoreConfirm}
+        onVersionAvailabilityChange={handleVersionAvailabilityChange}
+      />
       <Dialog open={basicInfoDialogOpen} onOpenChange={setBasicInfoDialogOpen}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
@@ -3816,11 +4057,23 @@ export function ClawDetailWorkbench({
         defaultCreatedBy={detail.overview.creator}
         onCreated={({ item }) => setAutomatedTasks((rows) => [item, ...rows])}
       />
+      <AgentVersionPublishDialog
+        open={versionPublishOpen}
+        entityLabel={entityLabel}
+        versionLabel={nextVersionLabel}
+        description={versionDescription}
+        onOpenChange={(open) => {
+          setVersionPublishOpen(open);
+          if (!open) setVersionDescription("");
+        }}
+        onDescriptionChange={setVersionDescription}
+        onConfirm={handleVersionPublishConfirm}
+      />
       <ClawPublishValidationDialog
         open={publishValidationOpen}
         onOpenChange={setPublishValidationOpen}
         agentName={entityName.trim() || detail.overview.name}
-        confirmLabel={isPublished ? "确认生效" : "确认发布"}
+        confirmLabel="继续发布"
         onValidationPassed={handlePublishValidationPassed}
       />
     </div>

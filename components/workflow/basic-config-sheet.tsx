@@ -21,11 +21,13 @@ import { cn } from "@/lib/utils";
 interface BasicConfigSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  readOnly?: boolean;
 }
 
 export function BasicConfigSheet({
   open,
   onOpenChange,
+  readOnly = false,
 }: BasicConfigSheetProps) {
   const [appName, setAppName] = useState("");
   const [appDescription, setAppDescription] = useState("");
@@ -64,6 +66,7 @@ export function BasicConfigSheet({
             <div className="flex-1 space-y-3">
               <div className="relative">
                 <Input
+                  readOnly={readOnly}
                   placeholder="智能体应用名称"
                   value={appName}
                   onChange={(e) => {
@@ -81,6 +84,7 @@ export function BasicConfigSheet({
 
               <div className="relative">
                 <Textarea
+                  readOnly={readOnly}
                   placeholder="智能体应用描述"
                   value={appDescription}
                   onChange={(e) => {
@@ -114,13 +118,14 @@ export function BasicConfigSheet({
                 )}
                 开场白
               </button>
-              <button className="p-1 hover:bg-slate-100 rounded transition-colors">
+              <button disabled={readOnly} className="p-1 hover:bg-slate-100 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-40">
                 <Sparkles className="w-4 h-4 text-blue-600" />
               </button>
             </div>
             {expandedSections.opening && (
               <div className="relative">
                 <Textarea
+                  readOnly={readOnly}
                   placeholder="请输入开场白"
                   value={openingStatement}
                   onChange={(e) => {
@@ -152,13 +157,14 @@ export function BasicConfigSheet({
                 )}
                 推荐问
               </button>
-              <button className="p-1 hover:bg-slate-100 rounded transition-colors">
+              <button disabled={readOnly} className="p-1 hover:bg-slate-100 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-40">
                 <Sparkles className="w-4 h-4 text-blue-600" />
               </button>
             </div>
             {expandedSections.suggested && (
               <div className="relative">
                 <Input
+                  readOnly={readOnly}
                   placeholder="请输入内容"
                   value={suggestedQuestion}
                   onChange={(e) => {
@@ -191,6 +197,7 @@ export function BasicConfigSheet({
             </button>
             {expandedSections.rounds && (
               <Input
+                readOnly={readOnly}
                 type="number"
                 placeholder="0"
                 value={conversationRounds}

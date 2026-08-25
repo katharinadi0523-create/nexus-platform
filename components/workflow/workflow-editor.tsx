@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useMemo, useRef, useEffect } from "react";
-import { Plus, Play, Bug } from "lucide-react";
+import { Plus, Bug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import ReactFlow, {
@@ -41,6 +41,14 @@ import { getWorkflowByAgentId } from "@/lib/mock/workflow-data";
 
 interface WorkflowEditorProps {
   agentId: string;
+  readOnly?: boolean;
+  snapshotVersion?: string | null;
+  showReferenceAlerts?: boolean;
+  historicalConfigSnapshot?: unknown;
+  restoreToDraftVersion?: string | null;
+  onDraftSnapshotChange?: (snapshot: { nodes: Node[]; edges: Edge[] }) => void;
+  onOpenNodeConfig?: () => void;
+  onRequestDraftAction?: (action: "update" | "reconfigure") => void;
 }
 
 // 定义节点类型
@@ -70,65 +78,117 @@ const initialNodes: Node[] = [
   {
     id: "start-1",
     type: "start",
-    position: { x: 100, y: 250 },
-    data: {
-      // 开始节点没有输出，只有输入变量可以被下游引用
-    },
+    position: { x: 80, y: 350 },
+    data: {},
   },
   {
     id: "knowledge-1",
     type: "knowledge",
-    position: { x: 400, y: 250 },
+    position: { x: 360, y: 350 },
     data: {
-      outputVariables: [
-        { name: "result", type: "array[object]" },
+      outputVariables: [{ name: "result", type: "array[object]" }],
+    },
+  },
+  {
+    id: "agent-version-demo",
+    type: "agent",
+    position: { x: 700, y: 60 },
+    data: {
+      description: "设备维修判断与预测",
+      agentId: "device-03",
+      agentName: "设备维修判断与预测",
+      currentVersion: "V1",
+      latestVersion: "V2",
+      latestPublishedAt: "2026-07-27 10:20:15",
+      latestVersionDescription: "优化数据校验及异常处理",
+      hasVersionUpdate: true,
+      versionUpdateDismissed: false,
+      availabilityStatus: "available",
+      inputVariables: [
+        { name: "query", type: "string" },
+        { name: "files", type: "array[object]" },
+        { name: "*device_id", type: "string" },
       ],
+      outputVariables: [
+        { name: "answer", type: "String" },
+        { name: "ruleIntervention", type: "String" },
+      ],
+    },
+  },
+  {
+    id: "agent-version-disabled-demo",
+    type: "agent",
+    position: { x: 700, y: 350 },
+    data: {
+      description: "合同审查",
+      agentId: "contract-review-agent",
+      agentName: "合同审查智能体",
+      currentVersion: "V1",
+      latestVersion: "V2",
+      latestVersionDescription: "优化合同条款识别与风险提示",
+      hasVersionUpdate: false,
+      availabilityStatus: "version-disabled",
+      agentUnavailableMessage: "引用资源已停用，请重新配置。",
+      runtimeError: "引用版本 V1 已停用，当前节点无法调用，请重新配置后再运行。",
+      inputVariables: [{ name: "query", type: "string" }],
+      outputVariables: [{ name: "answer", type: "String" }],
+    },
+  },
+  {
+    id: "agent-disabled-demo",
+    type: "agent",
+    position: { x: 700, y: 640 },
+    data: {
+      description: "设备诊断",
+      agentId: "legacy-device-agent",
+      agentName: "旧版设备诊断智能体",
+      currentVersion: "V3",
+      latestVersion: "V3",
+      hasVersionUpdate: false,
+      availabilityStatus: "agent-disabled",
+      agentUnavailableMessage: "引用的智能体已停用，请重新配置。",
+      runtimeError: "引用的智能体“旧版设备诊断智能体”已停用，当前节点无法调用，请重新配置后再运行。",
+      inputVariables: [{ name: "query", type: "string" }],
+      outputVariables: [{ name: "answer", type: "String" }],
     },
   },
   {
     id: "llm-1",
     type: "llm",
-    position: { x: 700, y: 250 },
+    position: { x: 1080, y: 350 },
     data: {
-      outputVariables: [
-        { name: "text", type: "string" },
-      ],
+      outputVariables: [{ name: "text", type: "string" }],
     },
   },
   {
     id: "end-1",
     type: "end",
-    position: { x: 1000, y: 250 },
+    position: { x: 1400, y: 350 },
     data: {},
   },
 ];
 
-// 初始边数据
 const initialEdges: Edge[] = [
-  {
-    id: "e1",
-    source: "start-1",
-    target: "knowledge-1",
-    type: "smoothstep",
-    animated: true,
-  },
-  {
-    id: "e2",
-    source: "knowledge-1",
-    target: "llm-1",
-    type: "smoothstep",
-    animated: true,
-  },
-  {
-    id: "e3",
-    source: "llm-1",
-    target: "end-1",
-    type: "smoothstep",
-    animated: true,
-  },
+  { id: "e1", source: "start-1", target: "knowledge-1", type: "smoothstep", animated: true },
+  { id: "e2", source: "knowledge-1", target: "agent-version-demo", type: "smoothstep", animated: true },
+  { id: "e3", source: "knowledge-1", target: "agent-version-disabled-demo", type: "smoothstep", animated: true },
+  { id: "e4", source: "knowledge-1", target: "agent-disabled-demo", type: "smoothstep", animated: true },
+  { id: "e5", source: "agent-version-demo", target: "llm-1", type: "smoothstep", animated: true },
+  { id: "e6", source: "agent-version-disabled-demo", target: "llm-1", type: "smoothstep", animated: true },
+  { id: "e7", source: "agent-disabled-demo", target: "llm-1", type: "smoothstep", animated: true },
+  { id: "e8", source: "llm-1", target: "end-1", type: "smoothstep", animated: true },
 ];
-
-export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
+export function WorkflowEditor({
+  agentId,
+  readOnly = false,
+  snapshotVersion = null,
+  showReferenceAlerts = true,
+  historicalConfigSnapshot,
+  restoreToDraftVersion = null,
+  onDraftSnapshotChange,
+  onOpenNodeConfig,
+  onRequestDraftAction,
+}: WorkflowEditorProps) {
   // 根据 agentId 加载工作流数据，如果没有则使用默认值
   const workflowData = agentId ? getWorkflowByAgentId(agentId) : null;
   const defaultNodes = workflowData?.nodes || initialNodes;
@@ -141,7 +201,12 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
   const [basicConfigOpen, setBasicConfigOpen] = useState(false);
   const [runResult, setRunResult] = useState<FlowRuntimeResult | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [runResultOpen, setRunResultOpen] = useState(false);
+  const draftSnapshotRef = useRef<{ nodes: Node[]; edges: Edge[] }>({
+    nodes: defaultNodes.map((node) => ({ ...node, position: { ...node.position }, data: { ...node.data } })),
+    edges: defaultEdges.map((edge) => ({ ...edge, data: edge.data ? { ...edge.data } : edge.data })),
+  });
+  const previousSnapshotVersionRef = useRef<string | null>(snapshotVersion);
+
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
 
   // 当 agentId 变化时，重新加载工作流数据
@@ -153,10 +218,69 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
     }
   }, [agentId, setNodes, setEdges]);
 
-  const selectedNode = useMemo(
-    () => nodes.find((node) => node.id === selectedNodeId) || null,
-    [nodes, selectedNodeId]
-  );
+  // 当前草稿和各历史版本使用彼此独立的画布数据。进入历史版本时先保存
+  // 当前草稿，再从该历史版本的固化快照重新加载；返回草稿时恢复原草稿。
+  useEffect(() => {
+    const previousSnapshotVersion = previousSnapshotVersionRef.current;
+
+    if (!previousSnapshotVersion && snapshotVersion) {
+      draftSnapshotRef.current = {
+        nodes: nodes.map((node) => ({ ...node, position: { ...node.position }, data: { ...node.data } })),
+        edges: edges.map((edge) => ({ ...edge, data: edge.data ? { ...edge.data } : edge.data })),
+      };
+    }
+
+    if (snapshotVersion) {
+      const storedSnapshot = historicalConfigSnapshot as { nodes?: Node[]; edges?: Edge[] } | undefined;
+      const frozenWorkflow = agentId ? getWorkflowByAgentId(agentId) : null;
+      const frozenNodes = storedSnapshot?.nodes || frozenWorkflow?.nodes || initialNodes;
+      const frozenEdges = storedSnapshot?.edges || frozenWorkflow?.edges || initialEdges;
+      setNodes(
+        frozenNodes.map((node) => ({
+          ...node,
+          position: { ...node.position },
+          data: { ...node.data, snapshotVersion },
+        }))
+      );
+      setEdges(
+        frozenEdges.map((edge) => ({
+          ...edge,
+          data: edge.data ? { ...edge.data } : edge.data,
+        }))
+      );
+    } else if (previousSnapshotVersion && restoreToDraftVersion !== previousSnapshotVersion) {
+      setNodes(
+        draftSnapshotRef.current.nodes.map((node) => ({
+          ...node,
+          position: { ...node.position },
+          data: { ...node.data },
+        }))
+      );
+      setEdges(
+        draftSnapshotRef.current.edges.map((edge) => ({
+          ...edge,
+          data: edge.data ? { ...edge.data } : edge.data,
+        }))
+      );
+    }
+
+    setSelectedNodeId(null);
+    previousSnapshotVersionRef.current = snapshotVersion;
+  }, [agentId, historicalConfigSnapshot, restoreToDraftVersion, snapshotVersion, setEdges, setNodes]);
+
+  useEffect(() => {
+    if (snapshotVersion) return;
+    draftSnapshotRef.current = {
+      nodes: nodes.map((node) => ({ ...node, position: { ...node.position }, data: { ...node.data } })),
+      edges: edges.map((edge) => ({ ...edge, data: edge.data ? { ...edge.data } : edge.data })),
+    };
+    onDraftSnapshotChange?.(draftSnapshotRef.current);
+  }, [edges, nodes, onDraftSnapshotChange, snapshotVersion]);
+
+  const selectedNode = useMemo(() => {
+    const node = nodes.find((item) => item.id === selectedNodeId) || null;
+    return node ? { ...node, data: { ...node.data, showReferenceAlerts } } : null;
+  }, [nodes, selectedNodeId, showReferenceAlerts]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -167,14 +291,15 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
-  }, []);
+    onOpenNodeConfig?.();
+  }, [onOpenNodeConfig]);
 
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null);
   }, []);
 
   const handleUpdateNode = useCallback(
-    (nodeId: string, data: any) => {
+    (nodeId: string, data: Record<string, unknown>) => {
       setNodes((nds) =>
         nds.map((node) =>
           node.id === nodeId ? { ...node, data: { ...node.data, ...data } } : node
@@ -212,7 +337,7 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
 
   const handleRun = useCallback(async () => {
     setIsExecuting(true);
-    setRunResultOpen(true);
+
     setRunResult(null); // 清空之前的结果
     
     try {
@@ -274,11 +399,17 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
         {/* React Flow Canvas */}
         <div className="absolute inset-0">
           <ReactFlow
-            nodes={nodes}
+            nodes={nodes.map((node) => ({
+              ...node,
+              data: { ...node.data, showReferenceAlerts },
+            }))}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
+            onNodesChange={readOnly ? undefined : onNodesChange}
+            onEdgesChange={readOnly ? undefined : onEdgesChange}
+            onConnect={readOnly ? undefined : onConnect}
+            nodesDraggable={!readOnly}
+            nodesConnectable={!readOnly}
+            deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             onInit={onInit}
@@ -328,7 +459,7 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
         >
           <Popover open={nodeLibraryOpen} onOpenChange={setNodeLibraryOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button variant="outline" size="sm" className="gap-2" disabled={readOnly}>
                 <Plus className="h-4 w-4" />
                 节点
               </Button>
@@ -350,7 +481,7 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
             size="sm"
             className="gap-2 bg-green-600 hover:bg-green-700"
             onClick={handleRun}
-            disabled={isExecuting}
+            disabled={isExecuting || readOnly}
           >
             <Bug className="h-4 w-4" />
             {isExecuting ? "执行中..." : "运行"}
@@ -365,6 +496,8 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
             onClose={() => setSelectedNodeId(null)}
             nodes={nodes}
             edges={edges}
+            readOnly={readOnly}
+            onRequestDraftAction={onRequestDraftAction}
           />
         )}
 
@@ -384,6 +517,7 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
       <BasicConfigSheet
         open={basicConfigOpen}
         onOpenChange={setBasicConfigOpen}
+        readOnly={readOnly}
       />
     </div>
   );

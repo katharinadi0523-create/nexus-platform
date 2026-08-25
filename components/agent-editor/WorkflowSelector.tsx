@@ -28,6 +28,7 @@ interface WorkflowSelectorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (workflow: Workflow) => void;
+  preferredWorkflow?: Workflow | null;
 }
 
 const mockWorkflows: Workflow[] = [
@@ -67,12 +68,17 @@ export function WorkflowSelector({
   open,
   onOpenChange,
   onSelect,
+  preferredWorkflow = null,
 }: WorkflowSelectorProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  const filteredWorkflows = mockWorkflows.filter((wf) =>
+  const workflowOptions = [
+    ...(preferredWorkflow ? [preferredWorkflow] : []),
+    ...mockWorkflows.filter((workflow) => workflow.id !== preferredWorkflow?.id),
+  ];
+  const filteredWorkflows = workflowOptions.filter((wf) =>
     wf.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -145,6 +151,9 @@ export function WorkflowSelector({
                           <span className="font-medium text-slate-900 truncate">
                             {workflow.name}
                           </span>
+                          {workflow.id === preferredWorkflow?.id ? (
+                            <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">最新可用版本</span>
+                          ) : null}
                         </div>
                         <p className="text-sm text-slate-500 mb-1">
                           {workflow.description}

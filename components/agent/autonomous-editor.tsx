@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, isValidElement } from "react";
+import { useState, useEffect, useRef, isValidElement } from "react";
 import {
   Send,
   Check,
@@ -20,6 +20,7 @@ import {
   Sparkles,
   Edit2,
   MessageSquareQuote,
+  CircleAlert,
 } from "lucide-react";
 import { KnowledgeBaseSelector, type KnowledgeBase } from "@/components/agent-editor/KnowledgeBaseSelector";
 import { RetrievalSettings, type RetrievalConfig } from "@/components/agent-editor/RetrievalSettings";
@@ -61,6 +62,7 @@ interface AgentDetailData {
   prompt: string;
   openingStatement: string;
   suggestedQuestions: string[];
+  workflows?: Array<{ id: string; name: string; description?: string; updateTime?: string }>;
   plugins?: unknown;
   ontologies?: Array<{ id: string; name: string; description?: string }>;
   terminologies?: Array<{ id: string; name: string }>;
@@ -105,6 +107,20 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
     suggestedQuestions: [
       "分析当前传感器读数",
       "预测设备故障概率",
+    ],
+    workflows: [
+      {
+        id: "workflow-device-inspection",
+        name: "设备巡检工作流",
+        description: "执行设备巡检、异常识别与维修建议生成。",
+        updateTime: "2026-08-18 15:08:26",
+      },
+      {
+        id: "workflow-device-alert",
+        name: "设备告警联动工作流",
+        description: "联动告警通知与设备处置流程。",
+        updateTime: "2026-07-26 11:42:08",
+      },
     ],
     plugins: ["Sensor Data Analyzer"],
     mockReply: "正在分析传感器数据... 检测到异常模式。建议在 48 小时内进行维护检查。",
@@ -168,6 +184,11 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
 interface AutonomousEditorProps {
   agentId: string;
   initialAgentData?: AgentDetailData;
+  snapshotVersion?: string | null;
+  showReferenceAlerts?: boolean;
+  historicalConfigSnapshot?: unknown;
+  restoreToDraftVersion?: string | null;
+  onDraftSnapshotChange?: (snapshot: Record<string, unknown>) => void;
   onNameChange?: (name: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }
@@ -530,6 +551,11 @@ function formatChatTimestamp() {
 export function AutonomousEditor({
   agentId,
   initialAgentData,
+  snapshotVersion = null,
+  showReferenceAlerts = true,
+  historicalConfigSnapshot,
+  restoreToDraftVersion = null,
+  onDraftSnapshotChange,
   onNameChange,
   onDirtyChange,
 }: AutonomousEditorProps) {
@@ -580,6 +606,10 @@ export function AutonomousEditor({
   const [selectedPlugins, setSelectedPlugins] = useState<Plugin[]>(() => initialPlugins);
   const [selectedMCPs, setSelectedMCPs] = useState<MCP[]>(() => initialMCPs);
   const [workflowSelectorOpen, setWorkflowSelectorOpen] = useState(false);
+  const [workflowUpdateOpen, setWorkflowUpdateOpen] = useState(false);
+  const [stoppedWorkflowOpen, setStoppedWorkflowOpen] = useState(false);
+  const [preferredWorkflow, setPreferredWorkflow] = useState<WorkflowType | null>(null);
+  const [workflowUpdateState, setWorkflowUpdateState] = useState<"pending" | "ignored" | "updated">("pending");
   const [pluginSelectorOpen, setPluginSelectorOpen] = useState(false);
   const [mcpSelectorOpen, setMcpSelectorOpen] = useState(false);
   const [pluginSelectorKey, setPluginSelectorKey] = useState(0);
@@ -617,6 +647,26 @@ export function AutonomousEditor({
     }>
   >([]);
   const [showSuggestedChips, setShowSuggestedChips] = useState(true);
+  const previousSnapshotVersionRef = useRef<string | null>(snapshotVersion);
+  const draftStateRef = useRef<null | {
+    appName: string;
+    appDescription: string;
+    avatarPresetId: AgentAvatarPresetId;
+    selectedModel: string;
+    modelParams: ModelParams;
+    retrievalConfig: RetrievalConfig;
+    prompt: string;
+    openingStatement: string;
+    suggestedQuestions: string[];
+    knowledgeBases: KnowledgeBase[];
+    workflows: WorkflowType[];
+    ontologies: OntologyConfig[];
+    terminologies: Terminology[];
+    plugins: Plugin[];
+    mcps: MCP[];
+    memoryVariables: MemoryVariable[];
+    workflowUpdateState: "pending" | "ignored" | "updated";
+  }>(null);
 
   // If initialAgentData arrives asynchronously (common when parent loads in useEffect),
   // hydrate selections once it becomes available.
@@ -684,6 +734,170 @@ export function AutonomousEditor({
       setSuggestedQuestions([""]);
     }
   }, [agentId, agentData]);
+
+  // 草稿与历史版本使用彼此独立的数据。进入历史版本时保存当前草稿，
+  // 并重新加载发布时固化内容；返回草稿后恢复用户未发布的修改。
+  useEffect(() => {
+    const previousSnapshotVersion = previousSnapshotVersionRef.current;
+    const frozenSource = initialAgentData ?? AGENTS_DETAIL_DATA[agentId] ?? null;
+    const storedSnapshot = historicalConfigSnapshot as typeof draftStateRef.current;
+
+    if (!previousSnapshotVersion && snapshotVersion) {
+      draftStateRef.current = {
+        appName,
+        appDescription,
+        avatarPresetId: selectedAvatarPresetId,
+        selectedModel,
+        modelParams: { ...modelParams },
+        retrievalConfig: { ...retrievalConfig },
+        prompt,
+        openingStatement,
+        suggestedQuestions: [...suggestedQuestions],
+        knowledgeBases: [...selectedKnowledgeBases],
+        workflows: [...selectedWorkflows],
+        ontologies: [...selectedOntologies],
+        terminologies: [...selectedTerminologies],
+        plugins: [...selectedPlugins],
+        mcps: [...selectedMCPs],
+        memoryVariables: [...memoryVariables],
+        workflowUpdateState,
+      };
+    }
+
+    if (snapshotVersion && storedSnapshot) {
+      setAppName(storedSnapshot.appName);
+      setAppDescription(storedSnapshot.appDescription);
+      setSelectedAvatarPresetId(storedSnapshot.avatarPresetId);
+      setSelectedModel(storedSnapshot.selectedModel);
+      setModelParams({ ...storedSnapshot.modelParams });
+      setRetrievalConfig({ ...storedSnapshot.retrievalConfig });
+      setPrompt(storedSnapshot.prompt);
+      setOpeningStatement(storedSnapshot.openingStatement);
+      setSuggestedQuestions([...storedSnapshot.suggestedQuestions]);
+      setSelectedKnowledgeBases([...storedSnapshot.knowledgeBases]);
+      setSelectedWorkflows([...storedSnapshot.workflows]);
+      setSelectedOntologies([...storedSnapshot.ontologies]);
+      setSelectedTerminologies([...storedSnapshot.terminologies]);
+      setSelectedPlugins([...storedSnapshot.plugins]);
+      setSelectedMCPs([...storedSnapshot.mcps]);
+      setMemoryVariables([...storedSnapshot.memoryVariables]);
+      setWorkflowUpdateState(storedSnapshot.workflowUpdateState);
+    } else if (snapshotVersion && frozenSource) {
+      const frozenKnowledgeBases = normalizeKnowledgeBases((frozenSource as any).knowledgeBases);
+      const frozenWorkflows = normalizeWorkflows((frozenSource as any).workflows);
+      const frozenOntologies = normalizeOntologies((frozenSource as any).ontologies);
+      const frozenTerminologies = normalizeTerminologies((frozenSource as any).terminologies);
+      const frozenPlugins = normalizePlugins((frozenSource as any).plugins);
+      const frozenMCPs = normalizeMCPs((frozenSource as any).mcps);
+
+      setAppName(frozenSource.name);
+      setAppDescription(frozenSource.description);
+      setSelectedAvatarPresetId((frozenSource.avatarPresetId ?? AGENT_AVATAR_PRESETS[0].id) as AgentAvatarPresetId);
+      setSelectedModel("Qwen3-32B");
+      setModelParams({ temperature: 0.01, top_p: 0.01, top_k: 20, context_turns: 5 });
+      setRetrievalConfig({
+        strategy: "hybrid",
+        semanticWeight: 0.6,
+        rerankEnabled: true,
+        topK: 6,
+        scoreThresholdEnabled: true,
+        scoreThreshold: 0.1,
+        autoTagFilterEnabled: false,
+      });
+      setPrompt(frozenSource.prompt);
+      setOpeningStatement(frozenSource.openingStatement);
+      setSuggestedQuestions(frozenSource.suggestedQuestions.length ? [...frozenSource.suggestedQuestions] : [""]);
+      setSelectedKnowledgeBases(frozenKnowledgeBases);
+      setSelectedWorkflows(frozenWorkflows);
+      setSelectedOntologies(frozenOntologies);
+      setSelectedTerminologies(frozenTerminologies);
+      setSelectedPlugins(frozenPlugins);
+      setSelectedMCPs(frozenMCPs);
+      setMemoryVariables([]);
+      setWorkflowUpdateState("pending");
+      setExpandedSections(
+        buildDefaultExpandedSections({
+          knowledgeCount: frozenKnowledgeBases.length,
+          ontologyCount: frozenOntologies.length,
+          terminologyCount: frozenTerminologies.length,
+          workflowCount: frozenWorkflows.length,
+          pluginCount: frozenPlugins.length,
+          mcpCount: frozenMCPs.length,
+        })
+      );
+    } else if (
+      !snapshotVersion &&
+      previousSnapshotVersion &&
+      restoreToDraftVersion !== previousSnapshotVersion &&
+      draftStateRef.current
+    ) {
+      const draft = draftStateRef.current;
+      setAppName(draft.appName);
+      setAppDescription(draft.appDescription);
+      setSelectedAvatarPresetId(draft.avatarPresetId);
+      setSelectedModel(draft.selectedModel);
+      setModelParams({ ...draft.modelParams });
+      setRetrievalConfig({ ...draft.retrievalConfig });
+      setPrompt(draft.prompt);
+      setOpeningStatement(draft.openingStatement);
+      setSuggestedQuestions([...draft.suggestedQuestions]);
+      setSelectedKnowledgeBases([...draft.knowledgeBases]);
+      setSelectedWorkflows([...draft.workflows]);
+      setSelectedOntologies([...draft.ontologies]);
+      setSelectedTerminologies([...draft.terminologies]);
+      setSelectedPlugins([...draft.plugins]);
+      setSelectedMCPs([...draft.mcps]);
+      setMemoryVariables([...draft.memoryVariables]);
+      setWorkflowUpdateState(draft.workflowUpdateState);
+    }
+
+    previousSnapshotVersionRef.current = snapshotVersion;
+  }, [historicalConfigSnapshot, restoreToDraftVersion, snapshotVersion]);
+
+  useEffect(() => {
+    if (snapshotVersion) return;
+    const snapshot = {
+      appName,
+      appDescription,
+      avatarPresetId: selectedAvatarPresetId,
+      selectedModel,
+      modelParams: { ...modelParams },
+      retrievalConfig: { ...retrievalConfig },
+      prompt,
+      openingStatement,
+      suggestedQuestions: [...suggestedQuestions],
+      knowledgeBases: [...selectedKnowledgeBases],
+      workflows: [...selectedWorkflows],
+      ontologies: [...selectedOntologies],
+      terminologies: [...selectedTerminologies],
+      plugins: [...selectedPlugins],
+      mcps: [...selectedMCPs],
+      memoryVariables: [...memoryVariables],
+      workflowUpdateState,
+    };
+    draftStateRef.current = snapshot;
+    onDraftSnapshotChange?.(snapshot);
+  }, [
+    appDescription,
+    appName,
+    memoryVariables,
+    modelParams,
+    onDraftSnapshotChange,
+    openingStatement,
+    prompt,
+    retrievalConfig,
+    selectedAvatarPresetId,
+    selectedKnowledgeBases,
+    selectedMCPs,
+    selectedModel,
+    selectedOntologies,
+    selectedPlugins,
+    selectedTerminologies,
+    selectedWorkflows,
+    snapshotVersion,
+    suggestedQuestions,
+    workflowUpdateState,
+  ]);
 
   useEffect(() => {
     onNameChange?.(appName.trim() || "未命名智能体");
@@ -1555,6 +1769,36 @@ export function AutonomousEditor({
                       )}
                     </button>
                     <div className="flex items-center gap-2">
+                      {selectedWorkflows.length > 0 && workflowUpdateState === "pending" && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setExpandedSections((current) => ({ ...current, workflow: true }));
+                            setWorkflowUpdateOpen(true);
+                          }}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-medium text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100"
+                          title="设备巡检工作流有新版本"
+                        >
+                          <CircleAlert className="h-4 w-4" />
+                          有更新
+                        </button>
+                      )}
+                      {selectedWorkflows.some((workflow) => workflow.id === "workflow-device-alert") && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setExpandedSections((current) => ({ ...current, workflow: true }));
+                            setStoppedWorkflowOpen(true);
+                          }}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-700 transition-colors hover:border-rose-300 hover:bg-rose-100"
+                          title="设备告警联动工作流的引用版本已停用"
+                        >
+                          <CircleAlert className="h-4 w-4" />
+                          有停用
+                        </button>
+                      )}
                       {selectedWorkflows.length > 0 && (
                         <button
                           onClick={(e) => {
@@ -1570,6 +1814,7 @@ export function AutonomousEditor({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          setPreferredWorkflow(null);
                           setWorkflowSelectorOpen(true);
                         }}
                         className={ACTION_BUTTON_CLASS}
@@ -1587,7 +1832,10 @@ export function AutonomousEditor({
                             智能体可以调用编排并发布的工作流以实现复杂、稳定的业务流程。
                           </div>
                           <button
-                            onClick={() => setWorkflowSelectorOpen(true)}
+                            onClick={() => {
+                              setPreferredWorkflow(null);
+                              setWorkflowSelectorOpen(true);
+                            }}
                             className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-600 transition-colors hover:bg-slate-50"
                           >
                             <Plus className="h-4 w-4" />
@@ -1596,7 +1844,7 @@ export function AutonomousEditor({
                         </div>
                       ) : (
                         <div className="space-y-3">
-                          {selectedWorkflows.map((workflow) => (
+                          {selectedWorkflows.map((workflow, index) => (
                             <div
                               key={workflow.id}
                               className="flex items-center gap-3 rounded-[20px] border border-slate-200 bg-[linear-gradient(135deg,#fbfdff_0%,#f8fafc_100%)] p-4"
@@ -1612,6 +1860,117 @@ export function AutonomousEditor({
                                   {workflow.description}
                                 </div>
                               </div>
+                              {index === 0 ? (
+                                <>
+                                  <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">
+                                    {workflowUpdateState === "updated" ? "V2" : "V1"}
+                                  </span>
+                                  {showReferenceAlerts && workflowUpdateState === "pending" ? (
+                                    <Popover open={workflowUpdateOpen} onOpenChange={setWorkflowUpdateOpen}>
+                                      <PopoverTrigger asChild>
+                                        <button
+                                          type="button"
+                                          aria-label="查看工作流版本更新"
+                                          title="该工作流有新版本"
+                                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-600 shadow-sm transition-colors hover:border-amber-300 hover:bg-amber-100"
+                                        >
+                                          <CircleAlert className="h-5 w-5" />
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent align="end" sideOffset={8} className="w-[360px] rounded-xl border-amber-200 p-0 shadow-xl">
+                                        <div className="border-b border-amber-100 bg-amber-50/70 px-4 py-3">
+                                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                                            <CircleAlert className="h-4 w-4 text-amber-600" />
+                                            工作流有新版本
+                                          </div>
+                                          <p className="mt-1 text-xs leading-5 text-slate-600">
+                                            当前草稿继续使用原版本，更新后随下次发布生效。
+                                          </p>
+                                        </div>
+                                        <div className="space-y-2 px-4 py-3 text-sm">
+                                          <div className="flex justify-between gap-4"><span className="text-slate-500">当前版本</span><span className="font-medium text-slate-900">V1</span></div>
+                                          <div className="flex justify-between gap-4"><span className="text-slate-500">最新版本</span><span className="font-medium text-slate-900">V2</span></div>
+                                          <div className="flex justify-between gap-4"><span className="text-slate-500">发布时间</span><span className="text-slate-700">2026-08-18 15:08:26</span></div>
+                                          <div className="flex items-start justify-between gap-4"><span className="shrink-0 text-slate-500">最新版本描述</span><span className="text-right leading-5 text-slate-700">优化设备巡检流程与异常处理</span></div>
+                                        </div>
+                                        <div className="flex justify-end gap-2 border-t border-slate-100 px-4 py-3">
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                              setWorkflowUpdateState("ignored");
+                                              setWorkflowUpdateOpen(false);
+                                            }}
+                                          >
+                                            本次忽略
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            className="bg-blue-600 text-white hover:bg-blue-700"
+                                            onClick={() => {
+                                              setWorkflowUpdateState("updated");
+                                              setWorkflowUpdateOpen(false);
+                                            }}
+                                          >
+                                            立即更新
+                                          </Button>
+                                        </div>
+                                      </PopoverContent>
+                                    </Popover>
+                                  ) : showReferenceAlerts && workflowUpdateState === "updated" ? (
+                                    <span className="rounded bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-600">已更新</span>
+                                  ) : null}
+                                </>
+                              ) : workflow.id === "workflow-device-alert" ? (
+                                <>
+                                  <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">V3</span>
+                                  {showReferenceAlerts ? <span className="rounded bg-rose-50 px-2 py-1 text-xs font-medium text-rose-600">已停用</span> : null}
+                                  {showReferenceAlerts ? <Popover open={stoppedWorkflowOpen} onOpenChange={setStoppedWorkflowOpen}>
+                                    <PopoverTrigger asChild>
+                                      <button
+                                        type="button"
+                                        aria-label="查看工作流停用提示"
+                                        title="引用资源已停用"
+                                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 shadow-sm transition-colors hover:border-rose-300 hover:bg-rose-100"
+                                      >
+                                        <CircleAlert className="h-5 w-5" />
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent align="end" sideOffset={8} className="w-[360px] rounded-xl border-rose-200 p-0 shadow-xl">
+                                      <div className="border-b border-rose-100 bg-rose-50/70 px-4 py-3">
+                                        <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                                          <CircleAlert className="h-4 w-4 text-rose-600" />
+                                          引用资源已停用
+                                        </div>
+                                        <p className="mt-1 text-xs leading-5 text-slate-600">
+                                          引用资源已停用，请重新配置。未处理时，该资源无法继续调用。
+                                        </p>
+                                      </div>
+                                      <div className="flex justify-end border-t border-slate-100 px-4 py-3">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          className="bg-blue-600 text-white hover:bg-blue-700"
+                                          onClick={() => {
+                                            setStoppedWorkflowOpen(false);
+                                            setPreferredWorkflow({
+                                              id: "workflow-device-alert-v4",
+                                              name: "设备告警联动工作流",
+                                              description: "当前资源最新可用版本 · V4",
+                                              updateTime: "2026-08-19 10:26:18",
+                                            });
+                                            setWorkflowSelectorOpen(true);
+                                          }}
+                                        >
+                                          重新配置
+                                        </Button>
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover> : null}
+                                </>
+                              ) : null}
                               <button
                                 onClick={() => handleRemoveWorkflow(workflow.id)}
                                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-200"
@@ -2111,7 +2470,17 @@ export function AutonomousEditor({
       <WorkflowSelector
         open={workflowSelectorOpen}
         onOpenChange={setWorkflowSelectorOpen}
-        onSelect={handleAddWorkflow}
+        onSelect={(workflow) => {
+          if (preferredWorkflow) {
+            setSelectedWorkflows((current) =>
+              current.map((item) => item.id === "workflow-device-alert" ? workflow : item)
+            );
+            setPreferredWorkflow(null);
+            return;
+          }
+          handleAddWorkflow(workflow);
+        }}
+        preferredWorkflow={preferredWorkflow}
       />
 
       {/* Plugin Selector Dialog */}
