@@ -3,8 +3,6 @@
 import { useState } from "react";
 import {
   AlertTriangle,
-  Link2,
-  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,7 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { SkillDetailView } from "./detail-view";
 import { INITIAL_SKILLS, INITIAL_WORK_ORDERS } from "./mock-data";
@@ -76,6 +73,7 @@ interface SkillHubV2WorkbenchProps {
     usageInstructions: string;
     files: SkillFile[];
   }) => void;
+  onRequestImportUpdate?: (skillId: string) => void;
 }
 
 function getNextVersionLabel(version = "v1.0") {
@@ -303,6 +301,7 @@ export function SkillHubV2Workbench({
   seedSkill,
   onExit,
   onSkillCreated,
+  onRequestImportUpdate,
 }: SkillHubV2WorkbenchProps) {
   const [skills, setSkills] = useState<SkillRecord[]>(() => {
     if (!seedSkill) return INITIAL_SKILLS;
@@ -311,11 +310,6 @@ export function SkillHubV2Workbench({
   });
   const [workOrders, setWorkOrders] = useState<SkillWorkOrder[]>(INITIAL_WORK_ORDERS);
   const [screen, setScreen] = useState<SkillHubScreen>(initialScreen);
-  const [importOpen, setImportOpen] = useState(false);
-  const [importMode, setImportMode] = useState<"local" | "url">("local");
-  const [importUrl, setImportUrl] = useState("");
-  const [importFileName, setImportFileName] = useState("");
-  const [importTargetSkillId, setImportTargetSkillId] = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [rollbackTarget, setRollbackTarget] = useState<{
@@ -340,16 +334,6 @@ export function SkillHubV2Workbench({
   const rollbackVersion = rollbackSkill?.versions.find(
     (version) => version.id === rollbackTarget?.versionId
   );
-  const importTargetSkill = importTargetSkillId
-    ? skills.find((skill) => skill.id === importTargetSkillId)
-    : undefined;
-
-  function openDetail(
-    skillId: string,
-    tab: "overview" | "files" | "dependencies" | "versions" = "overview"
-  ) {
-    setScreen({ kind: "detail", skillId, tab });
-  }
 
   function openWorkspace(mode: WorkOrderType, skillId?: string, workOrderId?: string) {
     setScreen({ kind: "workspace", mode, skillId, workOrderId });
@@ -392,114 +376,8 @@ export function SkillHubV2Workbench({
     toast.success("已导出技能包与绑定的运行时快照");
   }
 
-  function handleImport() {
-    const valid = importMode === "url" ? importUrl.trim().length > 0 : importFileName.length > 0;
-    if (!valid) {
-      toast.error(importMode === "url" ? "请输入导入链接" : "请选择 zip 文件");
-      return;
-    }
-    const stamp = Date.now().toString().slice(-5);
-    const name =
-      importMode === "url"
-        ? importUrl.split("/").filter(Boolean).pop()?.replace(/\.git$/, "") || `imported-${stamp}`
-        : importFileName.replace(/\.zip$/i, "") || `imported-${stamp}`;
-    const files: SkillFile[] = [
-      {
-        path: "SKILL.md",
-        content: `---\nname: ${name}\ndescription: 导入的 Skill 草稿\n---\n`,
-      },
-      { path: "src/main.py", content: "def run(input):\n    return input\n" },
-    ];
-    if (importTargetSkill) {
-      const currentVersion = getCurrentManagedVersion(importTargetSkill);
-      const nextVersionLabel = getNextVersionLabel(currentVersion?.version);
-      const version: SkillVersion = {
-        id: `${importTargetSkill.id}-${nextVersionLabel}-import-${Date.now()}`,
-        version: nextVersionLabel,
-        baseVersionId: currentVersion?.id,
-        createdAt: "2026-07-24 12:08",
-        createdBy: "邸若楠",
-        source: "import",
-        status: "draft",
-        releaseNotes: "通过更新包导入的技能版本草稿。",
-        evidence: [
-          importMode === "url" ? `更新来源：${importUrl.trim()}` : `更新包：${importFileName}`,
-        ],
-        evaluationStatus: null,
-        evaluationReport: null,
-        files,
-      };
-
-      setSkills((current) =>
-        current.map((skill) =>
-          skill.id === importTargetSkill.id
-            ? {
-                ...skill,
-                currentVersionId: version.id,
-                updatedAt: "2026-07-24 12:08",
-                versions: [version, ...skill.versions],
-                runtimeSnapshot: {
-                  id: `pending-${nextVersionLabel}-import`,
-                  boundVersion: nextVersionLabel,
-                  status: "not-run",
-                },
-              }
-            : skill
-        )
-      );
-      setImportOpen(false);
-      setImportTargetSkillId(null);
-      setImportUrl("");
-      setImportFileName("");
-      toast.success(`更新包已导入，生成 ${nextVersionLabel} 草稿`);
-      openDetail(importTargetSkill.id, "versions");
-      return;
-    }
-
-    const version: SkillVersion = {
-      id: `${name}-v10`,
-      version: "v1.0",
-      createdAt: "2026-07-24 11:30",
-      createdBy: "邸若楠",
-      source: "import",
-      status: "draft",
-      releaseNotes: "导入生成的首版草稿。",
-      evaluationStatus: null,
-      evaluationReport: null,
-      files,
-    };
-    const skill: SkillRecord = {
-      id: `${name}-${stamp}`,
-      name,
-      displayName: name,
-      description: "通过统一新建入口导入的 Skill，等待试运行装配与发布。",
-      owner: "邸若楠",
-      updatedAt: "2026-07-24 11:30",
-      status: "draft",
-      currentVersionId: version.id,
-      sourceLabel: importMode === "url" ? "链接导入" : "压缩包导入",
-      usageInstructions: "请完善使用说明。",
-      versions: [version],
-      dependencies: [],
-      runtimeSnapshot: {
-        id: `pending-${name}`,
-        boundVersion: "v1.0",
-        status: "not-run",
-      },
-    };
-    setSkills((current) => [skill, ...current]);
-    setImportOpen(false);
-    setImportUrl("");
-    setImportFileName("");
-    toast.success("导入成功，已生成 v1.0 草稿");
-    openDetail(skill.id, "dependencies");
-  }
-
   function openUpdateImport(skillId: string) {
-    setImportTargetSkillId(skillId);
-    setImportUrl("");
-    setImportFileName("");
-    setImportOpen(true);
+    onRequestImportUpdate?.(skillId);
   }
 
   function submitPublish(skillId: string) {
@@ -822,7 +700,14 @@ export function SkillHubV2Workbench({
   }
 
   return (
-    <div className="min-h-full" data-testid="skillhub-v2-extension">
+    <div
+      className={cn(
+        screen.kind === "workspace" && !screen.workOrderId
+          ? "h-full min-h-0 overflow-hidden"
+          : "min-h-full"
+      )}
+      data-testid="skillhub-v2-extension"
+    >
       {screen.kind === "workspace" && screen.workOrderId && activeWorkOrder ? (
         <WorkOrderView
           workOrder={activeWorkOrder}
@@ -879,101 +764,6 @@ export function SkillHubV2Workbench({
           onComplete={() => handleRunAssembly(activeSkill.id)}
         />
       ) : null}
-
-      <Dialog
-        open={importOpen}
-        onOpenChange={(open) => {
-          setImportOpen(open);
-          if (!open) {
-            setImportTargetSkillId(null);
-            setImportUrl("");
-            setImportFileName("");
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-[620px]">
-          <DialogHeader>
-            <DialogTitle>{importTargetSkill ? "导入更新包" : "导入技能"}</DialogTitle>
-            <DialogDescription>
-              {importTargetSkill
-                ? `更新内容将写入「${importTargetSkill.name}」的更新草稿，不会直接覆盖当前发布版本。`
-                : "导入只携带代码；保存为 v1.0 草稿后，通过试运行完成依赖装配。"}
-            </DialogDescription>
-          </DialogHeader>
-          <RadioGroup
-            value={importMode}
-            onValueChange={(value) => setImportMode(value as "local" | "url")}
-            className="grid grid-cols-2 gap-3"
-          >
-            <Label
-              htmlFor="import-local"
-              className={cn(
-                "flex cursor-pointer items-start gap-3 rounded-lg border p-4",
-                importMode === "local" ? "border-blue-300 bg-blue-50/50" : "border-slate-200"
-              )}
-            >
-              <RadioGroupItem id="import-local" value="local" className="mt-0.5" />
-              <span>
-                <span className="flex items-center gap-1.5 font-medium text-slate-900">
-                  <Upload className="h-4 w-4" />
-                  {importTargetSkill ? "更新压缩包" : "压缩包"}
-                </span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">本地 .zip 文件</span>
-              </span>
-            </Label>
-            <Label
-              htmlFor="import-url"
-              className={cn(
-                "flex cursor-pointer items-start gap-3 rounded-lg border p-4",
-                importMode === "url" ? "border-blue-300 bg-blue-50/50" : "border-slate-200"
-              )}
-            >
-              <RadioGroupItem id="import-url" value="url" className="mt-0.5" />
-              <span>
-                <span className="flex items-center gap-1.5 font-medium text-slate-900">
-                  <Link2 className="h-4 w-4" />
-                  链接
-                </span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">
-                  GitHub / skills.sh / ClawHub
-                </span>
-              </span>
-            </Label>
-          </RadioGroup>
-          {importMode === "local" ? (
-            <div className="space-y-2">
-              <Label htmlFor="skill-zip">选择文件</Label>
-              <Input
-                id="skill-zip"
-                type="file"
-                accept=".zip,application/zip"
-                onChange={(event) => setImportFileName(event.target.files?.[0]?.name ?? "")}
-              />
-              {importFileName ? (
-                <p className="text-xs text-emerald-600">已选择：{importFileName}</p>
-              ) : null}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="skill-url">{importTargetSkill ? "更新链接" : "导入链接"}</Label>
-              <Input
-                id="skill-url"
-                value={importUrl}
-                onChange={(event) => setImportUrl(event.target.value)}
-                placeholder="https://github.com/org/repo"
-              />
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setImportOpen(false)}>
-              取消
-            </Button>
-            <Button className="bg-[#2773ff]" onClick={handleImport}>
-              {importTargetSkill ? "校验并生成草稿" : "校验并导入"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={Boolean(deleteTarget)}

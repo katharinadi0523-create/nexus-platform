@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings } from "lucide-react";
+import { Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   MY_CLAW_BRAND_ICON_SRC,
@@ -22,6 +22,7 @@ import { MY_CLAW_SETTINGS_NAV } from "./nav-items";
 import { SessionList } from "./session-list";
 import { MyWorkNavItem } from "./my-work-nav-item";
 import { ProjectList } from "./project-list";
+import { SearchConversationsDialog } from "./search-conversations-dialog";
 
 function isNavActive(pathname: string, href: string) {
   if (href === "/my-claw") {
@@ -35,6 +36,7 @@ export function MyClawSidebar() {
   const splitAreaRef = useRef<HTMLDivElement>(null);
   const [personalPaneHeight, setPersonalPaneHeight] = useState(240);
   const [isResizingPanes, setIsResizingPanes] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     if (!isResizingPanes) return undefined;
@@ -85,7 +87,7 @@ export function MyClawSidebar() {
 
   return (
     <aside className="flex h-full w-[272px] shrink-0 flex-col border-r border-[#e2e8f0] bg-white">
-      <div className="flex items-center gap-2.5 px-4 pb-3 pt-4">
+      <div className="flex items-center gap-2 px-4 pb-3 pt-4">
         <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg">
           <Image
             src={MY_CLAW_BRAND_ICON_SRC}
@@ -96,13 +98,26 @@ export function MyClawSidebar() {
             priority
           />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-semibold text-slate-900">
             {MY_CLAW_BRAND_NAME}
           </div>
           <div className="truncate text-[11px] text-[#5a6779]">我的空间</div>
         </div>
+        <button
+          type="button"
+          aria-label="搜索会话"
+          onClick={() => setSearchOpen(true)}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#5a6779] transition-colors hover:bg-slate-50 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/40"
+        >
+          <Search className="h-4 w-4" />
+        </button>
       </div>
+
+      <SearchConversationsDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+      />
 
       <div className="space-y-0.5 px-2 pb-2">
         <GlobalInboxNavItem />

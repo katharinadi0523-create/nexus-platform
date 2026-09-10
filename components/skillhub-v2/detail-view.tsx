@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
+  BookOpen,
   Check,
   ChevronDown,
   Download,
@@ -92,11 +93,26 @@ interface SkillDetailViewProps {
   onSaveManualVersion: (draft: SkillManualDraft) => void;
 }
 
-const TABS: Array<{ id: SkillDetailTab; label: string }> = [
+const SKILL_NAME_PATTERN = /^[A-Za-z\u4e00-\u9fa5][A-Za-z0-9\u4e00-\u9fa5_.-]*$/;
+const SKILL_NAME_HINT =
+  "支持字母、中文、数字、下划线 (_)、中划线 (-)、点 (.)，以字母或中文开头，不可与已有名称重复";
+
+function getSkillNameError(name: string) {
+  const nextName = name.trim();
+  if (!nextName) {
+    return "";
+  }
+  if (!SKILL_NAME_PATTERN.test(nextName)) {
+    return "支持字母、中文、数字、下划线 (_)、中划线 (-)、点 (.)，以字母或中文开头";
+  }
+  return "";
+}
+
+const TABS: Array<{ id: SkillDetailTab; label: string; disabled?: boolean }> = [
   { id: "overview", label: "概览" },
   { id: "files", label: "文件结构" },
-  { id: "dependencies", label: "依赖" },
-  { id: "versions", label: "版本管理" },
+  { id: "dependencies", label: "依赖", disabled: true },
+  { id: "versions", label: "版本管理", disabled: true },
 ];
 
 export function SkillDetailView({
@@ -105,7 +121,7 @@ export function SkillDetailView({
   canManage,
   onBack,
   onTabChange,
-  onOptimize,
+  onOptimize: _onOptimize,
   onImportUpdate,
   onSubmitPublish,
   canSubmitPublish,
@@ -135,13 +151,30 @@ export function SkillDetailView({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<SkillManualDraft>(createDraft);
 
+  useEffect(() => {
+    if (activeTab === "dependencies" || activeTab === "versions") {
+      onTabChange("overview");
+    }
+  }, [activeTab, onTabChange]);
+
+  const nameError = getSkillNameError(draft.name);
+  const canSaveManualVersion = Boolean(draft.name.trim()) && !nameError;
+
   function cancelEditing() {
     setDraft(createDraft());
     setEditing(false);
   }
 
   function saveAsNewVersion() {
-    onSaveManualVersion(draft);
+    if (!canSaveManualVersion) {
+      toast.error(nameError || "请输入技能名称");
+      return;
+    }
+    onSaveManualVersion({
+      ...draft,
+      name: draft.name.trim(),
+      displayName: draft.name.trim(),
+    });
     setEditing(false);
     toast.success(`已基于 ${lockedVersion} 保存改动，生成新版本草稿`);
   }
@@ -199,6 +232,7 @@ export function SkillDetailView({
                       type="button"
                       className="h-9 rounded-[5px] bg-[#2773ff]"
                       onClick={saveAsNewVersion}
+                      disabled={!canSaveManualVersion}
                     >
                       <Save className="h-4 w-4" />
                       保存为新版本
@@ -232,13 +266,13 @@ export function SkillDetailView({
                           </span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          className="cursor-pointer rounded-md px-3 py-2.5"
-                          onSelect={onOptimize}
+                          disabled
+                          className="cursor-not-allowed rounded-md px-3 py-2.5"
                         >
-                          <Sparkles className="h-4 w-4 text-[#2773ff]" />
+                          <Sparkles className="h-4 w-4 text-slate-300" />
                           <span>
-                            <span className="block text-sm font-medium text-slate-900">AI 优化</span>
-                            <span className="mt-0.5 block text-xs text-slate-500">
+                            <span className="block text-sm font-medium text-slate-400">AI 优化</span>
+                            <span className="mt-0.5 block text-xs text-slate-400">
                               通过 Claw 对话生成更新
                             </span>
                           </span>
@@ -276,21 +310,31 @@ export function SkillDetailView({
         </header>
 
         <nav className="flex items-center gap-6 overflow-x-auto">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => onTabChange(tab.id)}
-              className={cn(
-                "relative flex h-12 shrink-0 items-center border-b-2 text-sm font-medium transition-colors",
-                activeTab === tab.id
-                  ? "border-[#2773ff] text-[#2773ff]"
-                  : "border-transparent text-slate-500 hover:text-slate-800"
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+          {TABS.map((tab) =>
+            tab.disabled ? (
+              <span
+                key={tab.id}
+                className="flex h-12 shrink-0 cursor-not-allowed items-center text-sm text-slate-300"
+                title={`${tab.label}（暂不可用）`}
+              >
+                {tab.label}
+              </span>
+            ) : (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => onTabChange(tab.id)}
+                className={cn(
+                  "relative flex h-12 shrink-0 items-center border-b-2 text-sm font-medium transition-colors",
+                  activeTab === tab.id
+                    ? "border-[#2773ff] text-[#2773ff]"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
+                )}
+              >
+                {tab.label}
+              </button>
+            )
+          )}
           <span className="flex h-12 shrink-0 items-center text-sm text-slate-300" title="评测报告（待建设）">
             评测报告
           </span>
@@ -298,7 +342,13 @@ export function SkillDetailView({
       </div>
 
       {activeTab === "overview" ? (
-        <OverviewTab skill={skill} draft={draft} editing={editing} onChange={setDraft} />
+        <OverviewTab
+          skill={skill}
+          draft={draft}
+          editing={editing}
+          nameError={nameError}
+          onChange={setDraft}
+        />
       ) : null}
       {activeTab === "files" ? (
         <FilesTab
@@ -330,21 +380,11 @@ export function SkillDetailView({
   );
 }
 
-function ReadOnlyField({ label, value, multiline }: { label: string; value: string; multiline?: boolean }) {
-  const isEmpty = !value?.trim();
+function OverviewCounter({ current, max }: { current: number; max: number }) {
   return (
-    <div className="space-y-1.5">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div
-        className={cn(
-          "text-sm leading-6",
-          multiline ? "whitespace-pre-wrap" : "truncate",
-          isEmpty ? "text-slate-400" : "text-slate-800"
-        )}
-      >
-        {isEmpty ? "暂无内容" : value}
-      </div>
-    </div>
+    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#94a3b8]">
+      {current}/{max}
+    </span>
   );
 }
 
@@ -352,11 +392,13 @@ function OverviewTab({
   skill,
   draft,
   editing,
+  nameError,
   onChange,
 }: {
   skill: SkillRecord;
   draft: SkillManualDraft;
   editing: boolean;
+  nameError?: string;
   onChange: Dispatch<SetStateAction<SkillManualDraft>>;
 }) {
   const currentManagedVersion = getCurrentManagedVersion(skill);
@@ -371,59 +413,115 @@ function OverviewTab({
   return (
     <div className="grid lg:grid-cols-[minmax(0,1.25fr)_320px] lg:divide-x lg:divide-slate-200">
       <div className="bg-white py-5 lg:pr-8">
-        <h2 className="text-base font-semibold text-slate-900">基本信息</h2>
-
-        {editing ? (
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>技能名称</Label>
+        <h2 className="mb-4 text-base font-semibold leading-6 text-[#000]">基本信息</h2>
+        <div className="max-w-[760px] space-y-5">
+          <div>
+            <div className="mb-2 flex items-center gap-1">
+              <Label htmlFor="overview-skill-name" className="text-sm font-medium text-[#1e293b]">
+                <span className="mr-1 text-[#e5484d]">*</span>
+                技能名称
+              </Label>
+            </div>
+            <div className="relative">
               <Input
+                id="overview-skill-name"
                 value={draft.name}
-                onChange={(event) => onChange((current) => ({ ...current, name: event.target.value }))}
+                maxLength={100}
+                readOnly={!editing}
+                onChange={(event) => {
+                  const nextName = event.target.value;
+                  onChange((current) => ({
+                    ...current,
+                    name: nextName,
+                    displayName: nextName,
+                  }));
+                }}
+                placeholder={editing ? "请输入技能名称" : undefined}
+                aria-invalid={Boolean(editing && nameError)}
+                className={cn(
+                  "h-8 rounded-[4px] border-[#cbd5e1] pr-16 text-xs shadow-none focus-visible:border-[#2773ff] focus-visible:ring-0",
+                  !editing && "cursor-default bg-white"
+                )}
               />
+              <OverviewCounter current={draft.name.length} max={100} />
             </div>
-            <div className="space-y-2">
-              <Label>展示名称</Label>
-              <Input
-                value={draft.displayName}
-                onChange={(event) =>
-                  onChange((current) => ({ ...current, displayName: event.target.value }))
-                }
-              />
+            <p
+              className={cn(
+                "mt-1 text-xs leading-[18px]",
+                editing && nameError ? "text-[#e5484d]" : "text-[#7f8c9f]"
+              )}
+            >
+              {(editing && nameError) || SKILL_NAME_HINT}
+            </p>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center gap-1">
+              <Label htmlFor="overview-skill-description" className="text-sm font-medium text-[#1e293b]">
+                技能描述
+              </Label>
             </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>描述</Label>
+            <div className="relative">
               <Textarea
+                id="overview-skill-description"
                 value={draft.description}
-                className="min-h-24"
+                maxLength={500}
+                readOnly={!editing}
                 onChange={(event) =>
                   onChange((current) => ({ ...current, description: event.target.value }))
                 }
+                placeholder={editing ? "请输入技能描述" : undefined}
+                className={cn(
+                  "min-h-[88px] rounded-[4px] border-[#cbd5e1] pb-6 text-xs shadow-none focus-visible:border-[#2773ff] focus-visible:ring-0",
+                  !editing && "cursor-default bg-white"
+                )}
               />
+              <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-[#94a3b8]">
+                {draft.description.length}/500
+              </span>
             </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>使用说明</Label>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center gap-1">
+              <Label htmlFor="overview-skill-usage" className="text-sm font-medium text-[#1e293b]">
+                使用说明
+              </Label>
+            </div>
+            <div className="relative">
               <Textarea
+                id="overview-skill-usage"
                 value={draft.usageInstructions}
-                className="min-h-28"
+                maxLength={1000}
+                readOnly={!editing}
                 onChange={(event) =>
                   onChange((current) => ({ ...current, usageInstructions: event.target.value }))
                 }
+                placeholder={
+                  editing
+                    ? "请输入技能使用说明，建议填写该技能的用户输入要求、核心处理能力及预期输出结果"
+                    : undefined
+                }
+                className={cn(
+                  "min-h-[120px] rounded-[4px] border-[#cbd5e1] pb-6 text-xs shadow-none focus-visible:border-[#2773ff] focus-visible:ring-0",
+                  !editing && "cursor-default bg-white"
+                )}
               />
+              <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-[#94a3b8]">
+                {draft.usageInstructions.length}/1000
+              </span>
             </div>
           </div>
-        ) : (
-          <div className="mt-5 grid gap-5 md:grid-cols-2">
-            <ReadOnlyField label="技能名称" value={draft.name} />
-            <ReadOnlyField label="展示名称" value={draft.displayName} />
-            <div className="md:col-span-2">
-              <ReadOnlyField label="描述" value={draft.description} multiline />
+
+          <div>
+            <div className="mb-2 flex items-center gap-1">
+              <Label className="text-sm font-medium text-[#1e293b]">技能图标</Label>
             </div>
-            <div className="md:col-span-2">
-              <ReadOnlyField label="使用说明" value={draft.usageInstructions} multiline />
+            <div className="flex h-16 w-16 items-center justify-center rounded-[6px] bg-[#14b8a6] text-white shadow-[0_1px_2px_rgba(15,23,42,0.08)]">
+              <BookOpen className="h-8 w-8" strokeWidth={1.75} />
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       <aside>

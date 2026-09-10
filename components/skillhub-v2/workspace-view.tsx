@@ -22,7 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { ClawConversationTimeline } from "@/components/claw-hub-next/conversation-timeline";
 import type { ConversationTimelineItem } from "@/components/claw-hub-next/detail/utils";
@@ -299,10 +298,10 @@ export function SkillWorkspaceView({
 
   return (
     <section
-      className="flex min-h-[calc(100vh-132px)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white"
       data-testid="skillhub-workspace-view"
     >
-      <header className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+      <header className="flex shrink-0 flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <Button
             type="button"
@@ -373,9 +372,9 @@ export function SkillWorkspaceView({
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(360px,1fr)_minmax(420px,1.05fr)]">
-        <div className="flex min-h-[560px] flex-col border-b border-slate-200 lg:border-b-0 lg:border-r">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(360px,1fr)_minmax(420px,1.05fr)]">
+        <div className="flex min-h-0 flex-col overflow-hidden border-b border-slate-200 lg:border-b-0 lg:border-r">
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
               <MessageSquare className="h-4 w-4 text-[#2773ff]" />
               对话
@@ -437,7 +436,7 @@ export function SkillWorkspaceView({
               ) : null}
             </div>
           </div>
-          <ScrollArea className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <div className="space-y-4 p-5">
               <ClawConversationTimeline items={timelineItems} />
               {isGenerating ? (
@@ -447,8 +446,8 @@ export function SkillWorkspaceView({
                 </div>
               ) : null}
             </div>
-          </ScrollArea>
-          <div className="border-t border-slate-200 p-4">
+          </div>
+          <div className="shrink-0 border-t border-slate-200 bg-white p-4">
             <div className="rounded-lg border border-slate-200 bg-white focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100">
               <Textarea
                 value={input}
@@ -492,15 +491,15 @@ export function SkillWorkspaceView({
           </div>
         </div>
 
-        <div className="flex min-h-[560px] flex-col bg-slate-50/50">
-          <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
+        <div className="flex min-h-0 flex-col overflow-hidden bg-slate-50/50">
+          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
             <div className="text-sm font-semibold text-slate-800">生成产物预览</div>
             <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
               新版本草稿
             </span>
           </div>
-          <div className="grid min-h-0 flex-1 grid-cols-[190px_minmax(0,1fr)]">
-            <div className="border-r border-slate-200 bg-white p-3">
+          <div className="grid min-h-0 flex-1 grid-cols-[190px_minmax(0,1fr)] overflow-hidden">
+            <div className="min-h-0 overflow-y-auto border-r border-slate-200 bg-white p-3">
               <div className="space-y-1">
                 {fileTree.rootFiles.map((path) => (
                   <FileTreeButton
@@ -533,9 +532,9 @@ export function SkillWorkspaceView({
                 ))}
               </div>
             </div>
-            <div className="min-w-0 p-4">
-              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="flex min-h-0 min-w-0 flex-col overflow-hidden p-4">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
                   <span className="font-mono text-xs text-slate-600">{selectedFile?.path}</span>
                   <span className="text-xs text-slate-400">
                     {selectedFile?.change === "added"
@@ -546,7 +545,7 @@ export function SkillWorkspaceView({
                   </span>
                 </div>
                 {selectedFile?.path === "src/parser.py" && mode === "optimize" ? (
-                  <div className="font-mono text-xs leading-6">
+                  <div className="min-h-0 flex-1 overflow-auto font-mono text-xs leading-6">
                     <div className="px-4 pt-3 text-slate-500">def read(file):</div>
                     <div className="bg-rose-50 px-4 text-rose-700">- header = next(file)</div>
                     <div className="bg-emerald-50 px-4 text-emerald-700">+ first = peek(file)</div>
@@ -559,12 +558,12 @@ export function SkillWorkspaceView({
                     <div className="px-4 pb-3 text-slate-500">return rows(file, header)</div>
                   </div>
                 ) : (
-                  <pre className="max-h-[470px] overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-6 text-slate-700">
+                  <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap p-4 font-mono text-xs leading-6 text-slate-700">
                     {selectedFile?.content}
                   </pre>
                 )}
               </div>
-              <div className="mt-3 flex items-center gap-2 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-700">
+              <div className="mt-3 flex shrink-0 items-center gap-2 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-700">
                 <Play className="h-3.5 w-3.5" />
                 保存版本后进入 AI 试运行：静态扫描 + 沙箱运行 + 锁定依赖。
               </div>
