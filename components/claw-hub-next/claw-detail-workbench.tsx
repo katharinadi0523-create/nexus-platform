@@ -98,6 +98,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
+import { ImportDraftNotice, type ImportDraftResult } from "@/components/import-export/import-draft-notice";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -540,6 +541,7 @@ export type ClawDetailWorkbenchProps = {
   mode?: ClawDetailWorkbenchMode;
   backHref?: string;
   backAriaLabel?: string;
+  importResult?: ImportDraftResult | null;
 };
 
 export function ClawDetailWorkbench({
@@ -547,6 +549,7 @@ export function ClawDetailWorkbench({
   mode = "claw",
   backHref = "/claw-hub-next",
   backAriaLabel = "返回 Claw 列表",
+  importResult = null,
 }: ClawDetailWorkbenchProps) {
   const isMultiAgentMode = mode === "multi-agent";
   const entityLabel = isMultiAgentMode ? "多智能体" : "Claw";
@@ -1964,6 +1967,10 @@ export function ClawDetailWorkbench({
           </div>
         </div>
       </section>
+
+      {isMultiAgentMode && importResult ? (
+        <ImportDraftNotice objectType="multi_agent" result={importResult} />
+      ) : null}
 
       <Tabs
         value={configSection}

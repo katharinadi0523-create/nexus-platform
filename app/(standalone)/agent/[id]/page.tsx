@@ -15,6 +15,7 @@ import { AutonomousEditor } from "@/components/agent/autonomous-editor";
 import { getAgentById } from "@/lib/agent-data";
 import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBadge";
 import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
+import { ImportDraftNotice, type ImportDraftResult } from "@/components/import-export/import-draft-notice";
 import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
@@ -174,6 +175,7 @@ export default function AgentDetailPage() {
   const [draftSecurityLevel, setDraftSecurityLevel] = useState<SecurityLevel>(
     agentProfile?.securityLevel ?? "公开"
   );
+  const [importResult, setImportResult] = useState<ImportDraftResult | null>(null);
 
   const isPublished = publishStatus === "已发布";
 
@@ -188,6 +190,14 @@ export default function AgentDetailPage() {
     setApprovalStatus(agentProfile.approvalStatus ?? "none");
     setDraftSecurityLevel(agentProfile.securityLevel ?? "公开");
   }, [agentProfile]);
+
+  useEffect(() => {
+    const result = new URLSearchParams(window.location.search).get("importResult");
+    if (result !== "success" && result !== "success_with_warnings") return;
+    setImportResult(result);
+    setDisplayName("智能客服分流助手");
+    setPublishStatus("未发布");
+  }, []);
 
   function handlePublish() {
     const action = getApprovalActionState(approvalStatus);
@@ -339,6 +349,8 @@ export default function AgentDetailPage() {
           </Button>
         </div>
       </header>
+
+      {importResult ? <ImportDraftNotice objectType="workflow_agent" result={importResult} /> : null}
 
       <main className="flex min-h-0 flex-1 overflow-hidden">
         {activeTab === "config" ? (
