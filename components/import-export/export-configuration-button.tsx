@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ChevronDown, Download, Loader2, RotateCcw } from "lucide-react";
+import { AlertTriangle, ChevronDown, Download, FileDown, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -83,21 +83,20 @@ export function ExportConfigurationButton({
     <>
       <div
         className={cn(
-          "inline-flex overflow-hidden rounded-md border border-blue-200 bg-blue-50 text-blue-700 shadow-none",
+          "inline-flex h-8 overflow-hidden rounded-[4px] border border-slate-300 bg-white text-slate-700 shadow-none",
           className
         )}
       >
         <Button
           type="button"
           variant="ghost"
-          size="sm"
           disabled={exporting}
           onClick={handleExport}
           title={"导出" + sourceLabel}
-          className="h-9 rounded-none border-0 bg-transparent px-3.5 text-sm font-medium text-blue-700 hover:bg-blue-100 hover:text-blue-800"
+          className="h-8 rounded-none border-0 bg-transparent px-3 text-sm text-slate-700 shadow-none hover:bg-slate-50 hover:text-slate-900"
         >
-          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          {exporting ? "正在生成" : "导出配置"}
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+          {exporting ? "导出中" : "导出"}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -108,7 +107,7 @@ export function ExportConfigurationButton({
               disabled={exporting}
               aria-label="查看导出原型场景"
               title="查看导出原型场景"
-              className="h-9 w-9 rounded-none border-0 border-l border-blue-200 bg-transparent text-blue-700 shadow-none hover:bg-blue-100 hover:text-blue-800"
+              className="h-8 w-8 rounded-none border-0 border-l border-slate-300 bg-transparent text-slate-500 shadow-none hover:bg-slate-50 hover:text-slate-800"
             >
               <ChevronDown className="h-4 w-4" />
             </Button>
