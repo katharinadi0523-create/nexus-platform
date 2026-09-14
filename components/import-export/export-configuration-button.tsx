@@ -38,6 +38,7 @@ export function ExportConfigurationButton({
   allowImport = false,
   importDestinationHref,
   onImported,
+  display = "button",
 }: {
   objectType: ImportObjectType;
   objectName: string;
@@ -47,6 +48,7 @@ export function ExportConfigurationButton({
   allowImport?: boolean;
   importDestinationHref?: string;
   onImported?: (preview: ImportPreview) => void;
+  display?: "button" | "table-action";
 }) {
   const [exporting, setExporting] = useState(false);
   const [failureOpen, setFailureOpen] = useState(false);
@@ -90,7 +92,17 @@ export function ExportConfigurationButton({
 
   return (
     <>
-      {allowImport && importDestinationHref ? (
+      {display === "table-action" ? (
+        <button
+          type="button"
+          disabled={exporting}
+          onClick={handleExport}
+          title={"导出" + sourceLabel}
+          className={cn("text-sm text-blue-600 hover:text-blue-700 disabled:cursor-wait disabled:text-slate-400", className)}
+        >
+          {exporting ? "导出中" : "导出"}
+        </button>
+      ) : allowImport && importDestinationHref ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

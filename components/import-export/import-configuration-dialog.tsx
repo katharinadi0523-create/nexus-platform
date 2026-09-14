@@ -14,11 +14,11 @@ import {
 } from "@/lib/agent-import-export";
 import { cn } from "@/lib/utils";
 
-type ImportStep = "upload" | "confirm" | "processing" | "failure";
+type ImportStep = "upload" | "processing" | "failure";
 type ImportDemoScenario = "success" | "success_with_warnings" | "failure";
 
 const CREATE_STEP_LABELS = ["选择文件", "创建草稿"];
-const OVERWRITE_STEP_LABELS = ["选择文件", "确认覆盖", "导入配置"];
+const OVERWRITE_STEP_LABELS = ["选择文件", "覆盖草稿"];
 const DEMO_SCENARIOS: Array<{
   value: ImportDemoScenario;
   label: string;
@@ -37,7 +37,6 @@ export function ImportConfigurationDialog({
   destinationHref,
   onImported,
   mode = "create",
-  currentObjectName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -97,15 +96,12 @@ export function ImportConfigurationDialog({
     if (validationError) return;
     setSelectedFileName(fileName);
     setSelectedScenario(scenario);
-    if (mode === "overwrite" && scenario !== "failure") {
-      setStep("confirm");
-      return;
-    }
+    if (mode === "overwrite" && scenario !== "failure") return;
     executeImport(fileName, scenario);
   }
 
   const stepLabels = mode === "overwrite" ? OVERWRITE_STEP_LABELS : CREATE_STEP_LABELS;
-  const activeStepIndex = step === "upload" ? 0 : step === "confirm" ? 1 : stepLabels.length - 1;
+  const activeStepIndex = step === "upload" ? 0 : stepLabels.length - 1;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -139,8 +135,15 @@ export function ImportConfigurationDialog({
 
         {step === "upload" ? (
           <div className="space-y-4 px-6 py-5">
+            {mode === "overwrite" ? (
+              <div className="flex items-center gap-2 rounded-[6px] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                <span>导入后将覆盖当前草稿配置，已发布版本不受影响。</span>
+              </div>
+            ) : null}
             <label htmlFor={inputId} className={cn(
-              "flex min-h-[190px] cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed bg-slate-50/70 px-8 text-center transition-colors hover:border-blue-400 hover:bg-blue-50/40",
+              "flex cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed bg-slate-50/70 px-8 text-center transition-colors hover:border-blue-400 hover:bg-blue-50/40",
+              mode === "overwrite" ? "min-h-[160px]" : "min-h-[190px]",
               error ? "border-rose-300" : "border-slate-300"
             )}>
               <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-[8px] bg-blue-50 text-blue-600"><UploadCloud className="h-6 w-6" /></span>
@@ -148,17 +151,27 @@ export function ImportConfigurationDialog({
               <span className="mt-2 text-xs leading-5 text-slate-500">
                 {mode === "overwrite" ? "选择文件后需确认覆盖，仅支持 .yaml / .yml 配置文件" : "选择后自动导入，仅支持 .yaml / .yml 配置文件"}
               </span>
-              <input id={inputId} type="file" accept=".yaml,.yml,application/yaml,text/yaml" className="sr-only" onChange={(event) => {
+              <input key={selectedFileName || "empty"} id={inputId} type="file" accept=".yaml,.yml,application/yaml,text/yaml" className="sr-only" onChange={(event) => {
                 const file = event.target.files?.[0];
                 if (file) selectFile(file.name);
               }} />
             </label>
+            {mode === "overwrite" && selectedFileName ? (
+              <div className="flex items-center gap-3 rounded-[6px] border border-slate-200 bg-white px-4 py-3">
+                <FileCode2 className="h-5 w-5 shrink-0 text-blue-600" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-slate-900">{selectedFileName}</div>
+                  <div className="mt-0.5 text-xs text-slate-500">文件已选择，确认后覆盖当前草稿</div>
+                </div>
+                <button type="button" className="text-xs text-blue-600 hover:text-blue-700" onClick={() => setSelectedFileName("")}>重新选择</button>
+              </div>
+            ) : null}
             {error ? (
               <div className="flex items-start gap-2 rounded-[6px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
               </div>
             ) : null}
-            <section className="rounded-[6px] border border-slate-200 bg-white p-4">
+            {mode === "create" ? <section className="rounded-[6px] border border-slate-200 bg-white p-4">
               <div className="text-sm font-medium text-slate-800">原型场景</div>
               <div className="mt-1 text-xs text-slate-500">点击后直接进入对应结果，便于评审全部状态。</div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -169,35 +182,14 @@ export function ImportConfigurationDialog({
                   </button>
                 ))}
               </div>
-            </section>
+            </section> : null}
+            {mode === "overwrite" && selectedFileName ? (
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <Button type="button" variant="outline" className="rounded-[4px] border-slate-300 bg-white shadow-none" onClick={() => handleOpenChange(false)}>取消</Button>
+                <Button type="button" className="rounded-[4px] bg-blue-600 text-white shadow-none hover:bg-blue-700" onClick={() => executeImport(selectedFileName, selectedScenario)}>确认覆盖并导入</Button>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-
-        {step === "confirm" ? (
-          <>
-            <div className="space-y-4 px-6 py-6">
-              <div className="flex items-center gap-3 rounded-[6px] border border-slate-200 bg-slate-50 px-4 py-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] bg-white text-blue-600"><FileCode2 className="h-5 w-5" /></span>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-slate-900">{selectedFileName}</div>
-                  <div className="mt-0.5 text-xs text-slate-500">文件校验通过，可以导入</div>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-[6px] border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
-                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-                <div>
-                  <div className="text-sm font-semibold">当前草稿内容将被覆盖</div>
-                  <p className="mt-1 text-sm leading-6 text-amber-900/80">
-                    导入后，“{currentObjectName || "当前对象"}”草稿中的画布、基础配置和资源引用将替换为文件内容；已发布版本不受影响。此操作无法撤销。
-                  </p>
-                </div>
-              </div>
-            </div>
-            <DialogFooter className="border-t border-slate-100 bg-slate-50/70 px-6 py-4">
-              <Button type="button" variant="outline" className="rounded-[4px] border-slate-300 bg-white shadow-none" onClick={reset}>重新选择</Button>
-              <Button type="button" className="rounded-[4px] bg-blue-600 text-white shadow-none hover:bg-blue-700" onClick={() => executeImport(selectedFileName, selectedScenario)}>确认覆盖并导入</Button>
-            </DialogFooter>
-          </>
         ) : null}
 
         {step === "processing" ? (

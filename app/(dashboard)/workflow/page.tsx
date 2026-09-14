@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, GitBranch, RefreshCw, Search, Workflow } from "lucide-react";
+import { ChevronDown, ChevronRight, FileUp, GitBranch, RefreshCw, Search, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ImportConfigurationButton } from "@/components/import-export/import-configuration-dialog";
+import { ImportConfigurationDialog } from "@/components/import-export/import-configuration-dialog";
+import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { ImportPreview } from "@/lib/agent-import-export";
 
 type WorkflowRow = {
@@ -34,6 +36,7 @@ const INITIAL_WORKFLOWS: WorkflowRow[] = [
 export default function WorkflowPage() {
   const [query, setQuery] = useState("");
   const [rows, setRows] = useState(INITIAL_WORKFLOWS);
+  const [importOpen, setImportOpen] = useState(false);
   const filteredRows = rows.filter((row) => `${row.name}${row.description}`.toLowerCase().includes(query.toLowerCase()));
 
   function handleImported(preview: ImportPreview) {
@@ -68,16 +71,32 @@ export default function WorkflowPage() {
             <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           </div>
           <div className="flex items-center justify-end gap-2">
-            <ImportConfigurationButton objectType="workflow" destinationHref="/workflow?source=import" onImported={handleImported} />
             <Button type="button" variant="outline" size="icon-sm" className="h-8 w-8 rounded-[4px] border-slate-300 bg-white text-slate-600 shadow-none" onClick={() => toast.success("刷新成功")}>
               <RefreshCw className="h-4 w-4" />
             </Button>
-            <Button type="button" className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700" onClick={() => toast.info("已进入空白工作流创建页（原型）")}>
-              <GitBranch className="h-4 w-4" />新建工作流
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700">
+                  <GitBranch className="h-4 w-4" />新建工作流<ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64 rounded-[6px] border-slate-200 p-1">
+                <DropdownMenuItem onSelect={() => toast.info("已进入空白工作流创建页（原型）")} className="rounded-[4px] px-3 py-2.5">
+                  <Workflow className="h-4 w-4 text-slate-500" />
+                  <div><div className="text-sm font-medium">新建工作流</div><div className="mt-0.5 text-xs text-slate-500">从空白画布开始创建</div></div>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setImportOpen(true)} className="rounded-[4px] px-3 py-2.5">
+                  <FileUp className="h-4 w-4 text-blue-600" />
+                  <div><div className="text-sm font-medium">导入工作流</div><div className="mt-0.5 text-xs text-slate-500">上传 YAML 并创建新草稿</div></div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
+
+      <ImportConfigurationDialog open={importOpen} onOpenChange={setImportOpen} objectType="workflow" destinationHref="/workflow?source=import" onImported={handleImported} />
 
       <section className="overflow-hidden rounded-[6px] border border-slate-200 bg-white">
         <Table className="min-w-[920px]">
@@ -108,7 +127,10 @@ export default function WorkflowPage() {
                 <TableCell className="px-4 py-3 text-sm text-slate-700">{row.nodes}</TableCell>
                 <TableCell className="px-4 py-3 text-sm text-slate-600">{row.updatedAt}</TableCell>
                 <TableCell className="px-4 py-3">
-                  <button type="button" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700" onClick={() => toast.info(`打开工作流配置：${row.name}`)}>编辑<ChevronRight className="h-3.5 w-3.5" /></button>
+                  <div className="flex items-center gap-4">
+                    <button type="button" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700" onClick={() => toast.info(`打开工作流配置：${row.name}`)}>编辑<ChevronRight className="h-3.5 w-3.5" /></button>
+                    <ExportConfigurationButton objectType="workflow" objectName={row.name} sourceType={row.status === "已发布" ? "published" : "draft"} sourceVersion={row.status === "已发布" ? "latest" : undefined} display="table-action" />
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

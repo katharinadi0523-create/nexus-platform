@@ -44,6 +44,7 @@ import {
 } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
 import { ImportConfigurationDialog } from "@/components/import-export/import-configuration-dialog";
+import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 
 interface Agent {
   id: string;
@@ -388,6 +389,15 @@ export default function AgentPage() {
                         >
                           删除
                         </button>
+                        {!isAutonomous ? (
+                          <ExportConfigurationButton
+                            objectType="workflow_agent"
+                            objectName={agent.name}
+                            sourceType={agent.status === "已发布" ? "published" : "draft"}
+                            sourceVersion={agent.status === "已发布" ? "latest" : undefined}
+                            display="table-action"
+                          />
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>

@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  FileUp,
   Network,
   Plus,
   RefreshCw,
@@ -16,6 +18,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -42,7 +45,8 @@ import {
   isHighSecurityLevel,
 } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
-import { ImportConfigurationButton } from "@/components/import-export/import-configuration-dialog";
+import { ImportConfigurationDialog } from "@/components/import-export/import-configuration-dialog";
+import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 import { formatMultiAgentUpdatedAt } from "@/lib/published-multi-agents";
 
 const ITEMS_PER_PAGE = 20;
@@ -52,6 +56,7 @@ export default function MultiAgentListPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
+  const [importOpen, setImportOpen] = useState(false);
   const [publishedMultiAgents, setPublishedMultiAgents] = useState<
     PublishedMultiAgentItem[]
   >([]);
@@ -164,22 +169,6 @@ export default function MultiAgentListPage() {
           </div>
 
           <div className="flex items-center justify-end gap-2">
-            <ImportConfigurationButton
-              objectType="multi_agent"
-              destinationHref="/multi-agent/create?id=imported-industry-research"
-              onImported={(preview) => {
-                upsertPublishedMultiAgent({
-                  id: "imported-industry-research",
-                  name: preview.objectName,
-                  status: "未发布",
-                  desc: preview.description,
-                  updatedAt: formatMultiAgentUpdatedAt(),
-                  securityLevel: "公开",
-                  approvalStatus: "none",
-                });
-                setPublishedMultiAgents(getPublishedMultiAgents());
-              }}
-            />
             <Button
               variant="outline"
               size="icon-sm"
@@ -189,18 +178,48 @@ export default function MultiAgentListPage() {
               <RefreshCw className="h-4 w-4" />
             </Button>
 
-            <Button
-              asChild
-              className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700"
-            >
-              <Link href="/multi-agent/create">
-                <Plus className="h-4 w-4" />
-                新建多智能体
-              </Link>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700">
+                  <Plus className="h-4 w-4" />新建多智能体<ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64 rounded-[6px] border-slate-200 p-1">
+                <DropdownMenuItem asChild className="rounded-[4px] px-3 py-2.5">
+                  <Link href="/multi-agent/create" className="flex cursor-pointer items-center gap-2">
+                    <Network className="h-4 w-4 text-slate-500" />
+                    <div><div className="text-sm font-medium">新建多智能体</div><div className="mt-0.5 text-xs text-slate-500">从空白配置开始创建</div></div>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setImportOpen(true)} className="rounded-[4px] px-3 py-2.5">
+                  <FileUp className="h-4 w-4 text-blue-600" />
+                  <div><div className="text-sm font-medium">导入多智能体</div><div className="mt-0.5 text-xs text-slate-500">上传 YAML 并创建新草稿</div></div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
+
+      <ImportConfigurationDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        objectType="multi_agent"
+        destinationHref="/multi-agent/create?id=imported-industry-research"
+        onImported={(preview) => {
+          upsertPublishedMultiAgent({
+            id: "imported-industry-research",
+            name: preview.objectName,
+            status: "未发布",
+            desc: preview.description,
+            updatedAt: formatMultiAgentUpdatedAt(),
+            securityLevel: "公开",
+            approvalStatus: "none",
+          });
+          setPublishedMultiAgents(getPublishedMultiAgents());
+        }}
+      />
 
       <section className="overflow-hidden rounded-[6px] border border-slate-200 bg-white">
         <Table className="min-w-[1180px]">
@@ -353,6 +372,13 @@ export default function MultiAgentListPage() {
                         >
                           删除
                         </button>
+                        <ExportConfigurationButton
+                          objectType="multi_agent"
+                          objectName={agent.name}
+                          sourceType={agent.status === "已发布" ? "published" : "draft"}
+                          sourceVersion={agent.status === "已发布" ? "latest" : undefined}
+                          display="table-action"
+                        />
                       </div>
                     </TableCell>
                   </TableRow>
