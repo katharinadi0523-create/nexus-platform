@@ -97,6 +97,7 @@ import {
 } from "@/components/claw-hub-next/detail/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1822,6 +1823,14 @@ export function ClawDetailWorkbench({
             </div>
           )}
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            {isMultiAgentMode ? (
+              <ExportConfigurationButton
+                objectType="multi_agent"
+                objectName={entityName || detail.overview.name}
+                sourceType={isPublished ? "published" : "draft"}
+                sourceVersion={isPublished ? detail.overview.version : undefined}
+              />
+            ) : null}
             <Button
               type="button"
               size="sm"

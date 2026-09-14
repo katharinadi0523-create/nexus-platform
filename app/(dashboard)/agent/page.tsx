@@ -41,6 +41,7 @@ import {
   type SecurityLevel,
 } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
+import { ImportConfigurationButton } from "@/components/import-export/import-configuration-dialog";
 
 interface Agent {
   id: string;
@@ -169,6 +170,25 @@ export default function AgentPage() {
           </div>
 
           <div className="flex items-center justify-end gap-2">
+            <ImportConfigurationButton
+              objectType="workflow_agent"
+              destinationHref="/agent/flow-01?source=import"
+              onImported={(preview) => {
+                setAgents((current) => [
+                  {
+                    id: `imported-${Date.now()}`,
+                    name: preview.objectName,
+                    type: "工作流智能体",
+                    status: "未发布",
+                    desc: preview.description,
+                    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+                    securityLevel: "公开",
+                    approvalStatus: "none",
+                  },
+                  ...current,
+                ]);
+              }}
+            />
             <Button
               variant="outline"
               size="icon-sm"

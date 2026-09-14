@@ -42,6 +42,8 @@ import {
   isHighSecurityLevel,
 } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
+import { ImportConfigurationButton } from "@/components/import-export/import-configuration-dialog";
+import { formatMultiAgentUpdatedAt } from "@/lib/published-multi-agents";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -162,6 +164,22 @@ export default function MultiAgentListPage() {
           </div>
 
           <div className="flex items-center justify-end gap-2">
+            <ImportConfigurationButton
+              objectType="multi_agent"
+              destinationHref="/multi-agent/create?id=imported-industry-research"
+              onImported={(preview) => {
+                upsertPublishedMultiAgent({
+                  id: "imported-industry-research",
+                  name: preview.objectName,
+                  status: "未发布",
+                  desc: preview.description,
+                  updatedAt: formatMultiAgentUpdatedAt(),
+                  securityLevel: "公开",
+                  approvalStatus: "none",
+                });
+                setPublishedMultiAgents(getPublishedMultiAgents());
+              }}
+            />
             <Button
               variant="outline"
               size="icon-sm"

@@ -14,6 +14,7 @@ import { WorkflowEditor } from "@/components/workflow/workflow-editor";
 import { AutonomousEditor } from "@/components/agent/autonomous-editor";
 import { getAgentById } from "@/lib/agent-data";
 import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBadge";
+import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
@@ -314,6 +315,14 @@ export default function AgentDetailPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {isWorkflow ? (
+            <ExportConfigurationButton
+              objectType="workflow_agent"
+              objectName={displayName}
+              sourceType={isPublished ? "published" : "draft"}
+              sourceVersion={isPublished ? "V3" : undefined}
+            />
+          ) : null}
           <ProtectionStatusBadge
             protectionTaskName="GF专属防护"
             protectionTaskId="1"
