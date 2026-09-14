@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Check, FileUp, Loader2, RotateCcw, UploadCloud, XCircle } from "lucide-react";
+import { AlertCircle, Check, FileCode2, FileUp, Loader2, RotateCcw, UploadCloud, XCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,10 +14,11 @@ import {
 } from "@/lib/agent-import-export";
 import { cn } from "@/lib/utils";
 
-type ImportStep = "upload" | "processing" | "failure";
+type ImportStep = "upload" | "confirm" | "processing" | "failure";
 type ImportDemoScenario = "success" | "success_with_warnings" | "failure";
 
-const STEP_LABELS = ["选择文件", "创建草稿"];
+const CREATE_STEP_LABELS = ["选择文件", "创建草稿"];
+const OVERWRITE_STEP_LABELS = ["选择文件", "确认覆盖", "导入配置"];
 const DEMO_SCENARIOS: Array<{
   value: ImportDemoScenario;
   label: string;
@@ -35,18 +36,24 @@ export function ImportConfigurationDialog({
   objectType,
   destinationHref,
   onImported,
+  mode = "create",
+  currentObjectName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   objectType: ImportObjectType;
   destinationHref: string;
   onImported?: (preview: ImportPreview) => void;
+  mode?: "create" | "overwrite";
+  currentObjectName?: string;
 }) {
   const router = useRouter();
   const inputId = useId();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [step, setStep] = useState<ImportStep>("upload");
   const [error, setError] = useState<string | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState("");
+  const [selectedScenario, setSelectedScenario] = useState<ImportDemoScenario>("success_with_warnings");
 
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -56,6 +63,8 @@ export function ImportConfigurationDialog({
     if (timerRef.current) clearTimeout(timerRef.current);
     setStep("upload");
     setError(null);
+    setSelectedFileName("");
+    setSelectedScenario("success_with_warnings");
   }
 
   function handleOpenChange(nextOpen: boolean) {
@@ -67,11 +76,7 @@ export function ImportConfigurationDialog({
     return `${destinationHref}${destinationHref.includes("?") ? "&" : "?"}importResult=${result}`;
   }
 
-  function importFile(fileName: string, scenario: ImportDemoScenario = "success_with_warnings") {
-    const validationError = validateImportFile(fileName);
-    setError(validationError);
-    if (validationError) return;
-
+  function executeImport(fileName: string, scenario: ImportDemoScenario) {
     setStep("processing");
     timerRef.current = setTimeout(() => {
       if (scenario === "failure") {
@@ -86,17 +91,35 @@ export function ImportConfigurationDialog({
     }, 1000);
   }
 
-  const activeStepIndex = step === "upload" ? 0 : 1;
+  function selectFile(fileName: string, scenario: ImportDemoScenario = "success_with_warnings") {
+    const validationError = validateImportFile(fileName);
+    setError(validationError);
+    if (validationError) return;
+    setSelectedFileName(fileName);
+    setSelectedScenario(scenario);
+    if (mode === "overwrite" && scenario !== "failure") {
+      setStep("confirm");
+      return;
+    }
+    executeImport(fileName, scenario);
+  }
+
+  const stepLabels = mode === "overwrite" ? OVERWRITE_STEP_LABELS : CREATE_STEP_LABELS;
+  const activeStepIndex = step === "upload" ? 0 : step === "confirm" ? 1 : stepLabels.length - 1;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[720px]" showCloseButton={step !== "processing"}>
         <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">
-          <DialogTitle className="text-lg font-semibold text-slate-950">导入{IMPORT_OBJECT_LABELS[objectType]}</DialogTitle>
-          <DialogDescription className="text-sm text-slate-500">选择文件后将自动校验并创建新草稿，不会覆盖同名对象。</DialogDescription>
+          <DialogTitle className="text-lg font-semibold text-slate-950">{mode === "overwrite" ? "导入配置" : `导入${IMPORT_OBJECT_LABELS[objectType]}`}</DialogTitle>
+          <DialogDescription className="text-sm text-slate-500">
+            {mode === "overwrite"
+              ? "上传配置文件并替换当前草稿，已发布版本不会受到影响。"
+              : "选择文件后将自动校验并创建新草稿，不会覆盖同名对象。"}
+          </DialogDescription>
           <div className="flex items-center pt-3">
-            {STEP_LABELS.map((label, index) => (
-              <div key={label} className={cn("flex items-center", index === 0 && "flex-1")}>
+            {stepLabels.map((label, index) => (
+              <div key={label} className={cn("flex items-center", index < stepLabels.length - 1 && "flex-1")}>
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     "flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold",
@@ -108,7 +131,7 @@ export function ImportConfigurationDialog({
                   )}>{index < activeStepIndex ? <Check className="h-3.5 w-3.5" /> : index + 1}</span>
                   <span className={cn("text-xs font-medium", index <= activeStepIndex ? "text-slate-800" : "text-slate-400")}>{label}</span>
                 </div>
-                {index === 0 ? <div className={cn("mx-3 h-px flex-1", activeStepIndex > 0 ? "bg-blue-500" : "bg-slate-200")} /> : null}
+                {index < stepLabels.length - 1 ? <div className={cn("mx-3 h-px flex-1", index < activeStepIndex ? "bg-blue-500" : "bg-slate-200")} /> : null}
               </div>
             ))}
           </div>
@@ -122,10 +145,12 @@ export function ImportConfigurationDialog({
             )}>
               <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-[8px] bg-blue-50 text-blue-600"><UploadCloud className="h-6 w-6" /></span>
               <span className="text-sm font-medium text-slate-900">点击选择，或将 YAML 文件拖到这里</span>
-              <span className="mt-2 text-xs leading-5 text-slate-500">选择后自动导入，仅支持 .yaml / .yml 配置文件</span>
+              <span className="mt-2 text-xs leading-5 text-slate-500">
+                {mode === "overwrite" ? "选择文件后需确认覆盖，仅支持 .yaml / .yml 配置文件" : "选择后自动导入，仅支持 .yaml / .yml 配置文件"}
+              </span>
               <input id={inputId} type="file" accept=".yaml,.yml,application/yaml,text/yaml" className="sr-only" onChange={(event) => {
                 const file = event.target.files?.[0];
-                if (file) importFile(file.name);
+                if (file) selectFile(file.name);
               }} />
             </label>
             {error ? (
@@ -138,7 +163,7 @@ export function ImportConfigurationDialog({
               <div className="mt-1 text-xs text-slate-500">点击后直接进入对应结果，便于评审全部状态。</div>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
                 {DEMO_SCENARIOS.map((item) => (
-                  <button key={item.value} type="button" className={cn("rounded-[6px] border px-3 py-2.5 text-left transition-transform hover:-translate-y-0.5", item.tone)} onClick={() => importFile(`${IMPORT_OBJECT_LABELS[objectType]}_${item.label}.yaml`, item.value)}>
+                  <button key={item.value} type="button" className={cn("rounded-[6px] border px-3 py-2.5 text-left transition-transform hover:-translate-y-0.5", item.tone)} onClick={() => selectFile(`${IMPORT_OBJECT_LABELS[objectType]}_${item.label}.yaml`, item.value)}>
                     <div className="text-sm font-semibold">{item.label}</div>
                     <div className="mt-1 text-xs opacity-75">{item.description}</div>
                   </button>
@@ -148,11 +173,38 @@ export function ImportConfigurationDialog({
           </div>
         ) : null}
 
+        {step === "confirm" ? (
+          <>
+            <div className="space-y-4 px-6 py-6">
+              <div className="flex items-center gap-3 rounded-[6px] border border-slate-200 bg-slate-50 px-4 py-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] bg-white text-blue-600"><FileCode2 className="h-5 w-5" /></span>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-slate-900">{selectedFileName}</div>
+                  <div className="mt-0.5 text-xs text-slate-500">文件校验通过，可以导入</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-[6px] border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                <div>
+                  <div className="text-sm font-semibold">当前草稿内容将被覆盖</div>
+                  <p className="mt-1 text-sm leading-6 text-amber-900/80">
+                    导入后，“{currentObjectName || "当前对象"}”草稿中的画布、基础配置和资源引用将替换为文件内容；已发布版本不受影响。此操作无法撤销。
+                  </p>
+                </div>
+              </div>
+            </div>
+            <DialogFooter className="border-t border-slate-100 bg-slate-50/70 px-6 py-4">
+              <Button type="button" variant="outline" className="rounded-[4px] border-slate-300 bg-white shadow-none" onClick={reset}>重新选择</Button>
+              <Button type="button" className="rounded-[4px] bg-blue-600 text-white shadow-none hover:bg-blue-700" onClick={() => executeImport(selectedFileName, selectedScenario)}>确认覆盖并导入</Button>
+            </DialogFooter>
+          </>
+        ) : null}
+
         {step === "processing" ? (
           <div className="flex min-h-[330px] flex-col items-center justify-center px-6 py-10 text-center">
             <span className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-blue-600"><Loader2 className="h-7 w-7 animate-spin" /></span>
-            <div className="mt-5 text-base font-semibold text-slate-900">正在校验并创建草稿</div>
-            <div className="mt-2 text-sm text-slate-500">完成后将自动进入草稿配置，无需再次确认。</div>
+            <div className="mt-5 text-base font-semibold text-slate-900">{mode === "overwrite" ? "正在导入配置" : "正在校验并创建草稿"}</div>
+            <div className="mt-2 text-sm text-slate-500">{mode === "overwrite" ? "正在使用文件内容更新当前草稿…" : "完成后将自动进入草稿配置，无需再次确认。"}</div>
           </div>
         ) : null}
 

@@ -16,6 +16,7 @@ import { getAgentById } from "@/lib/agent-data";
 import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBadge";
 import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 import { ImportDraftNotice, type ImportDraftResult } from "@/components/import-export/import-draft-notice";
+import { getPendingResources } from "@/lib/agent-import-export";
 import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
@@ -331,6 +332,12 @@ export default function AgentDetailPage() {
               objectName={displayName}
               sourceType={isPublished ? "published" : "draft"}
               sourceVersion={isPublished ? "V3" : undefined}
+              allowImport={!isPublished}
+              importDestinationHref={`/agent/${agentId}?source=import`}
+              onImported={(preview) => {
+                setImportResult(getPendingResources(preview).length > 0 ? "success_with_warnings" : "success");
+                toast.success("已用导入配置覆盖当前草稿");
+              }}
             />
           ) : null}
           <ProtectionStatusBadge

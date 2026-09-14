@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, ChevronDown, Download, FileDown, Loader2, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, ChevronDown, Download, FileDown, FileUp, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +25,8 @@ import {
   sanitizeExportFileName,
   type ImportObjectType,
 } from "@/lib/agent-import-export";
+import type { ImportPreview } from "@/lib/agent-import-export";
+import { ImportConfigurationDialog } from "@/components/import-export/import-configuration-dialog";
 import { cn } from "@/lib/utils";
 
 export function ExportConfigurationButton({
@@ -33,15 +35,22 @@ export function ExportConfigurationButton({
   sourceType,
   sourceVersion,
   className,
+  allowImport = false,
+  importDestinationHref,
+  onImported,
 }: {
   objectType: ImportObjectType;
   objectName: string;
   sourceType: "published" | "draft";
   sourceVersion?: string;
   className?: string;
+  allowImport?: boolean;
+  importDestinationHref?: string;
+  onImported?: (preview: ImportPreview) => void;
 }) {
   const [exporting, setExporting] = useState(false);
   const [failureOpen, setFailureOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const sourceLabel =
     sourceType === "published"
       ? ("最新发布版本 " + (sourceVersion ?? "")).trim()
@@ -81,12 +90,50 @@ export function ExportConfigurationButton({
 
   return (
     <>
-      <div
-        className={cn(
-          "inline-flex h-8 overflow-hidden rounded-[4px] border border-slate-300 bg-white text-slate-700 shadow-none",
-          className
-        )}
-      >
+      {allowImport && importDestinationHref ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              disabled={exporting}
+              aria-label="导入或导出配置"
+              title="导入或导出配置"
+              className={cn("h-8 w-8 rounded-[4px] border-slate-300 bg-white text-slate-600 shadow-none hover:bg-slate-50 hover:text-slate-900", className)}
+            >
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpDown className="h-4 w-4" />}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64 rounded-[6px] border-slate-200 p-1">
+            <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-slate-500">配置操作</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => setImportOpen(true)} className="rounded-[4px] px-3 py-2.5">
+              <FileUp className="h-4 w-4 text-blue-600" />
+              <div>
+                <div className="text-sm font-medium text-slate-800">导入配置</div>
+                <div className="mt-0.5 text-xs text-slate-500">上传文件并覆盖当前草稿</div>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={handleExport} className="rounded-[4px] px-3 py-2.5">
+              <FileDown className="h-4 w-4 text-slate-600" />
+              <div>
+                <div className="text-sm font-medium text-slate-800">导出配置</div>
+                <div className="mt-0.5 text-xs text-slate-500">下载{sourceLabel}的 YAML 文件</div>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-slate-500">原型状态</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={handleFailureDemo} className="rounded-[4px] px-3 py-2.5">
+              <AlertTriangle className="h-4 w-4 text-rose-600" />
+              <div>
+                <div className="text-sm font-medium text-slate-800">查看导出失败</div>
+                <div className="mt-0.5 text-xs text-slate-500">展示失败原因与重试操作</div>
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+      <div className={cn("inline-flex h-8 overflow-hidden rounded-[4px] border border-slate-300 bg-white text-slate-700 shadow-none", className)}>
         <Button
           type="button"
           variant="ghost"
@@ -134,6 +181,19 @@ export function ExportConfigurationButton({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      )}
+
+      {allowImport && importDestinationHref ? (
+        <ImportConfigurationDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          objectType={objectType}
+          destinationHref={importDestinationHref}
+          onImported={onImported}
+          mode="overwrite"
+          currentObjectName={objectName}
+        />
+      ) : null}
 
       <Dialog open={failureOpen} onOpenChange={setFailureOpen}>
         <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[520px]">

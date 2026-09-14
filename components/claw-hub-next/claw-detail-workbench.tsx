@@ -99,6 +99,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 import { ImportDraftNotice, type ImportDraftResult } from "@/components/import-export/import-draft-notice";
+import { getPendingResources } from "@/lib/agent-import-export";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -557,6 +558,7 @@ export function ClawDetailWorkbench({
   const [activeSection, setActiveSection] = useState<DetailSectionKey>("core");
   const [entityName, setEntityName] = useState(detail.overview.name);
   const [entityDescription, setEntityDescription] = useState(detail.overview.summary);
+  const [draftImportResult, setDraftImportResult] = useState<ImportDraftResult | null>(importResult);
   const [securityLevel, setSecurityLevel] = useState<ClawSecurityLevel>(
     detail.overview.securityLevel ?? "公开"
   );
@@ -1832,6 +1834,12 @@ export function ClawDetailWorkbench({
                 objectName={entityName || detail.overview.name}
                 sourceType={isPublished ? "published" : "draft"}
                 sourceVersion={isPublished ? detail.overview.version : undefined}
+                allowImport={!isPublished}
+                importDestinationHref={`/multi-agent/create?id=${detail.overview.id}`}
+                onImported={(preview) => {
+                  setDraftImportResult(getPendingResources(preview).length > 0 ? "success_with_warnings" : "success");
+                  toast.success("已用导入配置覆盖当前草稿");
+                }}
               />
             ) : null}
             <Button
@@ -1968,8 +1976,8 @@ export function ClawDetailWorkbench({
         </div>
       </section>
 
-      {isMultiAgentMode && importResult ? (
-        <ImportDraftNotice objectType="multi_agent" result={importResult} />
+      {isMultiAgentMode && draftImportResult ? (
+        <ImportDraftNotice objectType="multi_agent" result={draftImportResult} />
       ) : null}
 
       <Tabs
