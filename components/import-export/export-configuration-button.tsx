@@ -39,6 +39,8 @@ export function ExportConfigurationButton({
   importDestinationHref,
   onImported,
   display = "button",
+  disabled = false,
+  disabledTitle,
 }: {
   objectType: ImportObjectType;
   objectName: string;
@@ -49,6 +51,8 @@ export function ExportConfigurationButton({
   importDestinationHref?: string;
   onImported?: (preview: ImportPreview) => void;
   display?: "button" | "table-action";
+  disabled?: boolean;
+  disabledTitle?: string;
 }) {
   const [exporting, setExporting] = useState(false);
   const [failureOpen, setFailureOpen] = useState(false);
@@ -95,10 +99,10 @@ export function ExportConfigurationButton({
       {display === "table-action" ? (
         <button
           type="button"
-          disabled={exporting}
+          disabled={exporting || disabled}
           onClick={handleExport}
-          title={"导出" + sourceLabel}
-          className={cn("text-sm text-blue-600 hover:text-blue-700 disabled:cursor-wait disabled:text-slate-400", className)}
+          title={disabled ? disabledTitle : "导出" + sourceLabel}
+          className={cn("text-sm text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300", className)}
         >
           {exporting ? "导出中" : "导出"}
         </button>

@@ -389,15 +389,15 @@ export default function AgentPage() {
                         >
                           删除
                         </button>
-                        {!isAutonomous ? (
-                          <ExportConfigurationButton
-                            objectType="workflow_agent"
-                            objectName={agent.name}
-                            sourceType={agent.status === "已发布" ? "published" : "draft"}
-                            sourceVersion={agent.status === "已发布" ? "latest" : undefined}
-                            display="table-action"
-                          />
-                        ) : null}
+                        <ExportConfigurationButton
+                          objectType="workflow_agent"
+                          objectName={agent.name}
+                          sourceType={agent.status === "已发布" ? "published" : "draft"}
+                          sourceVersion={agent.status === "已发布" ? "latest" : undefined}
+                          display="table-action"
+                          disabled={isAutonomous}
+                          disabledTitle="自主规划智能体暂不支持导出"
+                        />
                       </div>
                     </TableCell>
                   </TableRow>
