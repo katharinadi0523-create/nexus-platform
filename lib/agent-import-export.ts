@@ -97,9 +97,21 @@ export function validateImportFile(fileName: string): string | null {
   return null;
 }
 
-export function buildImportPreview(objectType: ImportObjectType, fileName: string): ImportPreview {
+export function buildImportPreview(
+  objectType: ImportObjectType,
+  fileName: string,
+  includeWarnings = true
+): ImportPreview {
+  const fixture = OBJECT_FIXTURES[objectType];
   return {
-    ...OBJECT_FIXTURES[objectType],
+    ...fixture,
+    resources: includeWarnings
+      ? fixture.resources
+      : fixture.resources.map((resource) => ({
+          ...resource,
+          status: "matched" as const,
+          reason: undefined,
+        })),
     fileName,
     objectType,
   };
