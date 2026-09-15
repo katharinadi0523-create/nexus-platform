@@ -39,28 +39,27 @@ export function ExportConfigurationButton({
   importDestinationHref,
   onImported,
   display = "button",
+  allowExport = true,
   disabled = false,
   disabledTitle,
 }: {
   objectType: ImportObjectType;
   objectName: string;
-  sourceType: "published" | "draft";
+  sourceType: "published";
   sourceVersion?: string;
   className?: string;
   allowImport?: boolean;
   importDestinationHref?: string;
   onImported?: (preview: ImportPreview) => void;
   display?: "button" | "table-action";
+  allowExport?: boolean;
   disabled?: boolean;
   disabledTitle?: string;
 }) {
   const [exporting, setExporting] = useState(false);
   const [failureOpen, setFailureOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const sourceLabel =
-    sourceType === "published"
-      ? ("最新发布版本 " + (sourceVersion ?? "")).trim()
-      : "当前草稿";
+  const sourceLabel = ("最新发布版本 " + (sourceVersion ?? "")).trim();
 
   function downloadExport() {
     const yaml = buildExportYaml({ objectType, objectName, sourceType, sourceVersion });
@@ -130,22 +129,26 @@ export function ExportConfigurationButton({
                 <div className="mt-0.5 text-xs text-slate-500">上传文件并覆盖当前草稿</div>
               </div>
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={handleExport} className="rounded-[4px] px-3 py-2.5">
-              <FileDown className="h-4 w-4 text-slate-600" />
-              <div>
-                <div className="text-sm font-medium text-slate-800">导出配置</div>
-                <div className="mt-0.5 text-xs text-slate-500">下载{sourceLabel}的 YAML 文件</div>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-slate-500">原型状态</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={handleFailureDemo} className="rounded-[4px] px-3 py-2.5">
-              <AlertTriangle className="h-4 w-4 text-rose-600" />
-              <div>
-                <div className="text-sm font-medium text-slate-800">查看导出失败</div>
-                <div className="mt-0.5 text-xs text-slate-500">展示失败原因与重试操作</div>
-              </div>
-            </DropdownMenuItem>
+            {allowExport ? (
+              <>
+                <DropdownMenuItem onSelect={handleExport} className="rounded-[4px] px-3 py-2.5">
+                  <FileDown className="h-4 w-4 text-slate-600" />
+                  <div>
+                    <div className="text-sm font-medium text-slate-800">导出配置</div>
+                    <div className="mt-0.5 text-xs text-slate-500">下载{sourceLabel}的 YAML 文件</div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-slate-500">原型状态</DropdownMenuLabel>
+                <DropdownMenuItem onSelect={handleFailureDemo} className="rounded-[4px] px-3 py-2.5">
+                  <AlertTriangle className="h-4 w-4 text-rose-600" />
+                  <div>
+                    <div className="text-sm font-medium text-slate-800">查看导出失败</div>
+                    <div className="mt-0.5 text-xs text-slate-500">展示失败原因与重试操作</div>
+                  </div>
+                </DropdownMenuItem>
+              </>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
@@ -207,7 +210,6 @@ export function ExportConfigurationButton({
           destinationHref={importDestinationHref}
           onImported={onImported}
           mode="overwrite"
-          currentObjectName={objectName}
         />
       ) : null}
 

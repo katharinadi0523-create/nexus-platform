@@ -7,7 +7,6 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
-  FileUp,
   Plus,
   RefreshCw,
   Search,
@@ -19,7 +18,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -43,7 +41,7 @@ import {
   type SecurityLevel,
 } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
-import { ImportConfigurationDialog } from "@/components/import-export/import-configuration-dialog";
+import { ImportConfigurationButton } from "@/components/import-export/import-configuration-dialog";
 import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 
 interface Agent {
@@ -77,7 +75,6 @@ export default function AgentPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
-  const [importOpen, setImportOpen] = useState(false);
   const [agents, setAgents] = useState<Agent[]>(() =>
     getAllAgents().map(convertAgentProfileToAgent)
   );
@@ -174,6 +171,25 @@ export default function AgentPage() {
           </div>
 
           <div className="flex items-center justify-end gap-2">
+            <ImportConfigurationButton
+              objectType="workflow_agent"
+              destinationHref="/agent/flow-01?source=import"
+              onImported={(preview) => {
+                setAgents((current) => [
+                  {
+                    id: `imported-${Date.now()}`,
+                    name: preview.objectName,
+                    type: "工作流智能体",
+                    status: "未发布",
+                    desc: preview.description,
+                    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+                    securityLevel: "公开",
+                    approvalStatus: "none",
+                  },
+                  ...current,
+                ]);
+              }}
+            />
             <Button
               variant="outline"
               size="icon-sm"
@@ -210,41 +226,11 @@ export default function AgentPage() {
                     <div className="mt-0.5 text-xs text-slate-500">从空白画布开始创建</div>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => setImportOpen(true)} className="rounded-[4px] px-3 py-2">
-                  <FileUp className="h-4 w-4 text-blue-600" />
-                  <div>
-                    <div className="text-sm font-medium">导入工作流智能体</div>
-                    <div className="mt-0.5 text-xs text-slate-500">上传 YAML 并创建新草稿</div>
-                  </div>
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
       </div>
-
-      <ImportConfigurationDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        objectType="workflow_agent"
-        destinationHref="/agent/flow-01?source=import"
-        onImported={(preview) => {
-          setAgents((current) => [
-            {
-              id: `imported-${Date.now()}`,
-              name: preview.objectName,
-              type: "工作流智能体",
-              status: "未发布",
-              desc: preview.description,
-              updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-              securityLevel: "公开",
-              approvalStatus: "none",
-            },
-            ...current,
-          ]);
-        }}
-      />
 
       <section className="overflow-hidden rounded-[6px] border border-slate-200 bg-white">
         <Table className="min-w-[1180px]">
@@ -389,15 +375,23 @@ export default function AgentPage() {
                         >
                           删除
                         </button>
-                        <ExportConfigurationButton
-                          objectType="workflow_agent"
-                          objectName={agent.name}
-                          sourceType={agent.status === "已发布" ? "published" : "draft"}
-                          sourceVersion={agent.status === "已发布" ? "latest" : undefined}
-                          display="table-action"
-                          disabled={isAutonomous}
-                          disabledTitle="自主规划智能体暂不支持导出"
-                        />
+                        {isAutonomous ? (
+                          <ExportConfigurationButton
+                            objectType="workflow_agent"
+                            objectName={agent.name}
+                            sourceType="published"
+                            display="table-action"
+                            disabled
+                            disabledTitle="自主规划智能体暂不支持导出"
+                          />
+                        ) : agent.status === "已发布" ? (
+                          <ExportConfigurationButton
+                            objectType="workflow_agent"
+                            objectName={agent.name}
+                            sourceType="published"
+                            display="table-action"
+                          />
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>

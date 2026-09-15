@@ -9,7 +9,6 @@ import {
 } from "@/lib/mock/multi-agent-create";
 import { getPublishedMultiAgentById } from "@/lib/published-multi-agents";
 import type { ClawDetailData } from "@/lib/mock/claw-hub-next";
-import type { ImportDraftResult } from "@/components/import-export/import-draft-notice";
 
 function buildMultiAgentDetail(id: string | null): ClawDetailData {
   // 新建：空白初始态（无子智能体、主智能体提示词为空）
@@ -32,18 +31,6 @@ function buildMultiAgentDetail(id: string | null): ClawDetailData {
   const base = getMultiAgentCreateDetail();
   const published = getPublishedMultiAgentById(id);
   if (!published) {
-    if (id === "imported-industry-research") {
-      return {
-        ...base,
-        overview: {
-          ...base.overview,
-          id,
-          name: "行业研究协作组",
-          summary: "由主智能体调度检索、分析与报告生成三个子智能体。",
-          publishStatus: "未发布",
-        },
-      };
-    }
     return {
       ...base,
       overview: {
@@ -70,11 +57,6 @@ function buildMultiAgentDetail(id: string | null): ClawDetailData {
 function MultiAgentCreatePageContent() {
   const searchParams = useSearchParams();
   const agentId = searchParams.get("id");
-  const importResultParam = searchParams.get("importResult");
-  const importResult: ImportDraftResult | null =
-    importResultParam === "success" || importResultParam === "success_with_warnings"
-      ? importResultParam
-      : null;
   const [detail, setDetail] = useState<ClawDetailData | null>(null);
 
   useEffect(() => {
@@ -94,7 +76,7 @@ function MultiAgentCreatePageContent() {
     );
   }
 
-  return <MultiAgentDetailWorkbench key={workbenchKey} detail={detail} importResult={importResult} />;
+  return <MultiAgentDetailWorkbench key={workbenchKey} detail={detail} />;
 }
 
 /**

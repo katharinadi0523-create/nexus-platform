@@ -1,7 +1,6 @@
 "use client";
 
 import { ClawDetailWorkbench } from "@/components/claw-hub-next/claw-detail-workbench";
-import type { ImportDraftResult } from "@/components/import-export/import-draft-notice";
 import type { ClawDetailData } from "@/lib/mock/claw-hub-next";
 
 /**
@@ -10,10 +9,8 @@ import type { ClawDetailData } from "@/lib/mock/claw-hub-next";
  */
 export function MultiAgentDetailWorkbench({
   detail,
-  importResult,
 }: {
   detail: ClawDetailData;
-  importResult?: ImportDraftResult | null;
 }) {
   return (
     <ClawDetailWorkbench
@@ -21,7 +18,6 @@ export function MultiAgentDetailWorkbench({
       mode="multi-agent"
       backHref="/multi-agent"
       backAriaLabel="返回多智能体列表"
-      importResult={importResult}
     />
   );
 }

@@ -1,4 +1,4 @@
-export type ImportObjectType = "workflow_agent" | "workflow" | "multi_agent";
+export type ImportObjectType = "workflow_agent" | "workflow";
 
 export type ImportResourceStatus = "matched" | "missing" | "reauthorize";
 
@@ -25,7 +25,6 @@ export interface ImportPreview {
 export const IMPORT_OBJECT_LABELS: Record<ImportObjectType, string> = {
   workflow_agent: "工作流智能体",
   workflow: "工作流",
-  multi_agent: "多智能体",
 };
 
 const RESOURCE_FIXTURES: Record<ImportObjectType, ImportResourceItem[]> = {
@@ -40,12 +39,6 @@ const RESOURCE_FIXTURES: Record<ImportObjectType, ImportResourceItem[]> = {
     { id: "plugin-http", type: "插件", name: "HTTP 请求", status: "reauthorize", reason: "需要重新配置访问凭证" },
     { id: "kb-policy", type: "知识库", name: "售后政策知识库", status: "missing", reason: "当前环境未找到同名资源" },
     { id: "terminology-product", type: "术语库", name: "产品标准术语", status: "matched" },
-  ],
-  multi_agent: [
-    { id: "model-main", type: "模型", name: "Qwen3-235B", status: "matched" },
-    { id: "skill-research", type: "Skill", name: "深度调研", status: "matched" },
-    { id: "mcp-doc", type: "MCP", name: "内部文档检索", status: "reauthorize", reason: "连接凭证需要重新配置" },
-    { id: "kb-research", type: "知识库", name: "行业研究资料库", status: "missing", reason: "当前环境未找到同名资源" },
   ],
 };
 
@@ -75,19 +68,6 @@ const OBJECT_FIXTURES: Record<ImportObjectType, Omit<ImportPreview, "fileName" |
       { label: "关联资源", value: "4 项" },
     ],
     resources: RESOURCE_FIXTURES.workflow,
-  },
-  multi_agent: {
-    schemaVersion: "1.0",
-    objectTypeLabel: "多智能体",
-    objectName: "行业研究协作组",
-    description: "由主智能体调度检索、分析与报告生成三个子智能体。",
-    sourceLabel: "当前草稿",
-    configSummary: [
-      { label: "智能体", value: "1 个主智能体 · 3 个子智能体" },
-      { label: "协作关系", value: "4 条" },
-      { label: "关联资源", value: "4 项" },
-    ],
-    resources: RESOURCE_FIXTURES.multi_agent,
   },
 };
 
@@ -129,12 +109,10 @@ export function buildExportYaml({
 }: {
   objectType: ImportObjectType;
   objectName: string;
-  sourceType: "published" | "draft";
+  sourceType: "published";
   sourceVersion?: string;
 }) {
-  const versionLines = sourceType === "published"
-    ? `  version_id: ${sourceVersion ?? "latest"}\n  version_no: ${sourceVersion ?? "latest"}`
-    : "";
+  const versionLines = `  version_id: ${sourceVersion ?? "latest"}\n  version_no: ${sourceVersion ?? "latest"}`;
 
   return `schema_version: \"1.0\"\nobject:\n  type: ${objectType}\n  name: ${objectName}\n  description: Agent Foundry configuration export\nsource:\n  type: ${sourceType}\n${versionLines}\nconfig:\n  exported_for_prototype: true\nreferences:\n  models: []\n  knowledge_bases: []\n  plugins: []\n`;
 }

@@ -27,7 +27,7 @@ const DEMO_SCENARIOS: Array<{
 }> = [
   { value: "success", label: "完全成功", description: "直接进入完整草稿", tone: "border-emerald-200 bg-emerald-50/60 text-emerald-800" },
   { value: "success_with_warnings", label: "成功但有缺失", description: "在草稿中提示补配", tone: "border-amber-200 bg-amber-50/60 text-amber-800" },
-  { value: "failure", label: "导入失败", description: "留在此处说明原因", tone: "border-rose-200 bg-rose-50/60 text-rose-800" },
+  { value: "failure", label: "导入失败", description: "对象类型不支持", tone: "border-rose-200 bg-rose-50/60 text-rose-800" },
 ];
 
 export function ImportConfigurationDialog({
@@ -44,7 +44,6 @@ export function ImportConfigurationDialog({
   destinationHref: string;
   onImported?: (preview: ImportPreview) => void;
   mode?: "create" | "overwrite";
-  currentObjectName?: string;
 }) {
   const router = useRouter();
   const inputId = useId();
@@ -101,7 +100,9 @@ export function ImportConfigurationDialog({
   }
 
   const stepLabels = mode === "overwrite" ? OVERWRITE_STEP_LABELS : CREATE_STEP_LABELS;
-  const activeStepIndex = step === "upload" ? 0 : stepLabels.length - 1;
+  const activeStepIndex = step === "upload" && !(mode === "overwrite" && selectedFileName)
+    ? 0
+    : stepLabels.length - 1;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -110,7 +111,7 @@ export function ImportConfigurationDialog({
           <DialogTitle className="text-lg font-semibold text-slate-950">{mode === "overwrite" ? "导入配置" : `导入${IMPORT_OBJECT_LABELS[objectType]}`}</DialogTitle>
           <DialogDescription className="text-sm text-slate-500">
             {mode === "overwrite"
-              ? "上传配置文件并替换当前草稿，已发布版本不会受到影响。"
+              ? "仅支持 Agent Foundry 导出的 YAML 配置文件。"
               : "选择文件后将自动校验并创建新草稿，不会覆盖同名对象。"}
           </DialogDescription>
           <div className="flex items-center pt-3">
@@ -141,21 +142,6 @@ export function ImportConfigurationDialog({
                 <span>导入后将覆盖当前草稿配置，已发布版本不受影响。</span>
               </div>
             ) : null}
-            <label htmlFor={inputId} className={cn(
-              "flex cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed bg-slate-50/70 px-8 text-center transition-colors hover:border-blue-400 hover:bg-blue-50/40",
-              mode === "overwrite" ? "min-h-[160px]" : "min-h-[190px]",
-              error ? "border-rose-300" : "border-slate-300"
-            )}>
-              <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-[8px] bg-blue-50 text-blue-600"><UploadCloud className="h-6 w-6" /></span>
-              <span className="text-sm font-medium text-slate-900">点击选择，或将 YAML 文件拖到这里</span>
-              <span className="mt-2 text-xs leading-5 text-slate-500">
-                {mode === "overwrite" ? "选择文件后需确认覆盖，仅支持 .yaml / .yml 配置文件" : "选择后自动导入，仅支持 .yaml / .yml 配置文件"}
-              </span>
-              <input key={selectedFileName || "empty"} id={inputId} type="file" accept=".yaml,.yml,application/yaml,text/yaml" className="sr-only" onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) selectFile(file.name);
-              }} />
-            </label>
             {mode === "overwrite" && selectedFileName ? (
               <div className="flex items-center gap-3 rounded-[6px] border border-slate-200 bg-white px-4 py-3">
                 <FileCode2 className="h-5 w-5 shrink-0 text-blue-600" />
@@ -165,7 +151,23 @@ export function ImportConfigurationDialog({
                 </div>
                 <button type="button" className="text-xs text-blue-600 hover:text-blue-700" onClick={() => setSelectedFileName("")}>重新选择</button>
               </div>
-            ) : null}
+            ) : (
+              <label htmlFor={inputId} className={cn(
+                "flex cursor-pointer flex-col items-center justify-center rounded-[8px] border border-dashed bg-slate-50/70 px-8 text-center transition-colors hover:border-blue-400 hover:bg-blue-50/40",
+                mode === "overwrite" ? "min-h-[160px]" : "min-h-[190px]",
+                error ? "border-rose-300" : "border-slate-300"
+              )}>
+                <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-[8px] bg-blue-50 text-blue-600"><UploadCloud className="h-6 w-6" /></span>
+                <span className="text-sm font-medium text-slate-900">点击选择，或将 YAML 文件拖到这里</span>
+                <span className="mt-2 text-xs leading-5 text-slate-500">
+                  {mode === "overwrite" ? "选择文件后需确认覆盖，仅支持 .yaml / .yml 配置文件" : "选择后自动导入，仅支持 .yaml / .yml 配置文件"}
+                </span>
+                <input key={selectedFileName || "empty"} id={inputId} type="file" accept=".yaml,.yml,application/yaml,text/yaml" className="sr-only" onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) selectFile(file.name);
+                }} />
+              </label>
+            )}
             {error ? (
               <div className="flex items-start gap-2 rounded-[6px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
@@ -206,10 +208,10 @@ export function ImportConfigurationDialog({
               <div className="flex flex-col items-center text-center">
                 <span className="flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600"><XCircle className="h-7 w-7" /></span>
                 <div className="mt-4 text-lg font-semibold text-slate-950">导入失败</div>
-                <p className="mt-2 text-sm leading-6 text-slate-500">配置文件协议版本不受支持，未创建任何对象。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">配置文件中的对象类型不受支持，未创建任何对象。</p>
               </div>
               <div className="mt-6 rounded-[6px] border border-rose-200 bg-rose-50/50 p-4 text-sm text-rose-800">
-                文件 schema_version 为 0.7，当前环境支持 1.0。请重新导出配置文件后再试。
+                文件 object.type 为 multi_agent，本期仅支持 workflow_agent 和 workflow。
               </div>
             </div>
             <DialogFooter className="border-t border-slate-100 bg-slate-50/70 px-6 py-4">

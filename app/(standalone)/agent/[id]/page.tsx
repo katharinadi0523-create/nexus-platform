@@ -330,9 +330,10 @@ export default function AgentDetailPage() {
             <ExportConfigurationButton
               objectType="workflow_agent"
               objectName={displayName}
-              sourceType={isPublished ? "published" : "draft"}
-              sourceVersion={isPublished ? "V3" : undefined}
-              allowImport={!isPublished}
+              sourceType="published"
+              sourceVersion="V3"
+              allowImport
+              allowExport={isPublished}
               importDestinationHref={`/agent/${agentId}?source=import`}
               onImported={(preview) => {
                 setImportResult(getPendingResources(preview).length > 0 ? "success_with_warnings" : "success");

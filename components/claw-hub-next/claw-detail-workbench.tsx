@@ -97,9 +97,6 @@ import {
 } from "@/components/claw-hub-next/detail/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
-import { ImportDraftNotice, type ImportDraftResult } from "@/components/import-export/import-draft-notice";
-import { getPendingResources } from "@/lib/agent-import-export";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -542,7 +539,6 @@ export type ClawDetailWorkbenchProps = {
   mode?: ClawDetailWorkbenchMode;
   backHref?: string;
   backAriaLabel?: string;
-  importResult?: ImportDraftResult | null;
 };
 
 export function ClawDetailWorkbench({
@@ -550,7 +546,6 @@ export function ClawDetailWorkbench({
   mode = "claw",
   backHref = "/claw-hub-next",
   backAriaLabel = "返回 Claw 列表",
-  importResult = null,
 }: ClawDetailWorkbenchProps) {
   const isMultiAgentMode = mode === "multi-agent";
   const entityLabel = isMultiAgentMode ? "多智能体" : "Claw";
@@ -558,7 +553,6 @@ export function ClawDetailWorkbench({
   const [activeSection, setActiveSection] = useState<DetailSectionKey>("core");
   const [entityName, setEntityName] = useState(detail.overview.name);
   const [entityDescription, setEntityDescription] = useState(detail.overview.summary);
-  const [draftImportResult, setDraftImportResult] = useState<ImportDraftResult | null>(importResult);
   const [securityLevel, setSecurityLevel] = useState<ClawSecurityLevel>(
     detail.overview.securityLevel ?? "公开"
   );
@@ -1828,20 +1822,6 @@ export function ClawDetailWorkbench({
             </div>
           )}
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            {isMultiAgentMode ? (
-              <ExportConfigurationButton
-                objectType="multi_agent"
-                objectName={entityName || detail.overview.name}
-                sourceType={isPublished ? "published" : "draft"}
-                sourceVersion={isPublished ? detail.overview.version : undefined}
-                allowImport={!isPublished}
-                importDestinationHref={`/multi-agent/create?id=${detail.overview.id}`}
-                onImported={(preview) => {
-                  setDraftImportResult(getPendingResources(preview).length > 0 ? "success_with_warnings" : "success");
-                  toast.success("已用导入配置覆盖当前草稿");
-                }}
-              />
-            ) : null}
             <Button
               type="button"
               size="sm"
@@ -1975,10 +1955,6 @@ export function ClawDetailWorkbench({
           </div>
         </div>
       </section>
-
-      {isMultiAgentMode && draftImportResult ? (
-        <ImportDraftNotice objectType="multi_agent" result={draftImportResult} />
-      ) : null}
 
       <Tabs
         value={configSection}
