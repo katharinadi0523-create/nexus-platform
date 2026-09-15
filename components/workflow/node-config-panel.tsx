@@ -170,7 +170,7 @@ export function NodeConfigPanel({
               {selectedNode.data.importIssue.title}
             </div>
             <p className="mt-1.5 leading-6">
-              {selectedNode.data.importIssue.resourceName}：{selectedNode.data.importIssue.detail}。节点、位置和连线已保留，请在下方重新配置。
+              {selectedNode.data.importIssue.resourceName}：{selectedNode.data.importIssue.detail}。请在下方重新配置。
             </p>
           </div>
         ) : null}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useMemo, useRef, useEffect } from "react";
-import { Plus, Bug, AlertTriangle } from "lucide-react";
+import { Plus, Bug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import ReactFlow, {
@@ -354,12 +354,6 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
           >
             基本配置
           </Button>
-          {importResult === "success_with_warnings" ? (
-            <div className="ml-3 inline-flex items-center gap-2 rounded-[6px] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 shadow-sm">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <span>2 项资源待补配，异常节点已标记；节点位置与连线保持不变。</span>
-            </div>
-          ) : null}
         </div>
 
         {/* React Flow Canvas */}
