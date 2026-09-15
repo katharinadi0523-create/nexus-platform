@@ -113,7 +113,14 @@ export default function WorkflowPage() {
                 <TableCell className="px-4 py-3">
                   <div className="flex items-center gap-4">
                     <button type="button" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700" onClick={() => router.push(`/workflow/${row.id}`)}>编辑<ChevronRight className="h-3.5 w-3.5" /></button>
-                    {row.status === "已发布" ? <ExportConfigurationButton objectType="workflow" objectName={row.name} sourceType="published" display="table-action" /> : null}
+                    <ExportConfigurationButton
+                      objectType="workflow"
+                      objectName={row.name}
+                      sourceType="published"
+                      display="table-action"
+                      disabled={row.status !== "已发布"}
+                      disabledTitle="暂无已发布版本，请先发布后再导出"
+                    />
                   </div>
                 </TableCell>
               </TableRow>

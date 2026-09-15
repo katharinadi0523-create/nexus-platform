@@ -129,15 +129,22 @@ export function ExportConfigurationButton({
                 <div className="mt-0.5 text-xs text-slate-500">上传文件并覆盖当前草稿</div>
               </div>
             </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!allowExport}
+              onSelect={handleExport}
+              title={allowExport ? `导出${sourceLabel}` : "暂无已发布版本，请先发布后再导出"}
+              className="rounded-[4px] px-3 py-2.5 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-100"
+            >
+              <FileDown className={cn("h-4 w-4", allowExport ? "text-slate-600" : "text-slate-300")} />
+              <div>
+                <div className={cn("text-sm font-medium", allowExport ? "text-slate-800" : "text-slate-400")}>导出配置</div>
+                <div className={cn("mt-0.5 text-xs", allowExport ? "text-slate-500" : "text-slate-400")}>
+                  {allowExport ? `下载${sourceLabel}的 YAML 文件` : "暂无已发布版本，请先发布后再导出"}
+                </div>
+              </div>
+            </DropdownMenuItem>
             {allowExport ? (
               <>
-                <DropdownMenuItem onSelect={handleExport} className="rounded-[4px] px-3 py-2.5">
-                  <FileDown className="h-4 w-4 text-slate-600" />
-                  <div>
-                    <div className="text-sm font-medium text-slate-800">导出配置</div>
-                    <div className="mt-0.5 text-xs text-slate-500">下载{sourceLabel}的 YAML 文件</div>
-                  </div>
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-slate-500">原型状态</DropdownMenuLabel>
                 <DropdownMenuItem onSelect={handleFailureDemo} className="rounded-[4px] px-3 py-2.5">

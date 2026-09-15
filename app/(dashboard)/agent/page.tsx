@@ -384,14 +384,16 @@ export default function AgentPage() {
                             disabled
                             disabledTitle="自主规划智能体暂不支持导出"
                           />
-                        ) : agent.status === "已发布" ? (
+                        ) : (
                           <ExportConfigurationButton
                             objectType="workflow_agent"
                             objectName={agent.name}
                             sourceType="published"
                             display="table-action"
+                            disabled={agent.status !== "已发布"}
+                            disabledTitle="暂无已发布版本，请先发布后再导出"
                           />
-                        ) : null}
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
