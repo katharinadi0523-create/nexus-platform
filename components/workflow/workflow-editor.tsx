@@ -32,6 +32,7 @@ import { IntentRecognizeNode } from "./nodes/intent-recognize-node";
 import { CodeNode } from "./nodes/code-node";
 import { GenericNode } from "./nodes/generic-node";
 import { MCPNode } from "./nodes/mcp-node";
+import { WorkflowReferenceNode } from "./nodes/workflow-reference-node";
 import { NodeConfigPanel } from "./node-config-panel";
 import { NodeLibraryMenu } from "./node-library-menu";
 import { BasicConfigSheet } from "./basic-config-sheet";
@@ -63,6 +64,7 @@ const nodeTypes = {
   "intent-recognize": IntentRecognizeNode,
   code: CodeNode,
   mcp: MCPNode,
+  "workflow-ref": WorkflowReferenceNode,
   api: GenericNode,
   message: GenericNode,
   "object-query": ObjectQueryNode,
@@ -137,7 +139,14 @@ const importedPrototypeNodes: Node[] = [
     id: "import-classify",
     type: "llm",
     position: { x: 360, y: 260 },
-    data: { description: "问题分类", outputVariables: [{ name: "category", type: "string" }] },
+    data: {
+      description: "问题分类",
+      model: "DeepSeek-V3",
+      modelParams: { temperature: 0.2, max_tokens: 1024 },
+      prompt: "判断用户问题所属的售后类别，并输出分类结果。",
+      inputVariables: [{ name: "prompt", type: "string", value: "接收售后问题/query" }],
+      outputVariables: [{ name: "category", type: "string" }],
+    },
   },
   {
     id: "import-knowledge",
@@ -158,18 +167,39 @@ const importedPrototypeNodes: Node[] = [
   {
     id: "import-reply",
     type: "llm",
-    position: { x: 1040, y: 260 },
-    data: { description: "生成处理回复", outputVariables: [{ name: "text", type: "string" }] },
+    position: { x: 1060, y: 360 },
+    data: {
+      description: "生成处理回复",
+      model: "DeepSeek-V3",
+      modelParams: { temperature: 0.7, max_tokens: 2048 },
+      prompt: "结合政策检索结果和工单结果，生成面向用户的处理回复。",
+      inputVariables: [{ name: "prompt", type: "string", value: "接收售后问题/query" }],
+      outputVariables: [{ name: "text", type: "string" }],
+    },
   },
-  { id: "import-end", type: "end", position: { x: 1380, y: 260 }, data: { description: "返回处理结果" } },
+  {
+    id: "import-workflow",
+    type: "workflow-ref",
+    position: { x: 700, y: 780 },
+    data: {
+      description: "执行退款审批",
+      workflowId: "workflow-refund",
+      workflowName: "退款审批流程",
+      inputVariables: [{ name: "request", type: "object", value: "问题分类/category" }],
+      outputVariables: [{ name: "approvalResult", type: "object" }],
+    },
+  },
+  { id: "import-end", type: "end", position: { x: 1400, y: 360 }, data: { description: "返回处理结果" } },
 ];
 
 const importedPrototypeEdges: Edge[] = [
   { id: "import-e1", source: "import-start", target: "import-classify", type: "smoothstep", animated: true },
   { id: "import-e2", source: "import-classify", target: "import-knowledge", type: "smoothstep", animated: true },
   { id: "import-e3", source: "import-classify", target: "import-plugin", type: "smoothstep", animated: true },
+  { id: "import-e3-workflow", source: "import-classify", target: "import-workflow", type: "smoothstep", animated: true },
   { id: "import-e4", source: "import-knowledge", target: "import-reply", type: "smoothstep", animated: true },
   { id: "import-e5", source: "import-plugin", target: "import-reply", type: "smoothstep", animated: true },
+  { id: "import-e5-workflow", source: "import-workflow", target: "import-reply", type: "smoothstep", animated: true },
   { id: "import-e6", source: "import-reply", target: "import-end", type: "smoothstep", animated: true },
 ];
 
@@ -178,9 +208,19 @@ function buildImportedPrototypeNodes(objectType: ImportObjectType, result: "succ
   const pendingIds = new Set(getPendingResources(preview).map((resource) => resource.id));
   const knowledgeResource = preview.resources.find((resource) => resource.type === "知识库");
   const pluginResource = preview.resources.find((resource) => resource.type === "插件");
+  const modelResource = preview.resources.find((resource) => resource.type === "模型");
+  const workflowResource = preview.resources.find((resource) => resource.type === "工作流");
 
   return importedPrototypeNodes.map((node) => {
-    const resource = node.type === "knowledge" ? knowledgeResource : node.type === "mcp" ? pluginResource : undefined;
+    const resource = node.type === "knowledge"
+      ? knowledgeResource
+      : node.type === "mcp"
+        ? pluginResource
+        : node.type === "llm" && node.id === "import-classify"
+          ? modelResource
+          : node.type === "workflow-ref"
+            ? workflowResource
+          : undefined;
     if (!resource) return { ...node, data: { ...node.data } };
 
     return {
@@ -189,12 +229,24 @@ function buildImportedPrototypeNodes(objectType: ImportObjectType, result: "succ
         ...node.data,
         ...(node.type === "knowledge" ? { knowledgeBaseName: resource.name } : {}),
         ...(node.type === "mcp"
-          ? { selectedMCP: { id: resource.id, name: resource.name, description: "由导入文件保留的原资源引用" } }
+          ? { selectedMCP: { id: resource.id, name: resource.name, description: "用于查询与创建售后工单" } }
+          : {}),
+        ...(node.type === "llm" ? { model: pendingIds.has(resource.id) ? "" : resource.name } : {}),
+        ...(node.type === "workflow-ref"
+          ? pendingIds.has(resource.id)
+            ? { workflowId: "", workflowName: "", inputVariables: [], outputVariables: [] }
+            : { workflowId: resource.id, workflowName: resource.name }
           : {}),
         ...(pendingIds.has(resource.id)
           ? {
               importIssue: {
-                title: resource.status === "missing" ? `${resource.type}待关联` : `${resource.type}待鉴权`,
+                title: resource.type === "模型"
+                  ? "模型服务不可用"
+                  : resource.type === "工作流"
+                    ? "原工作流不可用"
+                  : resource.status === "missing"
+                    ? `${resource.type}待关联`
+                    : `${resource.type}待鉴权`,
                 resourceName: resource.name,
                 detail: resource.reason ?? "关联资源需要重新配置",
               },
@@ -261,7 +313,9 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
           if (node.id !== nodeId) return node;
           const nextData = { ...node.data, ...data };
           const resourceReconfigured = (node.type === "knowledge" && nextData.knowledgeBaseId)
-            || (node.type === "mcp" && nextData.selectedMCP);
+            || (node.type === "mcp" && nextData.selectedMCP)
+            || (node.type === "llm" && nextData.model)
+            || (node.type === "workflow-ref" && nextData.workflowId);
           if (resourceReconfigured) delete nextData.importIssue;
           return { ...node, data: nextData };
         })
@@ -392,6 +446,8 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
                   case "data-query":
                   case "data-visualize":
                     return "#a855f7";
+                  case "workflow-ref":
+                    return "#0ea5e9";
                   case "branch":
                   case "code":
                     return "#f97316";

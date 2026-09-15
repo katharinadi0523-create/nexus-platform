@@ -314,7 +314,7 @@ export function ModelSelector({
         >
           <span className="flex min-w-0 items-center gap-2">
             {getModelIcon(currentModel)}
-            <span className="truncate font-medium">{currentModel}</span>
+            <span className={cn("truncate font-medium", !currentModel && "text-slate-400")}>{currentModel || "请选择模型"}</span>
           </span>
           <ChevronDown className="w-4 h-4 text-slate-500" />
         </button>

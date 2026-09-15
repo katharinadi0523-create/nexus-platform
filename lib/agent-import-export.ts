@@ -29,15 +29,16 @@ export const IMPORT_OBJECT_LABELS: Record<ImportObjectType, string> = {
 
 const RESOURCE_FIXTURES: Record<ImportObjectType, ImportResourceItem[]> = {
   workflow_agent: [
-    { id: "model-qwen", type: "模型", name: "Qwen3-32B", status: "matched" },
+    { id: "model-qwen", type: "模型", name: "Qwen3-32B", status: "missing", reason: "当前环境未提供该模型服务" },
     { id: "kb-customer", type: "知识库", name: "企业客服知识库", status: "missing", reason: "当前环境未找到同名资源" },
     { id: "plugin-ticket", type: "插件", name: "工单中心", status: "reauthorize", reason: "凭证未随配置文件导入" },
-    { id: "workflow-route", type: "工作流", name: "意图识别与分流", status: "matched" },
+    { id: "workflow-route", type: "工作流", name: "意图识别与分流", status: "missing", reason: "原工作流版本已不可用" },
   ],
   workflow: [
-    { id: "model-deepseek", type: "模型", name: "DeepSeek-V3", status: "matched" },
+    { id: "model-deepseek", type: "模型", name: "DeepSeek-V3", status: "missing", reason: "当前环境未提供该模型服务" },
     { id: "plugin-http", type: "插件", name: "HTTP 请求", status: "reauthorize", reason: "需要重新配置访问凭证" },
     { id: "kb-policy", type: "知识库", name: "售后政策知识库", status: "missing", reason: "当前环境未找到同名资源" },
+    { id: "workflow-refund", type: "工作流", name: "退款审批流程", status: "missing", reason: "原工作流版本已不可用" },
     { id: "terminology-product", type: "术语库", name: "产品标准术语", status: "matched" },
   ],
 };
@@ -52,7 +53,7 @@ const OBJECT_FIXTURES: Record<ImportObjectType, Omit<ImportPreview, "fileName" |
     configSummary: [
       { label: "画布", value: "8 个节点 · 9 条连线" },
       { label: "基础配置", value: "开场白 · 推荐问题 · 3 轮上下文" },
-      { label: "关联资源", value: "4 项" },
+      { label: "关联资源", value: "5 项" },
     ],
     resources: RESOURCE_FIXTURES.workflow_agent,
   },

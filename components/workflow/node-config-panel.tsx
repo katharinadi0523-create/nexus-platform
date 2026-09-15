@@ -16,6 +16,7 @@ import { BranchNodeConfig } from "./configs/branch-node-config";
 import { IntentRecognizeNodeConfig } from "./configs/intent-recognize-node-config";
 import { CodeNodeConfig } from "./configs/code-node-config";
 import { MCPNodeConfig } from "./configs/mcp-node-config";
+import { WorkflowReferenceNodeConfig } from "./configs/workflow-reference-node-config";
 import { cn } from "@/lib/utils";
 
 interface NodeConfigPanelProps {
@@ -56,6 +57,8 @@ const getNodeIcon = (type: string | undefined) => {
       return Code;
     case "mcp":
       return Package;
+    case "workflow-ref":
+      return GitBranch;
     default:
       return Play;
   }
@@ -91,6 +94,8 @@ const getNodeLabel = (type: string | undefined) => {
       return "代码";
     case "mcp":
       return "MCP";
+    case "workflow-ref":
+      return "工作流";
     default:
       return "节点";
   }
@@ -123,6 +128,8 @@ const getNodeColor = (type: string | undefined) => {
       return "text-orange-600";
     case "mcp":
       return "text-green-600";
+    case "workflow-ref":
+      return "text-sky-600";
     default:
       return "text-slate-600";
   }
@@ -292,6 +299,12 @@ export function NodeConfigPanel({
             currentNodeId={selectedNode.id}
             nodes={nodes}
             edges={edges}
+          />
+        )}
+        {selectedNode.type === "workflow-ref" && (
+          <WorkflowReferenceNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
           />
         )}
       </div>
