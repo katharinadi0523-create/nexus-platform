@@ -177,6 +177,7 @@ export default function AgentDetailPage() {
     agentProfile?.securityLevel ?? "公开"
   );
   const [importResult, setImportResult] = useState<ImportDraftResult | null>(null);
+  const [importOperation, setImportOperation] = useState<"create" | "overwrite">("overwrite");
 
   const isPublished = publishStatus === "已发布";
 
@@ -196,6 +197,7 @@ export default function AgentDetailPage() {
     const result = new URLSearchParams(window.location.search).get("importResult");
     if (result !== "success" && result !== "success_with_warnings") return;
     setImportResult(result);
+    setImportOperation(new URLSearchParams(window.location.search).get("importMode") === "overwrite" ? "overwrite" : "create");
     setDisplayName("智能客服分流助手");
     setPublishStatus("未发布");
   }, []);
@@ -337,6 +339,7 @@ export default function AgentDetailPage() {
               importDestinationHref={`/agent/${agentId}?source=import`}
               onImported={(preview) => {
                 setImportResult(getPendingResources(preview).length > 0 ? "success_with_warnings" : "success");
+                setImportOperation("overwrite");
                 toast.success("已用导入配置覆盖当前草稿");
               }}
             />
@@ -358,12 +361,12 @@ export default function AgentDetailPage() {
         </div>
       </header>
 
-      {importResult ? <ImportDraftNotice objectType="workflow_agent" result={importResult} /> : null}
+      {importResult ? <ImportDraftNotice objectType="workflow_agent" result={importResult} operation={importOperation} /> : null}
 
       <main className="flex min-h-0 flex-1 overflow-hidden">
         {activeTab === "config" ? (
           isWorkflow ? (
-            <WorkflowEditor agentId={agentId} />
+            <WorkflowEditor agentId={agentId} importResult={importResult} importObjectType="workflow_agent" />
           ) : (
             <AutonomousEditor
               agentId={agentId}

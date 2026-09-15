@@ -15,7 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type ImportStep = "upload" | "processing" | "failure";
-type ImportDemoScenario = "success" | "success_with_warnings" | "failure";
+type ImportDemoScenario = "success" | "success_with_warnings" | "validation_failure" | "creation_failure";
 
 const CREATE_STEP_LABELS = ["选择文件", "创建草稿"];
 const OVERWRITE_STEP_LABELS = ["选择文件", "覆盖草稿"];
@@ -25,9 +25,10 @@ const DEMO_SCENARIOS: Array<{
   description: string;
   tone: string;
 }> = [
-  { value: "success", label: "完全成功", description: "直接进入完整草稿", tone: "border-emerald-200 bg-emerald-50/60 text-emerald-800" },
-  { value: "success_with_warnings", label: "成功但有缺失", description: "在草稿中提示补配", tone: "border-amber-200 bg-amber-50/60 text-amber-800" },
-  { value: "failure", label: "导入失败", description: "对象类型不支持", tone: "border-rose-200 bg-rose-50/60 text-rose-800" },
+  { value: "success", label: "导入成功", description: "创建草稿并进入编辑页", tone: "border-emerald-200 bg-emerald-50/60 text-emerald-800" },
+  { value: "success_with_warnings", label: "成功，有待补配资源", description: "保留节点并标记异常", tone: "border-amber-200 bg-amber-50/60 text-amber-800" },
+  { value: "validation_failure", label: "文件校验失败", description: "提示原因，不创建对象", tone: "border-rose-200 bg-rose-50/60 text-rose-800" },
+  { value: "creation_failure", label: "对象创建失败", description: "提示原因，不创建对象", tone: "border-rose-200 bg-rose-50/60 text-rose-800" },
 ];
 
 export function ImportConfigurationDialog({
@@ -70,14 +71,14 @@ export function ImportConfigurationDialog({
     if (!nextOpen) timerRef.current = setTimeout(reset, 180);
   }
 
-  function draftHref(result: Exclude<ImportDemoScenario, "failure">) {
-    return `${destinationHref}${destinationHref.includes("?") ? "&" : "?"}importResult=${result}`;
+  function draftHref(result: "success" | "success_with_warnings") {
+    return `${destinationHref}${destinationHref.includes("?") ? "&" : "?"}importResult=${result}&importMode=${mode}`;
   }
 
   function executeImport(fileName: string, scenario: ImportDemoScenario) {
     setStep("processing");
     timerRef.current = setTimeout(() => {
-      if (scenario === "failure") {
+      if (scenario === "validation_failure" || scenario === "creation_failure") {
         setStep("failure");
         return;
       }
@@ -95,7 +96,7 @@ export function ImportConfigurationDialog({
     if (validationError) return;
     setSelectedFileName(fileName);
     setSelectedScenario(scenario);
-    if (mode === "overwrite" && scenario !== "failure") return;
+    if (mode === "overwrite" && scenario !== "validation_failure" && scenario !== "creation_failure") return;
     executeImport(fileName, scenario);
   }
 
@@ -170,13 +171,14 @@ export function ImportConfigurationDialog({
             )}
             {error ? (
               <div className="flex items-start gap-2 rounded-[6px] border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{error}</span>
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span><strong className="font-semibold">导入失败：</strong>{error} 未创建任何对象。</span>
               </div>
             ) : null}
             {mode === "create" ? <section className="rounded-[6px] border border-slate-200 bg-white p-4">
               <div className="text-sm font-medium text-slate-800">原型场景</div>
               <div className="mt-1 text-xs text-slate-500">点击后直接进入对应结果，便于评审全部状态。</div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {DEMO_SCENARIOS.map((item) => (
                   <button key={item.value} type="button" className={cn("rounded-[6px] border px-3 py-2.5 text-left transition-transform hover:-translate-y-0.5", item.tone)} onClick={() => selectFile(`${IMPORT_OBJECT_LABELS[objectType]}_${item.label}.yaml`, item.value)}>
                     <div className="text-sm font-semibold">{item.label}</div>
@@ -208,10 +210,16 @@ export function ImportConfigurationDialog({
               <div className="flex flex-col items-center text-center">
                 <span className="flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600"><XCircle className="h-7 w-7" /></span>
                 <div className="mt-4 text-lg font-semibold text-slate-950">导入失败</div>
-                <p className="mt-2 text-sm leading-6 text-slate-500">配置文件中的对象类型不受支持，未创建任何对象。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  {selectedScenario === "validation_failure"
+                    ? "文件校验未通过，未创建任何对象。"
+                    : "文件校验已通过，但草稿创建失败，未创建任何对象。"}
+                </p>
               </div>
               <div className="mt-6 rounded-[6px] border border-rose-200 bg-rose-50/50 p-4 text-sm text-rose-800">
-                文件 object.type 为 multi_agent，本期仅支持 workflow_agent 和 workflow。
+                {selectedScenario === "validation_failure"
+                  ? "文件内容解析失败：第 18 行 YAML 缩进错误，请修正文件后重新导入。"
+                  : "对象创建失败：系统未能保存草稿，请稍后重试（错误码：AF-IMP-5001）。"}
               </div>
             </div>
             <DialogFooter className="border-t border-slate-100 bg-slate-50/70 px-6 py-4">

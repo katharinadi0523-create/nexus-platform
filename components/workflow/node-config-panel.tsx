@@ -1,7 +1,7 @@
 "use client";
 
 import { Node, Edge } from "reactflow";
-import { X, Play, StopCircle, Sparkles, BookOpen, Network, Table, Filter, Database, BarChart3, Bot, GitBranch, Eye, Code, Package } from "lucide-react";
+import { X, Play, StopCircle, Sparkles, BookOpen, Network, Table, Filter, Database, BarChart3, Bot, GitBranch, Eye, Code, Package, AlertTriangle } from "lucide-react";
 import { StartNodeConfig } from "./configs/start-node-config";
 import { LLMNodeConfig } from "./configs/llm-node-config";
 import { KnowledgeNodeConfig } from "./configs/knowledge-node-config";
@@ -163,6 +163,17 @@ export function NodeConfigPanel({
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-4">
+        {selectedNode.data?.importIssue ? (
+          <div className="mb-4 rounded-[6px] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <div className="flex items-center gap-2 font-semibold">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              {selectedNode.data.importIssue.title}
+            </div>
+            <p className="mt-1.5 leading-6">
+              {selectedNode.data.importIssue.resourceName}：{selectedNode.data.importIssue.detail}。节点、位置和连线已保留，请在下方重新配置。
+            </p>
+          </div>
+        ) : null}
         {selectedNode.type === "start" && (
           <StartNodeConfig
             nodeData={selectedNode.data}

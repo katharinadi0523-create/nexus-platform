@@ -28,6 +28,11 @@ export default function WorkflowDetailPage() {
   const queryImportResult: ImportDraftResult | null = resultParam === "success" || resultParam === "success_with_warnings" ? resultParam : null;
   const [runtimeImportResult, setRuntimeImportResult] = useState<ImportDraftResult | null>(null);
   const importResult = runtimeImportResult ?? queryImportResult;
+  const importOperation = runtimeImportResult
+    ? "overwrite"
+    : searchParams.get("importMode") === "overwrite"
+      ? "overwrite"
+      : "create";
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
@@ -64,10 +69,10 @@ export default function WorkflowDetailPage() {
         </div>
       </header>
 
-      {importResult ? <ImportDraftNotice objectType="workflow" result={importResult} /> : null}
+      {importResult ? <ImportDraftNotice objectType="workflow" result={importResult} operation={importOperation} /> : null}
 
       <main className="min-h-0 flex-1 overflow-hidden">
-        <WorkflowEditor agentId={workflowId} />
+        <WorkflowEditor agentId={workflowId} importResult={importResult} importObjectType="workflow" />
       </main>
     </div>
   );

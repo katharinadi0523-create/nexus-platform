@@ -5,6 +5,7 @@ import { BookOpen } from "lucide-react";
 import { BaseNode } from "./base-node";
 
 export function KnowledgeNode(props: NodeProps) {
+  const knowledgeBaseName = props.data?.knowledgeBaseName || "图片提取测试";
   return (
     <BaseNode
       icon={BookOpen}
@@ -19,7 +20,7 @@ export function KnowledgeNode(props: NodeProps) {
         <div className="space-y-1.5">
           <div className="text-xs font-medium text-slate-600 mb-1.5">知识库</div>
           <div className="bg-slate-50/50 rounded px-2 py-1.5">
-            <div className="text-xs text-slate-700">图片提取测试</div>
+            <div className="text-xs text-slate-700">{knowledgeBaseName}</div>
           </div>
         </div>
 

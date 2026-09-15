@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useMemo, useRef, useEffect } from "react";
-import { Plus, Play, Bug } from "lucide-react";
+import { Plus, Bug, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import ReactFlow, {
@@ -38,9 +38,12 @@ import { BasicConfigSheet } from "./basic-config-sheet";
 import { executeWorkflow, FlowRuntimeResult } from "./workflow-runner";
 import { WorkflowResultPanel } from "./workflow-result-panel";
 import { getWorkflowByAgentId } from "@/lib/mock/workflow-data";
+import { buildImportPreview, getPendingResources, type ImportObjectType } from "@/lib/agent-import-export";
 
 interface WorkflowEditorProps {
   agentId: string;
+  importResult?: "success" | "success_with_warnings" | null;
+  importObjectType?: ImportObjectType;
 }
 
 // 定义节点类型
@@ -128,11 +131,85 @@ const initialEdges: Edge[] = [
   },
 ];
 
-export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
+const importedPrototypeNodes: Node[] = [
+  { id: "import-start", type: "start", position: { x: 40, y: 260 }, data: { description: "接收售后问题" } },
+  {
+    id: "import-classify",
+    type: "llm",
+    position: { x: 360, y: 260 },
+    data: { description: "问题分类", outputVariables: [{ name: "category", type: "string" }] },
+  },
+  {
+    id: "import-knowledge",
+    type: "knowledge",
+    position: { x: 700, y: 80 },
+    data: { description: "检索售后政策", inputVariables: [{ name: "query", value: "问题分类/category" }] },
+  },
+  {
+    id: "import-plugin",
+    type: "mcp",
+    position: { x: 700, y: 430 },
+    data: {
+      description: "查询并创建工单",
+      inputVariables: [{ name: "category", value: "问题分类/category", required: true }],
+      outputVariables: [{ name: "result", type: "object" }],
+    },
+  },
+  {
+    id: "import-reply",
+    type: "llm",
+    position: { x: 1040, y: 260 },
+    data: { description: "生成处理回复", outputVariables: [{ name: "text", type: "string" }] },
+  },
+  { id: "import-end", type: "end", position: { x: 1380, y: 260 }, data: { description: "返回处理结果" } },
+];
+
+const importedPrototypeEdges: Edge[] = [
+  { id: "import-e1", source: "import-start", target: "import-classify", type: "smoothstep", animated: true },
+  { id: "import-e2", source: "import-classify", target: "import-knowledge", type: "smoothstep", animated: true },
+  { id: "import-e3", source: "import-classify", target: "import-plugin", type: "smoothstep", animated: true },
+  { id: "import-e4", source: "import-knowledge", target: "import-reply", type: "smoothstep", animated: true },
+  { id: "import-e5", source: "import-plugin", target: "import-reply", type: "smoothstep", animated: true },
+  { id: "import-e6", source: "import-reply", target: "import-end", type: "smoothstep", animated: true },
+];
+
+function buildImportedPrototypeNodes(objectType: ImportObjectType, result: "success" | "success_with_warnings") {
+  const preview = buildImportPreview(objectType, "imported.yaml", result === "success_with_warnings");
+  const pendingIds = new Set(getPendingResources(preview).map((resource) => resource.id));
+  const knowledgeResource = preview.resources.find((resource) => resource.type === "知识库");
+  const pluginResource = preview.resources.find((resource) => resource.type === "插件");
+
+  return importedPrototypeNodes.map((node) => {
+    const resource = node.type === "knowledge" ? knowledgeResource : node.type === "mcp" ? pluginResource : undefined;
+    if (!resource) return { ...node, data: { ...node.data } };
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        ...(node.type === "knowledge" ? { knowledgeBaseName: resource.name } : {}),
+        ...(node.type === "mcp"
+          ? { selectedMCP: { id: resource.id, name: resource.name, description: "由导入文件保留的原资源引用" } }
+          : {}),
+        ...(pendingIds.has(resource.id)
+          ? {
+              importIssue: {
+                title: resource.status === "missing" ? `${resource.type}待关联` : `${resource.type}待鉴权`,
+                resourceName: resource.name,
+                detail: resource.reason ?? "关联资源需要重新配置",
+              },
+            }
+          : {}),
+      },
+    };
+  });
+}
+
+export function WorkflowEditor({ agentId, importResult = null, importObjectType = "workflow_agent" }: WorkflowEditorProps) {
   // 根据 agentId 加载工作流数据，如果没有则使用默认值
   const workflowData = agentId ? getWorkflowByAgentId(agentId) : null;
-  const defaultNodes = workflowData?.nodes || initialNodes;
-  const defaultEdges = workflowData?.edges || initialEdges;
+  const defaultNodes = importResult ? buildImportedPrototypeNodes(importObjectType, importResult) : workflowData?.nodes || initialNodes;
+  const defaultEdges = importResult ? importedPrototypeEdges : workflowData?.edges || initialEdges;
 
   const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(defaultEdges);
@@ -141,17 +218,21 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
   const [basicConfigOpen, setBasicConfigOpen] = useState(false);
   const [runResult, setRunResult] = useState<FlowRuntimeResult | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
-  const [runResultOpen, setRunResultOpen] = useState(false);
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
 
   // 当 agentId 变化时，重新加载工作流数据
   useEffect(() => {
+    if (importResult) {
+      setNodes(buildImportedPrototypeNodes(importObjectType, importResult));
+      setEdges(importedPrototypeEdges);
+      return;
+    }
     const newWorkflowData = agentId ? getWorkflowByAgentId(agentId) : null;
     if (newWorkflowData) {
       setNodes(newWorkflowData.nodes);
       setEdges(newWorkflowData.edges);
     }
-  }, [agentId, setNodes, setEdges]);
+  }, [agentId, importObjectType, importResult, setNodes, setEdges]);
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId) || null,
@@ -176,9 +257,14 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
   const handleUpdateNode = useCallback(
     (nodeId: string, data: any) => {
       setNodes((nds) =>
-        nds.map((node) =>
-          node.id === nodeId ? { ...node, data: { ...node.data, ...data } } : node
-        )
+        nds.map((node) => {
+          if (node.id !== nodeId) return node;
+          const nextData = { ...node.data, ...data };
+          const resourceReconfigured = (node.type === "knowledge" && nextData.knowledgeBaseId)
+            || (node.type === "mcp" && nextData.selectedMCP);
+          if (resourceReconfigured) delete nextData.importIssue;
+          return { ...node, data: nextData };
+        })
       );
     },
     [setNodes]
@@ -212,7 +298,6 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
 
   const handleRun = useCallback(async () => {
     setIsExecuting(true);
-    setRunResultOpen(true);
     setRunResult(null); // 清空之前的结果
     
     try {
@@ -269,6 +354,12 @@ export function WorkflowEditor({ agentId }: WorkflowEditorProps) {
           >
             基本配置
           </Button>
+          {importResult === "success_with_warnings" ? (
+            <div className="ml-3 inline-flex items-center gap-2 rounded-[6px] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 shadow-sm">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <span>2 项资源待补配，异常节点已标记；节点位置与连线保持不变。</span>
+            </div>
+          ) : null}
         </div>
 
         {/* React Flow Canvas */}
