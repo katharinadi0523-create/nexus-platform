@@ -173,13 +173,17 @@ export default function AgentPage() {
           <div className="flex items-center justify-end gap-2">
             <ImportConfigurationButton
               objectType="workflow_agent"
-              destinationHref="/agent/flow-01?source=import"
+              objectTypeChoices={["workflow_agent", "autonomous_agent"]}
+              destinationHref={{
+                workflow_agent: "/agent/flow-01?source=import&objectType=workflow_agent",
+                autonomous_agent: "/agent/osint-01?source=import&objectType=autonomous_agent",
+              }}
               onImported={(preview) => {
                 setAgents((current) => [
                   {
                     id: `imported-${Date.now()}`,
                     name: preview.objectName,
-                    type: "工作流智能体",
+                    type: preview.objectTypeLabel,
                     status: "未发布",
                     desc: preview.description,
                     updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
@@ -375,25 +379,14 @@ export default function AgentPage() {
                         >
                           删除
                         </button>
-                        {isAutonomous ? (
+                        {isPublished ? (
                           <ExportConfigurationButton
-                            objectType="workflow_agent"
+                            objectType={isAutonomous ? "autonomous_agent" : "workflow_agent"}
                             objectName={agent.name}
                             sourceType="published"
                             display="table-action"
-                            disabled
-                            disabledTitle="自主规划智能体暂不支持导出"
                           />
-                        ) : (
-                          <ExportConfigurationButton
-                            objectType="workflow_agent"
-                            objectName={agent.name}
-                            sourceType="published"
-                            display="table-action"
-                            disabled={agent.status !== "已发布"}
-                            disabledTitle="暂无已发布版本，请先发布后再导出"
-                          />
-                        )}
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>

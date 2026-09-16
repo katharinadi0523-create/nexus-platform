@@ -1,69 +1,67 @@
 "use client";
 
-import { useState } from "react";
-import { AlertTriangle, ArrowUpDown, ChevronDown, Download, FileDown, FileUp, Loader2, RotateCcw } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AlertTriangle, Bot, Check, FileArchive, FileDown, GitBranch, Loader2, RotateCcw, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  buildExportYaml,
+  buildExportPackageManifest,
+  EXPORT_RELATED_OBJECTS,
+  IMPORT_OBJECT_LABELS,
   sanitizeExportFileName,
   type ImportObjectType,
 } from "@/lib/agent-import-export";
-import type { ImportPreview } from "@/lib/agent-import-export";
-import { ImportConfigurationDialog } from "@/components/import-export/import-configuration-dialog";
 import { cn } from "@/lib/utils";
+
+function ObjectIcon({ type }: { type: ImportObjectType }) {
+  if (type === "workflow") return <GitBranch className="h-4 w-4" />;
+  if (type === "workflow_agent") return <Workflow className="h-4 w-4" />;
+  return <Bot className="h-4 w-4" />;
+}
 
 export function ExportConfigurationButton({
   objectType,
   objectName,
-  sourceType,
   sourceVersion,
   className,
-  allowImport = false,
-  importDestinationHref,
-  onImported,
   display = "button",
   allowExport = true,
-  disabled = false,
-  disabledTitle,
 }: {
   objectType: ImportObjectType;
   objectName: string;
   sourceType: "published";
   sourceVersion?: string;
   className?: string;
-  allowImport?: boolean;
-  importDestinationHref?: string;
-  onImported?: (preview: ImportPreview) => void;
   display?: "button" | "table-action";
   allowExport?: boolean;
   disabled?: boolean;
   disabledTitle?: string;
 }) {
-  const [exporting, setExporting] = useState(false);
+  const relatedObjects = useMemo(() => EXPORT_RELATED_OBJECTS[objectType], [objectType]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [failureOpen, setFailureOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const sourceLabel = ("最新发布版本 " + (sourceVersion ?? "")).trim();
+  const [exporting, setExporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => relatedObjects.map((item) => item.id));
+  const sourceLabel = sourceVersion ? `最新发布版本 ${sourceVersion}` : "最新发布版本";
+
+  if (!allowExport) return null;
+
+  function toggleRelated(id: string) {
+    setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
 
   function downloadExport() {
-    const yaml = buildExportYaml({ objectType, objectName, sourceType, sourceVersion });
-    const blob = new Blob([yaml], { type: "application/yaml;charset=utf-8" });
+    const selectedRelated = relatedObjects.filter((item) => selectedIds.includes(item.id));
+    const manifest = buildExportPackageManifest({ objectType, objectName, sourceVersion, relatedObjects: selectedRelated });
+    const prototypePackage = [
+      "Agent Foundry prototype configuration package",
+      "--- manifest.yaml ---",
+      manifest,
+      "--- note ---",
+      "密钥及凭证信息未写入配置包。",
+    ].join("\n");
+    const blob = new Blob([prototypePackage], { type: "application/zip" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -80,17 +78,18 @@ export function ExportConfigurationButton({
     window.setTimeout(() => {
       downloadExport();
       setExporting(false);
-      toast.success("已导出" + sourceLabel + "，密钥及凭证信息已过滤。");
+      setConfirmOpen(false);
+      toast.success("配置包已生成并下载");
     }, 650);
   }
 
   function handleFailureDemo() {
-    if (exporting) return;
+    setConfirmOpen(false);
     setExporting(true);
     window.setTimeout(() => {
       setExporting(false);
       setFailureOpen(true);
-    }, 650);
+    }, 500);
   }
 
   return (
@@ -98,178 +97,101 @@ export function ExportConfigurationButton({
       {display === "table-action" ? (
         <button
           type="button"
-          disabled={exporting || disabled}
-          onClick={handleExport}
-          title={disabled ? disabledTitle : "导出" + sourceLabel}
-          className={cn("text-sm text-blue-600 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300", className)}
+          onClick={() => setConfirmOpen(true)}
+          className={cn("text-sm text-blue-600 hover:text-blue-700", className)}
         >
-          {exporting ? "导出中" : "导出"}
+          导出
         </button>
-      ) : allowImport && importDestinationHref ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              disabled={exporting}
-              aria-label="导入或导出配置"
-              title="导入或导出配置"
-              className={cn("h-8 w-8 rounded-[4px] border-slate-300 bg-white text-slate-600 shadow-none hover:bg-slate-50 hover:text-slate-900", className)}
-            >
-              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUpDown className="h-4 w-4" />}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64 rounded-[6px] border-slate-200 p-1">
-            <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-slate-500">配置操作</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => setImportOpen(true)} className="rounded-[4px] px-3 py-2.5">
-              <FileUp className="h-4 w-4 text-blue-600" />
-              <div>
-                <div className="text-sm font-medium text-slate-800">导入配置</div>
-                <div className="mt-0.5 text-xs text-slate-500">上传文件并覆盖当前草稿</div>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={!allowExport}
-              onSelect={handleExport}
-              title={allowExport ? `导出${sourceLabel}` : "暂无已发布版本，请先发布后再导出"}
-              className="rounded-[4px] px-3 py-2.5 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-100"
-            >
-              <FileDown className={cn("h-4 w-4", allowExport ? "text-slate-600" : "text-slate-300")} />
-              <div>
-                <div className={cn("text-sm font-medium", allowExport ? "text-slate-800" : "text-slate-400")}>导出配置</div>
-                <div className={cn("mt-0.5 text-xs", allowExport ? "text-slate-500" : "text-slate-400")}>
-                  {allowExport ? `下载${sourceLabel}的 YAML 文件` : "暂无已发布版本，请先发布后再导出"}
-                </div>
-              </div>
-            </DropdownMenuItem>
-            {allowExport ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-slate-500">原型状态</DropdownMenuLabel>
-                <DropdownMenuItem onSelect={handleFailureDemo} className="rounded-[4px] px-3 py-2.5">
-                  <AlertTriangle className="h-4 w-4 text-rose-600" />
-                  <div>
-                    <div className="text-sm font-medium text-slate-800">查看导出失败</div>
-                    <div className="mt-0.5 text-xs text-slate-500">展示失败原因与重试操作</div>
-                  </div>
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
       ) : (
-      <div className={cn("inline-flex h-8 overflow-hidden rounded-[4px] border border-slate-300 bg-white text-slate-700 shadow-none", className)}>
         <Button
           type="button"
-          variant="ghost"
-          disabled={exporting}
-          onClick={handleExport}
-          title={"导出" + sourceLabel}
-          className="h-8 rounded-none border-0 bg-transparent px-3 text-sm text-slate-700 shadow-none hover:bg-slate-50 hover:text-slate-900"
+          variant="outline"
+          onClick={() => setConfirmOpen(true)}
+          className={cn("h-8 rounded-[4px] border-slate-300 bg-white px-3 text-sm text-slate-700 shadow-none hover:bg-slate-50", className)}
         >
-          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-          {exporting ? "导出中" : "导出"}
+          <FileDown className="h-4 w-4" />导出
         </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              disabled={exporting}
-              aria-label="查看导出原型场景"
-              title="查看导出原型场景"
-              className="h-8 w-8 rounded-none border-0 border-l border-slate-300 bg-transparent text-slate-500 shadow-none hover:bg-slate-50 hover:text-slate-800"
-            >
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64 rounded-[6px] border-slate-200 p-1">
-            <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-slate-500">
-              原型场景
-            </DropdownMenuLabel>
-            <DropdownMenuItem onSelect={handleExport} className="rounded-[4px] px-3 py-2.5">
-              <Download className="h-4 w-4 text-emerald-600" />
-              <div>
-                <div className="text-sm font-medium text-slate-800">导出成功</div>
-                <div className="mt-0.5 text-xs text-slate-500">生成 YAML 并自动下载</div>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={handleFailureDemo} className="rounded-[4px] px-3 py-2.5">
-              <AlertTriangle className="h-4 w-4 text-rose-600" />
-              <div>
-                <div className="text-sm font-medium text-slate-800">导出失败</div>
-                <div className="mt-0.5 text-xs text-slate-500">展示失败原因与重试操作</div>
-              </div>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
       )}
 
-      {allowImport && importDestinationHref ? (
-        <ImportConfigurationDialog
-          open={importOpen}
-          onOpenChange={setImportOpen}
-          objectType={objectType}
-          destinationHref={importDestinationHref}
-          onImported={onImported}
-          mode="overwrite"
-        />
-      ) : null}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[640px]" showCloseButton={!exporting}>
+          <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <DialogTitle className="text-lg font-semibold text-slate-950">导出配置包</DialogTitle>
+            <DialogDescription>将导出{sourceLabel}，不包含当前草稿中的未发布修改。</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5 px-6 py-5">
+            <section>
+              <div className="mb-2 text-xs font-medium text-slate-500">主对象</div>
+              <div className="flex items-center gap-3 rounded-[6px] border border-slate-200 bg-slate-50/70 px-4 py-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-blue-600 text-white"><ObjectIcon type={objectType} /></span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-slate-950">{objectName}</div>
+                  <div className="mt-0.5 text-xs text-slate-500">{IMPORT_OBJECT_LABELS[objectType]} · {sourceLabel}</div>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500">随包导出的关联对象（{selectedIds.length}/{relatedObjects.length}）</span>
+                <span className="text-xs text-slate-400">默认全部选择</span>
+              </div>
+              <div className="divide-y divide-slate-100 overflow-hidden rounded-[6px] border border-slate-200">
+                {relatedObjects.map((item) => {
+                  const checked = selectedIds.includes(item.id);
+                  return (
+                    <label key={item.id} className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-slate-50">
+                      <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleRelated(item.id)} />
+                      <span className={cn("flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border", checked ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 bg-white")}>
+                        {checked ? <Check className="h-3 w-3" /> : null}
+                      </span>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-slate-100 text-slate-600"><ObjectIcon type={item.type} /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-slate-900">{item.name}</span>
+                        <span className="mt-0.5 block text-xs text-slate-500">{IMPORT_OBJECT_LABELS[item.type]} · {item.description}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">仅列出当前对象直接引用的一层对象；模型、知识库等资源不会打包，密钥及凭证会被过滤。</p>
+            </section>
+          </div>
+          <DialogFooter className="flex-row items-center justify-between border-t border-slate-100 bg-slate-50/70 px-6 py-4 sm:justify-between">
+            <button type="button" className="text-xs text-slate-500 hover:text-rose-600" onClick={handleFailureDemo}>查看导出失败状态</button>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" className="rounded-[4px] border-slate-300 bg-white shadow-none" onClick={() => setConfirmOpen(false)}>取消</Button>
+              <Button type="button" disabled={exporting} className="rounded-[4px] bg-blue-600 text-white shadow-none hover:bg-blue-700" onClick={handleExport}>
+                {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileArchive className="h-4 w-4" />}
+                {exporting ? "生成中" : "导出配置包"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={failureOpen} onOpenChange={setFailureOpen}>
         <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[520px]">
           <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">
             <DialogTitle className="text-lg font-semibold text-slate-950">导出失败</DialogTitle>
-            <DialogDescription>未生成配置文件。</DialogDescription>
+            <DialogDescription>未生成不完整的配置包。</DialogDescription>
           </DialogHeader>
           <div className="px-6 py-6">
             <div className="flex items-start gap-3 rounded-[6px] border border-rose-200 bg-rose-50/50 p-4">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-rose-600">
-                <AlertTriangle className="h-6 w-6" />
-              </span>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-rose-600"><AlertTriangle className="h-6 w-6" /></span>
               <div>
-                <div className="text-sm font-medium text-rose-900">配置文件生成失败</div>
-                <p className="mt-1 text-sm leading-6 text-rose-800">
-                  系统未能读取{sourceLabel}，请稍后重试。
-                </p>
+                <div className="text-sm font-medium text-rose-900">配置包生成失败</div>
+                <p className="mt-1 text-sm leading-6 text-rose-800">最新发布版本配置读取失败，请稍后重试。</p>
               </div>
             </div>
-            <dl className="mt-4 grid grid-cols-[100px_minmax(0,1fr)] gap-y-3 rounded-[6px] border border-slate-200 bg-slate-50 p-4 text-sm">
-              <dt className="text-slate-500">导出对象</dt>
-              <dd className="font-medium text-slate-800">{objectName}</dd>
-              <dt className="text-slate-500">失败原因</dt>
-              <dd className="font-medium text-slate-800">配置文件生成失败</dd>
-              <dt className="text-slate-500">错误标识</dt>
-              <dd className="font-mono text-xs text-slate-600">EXPORT_CONFIG_FAILED</dd>
+            <dl className="mt-4 grid grid-cols-[88px_minmax(0,1fr)] gap-y-3 rounded-[6px] border border-slate-200 bg-slate-50 p-4 text-sm">
+              <dt className="text-slate-500">导出对象</dt><dd className="font-medium text-slate-800">{objectName}</dd>
+              <dt className="text-slate-500">失败原因</dt><dd className="font-medium text-slate-800">最新发布版本配置读取失败</dd>
             </dl>
-            <p className="mt-3 text-xs leading-5 text-slate-500">
-              系统不会下载不完整的配置文件。若多次重试仍失败，请稍后再试。
-            </p>
           </div>
           <DialogFooter className="border-t border-slate-100 bg-slate-50/70 px-6 py-4">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-[4px] border-slate-300 bg-white shadow-none"
-              onClick={() => setFailureOpen(false)}
-            >
-              关闭
-            </Button>
-            <Button
-              type="button"
-              className="rounded-[4px] bg-blue-600 text-white shadow-none hover:bg-blue-700"
-              onClick={() => {
-                setFailureOpen(false);
-                handleExport();
-              }}
-            >
-              <RotateCcw className="h-4 w-4" />
-              重试导出
-            </Button>
+            <Button type="button" variant="outline" onClick={() => setFailureOpen(false)}>关闭</Button>
+            <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" onClick={() => { setFailureOpen(false); setConfirmOpen(true); }}><RotateCcw className="h-4 w-4" />重新导出</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

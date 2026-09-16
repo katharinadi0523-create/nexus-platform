@@ -16,7 +16,6 @@ import { getAgentById } from "@/lib/agent-data";
 import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBadge";
 import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 import { ImportDraftNotice, type ImportDraftResult } from "@/components/import-export/import-draft-notice";
-import { getPendingResources } from "@/lib/agent-import-export";
 import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
@@ -194,11 +193,12 @@ export default function AgentDetailPage() {
   }, [agentProfile]);
 
   useEffect(() => {
-    const result = new URLSearchParams(window.location.search).get("importResult");
+    const urlSearchParams = new URLSearchParams(window.location.search);
+    const result = urlSearchParams.get("importResult");
     if (result !== "success" && result !== "success_with_warnings") return;
     setImportResult(result);
-    setImportOperation(new URLSearchParams(window.location.search).get("importMode") === "overwrite" ? "overwrite" : "create");
-    setDisplayName("智能客服分流助手");
+    setImportOperation(urlSearchParams.get("importMode") === "overwrite" ? "overwrite" : "create");
+    setDisplayName(urlSearchParams.get("objectType") === "autonomous_agent" ? "开源情报分析助手" : "智能客服分流助手");
     setPublishStatus("未发布");
   }, []);
 
@@ -328,20 +328,12 @@ export default function AgentDetailPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {isWorkflow ? (
+          {isPublished ? (
             <ExportConfigurationButton
-              objectType="workflow_agent"
+              objectType={isWorkflow ? "workflow_agent" : "autonomous_agent"}
               objectName={displayName}
               sourceType="published"
               sourceVersion="V3"
-              allowImport
-              allowExport={isPublished}
-              importDestinationHref={`/agent/${agentId}?source=import`}
-              onImported={(preview) => {
-                setImportResult(getPendingResources(preview).length > 0 ? "success_with_warnings" : "success");
-                setImportOperation("overwrite");
-                toast.success("已用导入配置覆盖当前草稿");
-              }}
             />
           ) : null}
           <ProtectionStatusBadge
@@ -361,7 +353,7 @@ export default function AgentDetailPage() {
         </div>
       </header>
 
-      {importResult ? <ImportDraftNotice objectType="workflow_agent" result={importResult} operation={importOperation} /> : null}
+      {importResult ? <ImportDraftNotice objectType={isWorkflow ? "workflow_agent" : "autonomous_agent"} result={importResult} operation={importOperation} /> : null}
 
       <main className="flex min-h-0 flex-1 overflow-hidden">
         {activeTab === "config" ? (

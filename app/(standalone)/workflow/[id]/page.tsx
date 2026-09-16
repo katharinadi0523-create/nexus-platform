@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Rocket } from "lucide-react";
 import { toast } from "sonner";
@@ -8,7 +7,6 @@ import { WorkflowEditor } from "@/components/workflow/workflow-editor";
 import { Button } from "@/components/ui/button";
 import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 import { ImportDraftNotice, type ImportDraftResult } from "@/components/import-export/import-draft-notice";
-import { getPendingResources } from "@/lib/agent-import-export";
 
 const WORKFLOW_META: Record<string, { name: string; hasPublishedVersion: boolean; version?: string }> = {
   "workflow-ticket": { name: "客户工单处理流程", hasPublishedVersion: true, version: "V5" },
@@ -26,13 +24,8 @@ export default function WorkflowDetailPage() {
   const meta = WORKFLOW_META[workflowId] ?? { name: "工作流草稿", hasPublishedVersion: false };
   const resultParam = searchParams.get("importResult");
   const queryImportResult: ImportDraftResult | null = resultParam === "success" || resultParam === "success_with_warnings" ? resultParam : null;
-  const [runtimeImportResult, setRuntimeImportResult] = useState<ImportDraftResult | null>(null);
-  const importResult = runtimeImportResult ?? queryImportResult;
-  const importOperation = runtimeImportResult
-    ? "overwrite"
-    : searchParams.get("importMode") === "overwrite"
-      ? "overwrite"
-      : "create";
+  const importResult = queryImportResult;
+  const importOperation = "create";
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
@@ -50,19 +43,14 @@ export default function WorkflowDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <ExportConfigurationButton
-            objectType="workflow"
-            objectName={meta.name}
-            sourceType="published"
-            sourceVersion={meta.version}
-            allowImport
-            allowExport={meta.hasPublishedVersion}
-            importDestinationHref={`/workflow/${workflowId}?source=import`}
-            onImported={(preview) => {
-              setRuntimeImportResult(getPendingResources(preview).length > 0 ? "success_with_warnings" : "success");
-              toast.success("已用导入配置覆盖当前草稿");
-            }}
-          />
+          {meta.hasPublishedVersion ? (
+            <ExportConfigurationButton
+              objectType="workflow"
+              objectName={meta.name}
+              sourceType="published"
+              sourceVersion={meta.version}
+            />
+          ) : null}
           <Button type="button" className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm text-white shadow-none hover:bg-blue-700" onClick={() => toast.success(`已发布：${meta.name}`)}>
             <Rocket className="h-4 w-4" />发布
           </Button>
