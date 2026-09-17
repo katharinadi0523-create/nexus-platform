@@ -51,6 +51,11 @@ export function ExportConfigurationButton({
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   }
 
+  function openConfirm() {
+    setSelectedIds(relatedObjects.map((item) => item.id));
+    setConfirmOpen(true);
+  }
+
   function downloadExport() {
     const selectedRelated = relatedObjects.filter((item) => selectedIds.includes(item.id));
     const manifest = buildExportPackageManifest({ objectType, objectName, sourceVersion, relatedObjects: selectedRelated });
@@ -97,7 +102,7 @@ export function ExportConfigurationButton({
       {display === "table-action" ? (
         <button
           type="button"
-          onClick={() => setConfirmOpen(true)}
+          onClick={openConfirm}
           className={cn("text-sm text-blue-600 hover:text-blue-700", className)}
         >
           导出
@@ -106,7 +111,7 @@ export function ExportConfigurationButton({
         <Button
           type="button"
           variant="outline"
-          onClick={() => setConfirmOpen(true)}
+          onClick={openConfirm}
           className={cn("h-8 rounded-[4px] border-slate-300 bg-white px-3 text-sm text-slate-700 shadow-none hover:bg-slate-50", className)}
         >
           <FileDown className="h-4 w-4" />导出
@@ -149,12 +154,13 @@ export function ExportConfigurationButton({
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-medium text-slate-900">{item.name}</span>
                         <span className="mt-0.5 block text-xs text-slate-500">{IMPORT_OBJECT_LABELS[item.type]} · {item.description}</span>
+                        <span className="mt-1 block truncate text-[11px] text-slate-400">引用路径：{item.relationPath}</span>
                       </span>
                     </label>
                   );
                 })}
               </div>
-              <p className="mt-2 text-xs leading-5 text-slate-500">仅列出当前对象直接引用的一层对象；模型、知识库等资源不会打包，密钥及凭证会被过滤。</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">已递归识别全部层级的关联对象；默认全部勾选，可按需取消。同一对象被重复引用时仅导出一次。模型、知识库等资源不会打包，密钥及凭证会被过滤。</p>
             </section>
           </div>
           <DialogFooter className="flex-row items-center justify-between border-t border-slate-100 bg-slate-50/70 px-6 py-4 sm:justify-between">

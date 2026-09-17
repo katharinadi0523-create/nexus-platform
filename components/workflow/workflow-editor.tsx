@@ -33,13 +33,14 @@ import { CodeNode } from "./nodes/code-node";
 import { GenericNode } from "./nodes/generic-node";
 import { MCPNode } from "./nodes/mcp-node";
 import { WorkflowReferenceNode } from "./nodes/workflow-reference-node";
+import { UnavailableObjectNode } from "./nodes/unavailable-object-node";
 import { NodeConfigPanel } from "./node-config-panel";
 import { NodeLibraryMenu } from "./node-library-menu";
 import { BasicConfigSheet } from "./basic-config-sheet";
 import { executeWorkflow, FlowRuntimeResult } from "./workflow-runner";
 import { WorkflowResultPanel } from "./workflow-result-panel";
 import { getWorkflowByAgentId } from "@/lib/mock/workflow-data";
-import { buildImportPreview, getPendingResources, type ImportObjectType } from "@/lib/agent-import-export";
+import { type ImportObjectType } from "@/lib/agent-import-export";
 
 interface WorkflowEditorProps {
   agentId: string;
@@ -65,6 +66,7 @@ const nodeTypes = {
   code: CodeNode,
   mcp: MCPNode,
   "workflow-ref": WorkflowReferenceNode,
+  "unavailable-object": UnavailableObjectNode,
   api: GenericNode,
   message: GenericNode,
   "object-query": ObjectQueryNode,
@@ -134,126 +136,79 @@ const initialEdges: Edge[] = [
 ];
 
 const importedPrototypeNodes: Node[] = [
-  { id: "import-start", type: "start", position: { x: 40, y: 260 }, data: { description: "接收售后问题" } },
+  { id: "import-start", type: "start", position: { x: 20, y: 430 }, data: { description: "接收售后问题" } },
   {
-    id: "import-classify",
-    type: "llm",
-    position: { x: 360, y: 260 },
+    id: "import-classify", type: "llm", position: { x: 340, y: 430 },
     data: {
-      description: "问题分类",
-      model: "DeepSeek-V3",
+      description: "问题分类", model: "DeepSeek-V3",
       modelParams: { temperature: 0.2, max_tokens: 1024 },
       prompt: "判断用户问题所属的售后类别，并输出分类结果。",
       inputVariables: [{ name: "prompt", type: "string", value: "接收售后问题/query" }],
       outputVariables: [{ name: "category", type: "string" }],
     },
   },
+  { id: "import-knowledge", type: "knowledge", position: { x: 680, y: 0 }, data: { description: "检索售后政策", knowledgeBaseName: "售后政策知识库", inputVariables: [{ name: "query", value: "问题分类/category" }] } },
+  { id: "import-database", type: "data-query", position: { x: 680, y: 270 }, data: { description: "查询客户订单", databaseName: "客户订单数据库", inputVariables: [{ name: "customerId", value: "接收售后问题/customerId" }], outputVariables: [{ name: "results", type: "array[object]" }] } },
+  { id: "import-ontology", type: "object-query", position: { x: 680, y: 560 }, data: { description: "查询产品本体", objectTypeName: "售后产品对象", inputVariables: [{ name: "productId", value: "接收售后问题/productId" }] } },
+  { id: "import-api", type: "api", position: { x: 680, y: 850 }, data: { label: "查询客户信息 API", referenceName: "客户信息查询 API", inputVariables: [{ name: "customerId", type: "string" }], outputVariables: [{ name: "profile", type: "object" }] } },
+  { id: "import-database-missing", type: "data-query", position: { x: 680, y: 1120 }, data: { description: "查询历史服务记录", databaseName: "历史服务数据库", inputVariables: [{ name: "customerId", value: "接收售后问题/customerId" }], outputVariables: [{ name: "results", type: "array[object]" }] } },
   {
-    id: "import-knowledge",
-    type: "knowledge",
-    position: { x: 700, y: 80 },
-    data: { description: "检索售后政策", inputVariables: [{ name: "query", value: "问题分类/category" }] },
+    id: "import-workflow", type: "unavailable-object", position: { x: 1040, y: 0 },
+    data: { description: "执行退款审批", objectKind: "workflow", originalReference: "退款审批流程", referenceId: "workflow-refund", referenceName: "退款审批流程", inputVariables: [{ name: "request", type: "object", value: "问题分类/category" }], outputVariables: [{ name: "approvalResult", type: "object" }] },
   },
   {
-    id: "import-plugin",
-    type: "mcp",
-    position: { x: 700, y: 430 },
-    data: {
-      description: "查询并创建工单",
-      inputVariables: [{ name: "category", value: "问题分类/category", required: true }],
-      outputVariables: [{ name: "result", type: "object" }],
-    },
+    id: "import-agent", type: "unavailable-object", position: { x: 1040, y: 280 },
+    data: { description: "复核处理建议", objectKind: "agent", originalReference: "售后分析智能体", referenceId: "agent-service", referenceName: "售后分析智能体", inputVariables: [{ name: "query", type: "string", value: "接收售后问题/query" }], outputVariables: [{ name: "answer", type: "string" }] },
   },
   {
-    id: "import-reply",
-    type: "llm",
-    position: { x: 1060, y: 360 },
-    data: {
-      description: "生成处理回复",
-      model: "DeepSeek-V3",
-      modelParams: { temperature: 0.7, max_tokens: 2048 },
-      prompt: "结合政策检索结果和工单结果，生成面向用户的处理回复。",
-      inputVariables: [{ name: "prompt", type: "string", value: "接收售后问题/query" }],
-      outputVariables: [{ name: "text", type: "string" }],
-    },
+    id: "import-component", type: "unavailable-object", position: { x: 1040, y: 560 },
+    data: { description: "创建售后工单", objectKind: "component", originalReference: "工单中心组件", referenceId: "component-ticket", referenceName: "工单中心组件", inputVariables: [{ name: "category", type: "string", value: "问题分类/category" }], outputVariables: [{ name: "ticketId", type: "string" }] },
   },
+  { id: "import-terminology", type: "message", position: { x: 1040, y: 850 }, data: { label: "Query 多轮改写", referenceName: "产品标准术语库", inputVariables: [{ name: "query", type: "string" }], outputVariables: [{ name: "rewrittenQuery", type: "string" }] } },
+  { id: "import-auth", type: "mcp", position: { x: 1040, y: 1120 }, data: { description: "调用全网检索服务", selectedMCP: { id: "mcp-web-search", name: "全网检索服务", description: "检索公开网络信息" }, inputVariables: [{ name: "query", type: "string", required: true }], outputVariables: [{ name: "result", type: "object" }] } },
   {
-    id: "import-workflow",
-    type: "workflow-ref",
-    position: { x: 700, y: 780 },
-    data: {
-      description: "执行退款审批",
-      workflowId: "workflow-refund",
-      workflowName: "退款审批流程",
-      inputVariables: [{ name: "request", type: "object", value: "问题分类/category" }],
-      outputVariables: [{ name: "approvalResult", type: "object" }],
-    },
+    id: "import-reply", type: "llm", position: { x: 1400, y: 430 },
+    data: { description: "生成处理回复", model: "Qwen3-32B", modelParams: { temperature: 0.7, max_tokens: 2048 }, prompt: "结合各节点结果生成面向用户的处理回复。", inputVariables: [{ name: "prompt", type: "string", value: "接收售后问题/query" }], outputVariables: [{ name: "text", type: "string" }] },
   },
-  { id: "import-end", type: "end", position: { x: 1400, y: 360 }, data: { description: "返回处理结果" } },
+  { id: "import-end", type: "end", position: { x: 1750, y: 430 }, data: { description: "返回处理结果" } },
 ];
 
+const branchNodeIds = ["import-knowledge", "import-database", "import-ontology", "import-api", "import-database-missing", "import-workflow", "import-agent", "import-component", "import-terminology", "import-auth"];
 const importedPrototypeEdges: Edge[] = [
-  { id: "import-e1", source: "import-start", target: "import-classify", type: "smoothstep", animated: true },
-  { id: "import-e2", source: "import-classify", target: "import-knowledge", type: "smoothstep", animated: true },
-  { id: "import-e3", source: "import-classify", target: "import-plugin", type: "smoothstep", animated: true },
-  { id: "import-e3-workflow", source: "import-classify", target: "import-workflow", type: "smoothstep", animated: true },
-  { id: "import-e4", source: "import-knowledge", target: "import-reply", type: "smoothstep", animated: true },
-  { id: "import-e5", source: "import-plugin", target: "import-reply", type: "smoothstep", animated: true },
-  { id: "import-e5-workflow", source: "import-workflow", target: "import-reply", type: "smoothstep", animated: true },
-  { id: "import-e6", source: "import-reply", target: "import-end", type: "smoothstep", animated: true },
+  { id: "import-e-start", source: "import-start", target: "import-classify", type: "smoothstep", animated: true },
+  ...branchNodeIds.map((target) => ({ id: `import-e-classify-${target}`, source: "import-classify", target, type: "smoothstep", animated: true })),
+  ...branchNodeIds.map((source) => ({ id: `import-e-${source}-reply`, source, target: "import-reply", type: "smoothstep", animated: true })),
+  { id: "import-e-end", source: "import-reply", target: "import-end", type: "smoothstep", animated: true },
 ];
 
-function buildImportedPrototypeNodes(objectType: ImportObjectType, result: "success" | "success_with_warnings") {
-  const preview = buildImportPreview(objectType, "imported.yaml", result === "success_with_warnings");
-  const pendingIds = new Set(getPendingResources(preview).map((resource) => resource.id));
-  const knowledgeResource = preview.resources.find((resource) => resource.type === "知识库");
-  const pluginResource = preview.resources.find((resource) => resource.type === "插件");
-  const modelResource = preview.resources.find((resource) => resource.type === "模型");
-  const workflowResource = preview.resources.find((resource) => resource.type === "工作流");
+const IMPORT_ISSUES: Record<string, { title: string; resourceName: string; detail: string; message: string }> = {
+  "import-classify": { title: "模型服务不可用", resourceName: "DeepSeek-V3", detail: "当前不可用", message: "原模型“DeepSeek-V3”当前不可用，请重新选择模型。" },
+  "import-knowledge": { title: "知识库未匹配", resourceName: "售后政策知识库", detail: "未找到原知识库", message: "未找到原知识库“售后政策知识库”，请重新选择知识库。" },
+  "import-database": { title: "数据库无访问权限", resourceName: "客户订单数据库", detail: "当前用户无访问权限", message: "无权访问数据库“客户订单数据库”，请申请权限或重新选择数据库。" },
+  "import-ontology": { title: "本体资源未匹配", resourceName: "售后产品对象", detail: "未找到原本体对象类型", message: "未找到原本体或对象类型“售后产品对象”，请重新选择。" },
+  "import-api": { title: "API 不可用", resourceName: "客户信息查询 API", detail: "关联 API 当前不可用", message: "当前节点关联的 API“客户信息查询 API”不可用，请重新关联资源。" },
+  "import-database-missing": { title: "数据库未匹配", resourceName: "历史服务数据库", detail: "未找到原数据库", message: "未找到原数据库“历史服务数据库”，请重新选择数据库。" },
+  "import-workflow": { title: "工作流未恢复", resourceName: "退款审批流程", detail: "原关联对象未能恢复", message: "原工作流“退款审批流程”未能恢复，请重新选择工作流。" },
+  "import-agent": { title: "智能体未恢复", resourceName: "售后分析智能体", detail: "原关联对象未能恢复", message: "原智能体“售后分析智能体”未能恢复，请重新选择智能体。" },
+  "import-component": { title: "组件未恢复", resourceName: "工单中心组件", detail: "原关联对象未能恢复", message: "原组件“工单中心组件”未能恢复，请重新选择组件。" },
+  "import-terminology": { title: "术语库未匹配", resourceName: "产品标准术语库", detail: "未找到原术语库", message: "未找到原术语库“产品标准术语库”，请重新选择术语库。" },
+  "import-auth": { title: "鉴权信息缺失", resourceName: "全网检索服务", detail: "鉴权信息未随配置包导入", message: "“全网检索服务”的鉴权信息未导入，请重新完成鉴权。" },
+};
 
+function buildImportedPrototypeNodes(_objectType: ImportObjectType, result: "success" | "success_with_warnings") {
   return importedPrototypeNodes.map((node) => {
-    const resource = node.type === "knowledge"
-      ? knowledgeResource
-      : node.type === "mcp"
-        ? pluginResource
-        : node.type === "llm" && node.id === "import-classify"
-          ? modelResource
-          : node.type === "workflow-ref"
-            ? workflowResource
-          : undefined;
-    if (!resource) return { ...node, data: { ...node.data } };
+    const data = { ...node.data };
+    if (result === "success") return { ...node, data };
+    const issue = IMPORT_ISSUES[node.id];
+    if (!issue) return { ...node, data };
 
-    return {
-      ...node,
-      data: {
-        ...node.data,
-        ...(node.type === "knowledge" ? { knowledgeBaseName: resource.name } : {}),
-        ...(node.type === "mcp"
-          ? { selectedMCP: { id: resource.id, name: resource.name, description: "用于查询与创建售后工单" } }
-          : {}),
-        ...(node.type === "llm" ? { model: pendingIds.has(resource.id) ? "" : resource.name } : {}),
-        ...(node.type === "workflow-ref"
-          ? pendingIds.has(resource.id)
-            ? { workflowId: "", workflowName: "", inputVariables: [], outputVariables: [] }
-            : { workflowId: resource.id, workflowName: resource.name }
-          : {}),
-        ...(pendingIds.has(resource.id)
-          ? {
-              importIssue: {
-                title: resource.type === "模型"
-                  ? "模型服务不可用"
-                  : resource.type === "工作流"
-                    ? "原工作流不可用"
-                  : resource.status === "missing"
-                    ? `${resource.type}待关联`
-                    : `${resource.type}待鉴权`,
-                resourceName: resource.name,
-                detail: resource.reason ?? "关联资源需要重新配置",
-              },
-            }
-          : {}),
-      },
-    };
+    if (node.id === "import-classify") data.model = "";
+    if (node.type === "unavailable-object") {
+      data.referenceId = "";
+      data.referenceName = "";
+    }
+    data.importIssue = issue;
+    return { ...node, data };
   });
 }
 
@@ -307,15 +262,16 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
   }, []);
 
   const handleUpdateNode = useCallback(
-    (nodeId: string, data: any) => {
+    (nodeId: string, data: object) => {
       setNodes((nds) =>
         nds.map((node) => {
           if (node.id !== nodeId) return node;
           const nextData = { ...node.data, ...data };
           const resourceReconfigured = (node.type === "knowledge" && nextData.knowledgeBaseId)
-            || (node.type === "mcp" && nextData.selectedMCP)
+            || (node.type === "mcp" && nextData.selectedMCP?.id !== node.data?.selectedMCP?.id)
             || (node.type === "llm" && nextData.model)
-            || (node.type === "workflow-ref" && nextData.workflowId);
+            || (node.type === "workflow-ref" && nextData.workflowId)
+            || (node.type === "unavailable-object" && nextData.referenceId);
           if (resourceReconfigured) delete nextData.importIssue;
           return { ...node, data: nextData };
         })
@@ -351,6 +307,7 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
   }, []);
 
   const handleRun = useCallback(async () => {
+    if (nodes.some((node) => Boolean(node.data?.importIssue))) return;
     setIsExecuting(true);
     setRunResult(null); // 清空之前的结果
     
@@ -388,6 +345,8 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
     setSelectedNodeId(nodeId);
     // 可以在这里添加更多的高亮逻辑
   }, []);
+
+  const hasBlockingImportIssues = nodes.some((node) => Boolean(node.data?.importIssue));
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
@@ -448,6 +407,8 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
                     return "#a855f7";
                   case "workflow-ref":
                     return "#0ea5e9";
+                  case "unavailable-object":
+                    return "#f59e0b";
                   case "branch":
                   case "code":
                     return "#f97316";
@@ -491,7 +452,8 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
             size="sm"
             className="gap-2 bg-green-600 hover:bg-green-700"
             onClick={handleRun}
-            disabled={isExecuting}
+            disabled={isExecuting || hasBlockingImportIssues}
+            title={hasBlockingImportIssues ? "存在待补配节点，完成配置后才能运行" : undefined}
           >
             <Bug className="h-4 w-4" />
             {isExecuting ? "执行中..." : "运行"}

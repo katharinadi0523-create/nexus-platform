@@ -246,7 +246,7 @@ export function ImportConfigurationDialog({
               <section>
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-500">关联对象（{preview.relatedObjects.length}）</span>
-                  <span className="text-xs text-slate-400">仅包含主对象直接引用的一层</span>
+                  <span className="text-xs text-slate-400">包含配置包内的完整关联链</span>
                 </div>
                 <div className="divide-y divide-slate-100 overflow-hidden rounded-[6px] border border-slate-200">
                   {preview.relatedObjects.map((item) => (
@@ -255,6 +255,7 @@ export function ImportConfigurationDialog({
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium text-slate-900">{item.name}</div>
                         <div className="mt-0.5 text-xs text-slate-500">{IMPORT_OBJECT_LABELS[item.type]} · {item.description}</div>
+                        <div className="mt-1 truncate text-[11px] text-slate-400">引用路径：{item.relationPath}</div>
                       </div>
                     </div>
                   ))}
@@ -271,8 +272,8 @@ export function ImportConfigurationDialog({
                         {relatedMode === "publish" ? <span className="h-2 w-2 rounded-full bg-blue-600" /> : null}
                       </span>
                       <div>
-                        <div className="text-sm font-medium text-slate-900">发布并恢复引用</div>
-                        <div className="mt-1 text-xs leading-5 text-slate-500">满足发布条件时直接发布，并恢复主对象引用</div>
+                        <div className="text-sm font-medium text-slate-900">发布全部关联对象并恢复引用</div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">满足发布条件时依次发布，并恢复对象之间的引用</div>
                       </div>
                     </div>
                   </label>
@@ -283,8 +284,8 @@ export function ImportConfigurationDialog({
                         {relatedMode === "draft" ? <span className="h-2 w-2 rounded-full bg-blue-600" /> : null}
                       </span>
                       <div>
-                        <div className="text-sm font-medium text-slate-900">仅保存为草稿</div>
-                        <div className="mt-1 text-xs leading-5 text-slate-500">关联对象保留为草稿，主对象引用将标记待补配</div>
+                        <div className="text-sm font-medium text-slate-900">全部仅保存为草稿</div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">关联对象均保留为草稿，未恢复的引用标记待补配</div>
                       </div>
                     </div>
                   </label>

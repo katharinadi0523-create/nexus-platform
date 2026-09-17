@@ -16,6 +16,7 @@ export interface RelatedObjectItem {
   type: ImportObjectType;
   name: string;
   description: string;
+  relationPath: string;
 }
 
 export interface ImportPreview {
@@ -40,15 +41,20 @@ export const IMPORT_OBJECT_LABELS: Record<ImportObjectType, string> = {
 
 export const EXPORT_RELATED_OBJECTS: Record<ImportObjectType, RelatedObjectItem[]> = {
   workflow_agent: [
-    { id: "related-agent", type: "autonomous_agent", name: "售后分析智能体", description: "由智能体选择节点直接引用" },
-    { id: "related-workflow", type: "workflow", name: "退款审批流程", description: "由工作流节点直接引用" },
+    { id: "related-agent", type: "autonomous_agent", name: "售后分析智能体", description: "由智能体选择节点引用", relationPath: "主对象 → 售后分析智能体" },
+    { id: "related-workflow", type: "workflow", name: "退款审批流程", description: "由工作流节点引用", relationPath: "主对象 → 退款审批流程" },
+    { id: "nested-profile-workflow", type: "workflow", name: "客户画像查询流程", description: "由售后分析智能体继续引用", relationPath: "主对象 → 售后分析智能体 → 客户画像查询流程" },
+    { id: "nested-audit-agent", type: "workflow_agent", name: "人工复核智能体", description: "由退款审批流程继续引用", relationPath: "主对象 → 退款审批流程 → 人工复核智能体" },
   ],
   workflow: [
-    { id: "related-agent", type: "autonomous_agent", name: "服务质检智能体", description: "由智能体节点直接引用" },
-    { id: "related-workflow", type: "workflow", name: "人工复核流程", description: "由工作流节点直接引用" },
+    { id: "related-agent", type: "autonomous_agent", name: "服务质检智能体", description: "由智能体节点引用", relationPath: "主对象 → 服务质检智能体" },
+    { id: "related-workflow", type: "workflow", name: "人工复核流程", description: "由工作流节点引用", relationPath: "主对象 → 人工复核流程" },
+    { id: "nested-agent", type: "workflow_agent", name: "升级处理智能体", description: "由人工复核流程继续引用", relationPath: "主对象 → 人工复核流程 → 升级处理智能体" },
   ],
   autonomous_agent: [
-    { id: "related-workflow", type: "workflow", name: "情报研判流程", description: "由工具配置直接引用" },
+    { id: "related-workflow", type: "workflow", name: "情报研判流程", description: "由工具配置引用", relationPath: "主对象 → 情报研判流程" },
+    { id: "nested-agent", type: "workflow_agent", name: "风险复核智能体", description: "由情报研判流程继续引用", relationPath: "主对象 → 情报研判流程 → 风险复核智能体" },
+    { id: "nested-workflow", type: "workflow", name: "报告生成流程", description: "由风险复核智能体继续引用", relationPath: "主对象 → 情报研判流程 → 风险复核智能体 → 报告生成流程" },
   ],
 };
 
@@ -84,7 +90,7 @@ const OBJECT_FIXTURES: Record<ImportObjectType, Omit<ImportPreview, "fileName" |
     configSummary: [
       { label: "画布", value: "8 个节点 · 9 条连线" },
       { label: "基础配置", value: "开场白 · 推荐问题 · 3 轮上下文" },
-      { label: "关联对象", value: "2 个" },
+      { label: "关联对象", value: "4 个 · 完整关联链" },
     ],
     resources: RESOURCE_FIXTURES.workflow_agent,
     relatedObjects: EXPORT_RELATED_OBJECTS.workflow_agent,
@@ -98,7 +104,7 @@ const OBJECT_FIXTURES: Record<ImportObjectType, Omit<ImportPreview, "fileName" |
     configSummary: [
       { label: "画布", value: "11 个节点 · 13 条连线" },
       { label: "变量", value: "6 个输入 · 3 个输出" },
-      { label: "关联对象", value: "2 个" },
+      { label: "关联对象", value: "3 个 · 完整关联链" },
     ],
     resources: RESOURCE_FIXTURES.workflow,
     relatedObjects: EXPORT_RELATED_OBJECTS.workflow,
@@ -112,7 +118,7 @@ const OBJECT_FIXTURES: Record<ImportObjectType, Omit<ImportPreview, "fileName" |
     configSummary: [
       { label: "基础配置", value: "角色指令 · 开场白 · 推荐问题" },
       { label: "能力配置", value: "模型 · 知识 · 工具" },
-      { label: "关联对象", value: "1 个" },
+      { label: "关联对象", value: "3 个 · 完整关联链" },
     ],
     resources: RESOURCE_FIXTURES.autonomous_agent,
     relatedObjects: EXPORT_RELATED_OBJECTS.autonomous_agent,
@@ -171,7 +177,7 @@ export function buildExportPackageManifest({
   sourceVersion?: string;
   relatedObjects: RelatedObjectItem[];
 }) {
-  const objectLines = relatedObjects.map((item) => `  - type: ${item.type}\n    role: related\n    name: ${item.name}`).join("\n");
+  const objectLines = relatedObjects.map((item) => `  - type: ${item.type}\n    role: related\n    name: ${item.name}\n    relation_path: ${item.relationPath}`).join("\n");
   return `package_schema_version: "1.0"\nmain_object:\n  type: ${objectType}\n  name: ${objectName}\n  version_no: ${sourceVersion ?? "latest"}\nobjects:\n  - type: ${objectType}\n    role: main\n    name: ${objectName}\n${objectLines ? `${objectLines}\n` : ""}`;
 }
 

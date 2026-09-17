@@ -58,7 +58,7 @@ export function BaseNode({
   const isSelected = selected;
   const colors = colorMap[color];
   const importIssue = nodeProps.data?.importIssue as
-    | { title: string; resourceName: string; detail: string }
+    | { title: string; resourceName: string; detail: string; message?: string }
     | undefined;
   
   // 优先使用 data.description 或 data.label，如果没有则使用传入的 label
