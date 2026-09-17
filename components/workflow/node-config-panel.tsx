@@ -17,7 +17,6 @@ import { IntentRecognizeNodeConfig } from "./configs/intent-recognize-node-confi
 import { CodeNodeConfig } from "./configs/code-node-config";
 import { MCPNodeConfig } from "./configs/mcp-node-config";
 import { WorkflowReferenceNodeConfig } from "./configs/workflow-reference-node-config";
-import { UnavailableObjectNodeConfig } from "./configs/unavailable-object-node-config";
 import { cn } from "@/lib/utils";
 
 interface NodeConfigPanelProps {
@@ -44,7 +43,6 @@ const NODE_ICONS = {
   code: Code,
   mcp: Package,
   "workflow-ref": GitBranch,
-  "unavailable-object": Package,
 } as const;
 
 const getNodeLabel = (type: string | undefined) => {
@@ -79,8 +77,6 @@ const getNodeLabel = (type: string | undefined) => {
       return "MCP";
     case "workflow-ref":
       return "工作流";
-    case "unavailable-object":
-      return "待重新关联";
     default:
       return "节点";
   }
@@ -115,8 +111,6 @@ const getNodeColor = (type: string | undefined) => {
       return "text-green-600";
     case "workflow-ref":
       return "text-sky-600";
-    case "unavailable-object":
-      return "text-amber-600";
     default:
       return "text-slate-600";
   }
@@ -290,12 +284,6 @@ export function NodeConfigPanel({
         )}
         {selectedNode.type === "workflow-ref" && (
           <WorkflowReferenceNodeConfig
-            nodeData={selectedNode.data}
-            onUpdate={handleUpdate}
-          />
-        )}
-        {selectedNode.type === "unavailable-object" && (
-          <UnavailableObjectNodeConfig
             nodeData={selectedNode.data}
             onUpdate={handleUpdate}
           />

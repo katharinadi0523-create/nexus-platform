@@ -246,7 +246,7 @@ export function ImportConfigurationDialog({
               <section>
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-medium text-slate-500">关联对象（{preview.relatedObjects.length}）</span>
-                  <span className="text-xs text-slate-400">包含配置包内的完整关联链</span>
+                  <span className="text-xs text-slate-400">按引用层级展示</span>
                 </div>
                 <div className="divide-y divide-slate-100 overflow-hidden rounded-[6px] border border-slate-200">
                   {preview.relatedObjects.map((item) => (
@@ -273,7 +273,7 @@ export function ImportConfigurationDialog({
                       </span>
                       <div>
                         <div className="text-sm font-medium text-slate-900">发布全部关联对象并恢复引用</div>
-                        <div className="mt-1 text-xs leading-5 text-slate-500">满足发布条件时依次发布，并恢复对象之间的引用</div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">发布配置包中的关联对象；发布成功后恢复对象之间的引用</div>
                       </div>
                     </div>
                   </label>
@@ -284,8 +284,8 @@ export function ImportConfigurationDialog({
                         {relatedMode === "draft" ? <span className="h-2 w-2 rounded-full bg-blue-600" /> : null}
                       </span>
                       <div>
-                        <div className="text-sm font-medium text-slate-900">全部仅保存为草稿</div>
-                        <div className="mt-1 text-xs leading-5 text-slate-500">关联对象均保留为草稿，未恢复的引用标记待补配</div>
+                        <div className="text-sm font-medium text-slate-900">全部保存为草稿</div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">不发布关联对象；相关引用保留为待补配状态</div>
                       </div>
                     </div>
                   </label>
@@ -313,7 +313,7 @@ export function ImportConfigurationDialog({
               <div className="flex flex-col items-center text-center">
                 <span className="flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600"><XCircle className="h-7 w-7" /></span>
                 <div className="mt-4 text-lg font-semibold text-slate-950">导入失败</div>
-                <p className="mt-2 text-sm leading-6 text-slate-500">未创建主对象或关联对象。</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">本次未创建任何对象。</p>
               </div>
               <div className="mt-6 rounded-[6px] border border-rose-200 bg-rose-50/50 p-4 text-sm text-rose-800">
                 {selectedScenario === "validation_failure"

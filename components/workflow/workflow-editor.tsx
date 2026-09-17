@@ -188,9 +188,9 @@ const IMPORT_ISSUES: Record<string, { title: string; resourceName: string; detai
   "import-ontology": { title: "本体资源未匹配", resourceName: "售后产品对象", detail: "未找到原本体对象类型", message: "未找到原本体或对象类型“售后产品对象”，请重新选择。" },
   "import-api": { title: "API 不可用", resourceName: "客户信息查询 API", detail: "关联 API 当前不可用", message: "当前节点关联的 API“客户信息查询 API”不可用，请重新关联资源。" },
   "import-database-missing": { title: "数据库未匹配", resourceName: "历史服务数据库", detail: "未找到原数据库", message: "未找到原数据库“历史服务数据库”，请重新选择数据库。" },
-  "import-workflow": { title: "工作流未恢复", resourceName: "退款审批流程", detail: "原关联对象未能恢复", message: "原工作流“退款审批流程”未能恢复，请重新选择工作流。" },
-  "import-agent": { title: "智能体未恢复", resourceName: "售后分析智能体", detail: "原关联对象未能恢复", message: "原智能体“售后分析智能体”未能恢复，请重新选择智能体。" },
-  "import-component": { title: "组件未恢复", resourceName: "工单中心组件", detail: "原关联对象未能恢复", message: "原组件“工单中心组件”未能恢复，请重新选择组件。" },
+  "import-workflow": { title: "工作流未恢复", resourceName: "退款审批流程", detail: "原关联对象未能恢复", message: "原工作流“退款审批流程”未能恢复，请新增工作流节点并重新配置。" },
+  "import-agent": { title: "智能体未恢复", resourceName: "售后分析智能体", detail: "原关联对象未能恢复", message: "原智能体“售后分析智能体”未能恢复，请新增智能体节点并重新配置。" },
+  "import-component": { title: "组件未恢复", resourceName: "工单中心组件", detail: "原关联对象未能恢复", message: "原组件“工单中心组件”未能恢复，请新增组件节点并重新配置。" },
   "import-terminology": { title: "术语库未匹配", resourceName: "产品标准术语库", detail: "未找到原术语库", message: "未找到原术语库“产品标准术语库”，请重新选择术语库。" },
   "import-auth": { title: "鉴权信息缺失", resourceName: "全网检索服务", detail: "鉴权信息未随配置包导入", message: "“全网检索服务”的鉴权信息未导入，请重新完成鉴权。" },
 };
@@ -198,6 +198,15 @@ const IMPORT_ISSUES: Record<string, { title: string; resourceName: string; detai
 function buildImportedPrototypeNodes(_objectType: ImportObjectType, result: "success" | "success_with_warnings") {
   return importedPrototypeNodes.map((node) => {
     const data = { ...node.data };
+    if (result === "success" && node.type === "unavailable-object") {
+      if (data.objectKind === "workflow") {
+        return { ...node, type: "workflow-ref", data: { ...data, workflowId: data.referenceId, workflowName: data.referenceName } };
+      }
+      if (data.objectKind === "agent") {
+        return { ...node, type: "agent", data: { ...data, agentId: data.referenceId, agentName: data.referenceName } };
+      }
+      return { ...node, type: "api", data: { ...data, label: "组件", referenceName: data.referenceName } };
+    }
     if (result === "success") return { ...node, data };
     const issue = IMPORT_ISSUES[node.id];
     if (!issue) return { ...node, data };
@@ -208,7 +217,13 @@ function buildImportedPrototypeNodes(_objectType: ImportObjectType, result: "suc
       data.referenceName = "";
     }
     data.importIssue = issue;
-    return { ...node, data };
+    return {
+      ...node,
+      data,
+      ...(node.type === "unavailable-object"
+        ? { selectable: false, draggable: false, deletable: false, connectable: false }
+        : {}),
+    };
   });
 }
 
@@ -254,6 +269,10 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
   );
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+    if (node.type === "unavailable-object") {
+      setSelectedNodeId(null);
+      return;
+    }
     setSelectedNodeId(node.id);
   }, []);
 
@@ -270,8 +289,7 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
           const resourceReconfigured = (node.type === "knowledge" && nextData.knowledgeBaseId)
             || (node.type === "mcp" && nextData.selectedMCP?.id !== node.data?.selectedMCP?.id)
             || (node.type === "llm" && nextData.model)
-            || (node.type === "workflow-ref" && nextData.workflowId)
-            || (node.type === "unavailable-object" && nextData.referenceId);
+            || (node.type === "workflow-ref" && nextData.workflowId);
           if (resourceReconfigured) delete nextData.importIssue;
           return { ...node, data: nextData };
         })

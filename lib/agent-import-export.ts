@@ -90,7 +90,7 @@ const OBJECT_FIXTURES: Record<ImportObjectType, Omit<ImportPreview, "fileName" |
     configSummary: [
       { label: "画布", value: "8 个节点 · 9 条连线" },
       { label: "基础配置", value: "开场白 · 推荐问题 · 3 轮上下文" },
-      { label: "关联对象", value: "4 个 · 完整关联链" },
+      { label: "关联对象", value: "4 个（含下级引用）" },
     ],
     resources: RESOURCE_FIXTURES.workflow_agent,
     relatedObjects: EXPORT_RELATED_OBJECTS.workflow_agent,
@@ -104,7 +104,7 @@ const OBJECT_FIXTURES: Record<ImportObjectType, Omit<ImportPreview, "fileName" |
     configSummary: [
       { label: "画布", value: "11 个节点 · 13 条连线" },
       { label: "变量", value: "6 个输入 · 3 个输出" },
-      { label: "关联对象", value: "3 个 · 完整关联链" },
+      { label: "关联对象", value: "3 个（含下级引用）" },
     ],
     resources: RESOURCE_FIXTURES.workflow,
     relatedObjects: EXPORT_RELATED_OBJECTS.workflow,
@@ -118,7 +118,7 @@ const OBJECT_FIXTURES: Record<ImportObjectType, Omit<ImportPreview, "fileName" |
     configSummary: [
       { label: "基础配置", value: "角色指令 · 开场白 · 推荐问题" },
       { label: "能力配置", value: "模型 · 知识 · 工具" },
-      { label: "关联对象", value: "3 个 · 完整关联链" },
+      { label: "关联对象", value: "3 个（含下级引用）" },
     ],
     resources: RESOURCE_FIXTURES.autonomous_agent,
     relatedObjects: EXPORT_RELATED_OBJECTS.autonomous_agent,
@@ -159,7 +159,7 @@ export function getPendingResources(preview: ImportPreview) {
         type: IMPORT_OBJECT_LABELS[object.type],
         name: object.name,
         status: "missing" as const,
-        reason: "关联对象保存为草稿，主对象引用待重新关联",
+        reason: "关联对象已保存为草稿，引用将在发布后恢复",
       })),
     ];
   }

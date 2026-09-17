@@ -138,8 +138,8 @@ export function ExportConfigurationButton({
 
             <section>
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-500">随包导出的关联对象（{selectedIds.length}/{relatedObjects.length}）</span>
-                <span className="text-xs text-slate-400">默认全部选择</span>
+                <span className="text-xs font-medium text-slate-500">选择需要导出的关联对象（{selectedIds.length}/{relatedObjects.length}）</span>
+                <span className="text-xs text-slate-400">默认全选</span>
               </div>
               <div className="divide-y divide-slate-100 overflow-hidden rounded-[6px] border border-slate-200">
                 {relatedObjects.map((item) => {
@@ -160,7 +160,7 @@ export function ExportConfigurationButton({
                   );
                 })}
               </div>
-              <p className="mt-2 text-xs leading-5 text-slate-500">已递归识别全部层级的关联对象；默认全部勾选，可按需取消。同一对象被重复引用时仅导出一次。模型、知识库等资源不会打包，密钥及凭证会被过滤。</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">已列出各层级的关联对象，可取消不需要导出的对象。相同对象仅导出一次；模型、知识库等外部资源以及密钥、凭证不会被导出。</p>
             </section>
           </div>
           <DialogFooter className="flex-row items-center justify-between border-t border-slate-100 bg-slate-50/70 px-6 py-4 sm:justify-between">
