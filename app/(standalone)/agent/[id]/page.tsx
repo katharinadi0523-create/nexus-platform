@@ -16,6 +16,7 @@ import { getAgentById } from "@/lib/agent-data";
 import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBadge";
 import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 import { ImportDraftNotice, type ImportDraftResult } from "@/components/import-export/import-draft-notice";
+import { ReferenceRelationshipDialog } from "@/components/reference-relations/reference-relationship-dialog";
 import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
@@ -177,6 +178,7 @@ export default function AgentDetailPage() {
   );
   const [importResult, setImportResult] = useState<ImportDraftResult | null>(null);
   const [importOperation, setImportOperation] = useState<"create" | "overwrite">("overwrite");
+  const [hasBlockingIssues, setHasBlockingIssues] = useState(false);
 
   const isPublished = publishStatus === "已发布";
 
@@ -203,6 +205,10 @@ export default function AgentDetailPage() {
   }, []);
 
   function handlePublish() {
+    if (hasBlockingIssues) {
+      toast.error("存在待关联或异常节点，请完成配置后再发布。");
+      return;
+    }
     const action = getApprovalActionState(approvalStatus);
     if (action.publishLocked) {
       toast.info(action.publishTitle ?? "审批中，暂不可发布。");
@@ -328,6 +334,12 @@ export default function AgentDetailPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ReferenceRelationshipDialog
+            objectType={isWorkflow ? "workflow_agent" : "autonomous_agent"}
+            objectId={agentId}
+            objectName={displayName}
+            objectStatus={isPublished ? "已发布" : "草稿"}
+          />
           {isPublished ? (
             <ExportConfigurationButton
               objectType={isWorkflow ? "workflow_agent" : "autonomous_agent"}
@@ -342,8 +354,8 @@ export default function AgentDetailPage() {
             protectionTypes={["policy", "lexicon"]}
           />
           <Button
-            disabled={getApprovalActionState(approvalStatus).publishLocked}
-            title={getApprovalActionState(approvalStatus).publishTitle ?? "发布"}
+            disabled={getApprovalActionState(approvalStatus).publishLocked || hasBlockingIssues}
+            title={hasBlockingIssues ? "存在待关联或异常节点，完成配置后才能发布" : getApprovalActionState(approvalStatus).publishTitle ?? "发布"}
             onClick={handlePublish}
             className="rounded-2xl bg-slate-900 px-4 text-white shadow-[0_18px_40px_-24px_rgba(15,23,42,0.8)] hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -358,7 +370,7 @@ export default function AgentDetailPage() {
       <main className="flex min-h-0 flex-1 overflow-hidden">
         {activeTab === "config" ? (
           isWorkflow ? (
-            <WorkflowEditor agentId={agentId} importResult={importResult} importObjectType="workflow_agent" />
+            <WorkflowEditor agentId={agentId} importResult={importResult} importObjectType="workflow_agent" onBlockingIssueChange={setHasBlockingIssues} />
           ) : (
             <AutonomousEditor
               agentId={agentId}

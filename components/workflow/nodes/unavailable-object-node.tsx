@@ -1,6 +1,6 @@
 "use client";
 
-import { FileQuestion, LockKeyhole, Trash2 } from "lucide-react";
+import { Bot, Boxes, GitBranch, Trash2 } from "lucide-react";
 import { Handle, NodeProps, Position, useReactFlow } from "reactflow";
 import { cn } from "@/lib/utils";
 
@@ -8,23 +8,28 @@ export interface UnavailableObjectNodeData {
   description?: string;
   objectKind: "workflow" | "agent" | "component";
   originalReference: string;
+  originalVersion?: string;
+  originalSource?: string;
+  originalComponentType?: "MCP" | "插件" | "本体行为";
   referenceId?: string;
   referenceName?: string;
   inputVariables?: Array<{ name: string; type: string; value?: string }>;
   outputVariables?: Array<{ name: string; type: string }>;
   importIssue?: { title: string; resourceName: string; detail: string; message?: string };
+  onOpenConfig?: () => void;
 }
 
 const KIND_META = {
-  workflow: { label: "工作流", empty: "原工作流未恢复" },
-  agent: { label: "智能体", empty: "原智能体未恢复" },
-  component: { label: "组件", empty: "原组件未恢复" },
+  workflow: { label: "工作流", Icon: GitBranch, iconClass: "bg-sky-50 text-sky-600" },
+  agent: { label: "智能体选择", Icon: Bot, iconClass: "bg-indigo-50 text-indigo-600" },
+  component: { label: "组件", Icon: Boxes, iconClass: "bg-emerald-50 text-emerald-600" },
 };
 
 export function UnavailableObjectNode(props: NodeProps<UnavailableObjectNodeData>) {
   const data = props.data;
   const { setNodes, setEdges } = useReactFlow();
   const meta = KIND_META[data.objectKind];
+  const Icon = meta.Icon;
   const inputs = data.inputVariables ?? [];
   const outputs = data.outputVariables ?? [];
 
@@ -36,29 +41,33 @@ export function UnavailableObjectNode(props: NodeProps<UnavailableObjectNodeData
 
   return (
     <div
-      aria-readonly="true"
+      onMouseDown={(event) => {
+        if (event.button !== 0) return;
+        if ((event.target as HTMLElement).closest("button")) return;
+        data.onOpenConfig?.();
+      }}
       className={cn(
-        "w-[280px] cursor-default overflow-hidden rounded-lg border border-dashed border-slate-400 bg-slate-50/95 shadow-none",
-        props.selected && "border-slate-600 ring-2 ring-slate-300"
+        "w-[280px] cursor-move overflow-hidden rounded-lg border border-amber-300 bg-white shadow-sm",
+        props.selected && "border-amber-500 ring-2 ring-amber-200"
       )}
     >
       <Handle type="target" position={Position.Left} isConnectable={false} className="!h-3 !w-3 !border-2 !border-white !bg-slate-400" />
 
-      <div className="flex items-center gap-2 border-b border-dashed border-slate-300 bg-slate-100 px-3 py-2.5">
-        <span className="flex h-7 w-7 items-center justify-center rounded bg-white text-slate-500 ring-1 ring-slate-200">
-          <FileQuestion className="h-4 w-4" />
+      <div className="flex items-center gap-2 border-b border-amber-200 bg-white px-3 py-2.5">
+        <span className={cn("flex h-7 w-7 items-center justify-center rounded", meta.iconClass)}>
+          <Icon className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-slate-700">{meta.label}占位节点</div>
-          <div className="text-[11px] text-slate-500">{meta.empty}</div>
+          <div className="truncate text-sm font-semibold text-slate-900">{data.description || meta.label}</div>
+          <div className="text-[11px] text-slate-500">{meta.label}</div>
         </div>
-        <span className="flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500">
-          <LockKeyhole className="h-3 w-3" />只读
+        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+          待关联
         </span>
         <button
           type="button"
-          aria-label={`删除${meta.label}占位节点`}
-          title="删除占位节点"
+          aria-label={`删除${meta.label}节点`}
+          title="删除节点"
           className="nodrag nopan flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-rose-50 hover:text-rose-600"
           onClick={handleDelete}
         >
@@ -68,11 +77,11 @@ export function UnavailableObjectNode(props: NodeProps<UnavailableObjectNodeData
 
       <div className="space-y-3 p-3">
         <div className="rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-5 text-amber-900">
-          <div className="font-medium">原{meta.label}：{data.originalReference}</div>
-          <div className="text-amber-700">无法恢复，仅保留原配置用于查看</div>
+          <div className="font-medium">原关联对象：{data.originalReference}{data.originalVersion ? ` ${data.originalVersion}` : ""}</div>
+          <div className="text-amber-700">尚未形成有效关联，请重新选择{meta.label}</div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-xs opacity-75">
+        <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="rounded bg-slate-50 px-2 py-1.5">
             <div className="font-medium text-slate-600">输入</div>
             {inputs.map((item) => <div key={item.name} className="mt-1 truncate text-slate-500">{item.name} · {item.type}</div>)}
@@ -83,7 +92,7 @@ export function UnavailableObjectNode(props: NodeProps<UnavailableObjectNodeData
           </div>
         </div>
 
-        <div className="rounded bg-slate-200/70 px-2 py-1.5 text-center text-[11px] leading-4 text-slate-600">只读占位 · 可删除，或新增可用{meta.label}节点完成替换</div>
+        <div className="rounded bg-slate-50 px-2 py-1.5 text-center text-[11px] leading-4 text-slate-500">原配置仅供查看 · 点击节点重新关联</div>
       </div>
 
       <Handle type="source" position={Position.Right} isConnectable={false} className="!h-3 !w-3 !border-2 !border-white !bg-slate-400" />

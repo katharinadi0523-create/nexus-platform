@@ -46,6 +46,7 @@ interface WorkflowEditorProps {
   agentId: string;
   importResult?: "success" | "success_with_warnings" | null;
   importObjectType?: ImportObjectType;
+  onBlockingIssueChange?: (hasIssues: boolean) => void;
 }
 
 // 定义节点类型
@@ -154,15 +155,15 @@ const importedPrototypeNodes: Node[] = [
   { id: "import-database-missing", type: "data-query", position: { x: 680, y: 1120 }, data: { description: "查询历史服务记录", databaseName: "历史服务数据库", inputVariables: [{ name: "customerId", value: "接收售后问题/customerId" }], outputVariables: [{ name: "results", type: "array[object]" }] } },
   {
     id: "import-workflow", type: "unavailable-object", position: { x: 1040, y: 0 },
-    data: { description: "执行退款审批", objectKind: "workflow", originalReference: "退款审批流程", referenceId: "workflow-refund", referenceName: "退款审批流程", inputVariables: [{ name: "request", type: "object", value: "问题分类/category" }], outputVariables: [{ name: "approvalResult", type: "object" }] },
+    data: { description: "执行退款审批", objectKind: "workflow", originalReference: "退款审批流程", originalVersion: "V3", originalSource: "原环境 / workflow-refund", referenceId: "workflow-refund", referenceName: "退款审批流程", inputVariables: [{ name: "request", type: "object", value: "问题分类/category" }], outputVariables: [{ name: "approvalResult", type: "object" }] },
   },
   {
     id: "import-agent", type: "unavailable-object", position: { x: 1040, y: 280 },
-    data: { description: "复核处理建议", objectKind: "agent", originalReference: "售后分析智能体", referenceId: "agent-service", referenceName: "售后分析智能体", inputVariables: [{ name: "query", type: "string", value: "接收售后问题/query" }], outputVariables: [{ name: "answer", type: "string" }] },
+    data: { description: "复核处理建议", objectKind: "agent", originalReference: "售后分析智能体", originalVersion: "V4", originalSource: "原环境 / agent-service", referenceId: "agent-service", referenceName: "售后分析智能体", inputVariables: [{ name: "query", type: "string", value: "接收售后问题/query" }], outputVariables: [{ name: "answer", type: "string" }] },
   },
   {
     id: "import-component", type: "unavailable-object", position: { x: 1040, y: 560 },
-    data: { description: "创建售后工单", objectKind: "component", originalReference: "工单中心组件", referenceId: "component-ticket", referenceName: "工单中心组件", inputVariables: [{ name: "category", type: "string", value: "问题分类/category" }], outputVariables: [{ name: "ticketId", type: "string" }] },
+    data: { description: "创建售后工单", objectKind: "component", originalReference: "工单中心组件", originalVersion: "V2", originalSource: "原环境 / component-ticket", originalComponentType: "插件", referenceId: "component-ticket", referenceName: "工单中心组件", inputVariables: [{ name: "category", type: "string", value: "问题分类/category" }], outputVariables: [{ name: "ticketId", type: "string" }] },
   },
   { id: "import-terminology", type: "message", position: { x: 1040, y: 850 }, data: { label: "Query 多轮改写", referenceName: "产品标准术语库", inputVariables: [{ name: "query", type: "string" }], outputVariables: [{ name: "rewrittenQuery", type: "string" }] } },
   { id: "import-auth", type: "mcp", position: { x: 1040, y: 1120 }, data: { description: "调用全网检索服务", selectedMCP: { id: "mcp-web-search", name: "全网检索服务", description: "检索公开网络信息" }, inputVariables: [{ name: "query", type: "string", required: true }], outputVariables: [{ name: "result", type: "object" }] } },
@@ -188,9 +189,9 @@ const IMPORT_ISSUES: Record<string, { title: string; resourceName: string; detai
   "import-ontology": { title: "本体资源未匹配", resourceName: "售后产品对象", detail: "未找到原本体对象类型", message: "未找到原本体或对象类型“售后产品对象”，请重新选择。" },
   "import-api": { title: "API 不可用", resourceName: "客户信息查询 API", detail: "关联 API 当前不可用", message: "当前节点关联的 API“客户信息查询 API”不可用，请重新关联资源。" },
   "import-database-missing": { title: "数据库未匹配", resourceName: "历史服务数据库", detail: "未找到原数据库", message: "未找到原数据库“历史服务数据库”，请重新选择数据库。" },
-  "import-workflow": { title: "工作流未恢复", resourceName: "退款审批流程", detail: "原关联对象未能恢复", message: "原工作流“退款审批流程”未能恢复，请新增工作流节点并重新配置。" },
-  "import-agent": { title: "智能体未恢复", resourceName: "售后分析智能体", detail: "原关联对象未能恢复", message: "原智能体“售后分析智能体”未能恢复，请新增智能体节点并重新配置。" },
-  "import-component": { title: "组件未恢复", resourceName: "工单中心组件", detail: "原关联对象未能恢复", message: "原组件“工单中心组件”未能恢复，请新增组件节点并重新配置。" },
+  "import-workflow": { title: "工作流未恢复", resourceName: "退款审批流程", detail: "原关联对象未能恢复", message: "原工作流“退款审批流程”未能恢复，请重新选择工作流。" },
+  "import-agent": { title: "智能体未恢复", resourceName: "售后分析智能体", detail: "原关联对象未能恢复", message: "原智能体“售后分析智能体”未能恢复，请重新选择智能体。" },
+  "import-component": { title: "组件未恢复", resourceName: "工单中心组件", detail: "原关联对象未能恢复", message: "原组件“工单中心组件”未能恢复，请重新选择组件。" },
   "import-terminology": { title: "术语库未匹配", resourceName: "产品标准术语库", detail: "未找到原术语库", message: "未找到原术语库“产品标准术语库”，请重新选择术语库。" },
   "import-auth": { title: "鉴权信息缺失", resourceName: "全网检索服务", detail: "鉴权信息未随配置包导入", message: "“全网检索服务”的鉴权信息未导入，请重新完成鉴权。" },
 };
@@ -221,13 +222,13 @@ function buildImportedPrototypeNodes(_objectType: ImportObjectType, result: "suc
       ...node,
       data,
       ...(node.type === "unavailable-object"
-        ? { selectable: true, draggable: false, deletable: true, connectable: false }
+        ? { selectable: true, draggable: true, deletable: true, connectable: false }
         : {}),
     };
   });
 }
 
-export function WorkflowEditor({ agentId, importResult = null, importObjectType = "workflow_agent" }: WorkflowEditorProps) {
+export function WorkflowEditor({ agentId, importResult = null, importObjectType = "workflow_agent", onBlockingIssueChange }: WorkflowEditorProps) {
   // 根据 agentId 加载工作流数据，如果没有则使用默认值
   const workflowData = agentId ? getWorkflowByAgentId(agentId) : null;
   const defaultNodes = importResult ? buildImportedPrototypeNodes(importObjectType, importResult) : workflowData?.nodes || initialNodes;
@@ -269,15 +270,15 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
   );
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    if (node.type === "unavailable-object") {
-      setSelectedNodeId(null);
-      return;
-    }
     setSelectedNodeId(node.id);
   }, []);
 
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null);
+  }, []);
+
+  const onSelectionChange = useCallback(({ nodes: selectedNodes }: { nodes: Node[] }) => {
+    setSelectedNodeId(selectedNodes[0]?.id ?? null);
   }, []);
 
   const handleUpdateNode = useCallback(
@@ -286,6 +287,16 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
         nds.map((node) => {
           if (node.id !== nodeId) return node;
           const nextData = { ...node.data, ...data };
+          if (node.type === "unavailable-object" && nextData.referenceId) {
+            delete nextData.importIssue;
+            if (nextData.objectKind === "workflow") {
+              return { ...node, type: "workflow-ref", data: { ...nextData, workflowId: nextData.referenceId, workflowName: nextData.referenceName }, connectable: true, draggable: true };
+            }
+            if (nextData.objectKind === "agent") {
+              return { ...node, type: "agent", data: { ...nextData, agentId: nextData.referenceId, agentName: nextData.referenceName }, connectable: true, draggable: true };
+            }
+            return { ...node, type: "api", data: { ...nextData, label: nextData.originalComponentType ?? "组件" }, connectable: true, draggable: true };
+          }
           const resourceReconfigured = (node.type === "knowledge" && nextData.knowledgeBaseId)
             || (node.type === "mcp" && nextData.selectedMCP?.id !== node.data?.selectedMCP?.id)
             || (node.type === "llm" && nextData.model)
@@ -365,6 +376,16 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
   }, []);
 
   const hasBlockingImportIssues = nodes.some((node) => Boolean(node.data?.importIssue));
+  const renderedNodes = useMemo(
+    () => nodes.map((node) => node.type === "unavailable-object"
+      ? { ...node, data: { ...node.data, onOpenConfig: () => setSelectedNodeId(node.id) } }
+      : node),
+    [nodes]
+  );
+
+  useEffect(() => {
+    onBlockingIssueChange?.(hasBlockingImportIssues);
+  }, [hasBlockingImportIssues, onBlockingIssueChange]);
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
@@ -390,12 +411,13 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
         {/* React Flow Canvas */}
         <div className="absolute inset-0">
           <ReactFlow
-            nodes={nodes}
+            nodes={renderedNodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            onSelectionChange={onSelectionChange}
             onPaneClick={onPaneClick}
             onInit={onInit}
             nodeTypes={nodeTypes}
@@ -471,7 +493,7 @@ export function WorkflowEditor({ agentId, importResult = null, importObjectType 
             className="gap-2 bg-green-600 hover:bg-green-700"
             onClick={handleRun}
             disabled={isExecuting || hasBlockingImportIssues}
-            title={hasBlockingImportIssues ? "存在待补配节点，完成配置后才能运行" : undefined}
+            title={hasBlockingImportIssues ? "存在待关联或异常节点，完成配置后才能运行" : undefined}
           >
             <Bug className="h-4 w-4" />
             {isExecuting ? "执行中..." : "运行"}

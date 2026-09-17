@@ -1,12 +1,14 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { ArrowLeft, Rocket } from "lucide-react";
 import { toast } from "sonner";
 import { WorkflowEditor } from "@/components/workflow/workflow-editor";
 import { Button } from "@/components/ui/button";
 import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 import { ImportDraftNotice, type ImportDraftResult } from "@/components/import-export/import-draft-notice";
+import { ReferenceRelationshipDialog } from "@/components/reference-relations/reference-relationship-dialog";
 
 const WORKFLOW_META: Record<string, { name: string; hasPublishedVersion: boolean; version?: string }> = {
   "workflow-ticket": { name: "客户工单处理流程", hasPublishedVersion: true, version: "V5" },
@@ -26,6 +28,7 @@ export default function WorkflowDetailPage() {
   const queryImportResult: ImportDraftResult | null = resultParam === "success" || resultParam === "success_with_warnings" ? resultParam : null;
   const importResult = queryImportResult;
   const importOperation = "create";
+  const [hasBlockingIssues, setHasBlockingIssues] = useState(false);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
@@ -43,6 +46,7 @@ export default function WorkflowDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <ReferenceRelationshipDialog objectType="workflow" objectId={workflowId} objectName={meta.name} />
           {meta.hasPublishedVersion ? (
             <ExportConfigurationButton
               objectType="workflow"
@@ -51,7 +55,7 @@ export default function WorkflowDetailPage() {
               sourceVersion={meta.version}
             />
           ) : null}
-          <Button type="button" className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm text-white shadow-none hover:bg-blue-700" onClick={() => toast.success(`已发布：${meta.name}`)}>
+          <Button type="button" disabled={hasBlockingIssues} title={hasBlockingIssues ? "存在待关联或异常节点，完成配置后才能发布" : "发布"} className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm text-white shadow-none hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => toast.success(`已发布：${meta.name}`)}>
             <Rocket className="h-4 w-4" />发布
           </Button>
         </div>
@@ -60,7 +64,7 @@ export default function WorkflowDetailPage() {
       {importResult ? <ImportDraftNotice objectType="workflow" result={importResult} operation={importOperation} /> : null}
 
       <main className="min-h-0 flex-1 overflow-hidden">
-        <WorkflowEditor agentId={workflowId} importResult={importResult} importObjectType="workflow" />
+        <WorkflowEditor agentId={workflowId} importResult={importResult} importObjectType="workflow" onBlockingIssueChange={setHasBlockingIssues} />
       </main>
     </div>
   );
