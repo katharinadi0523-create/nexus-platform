@@ -1,7 +1,8 @@
 "use client";
 
-import { FileQuestion, LockKeyhole } from "lucide-react";
-import { Handle, NodeProps, Position } from "reactflow";
+import { FileQuestion, LockKeyhole, Trash2 } from "lucide-react";
+import { Handle, NodeProps, Position, useReactFlow } from "reactflow";
+import { cn } from "@/lib/utils";
 
 export interface UnavailableObjectNodeData {
   description?: string;
@@ -22,12 +23,25 @@ const KIND_META = {
 
 export function UnavailableObjectNode(props: NodeProps<UnavailableObjectNodeData>) {
   const data = props.data;
+  const { setNodes, setEdges } = useReactFlow();
   const meta = KIND_META[data.objectKind];
   const inputs = data.inputVariables ?? [];
   const outputs = data.outputVariables ?? [];
 
+  function handleDelete(event: React.MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    setNodes((nodes) => nodes.filter((node) => node.id !== props.id));
+    setEdges((edges) => edges.filter((edge) => edge.source !== props.id && edge.target !== props.id));
+  }
+
   return (
-    <div aria-disabled="true" className="w-[280px] cursor-not-allowed overflow-hidden rounded-lg border border-dashed border-slate-400 bg-slate-50/95 shadow-none">
+    <div
+      aria-readonly="true"
+      className={cn(
+        "w-[280px] cursor-default overflow-hidden rounded-lg border border-dashed border-slate-400 bg-slate-50/95 shadow-none",
+        props.selected && "border-slate-600 ring-2 ring-slate-300"
+      )}
+    >
       <Handle type="target" position={Position.Left} isConnectable={false} className="!h-3 !w-3 !border-2 !border-white !bg-slate-400" />
 
       <div className="flex items-center gap-2 border-b border-dashed border-slate-300 bg-slate-100 px-3 py-2.5">
@@ -41,6 +55,15 @@ export function UnavailableObjectNode(props: NodeProps<UnavailableObjectNodeData
         <span className="flex items-center gap-1 rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500">
           <LockKeyhole className="h-3 w-3" />只读
         </span>
+        <button
+          type="button"
+          aria-label={`删除${meta.label}占位节点`}
+          title="删除占位节点"
+          className="nodrag nopan flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+          onClick={handleDelete}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
       </div>
 
       <div className="space-y-3 p-3">
@@ -60,7 +83,7 @@ export function UnavailableObjectNode(props: NodeProps<UnavailableObjectNodeData
           </div>
         </div>
 
-        <div className="rounded bg-slate-200/70 px-2 py-1.5 text-center text-[11px] leading-4 text-slate-600">只读占位 · 请新增可用{meta.label}节点完成替换</div>
+        <div className="rounded bg-slate-200/70 px-2 py-1.5 text-center text-[11px] leading-4 text-slate-600">只读占位 · 可删除，或新增可用{meta.label}节点完成替换</div>
       </div>
 
       <Handle type="source" position={Position.Right} isConnectable={false} className="!h-3 !w-3 !border-2 !border-white !bg-slate-400" />

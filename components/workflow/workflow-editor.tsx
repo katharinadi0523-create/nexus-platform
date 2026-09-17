@@ -221,7 +221,7 @@ function buildImportedPrototypeNodes(_objectType: ImportObjectType, result: "suc
       ...node,
       data,
       ...(node.type === "unavailable-object"
-        ? { selectable: false, draggable: false, deletable: false, connectable: false }
+        ? { selectable: true, draggable: false, deletable: true, connectable: false }
         : {}),
     };
   });
