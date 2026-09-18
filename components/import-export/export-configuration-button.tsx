@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Bot, Check, FileArchive, FileDown, GitBranch, Loader2, RotateCcw, Workflow } from "lucide-react";
+import { AlertTriangle, Bot, Check, CheckCircle2, FileArchive, FileDown, GitBranch, Loader2, RotateCcw, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,9 +40,11 @@ export function ExportConfigurationButton({
 }) {
   const relatedObjects = useMemo(() => EXPORT_RELATED_OBJECTS[objectType], [objectType]);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [partialSuccessOpen, setPartialSuccessOpen] = useState(false);
   const [failureOpen, setFailureOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => relatedObjects.map((item) => item.id));
+  const [failedRelatedIds, setFailedRelatedIds] = useState<string[]>([]);
   const sourceLabel = sourceVersion ? `最新发布版本 ${sourceVersion}` : "最新发布版本";
 
   if (!allowExport) return null;
@@ -56,8 +58,9 @@ export function ExportConfigurationButton({
     setConfirmOpen(true);
   }
 
-  function downloadExport() {
-    const selectedRelated = relatedObjects.filter((item) => selectedIds.includes(item.id));
+  function downloadExport(excludedIds: string[] = []) {
+    const selectedRelated = relatedObjects.filter((item) => selectedIds.includes(item.id) && !excludedIds.includes(item.id));
+    const failedRelated = relatedObjects.filter((item) => excludedIds.includes(item.id));
     const manifest = buildExportPackageManifest({ objectType, objectName, sourceVersion, relatedObjects: selectedRelated });
     const prototypePackage = [
       "Agent Foundry prototype configuration package",
@@ -65,6 +68,9 @@ export function ExportConfigurationButton({
       manifest,
       "--- note ---",
       "密钥及凭证信息未写入配置包。",
+      ...(failedRelated.length
+        ? ["以下关联对象未成功导出：", ...failedRelated.map((item) => `- ${item.name}`)]
+        : []),
     ].join("\n");
     const blob = new Blob([prototypePackage], { type: "application/zip" });
     const url = URL.createObjectURL(blob);
@@ -75,6 +81,28 @@ export function ExportConfigurationButton({
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  }
+
+  function handlePartialSuccessDemo() {
+    if (exporting) return;
+    const failedIds = selectedIds.slice(0, Math.min(2, selectedIds.length));
+    if (failedIds.length === 0) {
+      toast.info("当前未选择关联对象，没有可演示的关联对象失败结果。");
+      return;
+    }
+    setConfirmOpen(false);
+    setExporting(true);
+    window.setTimeout(() => {
+      setFailedRelatedIds(failedIds);
+      setExporting(false);
+      setPartialSuccessOpen(true);
+    }, 500);
+  }
+
+  function handlePartialDownload() {
+    downloadExport(failedRelatedIds);
+    setPartialSuccessOpen(false);
+    toast.success("配置包已下载，未成功导出的关联对象未写入配置包");
   }
 
   function handleExport() {
@@ -164,7 +192,10 @@ export function ExportConfigurationButton({
             </section>
           </div>
           <DialogFooter className="flex-row items-center justify-between border-t border-slate-100 bg-slate-50/70 px-6 py-4 sm:justify-between">
-            <button type="button" className="text-xs text-slate-500 hover:text-rose-600" onClick={handleFailureDemo}>查看导出失败状态</button>
+            <div className="flex items-center gap-4">
+              <button type="button" className="text-xs text-amber-700 hover:text-amber-800" onClick={handlePartialSuccessDemo}>查看关联对象失败状态</button>
+              <button type="button" className="text-xs text-slate-500 hover:text-rose-600" onClick={handleFailureDemo}>查看主对象失败状态</button>
+            </div>
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" className="rounded-[4px] border-slate-300 bg-white shadow-none" onClick={() => setConfirmOpen(false)}>取消</Button>
               <Button type="button" disabled={exporting} className="rounded-[4px] bg-blue-600 text-white shadow-none hover:bg-blue-700" onClick={handleExport}>
@@ -176,11 +207,58 @@ export function ExportConfigurationButton({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={partialSuccessOpen} onOpenChange={setPartialSuccessOpen}>
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[560px]">
+          <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <DialogTitle className="text-lg font-semibold text-slate-950">配置包已生成</DialogTitle>
+            <DialogDescription>主对象导出成功，关联对象按对象独立处理。</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 px-6 py-6">
+            <div className="flex items-start gap-3 rounded-[6px] border border-amber-200 bg-amber-50/70 p-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-amber-600"><AlertTriangle className="h-6 w-6" /></span>
+              <div>
+                <div className="text-sm font-semibold text-amber-950">导出完成，存在未成功导出的关联对象</div>
+                <p className="mt-1 text-sm leading-6 text-amber-800">配置包可正常使用。下列对象未写入配置包，其余对象不受影响。</p>
+              </div>
+            </div>
+
+            <div className="rounded-[6px] border border-emerald-200 bg-emerald-50/50 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-emerald-900"><CheckCircle2 className="h-4 w-4" />主对象已导出</div>
+              <div className="mt-1 pl-6 text-xs text-emerald-700">{objectName} · {sourceLabel}</div>
+            </div>
+
+            <section>
+              <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
+                <span>未成功导出的关联对象</span>
+                <span>{failedRelatedIds.length} 个</span>
+              </div>
+              <div className="divide-y divide-slate-100 overflow-hidden rounded-[6px] border border-slate-200">
+                {relatedObjects.filter((item) => failedRelatedIds.includes(item.id)).map((item, index) => (
+                  <div key={item.id} className="flex items-start gap-3 px-4 py-3">
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-slate-100 text-slate-600"><ObjectIcon type={item.type} /></span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-slate-900">{item.name}</div>
+                      <div className="mt-1 text-xs leading-5 text-rose-600">{index === 0 ? "最新发布版本配置读取失败" : "当前用户无导出权限"}</div>
+                      <div className="mt-0.5 truncate text-[11px] text-slate-400">{item.relationPath}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">每个关联对象独立导出；单个对象失败不会中断其他对象，也不会阻断配置包生成。</p>
+            </section>
+          </div>
+          <DialogFooter className="border-t border-slate-100 bg-slate-50/70 px-6 py-4">
+            <Button type="button" variant="outline" onClick={() => setPartialSuccessOpen(false)}>关闭</Button>
+            <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" onClick={handlePartialDownload}><FileDown className="h-4 w-4" />下载配置包</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={failureOpen} onOpenChange={setFailureOpen}>
         <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-[520px]">
           <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">
             <DialogTitle className="text-lg font-semibold text-slate-950">导出失败</DialogTitle>
-            <DialogDescription>未生成不完整的配置包。</DialogDescription>
+            <DialogDescription>主对象导出失败，未生成配置包。</DialogDescription>
           </DialogHeader>
           <div className="px-6 py-6">
             <div className="flex items-start gap-3 rounded-[6px] border border-rose-200 bg-rose-50/50 p-4">
