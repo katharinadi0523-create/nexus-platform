@@ -17,7 +17,7 @@ export function SecurityLevelBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-[4px] px-2 py-1 text-xs font-medium",
+        "inline-flex shrink-0 items-center whitespace-nowrap rounded-[4px] px-2 py-1 text-xs font-medium",
         getSecurityLevelBadgeClass(level),
         className
       )}

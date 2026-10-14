@@ -669,10 +669,10 @@ export default function AgentDetailPage() {
             <span className="text-sm font-medium">返回</span>
           </Button>
           <div className="h-6 w-px bg-border" />
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="truncate text-base font-semibold text-slate-950">{displayName}</span>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="max-w-[240px] truncate text-base font-semibold text-slate-950">{displayName}</span>
             <span
-              className={cn(isPublished && "cursor-not-allowed opacity-70")}
+              className={cn("shrink-0", isPublished && "cursor-not-allowed opacity-70")}
               title={isPublished ? "已发布密级已锁定" : undefined}
             >
               <SecurityLevelBadge

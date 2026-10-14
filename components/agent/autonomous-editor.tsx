@@ -21,6 +21,7 @@ import {
   Edit2,
   MessageSquareQuote,
   CircleAlert,
+  Unlink,
 } from "lucide-react";
 import { KnowledgeBaseSelector, type KnowledgeBase } from "@/components/agent-editor/KnowledgeBaseSelector";
 import { RetrievalSettings, type RetrievalConfig } from "@/components/agent-editor/RetrievalSettings";
@@ -51,7 +52,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { MemoryVariable } from "@/lib/types/agent";
-import type { SecurityLevel } from "@/lib/security-level";
+import { SecurityLevelBadge } from "@/components/security/security-level-badge";
+import { SECURITY_LEVELS, type SecurityLevel } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
 
 // 定义详细数据源
@@ -220,28 +222,34 @@ function normalizeTerminologies(input: unknown): Terminology[] {
 
 function normalizeKnowledgeBases(input: unknown): KnowledgeBase[] {
   if (!Array.isArray(input)) return [];
-  return input
-    .map((item) => {
-      if (!item || typeof item !== "object") return null;
-      const obj = item as {
-        id?: unknown;
-        name?: unknown;
-        itemCount?: unknown;
-        createTime?: unknown;
-        source?: unknown;
-      };
+  const normalized: KnowledgeBase[] = [];
 
-      if (typeof obj.id !== "string" || typeof obj.name !== "string") return null;
+  for (const item of input) {
+    if (!item || typeof item !== "object") continue;
+    const obj = item as {
+      id?: unknown;
+      name?: unknown;
+      itemCount?: unknown;
+      createTime?: unknown;
+      source?: unknown;
+      securityLevel?: unknown;
+    };
 
-      return {
-        id: obj.id,
-        name: obj.name,
-        itemCount: typeof obj.itemCount === "number" ? obj.itemCount : 0,
-        createTime: typeof obj.createTime === "string" ? obj.createTime : "",
-        source: typeof obj.source === "string" ? obj.source : undefined,
-      } satisfies KnowledgeBase;
-    })
-    .filter((x): x is KnowledgeBase => !!x);
+    if (typeof obj.id !== "string" || typeof obj.name !== "string") continue;
+
+    normalized.push({
+      id: obj.id,
+      name: obj.name,
+      itemCount: typeof obj.itemCount === "number" ? obj.itemCount : 0,
+      createTime: typeof obj.createTime === "string" ? obj.createTime : "",
+      source: typeof obj.source === "string" ? obj.source : undefined,
+      securityLevel: SECURITY_LEVELS.includes(obj.securityLevel as SecurityLevel)
+        ? (obj.securityLevel as SecurityLevel)
+        : undefined,
+    });
+  }
+
+  return normalized;
 }
 
 function normalizeWorkflows(input: unknown): WorkflowType[] {
@@ -389,7 +397,7 @@ function normalizePlugins(input: unknown): Plugin[] {
 const SURFACE_CARD_CLASS =
   "overflow-hidden rounded-[24px] border border-slate-200/80 bg-white/90 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.45)] backdrop-blur-sm";
 const ACTION_BUTTON_CLASS =
-  "inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-100";
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-100";
 const EMPTY_PANEL_CLASS =
   "rounded-[20px] border border-dashed border-slate-200 bg-slate-50/80 px-4 py-7 text-center text-sm text-slate-500";
 
@@ -1341,13 +1349,13 @@ export function AutonomousEditor({
                 </div>
 
                 <div className={SURFACE_CARD_CLASS}>
-                  <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                  <div className="flex min-w-0 items-center justify-between border-b border-slate-100 px-5 py-4">
                     <button
                       onClick={() => toggleSection("knowledge")}
-                      className="flex flex-1 items-center justify-between gap-4"
+                      className="flex min-w-0 flex-1 items-center justify-between gap-3"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-100">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-100">
                           <BookOpen className="h-5 w-5" />
                         </div>
                         <div className="min-w-0 text-left">
@@ -1365,22 +1373,23 @@ export function AutonomousEditor({
                         </div>
                       </div>
                       {expandedSections.knowledge ? (
-                        <ChevronUp className="h-5 w-5 text-slate-400" />
+                        <ChevronUp className="h-5 w-5 shrink-0 text-slate-400" />
                       ) : (
-                        <ChevronDown className="h-5 w-5 text-slate-400" />
+                        <ChevronDown className="h-5 w-5 shrink-0 text-slate-400" />
                       )}
                     </button>
-                    <div className="ml-3 flex items-center gap-2">
+                    <div className="ml-3 flex shrink-0 items-center gap-2">
                       {selectedKnowledgeBases.length > 0 && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleClearKnowledgeBases();
                           }}
-                          className="inline-flex h-9 items-center justify-center rounded-2xl px-3 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-red-600"
+                          className={cn(ACTION_BUTTON_CLASS, "hover:border-red-200 hover:bg-red-50 hover:text-red-600")}
                           title="取消挂载全部知识库"
+                          aria-label="取消挂载全部知识库"
                         >
-                          取消挂载
+                          <Unlink className="h-4 w-4" />
                         </button>
                       )}
                       <button
@@ -1419,12 +1428,25 @@ export function AutonomousEditor({
                               <FileText className="h-4 w-4" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <span className="truncate text-sm font-medium text-slate-900">
                                   {kb.name}
                                 </span>
+                                {kb.securityLevel ? (
+                                  <SecurityLevelBadge
+                                    level={kb.securityLevel}
+                                    className="px-1.5 py-0.5"
+                                  />
+                                ) : (
+                                  <span
+                                    className="inline-flex shrink-0 items-center whitespace-nowrap rounded-[4px] bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-500"
+                                    title="该知识库尚未同步密级，请确认后再使用"
+                                  >
+                                    密级未同步
+                                  </span>
+                                )}
                                 {kb.source && (
-                                  <span className="truncate text-xs text-slate-500">
+                                  <span className="min-w-0 truncate text-xs text-slate-500">
                                     ({kb.source.split("/").pop()})
                                   </span>
                                 )}

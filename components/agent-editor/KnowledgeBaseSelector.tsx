@@ -212,7 +212,7 @@ export function KnowledgeBaseSelector({
                           <span className="font-medium text-slate-900 truncate">
                             {kb.name}
                           </span>
-                          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded">
+                          <span className="shrink-0 whitespace-nowrap rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                             {kb.itemCount}个
                           </span>
                           <SecurityLevelBadge level={kb.securityLevel ?? "公开"} className="px-1.5 py-0.5" />
