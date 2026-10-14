@@ -102,7 +102,10 @@ export function buildSecurityLevelSelectOptions(params: {
     userLevel: params.userLevel,
     maxLevel: params.maxLevel,
     minLevel: params.currentLevel,
-  });
+  }).map((option) => ({
+    ...option,
+    disabled: option.value === params.currentLevel,
+  }));
 }
 
 /**
@@ -127,53 +130,31 @@ export function buildSecurityLevelOptionsUpToUser(params?: {
  * - 创建审批中（知识库等）：不可编辑、删除
  */
 export function getApprovalActionState(approval: ApprovalStatus = "none") {
-  const configLocked = approval === "delete" || approval === "create";
-  const publishLocked = approval === "publish" || approval === "shelf";
-  const shelfLocked = approval === "shelf";
-  const unshelfLocked = approval === "unshelf";
-  const deleteLocked =
-    approval === "publish" ||
-    approval === "shelf" ||
-    approval === "unshelf" ||
-    approval === "delete" ||
-    approval === "create";
+  const locked = approval !== "none";
+  const approvalLabel: Record<Exclude<ApprovalStatus, "none">, string> = {
+    create: "创建审批中",
+    publish: "发布审批中",
+    shelf: "上架审批中",
+    unshelf: "下架审批中",
+    delete: "删除审批中",
+    securityChange: "密级修改审批中",
+  };
+  const lockedTitle = approval === "none" ? undefined : approvalLabel[approval];
 
   return {
     approval,
-    configLocked,
-    publishLocked,
-    shelfLocked,
-    unshelfLocked,
-    deleteLocked,
-    configTitle:
-      approval === "delete"
-        ? "删除审批中"
-        : approval === "create"
-          ? "资源审批中"
-          : undefined,
-    publishTitle:
-      approval === "publish"
-        ? "发布审批中"
-        : approval === "shelf"
-          ? "上架审批中"
-          : undefined,
-    shelfTitle: approval === "shelf" ? "上架审批中" : undefined,
-    unshelfTitle: approval === "unshelf" ? "下架审批中" : undefined,
-    deleteTitle:
-      approval === "publish"
-        ? "发布审批中"
-        : approval === "shelf"
-          ? "上架审批中"
-          : approval === "unshelf"
-            ? "下架审批中"
-            : approval === "delete"
-              ? "删除审批中"
-              : approval === "create"
-                ? "资源审批中"
-                : undefined,
-    securityChangeLocked: approval === "securityChange",
-    securityChangeTitle:
-      approval === "securityChange" ? "密级修改审批中" : undefined,
+    configLocked: locked,
+    publishLocked: locked,
+    shelfLocked: locked,
+    unshelfLocked: locked,
+    deleteLocked: locked,
+    configTitle: lockedTitle,
+    publishTitle: lockedTitle,
+    shelfTitle: lockedTitle,
+    unshelfTitle: lockedTitle,
+    deleteTitle: lockedTitle,
+    securityChangeLocked: locked,
+    securityChangeTitle: lockedTitle,
   };
 }
 

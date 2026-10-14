@@ -17,6 +17,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SecurityLevelBadge } from "@/components/security/security-level-badge";
+import type { SecurityLevel } from "@/lib/security-level";
 import type { AgentRestoreIssue, AgentVersionAvailability, AgentVersionRecord } from "@/lib/mock/agent-version-management";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +34,9 @@ interface AgentVersionHistoryDrawerProps {
   selectedVersionId: string | null;
   restoredDraft: RestoredAgentDraft | null;
   entityDisabled: boolean;
+  securityLevel?: SecurityLevel;
+  actionsLocked?: boolean;
+  lockedReason?: string;
   restoreConfirmOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectVersion: (versionId: string | null) => void;
@@ -47,6 +52,9 @@ export function AgentVersionHistoryDrawer({
   selectedVersionId,
   restoredDraft,
   entityDisabled,
+  securityLevel = "公开",
+  actionsLocked = false,
+  lockedReason,
   restoreConfirmOpen,
   onOpenChange,
   onSelectVersion,
@@ -108,6 +116,15 @@ export function AgentVersionHistoryDrawer({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-blue-900">资源当前密级</span>
+              <SecurityLevelBadge level={securityLevel} />
+            </div>
+            <p className="mt-1.5 text-xs leading-5 text-blue-700">
+              当前草稿与全部历史版本共用该密级；还原、停用或启用版本不会改变资源密级。
+            </p>
+          </div>
 
           <div className="relative space-y-3 before:absolute before:bottom-6 before:left-[9px] before:top-6 before:w-px before:bg-slate-200">
             {restoredDraft ? (
@@ -200,6 +217,8 @@ export function AgentVersionHistoryDrawer({
                           variant="ghost"
                           size="icon"
                           aria-label={`${version.label} 更多操作`}
+                          disabled={actionsLocked}
+                          title={actionsLocked ? lockedReason : undefined}
                           className="absolute right-2 top-2 h-8 w-8 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                         >
                           <MoreHorizontal className="h-4 w-4" />
@@ -208,6 +227,7 @@ export function AgentVersionHistoryDrawer({
                       <DropdownMenuContent align="end" className="w-36 rounded-md p-1">
                         <DropdownMenuItem
                           onSelect={() => requestAvailabilityChange(version.id)}
+                          disabled={actionsLocked}
                           className="cursor-pointer rounded"
                         >
                           {version.availabilityStatus === "启用" ? <Ban className="h-4 w-4" /> : <Power className="h-4 w-4" />}
@@ -226,6 +246,8 @@ export function AgentVersionHistoryDrawer({
           <div className="shrink-0 border-t border-slate-200 bg-white p-4">
             <Button
               onClick={onRestoreRequest}
+              disabled={actionsLocked}
+              title={actionsLocked ? lockedReason : undefined}
               className="h-10 w-full rounded-md bg-blue-600 text-white shadow-none hover:bg-blue-700"
             >
               <RotateCcw className="h-4 w-4" />

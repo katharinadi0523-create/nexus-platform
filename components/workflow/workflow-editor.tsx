@@ -38,6 +38,7 @@ import { BasicConfigSheet } from "./basic-config-sheet";
 import { executeWorkflow, FlowRuntimeResult } from "./workflow-runner";
 import { WorkflowResultPanel } from "./workflow-result-panel";
 import { getWorkflowByAgentId } from "@/lib/mock/workflow-data";
+import type { SecurityLevel } from "@/lib/security-level";
 
 interface WorkflowEditorProps {
   agentId: string;
@@ -49,6 +50,7 @@ interface WorkflowEditorProps {
   onDraftSnapshotChange?: (snapshot: { nodes: Node[]; edges: Edge[] }) => void;
   onOpenNodeConfig?: () => void;
   onRequestDraftAction?: (action: "update" | "reconfigure") => void;
+  securityLevel?: SecurityLevel;
 }
 
 // 定义节点类型
@@ -188,6 +190,7 @@ export function WorkflowEditor({
   onDraftSnapshotChange,
   onOpenNodeConfig,
   onRequestDraftAction,
+  securityLevel = "公开",
 }: WorkflowEditorProps) {
   // 根据 agentId 加载工作流数据，如果没有则使用默认值
   const workflowData = agentId ? getWorkflowByAgentId(agentId) : null;
@@ -498,6 +501,7 @@ export function WorkflowEditor({
             edges={edges}
             readOnly={readOnly}
             onRequestDraftAction={onRequestDraftAction}
+            callerSecurityLevel={securityLevel}
           />
         )}
 

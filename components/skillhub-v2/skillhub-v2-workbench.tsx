@@ -76,27 +76,12 @@ interface SkillHubV2WorkbenchProps {
   onRequestImportUpdate?: (skillId: string) => void;
 }
 
-function toSequentialVersionLabel(version?: string) {
-  const normalized = version?.trim() ?? "";
-  const sequentialMatch = normalized.match(/^v(\d+)$/i);
-  if (sequentialMatch) {
-    return `V${Math.max(1, Number.parseInt(sequentialMatch[1], 10))}`;
-  }
-
-  const [major = 1, minor = 0] = normalized
+function getNextVersionLabel(version = "v1.0") {
+  const [major = 1, minor = 0] = version
     .replace(/^v/i, "")
     .split(".")
     .map((value) => Number.parseInt(value, 10));
-  if (Number.isFinite(major) && Number.isFinite(minor)) {
-    return major === 1 ? `V${Math.max(1, minor + 1)}` : `V${Math.max(1, major)}`;
-  }
-
-  return "V1";
-}
-
-function getNextVersionLabel(version = "V1") {
-  const current = Number.parseInt(toSequentialVersionLabel(version).slice(1), 10);
-  return `V${current + 1}`;
+  return `v${Number.isFinite(major) ? major : 1}.${(Number.isFinite(minor) ? minor : 0) + 1}`;
 }
 
 function getDefaultBoundDependencies(skillId: string): SkillRecord["dependencies"] {
@@ -199,9 +184,9 @@ function getDefaultTrialSample(skillId: string) {
 }
 
 function createSeedRecord(seed: SkillHubV2Seed): SkillRecord {
-  const currentVersionLabel = toSequentialVersionLabel(seed.version);
+  const currentVersionLabel = seed.version ? `v${seed.version.replace(/^v/i, "")}` : "v1.0";
   const publishedVersionLabel = seed.publishedVersion
-    ? toSequentialVersionLabel(seed.publishedVersion)
+    ? `v${seed.publishedVersion.replace(/^v/i, "")}`
     : seed.status === "published"
       ? currentVersionLabel
       : undefined;
@@ -212,8 +197,12 @@ function createSeedRecord(seed: SkillHubV2Seed): SkillRecord {
   /** 发布版本 = 当前版本：线上已装配，试运行与依赖默认就绪，无需再走一遍 */
   const isPublishedCurrent = Boolean(publishedVersionId) && publishedVersionId === currentVersionId;
   const existingBaseline = INITIAL_SKILLS.find((item) => item.id === seed.id);
-  const currentVersionNumber = Number.parseInt(currentVersionLabel.slice(1), 10);
-  const previousVersion = currentVersionNumber > 1 ? `V${currentVersionNumber - 1}` : undefined;
+  const [major, minor] = currentVersionLabel
+    .replace(/^v/i, "")
+    .split(".")
+    .map((value) => Number.parseInt(value, 10));
+  const previousVersion =
+    Number.isFinite(minor) && minor > 0 ? `v${major}.${minor - 1}` : `v${Math.max(major - 1, 0)}.9`;
   const versionHistory: SkillVersion[] = [
     {
       id: currentVersionId,
@@ -249,7 +238,7 @@ function createSeedRecord(seed: SkillHubV2Seed): SkillRecord {
           },
         ]
       : []),
-    ...(previousVersion && previousVersion !== publishedVersionLabel && previousVersion !== currentVersionLabel
+    ...(previousVersion !== publishedVersionLabel && previousVersion !== currentVersionLabel
       ? [
           {
             id: `${seed.id}-${previousVersion}`,
@@ -436,7 +425,7 @@ export function SkillHubV2Workbench({
       }));
       const version: SkillVersion = {
         id: `${CREATE_SKILL_ID_PREFIX}-v10-${timestamp}`,
-        version: "V1",
+        version: "v1.0",
         createdAt: "2026-07-27 15:20",
         createdBy: "邸若楠",
         source: "ai-create",
@@ -463,7 +452,7 @@ export function SkillHubV2Workbench({
         dependencies: [],
         runtimeSnapshot: {
           id: `pending-${CREATE_SKILL_ID_PREFIX}`,
-          boundVersion: "V1",
+          boundVersion: "v1.0",
           status: "not-run",
           sample: CREATE_SKILL_SAMPLE,
         },
@@ -475,7 +464,7 @@ export function SkillHubV2Workbench({
         skillName: skill.name,
         source: "conversation",
         status: "pending-confirmation",
-        outputVersion: "V1 草稿",
+        outputVersion: "v1.0 草稿",
         request: input.request,
         createdAt: "2026-07-27 15:20",
         evidence: skill.versions[0]?.evidence ?? [CREATE_SKILL_SAMPLE],
@@ -497,7 +486,7 @@ export function SkillHubV2Workbench({
         usageInstructions: skill.usageInstructions,
         files,
       });
-      toast.success("已保存为 V1 草稿，新技能已加入技能列表");
+      toast.success("已保存为 v1.0 草稿，新技能已加入技能列表");
       setScreen({ kind: "detail", skillId: skill.id, tab: "overview" });
       return;
     }
@@ -505,7 +494,8 @@ export function SkillHubV2Workbench({
     const target = skills.find((skill) => skill.id === input.skillId);
     if (!target) return;
     const currentVersion = getCurrentManagedVersion(target);
-    const nextVersionLabel = getNextVersionLabel(currentVersion?.version);
+    const currentNumber = Number.parseInt(currentVersion?.version.replace(/\D/g, "") || "10", 10);
+    const nextVersionLabel = `v${Math.floor(currentNumber / 10)}.${(currentNumber % 10) + 1}`;
     const nextVersion: SkillVersion = {
       id: `${target.id}-${nextVersionLabel}-${timestamp}`,
       version: nextVersionLabel,
@@ -568,7 +558,7 @@ export function SkillHubV2Workbench({
 
     const timestamp = Date.now();
     const currentVersion = getCurrentManagedVersion(target);
-    const currentVersionLabel = currentVersion?.version ?? "V1";
+    const currentVersionLabel = currentVersion?.version ?? "v1.0";
     const nextVersionLabel = getNextVersionLabel(currentVersionLabel);
     const nextVersion: SkillVersion = {
       id: `${target.id}-${nextVersionLabel}-manual-${timestamp}`,
@@ -622,7 +612,7 @@ export function SkillHubV2Workbench({
               : getDefaultBoundDependencies(skill.id),
           runtimeSnapshot: {
             id: `rt-snap-${skill.id}-${Date.now().toString().slice(-4)}`,
-            boundVersion: getCurrentManagedVersion(skill)?.version ?? "V1",
+            boundVersion: getCurrentManagedVersion(skill)?.version ?? "v1.0",
             status: "ready",
             assembledAt: "2026-07-24 11:42",
             sample: skill.runtimeSnapshot.sample ?? getDefaultTrialSample(skill.id),
@@ -653,7 +643,11 @@ export function SkillHubV2Workbench({
     }
     const timestamp = Date.now();
     const currentVersion = getCurrentManagedVersion(rollbackSkill);
-    const nextVersionLabel = getNextVersionLabel(currentVersion?.version);
+    const currentNumber = Number.parseInt(
+      currentVersion?.version.replace(/\D/g, "") || "10",
+      10
+    );
+    const nextVersionLabel = `v${Math.floor(currentNumber / 10)}.${(currentNumber % 10) + 1}`;
     const rollbackRecord: SkillVersion = {
       ...rollbackVersion,
       id: `${rollbackSkill.id}-${nextVersionLabel}-rollback-${timestamp}`,
@@ -752,10 +746,12 @@ export function SkillHubV2Workbench({
           }
           publishLabel={activeSkill.status === "reviewing" ? "审核中" : "提交发布"}
           onExport={() => exportSkill(activeSkill.id)}
-          onDownloadVersion={(versionId) => exportSkillVersion(activeSkill.id, versionId)}
           onRunAssembly={() => setScreen({ kind: "trial-run", skillId: activeSkill.id })}
           onSaveManualVersion={(draft) => handleSaveManualVersion(activeSkill.id, draft)}
-
+          onRollback={(versionId) => {
+            setRollbackTarget({ skillId: activeSkill.id, versionId });
+            setRollbackConfirmation("");
+          }}
         />
       ) : null}
 

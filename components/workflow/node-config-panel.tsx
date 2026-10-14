@@ -17,6 +17,7 @@ import { IntentRecognizeNodeConfig } from "./configs/intent-recognize-node-confi
 import { CodeNodeConfig } from "./configs/code-node-config";
 import { MCPNodeConfig } from "./configs/mcp-node-config";
 import { cn } from "@/lib/utils";
+import type { SecurityLevel } from "@/lib/security-level";
 
 interface NodeConfigPanelProps {
   selectedNode: Node | null;
@@ -26,6 +27,7 @@ interface NodeConfigPanelProps {
   edges?: Edge[];
   readOnly?: boolean;
   onRequestDraftAction?: (action: "update" | "reconfigure") => void;
+  callerSecurityLevel?: SecurityLevel;
 }
 
 const getNodeIcon = (type: string | undefined) => {
@@ -138,6 +140,7 @@ export function NodeConfigPanel({
   edges = [],
   readOnly = false,
   onRequestDraftAction,
+  callerSecurityLevel = "公开",
 }: NodeConfigPanelProps) {
   if (!selectedNode) return null;
 
@@ -254,6 +257,7 @@ export function NodeConfigPanel({
             edges={edges}
             readOnly={readOnly}
             onRequestDraftAction={onRequestDraftAction}
+            callerSecurityLevel={callerSecurityLevel}
           />
         )}
         {selectedNode.type === "branch" && (

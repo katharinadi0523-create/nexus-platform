@@ -22,6 +22,8 @@ interface AgentAvailabilityControlProps {
   entityLabel: string;
   disabled: boolean;
   hasListedVersion: boolean;
+  locked?: boolean;
+  lockedReason?: string;
   onDisabledChange: (disabled: boolean) => void;
 }
 
@@ -29,6 +31,8 @@ export function AgentAvailabilityControl({
   entityLabel,
   disabled,
   hasListedVersion,
+  locked = false,
+  lockedReason,
   onDisabledChange,
 }: AgentAvailabilityControlProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -56,6 +60,8 @@ export function AgentAvailabilityControl({
             variant="outline"
             size="icon"
             aria-label={`${entityLabel}更多操作`}
+            disabled={locked}
+            title={locked ? lockedReason : undefined}
             className="h-9 w-9 rounded-md border-slate-300 bg-white text-slate-600 shadow-none hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
           >
             <MoreHorizontal className="h-4 w-4" />
@@ -64,6 +70,7 @@ export function AgentAvailabilityControl({
         <DropdownMenuContent align="end" className="w-48 rounded-md p-1">
           <DropdownMenuItem
             onSelect={requestAvailabilityChange}
+            disabled={locked}
             className="cursor-pointer rounded"
           >
             {disabled ? <Power className="h-4 w-4" /> : <Ban className="h-4 w-4" />}

@@ -10,14 +10,16 @@ import {
   ChevronDown,
   Download,
   FileArchive,
-  List,
+  History,
   LoaderCircle,
   Pencil,
   Play,
   Plus,
+  RotateCcw,
+  Save,
   Sparkles,
   Trash2,
-  Wrench,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -86,8 +88,8 @@ interface SkillDetailViewProps {
   canSubmitPublish: boolean;
   publishLabel: string;
   onExport: () => void;
-  onDownloadVersion: (versionId: string) => void;
   onRunAssembly: () => void;
+  onRollback: (versionId: string) => void;
   onSaveManualVersion: (draft: SkillManualDraft) => void;
 }
 
@@ -125,8 +127,8 @@ export function SkillDetailView({
   canSubmitPublish,
   publishLabel,
   onExport,
-  onDownloadVersion,
   onRunAssembly,
+  onRollback,
   onSaveManualVersion,
 }: SkillDetailViewProps) {
   const currentManagedVersion = getCurrentManagedVersion(skill);
@@ -137,7 +139,7 @@ export function SkillDetailView({
       ? "offline"
       : "published"
     : skill.status;
-  const lockedVersion = currentManagedVersion?.version ?? "V1";
+  const lockedVersion = currentManagedVersion?.version ?? "v1.0";
   const createDraft = (): SkillManualDraft => ({
     name: skill.name,
     displayName: skill.displayName,
@@ -148,10 +150,6 @@ export function SkillDetailView({
   });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<SkillManualDraft>(createDraft);
-  const visibleTab = activeTab === "dependencies" || activeTab === "files" ? activeTab : "overview";
-  const skillTitle = skill.displayName === skill.name
-    ? skill.displayName
-    : `${skill.displayName}  ${skill.name}`;
 
   useEffect(() => {
     if (activeTab === "dependencies" || activeTab === "versions") {
@@ -181,39 +179,35 @@ export function SkillDetailView({
     toast.success(`已基于 ${lockedVersion} 保存改动，生成新版本草稿`);
   }
 
-  const detailTabs: Array<{
-    id: "overview" | "dependencies";
-    label: string;
-    count: number;
-    icon: typeof List;
-  }> = [
-    { id: "overview", label: "版本说明", count: skill.versions.length, icon: List },
-    { id: "dependencies", label: "依赖组件", count: skill.dependencies.length, icon: Wrench },
-  ];
-
   return (
-    <section className="px-5 pb-10" data-testid="skillhub-detail-view">
-      <header className="flex flex-col gap-3 border-b border-slate-200 py-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-9 w-9 shrink-0 rounded-[5px] border-slate-200"
-            onClick={onBack}
-            aria-label="返回技能管理"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-xl font-semibold text-slate-950">{skill.name}</h1>
-              <SkillStatusPill status={releaseStatus} />
-              {hasPendingVersion && currentPublishedVersion ? (
-                <span className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                  {skill.status === "reviewing" ? "更新审核中" : "有未发布更新"}
-                </span>
-              ) : null}
+    <section className="space-y-5 px-5" data-testid="skillhub-detail-view">
+      <div className="border-b border-slate-200 bg-white">
+        <header className="flex flex-col gap-4 border-b border-slate-200 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={onBack}
+              aria-label="返回技能管理"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#1bb3a9] text-white">
+              <FileArchive className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-xl font-semibold text-slate-950">{skill.name}</h1>
+                <SkillStatusPill status={releaseStatus} />
+                {hasPendingVersion && currentPublishedVersion ? (
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                    {skill.status === "reviewing" ? "更新审核中" : "有未发布更新"}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 line-clamp-1 text-sm text-slate-500">{skill.description}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 pl-11 lg:shrink-0 lg:flex-nowrap lg:pl-0">
@@ -1009,12 +1003,14 @@ function VersionsTab({
   skill,
   draft,
   editing,
-  onDownloadVersion,
+  canManage,
+  onRollback,
 }: {
   skill: SkillRecord;
   draft: SkillManualDraft;
   editing: boolean;
-  onDownloadVersion: (versionId: string) => void;
+  canManage: boolean;
+  onRollback: (versionId: string) => void;
 }) {
   const baselineVersion = getCurrentManagedVersion(skill);
   const fileChanges = computeFileChanges(baselineVersion?.files ?? [], draft.files);
@@ -1026,96 +1022,72 @@ function VersionsTab({
   const dependenciesChanged =
     JSON.stringify(draft.dependencies) !== JSON.stringify(skill.dependencies);
   const hasChanges = fileChanges.length > 0 || basicInfoChanged || dependenciesChanged;
-  const toVersionTimestamp = (value: string) => {
-    const normalized = /^\d{2}-\d{2}\s/.test(value)
-      ? `${new Date().getFullYear()}-${value}`
-      : value;
-    return Date.parse(normalized.replace(" ", "T")) || 0;
-  };
-  const sortedVersions = [...skill.versions].sort(
-    (a, b) => toVersionTimestamp(b.createdAt) - toVersionTimestamp(a.createdAt)
-  );
 
   return (
     <div className={cn("grid", editing && "lg:grid-cols-[minmax(0,1fr)_360px] lg:divide-x lg:divide-slate-200")}>
-      <div className={cn("min-w-0", editing && "lg:pr-8")}>
-        <section>
-          <h2 className="text-xl font-semibold text-slate-950">使用说明</h2>
-          <p className="mt-4 max-w-[1180px] text-base leading-8 text-slate-800">
-            {skill.usageInstructions?.trim() || "暂未填写使用说明"}
-          </p>
-        </section>
-
-        <section className="mt-8">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-semibold text-slate-950">版本历史</h2>
-              <p className="mt-1 text-xs text-slate-500">历史版本按更新时间倒序排列，支持下载指定版本。</p>
-            </div>
-            <span className="text-xs text-slate-400">共 {sortedVersions.length} 个版本</span>
-          </div>
-
-          <div className="relative mt-4">
-            {sortedVersions.length > 1 ? (
-              <span className="absolute bottom-6 left-[9px] top-6 w-px bg-slate-200" aria-hidden />
-            ) : null}
-            <div>
-              {sortedVersions.map((version, index) => {
-                const current = version.id === skill.currentVersionId;
-                const published = version.id === skill.publishedVersionId;
-                return (
-                  <article
-                    key={version.id}
-                    className={cn(
-                      "relative grid gap-3 border-b border-slate-100 py-4 pl-10 md:grid-cols-[minmax(0,1fr)_auto] md:items-center",
-                      index === 0 && "pt-2"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "absolute left-1 top-6 h-3 w-3 rounded-full border-[3px] border-white ring-1",
-                        published || current
-                          ? "bg-[#2773ff] ring-blue-100"
-                          : "bg-slate-300 ring-slate-100"
-                      )}
-                      aria-hidden
-                    />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-base font-semibold text-slate-950">{version.version}</span>
-                        {published ? (
-                          <span className="rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
-                            当前发布版本
-                          </span>
-                        ) : null}
-                        {current && !published ? (
-                          <span className="rounded bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600">
-                            {skill.status === "reviewing" ? "审核中" : "当前草稿"}
-                          </span>
-                        ) : null}
+      <div className={cn(editing && "lg:pr-8")}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-slate-900">版本历史</h2>
+          <History className="h-5 w-5 text-slate-400" />
+        </div>
+        <div className="mt-4 space-y-2">
+          {skill.versions.map((version) => {
+            const current = version.id === skill.currentVersionId;
+            const published = version.id === skill.publishedVersionId;
+            return (
+              <div key={version.id} className="border-b border-slate-200 pb-3 pt-3 first:pt-0 last:border-b-0">
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-base font-semibold text-slate-900">
+                       {version.version}
+                      </span>
+                      <SourcePill source={version.source} />
+                      {current ? (
+                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                          当前版本
+                        </span>
+                      ) : null}
+                      {published ? (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                          当前发布
+                        </span>
+                      ) : null}
+                      {current && !published ? (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                          {skill.status === "reviewing" ? "审核中" : "草稿"}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 text-sm leading-5 text-slate-600">{version.releaseNotes}</p>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400">
+                      <span>{version.createdAt}</span>
+                      <span>{version.createdBy}</span>
+                      {version.conversationId ? <span>对话 {version.conversationId}</span> : null}
+                    </div>
+                    {version.evidence?.length ? (
+                      <div className="mt-2 text-xs text-slate-500">
+                        依据：{version.evidence.join(" · ")}
                       </div>
-                      <p className="mt-2 text-sm leading-6 text-slate-700">{version.releaseNotes || "—"}</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3 md:justify-end">
-                      <span className="text-sm text-slate-500">{version.createdAt}</span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        aria-label={`下载 ${version.version}`}
-                        className="h-8 shrink-0 gap-1.5 rounded-[5px] border-slate-200 px-3 text-blue-600 hover:border-blue-300 hover:bg-blue-50"
-                        onClick={() => onDownloadVersion(version.id)}
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        下载
-                      </Button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-        </section>
+                    ) : null}
+                  </div>
+                  {!current && canManage ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 shrink-0 px-2 text-[#2773ff]"
+                      onClick={() => onRollback(version.id)}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      回滚到此
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {editing ? (

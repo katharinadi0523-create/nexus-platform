@@ -237,6 +237,8 @@ export default function AgentDetailPage() {
 
   const isHistorical = Boolean(versionDetailMode && selectedVersion);
   const isVersionContext = Boolean(versionDetailMode && selectedVersion);
+  const approvalAction = getApprovalActionState(approvalStatus);
+  const configReadOnly = isHistorical || approvalAction.configLocked;
   const nextVersionNumber = versions.reduce((highest, version) => {
     const parsed = Number(version.label.replace(/^V/, ""));
     return Number.isInteger(parsed) ? Math.max(highest, parsed) : highest;
@@ -322,8 +324,8 @@ export default function AgentDetailPage() {
       setVersionDescription("");
       toast.success(
         isPublished
-          ? `已提交发布审批：${displayName}，审批通过前仍按当前已发布版本运行。`
-          : `已提交发布审批：${displayName}，审批通过后方可生效。`
+          ? `已提交至基础管控平台：${displayName}，结果回传前仍按当前已发布版本运行。`
+          : `已提交至基础管控平台：${displayName}，结果回传并发布成功后方可生效。`
       );
       return;
     }
@@ -413,15 +415,16 @@ export default function AgentDetailPage() {
   };
   const renderAgentConfig = () => (
     <div
-      aria-readonly={isHistorical}
-      className={isHistorical
+      aria-readonly={configReadOnly}
+      className={configReadOnly
         ? "h-full w-full bg-slate-50 [&_button:disabled]:cursor-not-allowed [&_input:disabled]:cursor-not-allowed [&_input]:!border-slate-200 [&_input]:!bg-slate-100 [&_input]:!text-slate-500 [&_select:disabled]:cursor-not-allowed [&_select]:!border-slate-200 [&_select]:!bg-slate-100 [&_select]:!text-slate-500 [&_textarea:disabled]:cursor-not-allowed [&_textarea]:!border-slate-200 [&_textarea]:!bg-slate-100 [&_textarea]:!text-slate-500 [&_[contenteditable='true']]:!cursor-not-allowed [&_[contenteditable='true']]:!bg-slate-100 [&_[contenteditable='true']]:!text-slate-500"
         : "h-full w-full"}
     >
       {isWorkflow ? (
         <WorkflowEditor
           agentId={agentId}
-          readOnly={isHistorical}
+          readOnly={configReadOnly}
+          securityLevel={securityLevel}
           snapshotVersion={isHistorical ? selectedVersion?.label ?? null : null}
           showReferenceAlerts={!isHistorical}
           historicalConfigSnapshot={selectedVersion?.configSnapshot.editorState}
@@ -433,7 +436,7 @@ export default function AgentDetailPage() {
           onRequestDraftAction={handleHistoricalReferenceAction}
         />
       ) : (
-        <fieldset disabled={isHistorical} className="h-full w-full min-w-0 border-0 p-0">
+        <fieldset disabled={configReadOnly} className="h-full w-full min-w-0 border-0 p-0">
           <AutonomousEditor
             agentId={agentId}
             initialAgentData={agentData || undefined}
@@ -445,6 +448,7 @@ export default function AgentDetailPage() {
               currentDraftConfigRef.current = snapshot;
             }}
             onNameChange={setDisplayName}
+            securityLevel={securityLevel}
           />
         </fieldset>
       )}
@@ -472,7 +476,7 @@ export default function AgentDetailPage() {
     }
     setApprovalStatus("securityChange");
     setSecurityChangeOpen(false);
-    toast.success("已提交密级修改审批，审批通过后方可生效。");
+    toast.success("已提交至基础管控平台，结果回传前资源保持原密级。");
   }
 
   function handleSaveDraftSecurity() {
@@ -508,17 +512,15 @@ export default function AgentDetailPage() {
             {isPublished ? (
               <button
                 type="button"
-                disabled={approvalStatus === "securityChange"}
-                title={
-                  approvalStatus === "securityChange" ? "密级修改审批中" : "申请修改密级"
-                }
+                disabled={approvalAction.securityChangeLocked}
+                title={approvalAction.securityChangeTitle ?? "申请修改密级"}
                 onClick={() => {
                   setSecurityChangeDraft({ targetLevel: securityLevel, reason: "" });
                   setSecurityChangeOpen(true);
                 }}
                 className={cn(
                   "text-xs font-medium",
-                  approvalStatus === "securityChange"
+                  approvalAction.securityChangeLocked
                     ? "cursor-not-allowed text-slate-400"
                     : "text-blue-600 hover:text-blue-700"
                 )}
@@ -528,11 +530,18 @@ export default function AgentDetailPage() {
             ) : (
               <button
                 type="button"
+                disabled={approvalAction.securityChangeLocked}
+                title={approvalAction.securityChangeTitle ?? "调整密级"}
                 onClick={() => {
                   setDraftSecurityLevel(securityLevel);
                   setDraftSecurityOpen(true);
                 }}
-                className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                className={cn(
+                  "text-xs font-medium",
+                  approvalAction.securityChangeLocked
+                    ? "cursor-not-allowed text-slate-400"
+                    : "text-blue-600 hover:text-blue-700"
+                )}
               >
                 调整密级
               </button>
@@ -596,6 +605,8 @@ export default function AgentDetailPage() {
             entityLabel={entityLabel}
             disabled={entityDisabled}
             hasListedVersion={versions.some((version) => version.listingStatus === "已上架")}
+            locked={approvalStatus !== "none"}
+            lockedReason={approvalAction.configTitle}
             onDisabledChange={handleEntityDisabledChange}
           />
           <TooltipProvider delayDuration={200}>
@@ -619,8 +630,8 @@ export default function AgentDetailPage() {
           </TooltipProvider>
 
           <Button
-            disabled={isHistorical || getApprovalActionState(approvalStatus).publishLocked}
-            title={isHistorical ? "\u5386\u53f2\u7248\u672c\u4e0d\u53ef\u53d1\u5e03" : getApprovalActionState(approvalStatus).publishTitle ?? "发布"}
+            disabled={isHistorical || approvalAction.publishLocked}
+            title={isHistorical ? "\u5386\u53f2\u7248\u672c\u4e0d\u53ef\u53d1\u5e03" : approvalAction.publishTitle ?? "发布"}
             onClick={handleOpenPublishDialog}
             className="rounded-2xl bg-slate-900 px-4 text-white shadow-[0_18px_40px_-24px_rgba(15,23,42,0.8)] hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -641,6 +652,14 @@ export default function AgentDetailPage() {
           >
             {"\u8fd4\u56de\u5f53\u524d\u8349\u7a3f"}
           </Button>
+        </div>
+      ) : approvalStatus !== "none" ? (
+        <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span className="font-medium">{approvalAction.configTitle}</span>
+          <span className="text-amber-800">
+            等待基础管控平台回传结果；当前草稿保持只读，不能保存、发布、升密、停用或还原版本，已有发布版本继续按原状态运行。
+          </span>
         </div>
       ) : restoredDraft?.issues.length ? (
         <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-6 py-3 text-sm text-amber-900">
@@ -706,6 +725,14 @@ export default function AgentDetailPage() {
               </div>
             </div>
 
+            <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <div>
+                <p className="text-sm font-medium text-slate-800">资源密级</p>
+                <p className="mt-1 text-xs text-slate-500">新版本沿用资源当前密级，不单独设置。</p>
+              </div>
+              <SecurityLevelBadge level={securityLevel} />
+            </div>
+
             <div className="space-y-2">
               <label htmlFor="publish-version-description" className="text-sm font-medium text-slate-800">
                 <span className="mr-1 text-rose-500">*</span>{"\u7248\u672c\u63cf\u8ff0"}
@@ -725,8 +752,15 @@ export default function AgentDetailPage() {
               </div>
             </div>
 
-            <div className="rounded-md bg-blue-50 px-3 py-2.5 text-xs leading-5 text-blue-800">
-              {"\u53d1\u5e03\u6210\u529f\u540e\u5c06\u751f\u6210\u65b0\u7684\u7248\u672c\u8bb0\u5f55\uff0c\u5e76\u8bb0\u5f55\u53d1\u5e03\u65f6\u95f4\u3001\u53d1\u5e03\u4eba\u548c\u7248\u672c ID\u3002\u5f53\u524d\u8349\u7a3f\u5185\u5bb9\u5c06\u4f5c\u4e3a"} {nextVersionLabel} {"\u53d1\u5e03\u3002"}
+            <div className={cn(
+              "rounded-md px-3 py-2.5 text-xs leading-5",
+              isHighSecurityLevel(securityLevel)
+                ? "border border-amber-200 bg-amber-50 text-amber-800"
+                : "bg-blue-50 text-blue-800"
+            )}>
+              {isHighSecurityLevel(securityLevel)
+                ? `当前为${securityLevel}级资源。AF 将固定待发布配置并提交至基础管控平台；结果回传且发布成功后才生成 ${nextVersionLabel}，等待期间草稿不可编辑。`
+                : `${nextVersionLabel} 将沿用资源当前密级，发布成功后生成新版本记录。`}
             </div>
           </div>
 
@@ -737,7 +771,7 @@ export default function AgentDetailPage() {
               onClick={handlePublishConfirm}
               className="rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300"
             >
-              {"\u786e\u8ba4\u53d1\u5e03"}
+              {isHighSecurityLevel(securityLevel) ? "提交发布审批" : "确认发布"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -835,6 +869,9 @@ export default function AgentDetailPage() {
         selectedVersionId={selectedVersionId}
         restoredDraft={restoredDraft}
         entityDisabled={entityDisabled}
+        securityLevel={securityLevel}
+        actionsLocked={approvalStatus !== "none"}
+        lockedReason={approvalAction.configTitle}
         restoreConfirmOpen={restoreConfirmOpen}
         onOpenChange={setHistoryOpen}
         onSelectVersion={handleSelectVersion}

@@ -14,8 +14,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { SecurityLevelBadge } from "@/components/security/security-level-badge";
+import {
+  getSecurityLevelRank,
+  type SecurityLevel,
+} from "@/lib/security-level";
 import { cn } from "@/lib/utils";
 
 export interface KnowledgeBase {
@@ -24,12 +29,14 @@ export interface KnowledgeBase {
   itemCount: number;
   createTime: string;
   source?: string;
+  securityLevel?: SecurityLevel;
 }
 
 interface KnowledgeBaseSelectorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (kb: KnowledgeBase) => void;
+  callerSecurityLevel?: SecurityLevel;
 }
 
 const mockKnowledgeBases: KnowledgeBase[] = [
@@ -38,36 +45,42 @@ const mockKnowledgeBases: KnowledgeBase[] = [
     name: "app-ngy1wu0t_qa",
     itemCount: 156,
     createTime: "2026-01-11 14:20:51",
+    securityLevel: "公开",
   },
   {
     id: "kb-2",
     name: "app-in5jnfqk_qa",
     itemCount: 89,
     createTime: "2026-01-10 09:15:32",
+    securityLevel: "内部",
   },
   {
     id: "kb-3",
     name: "app-msuc0pch_qa",
     itemCount: 234,
     createTime: "2026-01-09 17:49:35",
+    securityLevel: "秘密",
   },
   {
     id: "kb-4",
     name: "app-bh4a2qek_qa",
     itemCount: 67,
     createTime: "2026-01-08 11:23:18",
+    securityLevel: "机密",
   },
   {
     id: "kb-5",
     name: "app-ghsfxst0_qa",
     itemCount: 312,
     createTime: "2026-01-07 16:42:09",
+    securityLevel: "绝密",
   },
   {
     id: "kb-6",
     name: "app-6jfe6te1_qa",
     itemCount: 45,
     createTime: "2026-01-06 10:30:45",
+    securityLevel: "内部",
   },
 ];
 
@@ -78,6 +91,7 @@ const mockMultimodalBases: KnowledgeBase[] = [
     itemCount: 528,
     createTime: "2026-01-11 14:20:51",
     source: "多模态数据治理平台/数据集市/RAG知识库",
+    securityLevel: "秘密",
   },
   {
     id: "mm-2",
@@ -85,6 +99,7 @@ const mockMultimodalBases: KnowledgeBase[] = [
     itemCount: 267,
     createTime: "2026-01-10 09:15:32",
     source: "多模态数据治理平台/数据集市/RAG知识库",
+    securityLevel: "公开",
   },
 ];
 
@@ -92,6 +107,7 @@ export function KnowledgeBaseSelector({
   open,
   onOpenChange,
   onSelect,
+  callerSecurityLevel = "公开",
 }: KnowledgeBaseSelectorProps) {
   const [activeTab, setActiveTab] = useState("dev");
   const [searchQuery, setSearchQuery] = useState("");
@@ -101,8 +117,10 @@ export function KnowledgeBaseSelector({
   const currentBases =
     activeTab === "dev" ? mockKnowledgeBases : mockMultimodalBases;
 
-  const filteredBases = currentBases.filter((kb) =>
-    kb.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredBases = currentBases.filter(
+    (kb) =>
+      getSecurityLevelRank(kb.securityLevel ?? "公开") <= getSecurityLevelRank(callerSecurityLevel) &&
+      kb.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const totalPages = Math.ceil(filteredBases.length / itemsPerPage);
@@ -124,6 +142,10 @@ export function KnowledgeBaseSelector({
         <DialogHeader>
           <DialogTitle className="text-left">选择知识库</DialogTitle>
         </DialogHeader>
+
+        <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+          当前资源密级为「{callerSecurityLevel}」，仅展示密级不高于当前资源且状态可用的知识库。
+        </div>
 
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Tabs and Header Controls */}
@@ -170,7 +192,7 @@ export function KnowledgeBaseSelector({
             <div className="divide-y divide-slate-200">
               {displayedBases.length === 0 ? (
                 <div className="p-8 text-center text-slate-500">
-                  暂无知识库
+                  当前条件下暂无可引用知识库
                 </div>
               ) : (
                 displayedBases.map((kb) => (
@@ -193,6 +215,7 @@ export function KnowledgeBaseSelector({
                           <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded">
                             {kb.itemCount}个
                           </span>
+                          <SecurityLevelBadge level={kb.securityLevel ?? "公开"} className="px-1.5 py-0.5" />
                         </div>
                         {kb.source && (
                           <p className="text-xs text-slate-500 mb-1">

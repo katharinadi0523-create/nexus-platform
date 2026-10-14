@@ -15,6 +15,11 @@ import {
 import { Node, Edge } from "reactflow";
 import { VariableSelector } from "../variable-selector";
 import { toast } from "sonner";
+import { SecurityLevelBadge } from "@/components/security/security-level-badge";
+import {
+  getSecurityLevelRank,
+  type SecurityLevel,
+} from "@/lib/security-level";
 
 interface Agent {
   id: string;
@@ -25,6 +30,7 @@ interface Agent {
   updatedAt: string;
   version?: string;
   recommended?: boolean;
+  securityLevel: SecurityLevel;
 }
 
 interface AgentNodeData {
@@ -44,6 +50,7 @@ interface AgentNodeData {
   agentUnavailableMessage?: string;
   runtimeError?: string;
   showReferenceAlerts?: boolean;
+  securityLevel?: SecurityLevel;
 }
 
 interface AgentNodeConfigProps {
@@ -54,6 +61,7 @@ interface AgentNodeConfigProps {
   edges?: Edge[];
   readOnly?: boolean;
   onRequestDraftAction?: (action: "update" | "reconfigure") => void;
+  callerSecurityLevel?: SecurityLevel;
 }
 
 const typeOptions = [
@@ -76,6 +84,7 @@ const PUBLISHED_AGENTS: Agent[] = [
     status: "已发布",
     desc: "基于传感器数据和历史维修记录，预测设备故障概率。",
     updatedAt: "2025-12-20 21:03:15",
+    securityLevel: "秘密",
   },
   {
     id: "anti-fl-07",
@@ -84,6 +93,7 @@ const PUBLISHED_AGENTS: Agent[] = [
     status: "已发布",
     desc: "智能体应用描述",
     updatedAt: "2026-01-02 13:30:00",
+    securityLevel: "机密",
   },
 ];
 
@@ -95,6 +105,7 @@ export function AgentNodeConfig({
   edges = [],
   readOnly = false,
   onRequestDraftAction,
+  callerSecurityLevel = "公开",
 }: AgentNodeConfigProps) {
   const [description, setDescription] = useState(nodeData?.description || "");
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(
@@ -106,6 +117,7 @@ export function AgentNodeConfig({
           status: "",
           desc: "",
           updatedAt: "",
+          securityLevel: nodeData.securityLevel ?? "公开",
         }
       : null
   );
@@ -130,6 +142,7 @@ export function AgentNodeConfig({
       ...nodeData,
       agentId: agent.id,
       agentName: agent.name,
+      securityLevel: agent.securityLevel,
       currentVersion: agent.version || "V1",
       latestVersion: agent.version || "V2",
       latestPublishedAt: "2026-07-27 10:20:15",
@@ -227,6 +240,7 @@ export function AgentNodeConfig({
                         status: "可用",
                         desc: `当前资源最新可用版本 · ${nodeData.latestVersion}`,
                         updatedAt: nodeData.latestPublishedAt || "",
+                        securityLevel: selectedAgent.securityLevel,
                       }
                     : null
                 );
@@ -343,6 +357,7 @@ export function AgentNodeConfig({
                 <div className="text-sm font-medium text-slate-900 mb-1">
                   智能体名称: {selectedAgent.name}
                 </div>
+                <SecurityLevelBadge level={selectedAgent.securityLevel} className="mb-1 px-1.5 py-0.5" />
                 <div className="text-xs text-slate-500">
                   {selectedAgent.updatedAt || "2025-12-20 21:03:15"}
                 </div>
@@ -370,11 +385,20 @@ export function AgentNodeConfig({
               <DialogHeader>
                 <DialogTitle>选择智能体</DialogTitle>
               </DialogHeader>
+              <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                当前工作流智能体密级为「{callerSecurityLevel}」，仅展示密级不高于当前资源的最新发布可用版本。
+              </div>
               <div className="mt-4 space-y-2 max-h-[400px] overflow-y-auto">
                 {[
                   ...(reconfigureCandidate ? [reconfigureCandidate] : []),
                   ...PUBLISHED_AGENTS.filter((agent) => agent.id !== reconfigureCandidate?.id),
-                ].map((agent) => (
+                ]
+                  .filter(
+                    (agent) =>
+                      getSecurityLevelRank(agent.securityLevel) <=
+                      getSecurityLevelRank(callerSecurityLevel)
+                  )
+                  .map((agent) => (
                   <button
                     key={agent.id}
                     onClick={() => handleSelectAgent(agent)}
@@ -390,6 +414,7 @@ export function AgentNodeConfig({
                           {agent.recommended ? (
                             <span className="ml-2 rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">最新可用版本</span>
                           ) : null}
+                          <SecurityLevelBadge level={agent.securityLevel} className="ml-2 px-1.5 py-0.5" />
                         </div>
                         <div className="text-xs text-slate-500">{agent.desc}</div>
                         <div className="text-xs text-slate-400 mt-1">

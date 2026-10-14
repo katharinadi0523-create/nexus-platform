@@ -15,6 +15,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { SecurityLevelBadge } from "@/components/security/security-level-badge";
+import {
+  getSecurityLevelRank,
+  type SecurityLevel,
+} from "@/lib/security-level";
 import { cn } from "@/lib/utils";
 
 export interface Workflow {
@@ -22,6 +27,7 @@ export interface Workflow {
   name: string;
   description: string;
   updateTime: string;
+  securityLevel?: SecurityLevel;
 }
 
 interface WorkflowSelectorProps {
@@ -29,6 +35,7 @@ interface WorkflowSelectorProps {
   onOpenChange: (open: boolean) => void;
   onSelect: (workflow: Workflow) => void;
   preferredWorkflow?: Workflow | null;
+  callerSecurityLevel?: SecurityLevel;
 }
 
 const mockWorkflows: Workflow[] = [
@@ -37,30 +44,35 @@ const mockWorkflows: Workflow[] = [
     name: "云时代poc",
     description: "找到AI产线的各位大神",
     updateTime: "2025-12-30 12:34:06",
+    securityLevel: "公开",
   },
   {
     id: "wf-2",
     name: "南航办公助手",
     description: "--",
     updateTime: "2025-12-24 09:36:21",
+    securityLevel: "内部",
   },
   {
     id: "wf-3",
     name: "知识库检索工作流-油...",
     description: "油气价格知识检索",
     updateTime: "2025-11-28 07:21:14",
+    securityLevel: "秘密",
   },
   {
     id: "wf-4",
     name: "评测工作流for算法",
     description: "评测工作流for算法",
     updateTime: "2025-11-27 05:35:49",
+    securityLevel: "机密",
   },
   {
     id: "wf-5",
     name: "西游记问答",
     description: "这是一个可以回答西游记相关问题的智能工作流",
     updateTime: "2025-12-17 13:49:37",
+    securityLevel: "绝密",
   },
 ];
 
@@ -69,6 +81,7 @@ export function WorkflowSelector({
   onOpenChange,
   onSelect,
   preferredWorkflow = null,
+  callerSecurityLevel = "公开",
 }: WorkflowSelectorProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -78,8 +91,11 @@ export function WorkflowSelector({
     ...(preferredWorkflow ? [preferredWorkflow] : []),
     ...mockWorkflows.filter((workflow) => workflow.id !== preferredWorkflow?.id),
   ];
-  const filteredWorkflows = workflowOptions.filter((wf) =>
-    wf.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredWorkflows = workflowOptions.filter(
+    (wf) =>
+      getSecurityLevelRank(wf.securityLevel ?? "公开") <=
+        getSecurityLevelRank(callerSecurityLevel) &&
+      wf.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const totalPages = Math.ceil(filteredWorkflows.length / itemsPerPage);
@@ -101,6 +117,10 @@ export function WorkflowSelector({
         <DialogHeader>
           <DialogTitle className="text-left">选择工作流</DialogTitle>
         </DialogHeader>
+
+        <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+          当前资源密级为「{callerSecurityLevel}」，仅展示密级不高于当前资源的最新已发布可用版本。
+        </div>
 
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header Controls */}
@@ -131,7 +151,7 @@ export function WorkflowSelector({
             <div className="divide-y divide-slate-200">
               {displayedWorkflows.length === 0 ? (
                 <div className="p-8 text-center text-slate-500">
-                  暂无工作流
+                  当前条件下暂无可引用工作流
                 </div>
               ) : (
                 displayedWorkflows.map((workflow) => (
@@ -154,6 +174,7 @@ export function WorkflowSelector({
                           {workflow.id === preferredWorkflow?.id ? (
                             <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">最新可用版本</span>
                           ) : null}
+                          <SecurityLevelBadge level={workflow.securityLevel ?? "公开"} className="px-1.5 py-0.5" />
                         </div>
                         <p className="text-sm text-slate-500 mb-1">
                           {workflow.description}

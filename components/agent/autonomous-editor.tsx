@@ -51,6 +51,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { MemoryVariable } from "@/lib/types/agent";
+import type { SecurityLevel } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
 
 // 定义详细数据源
@@ -191,6 +192,7 @@ interface AutonomousEditorProps {
   onDraftSnapshotChange?: (snapshot: Record<string, unknown>) => void;
   onNameChange?: (name: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  securityLevel?: SecurityLevel;
 }
 
 type PresetPlugin = {
@@ -558,6 +560,7 @@ export function AutonomousEditor({
   onDraftSnapshotChange,
   onNameChange,
   onDirtyChange,
+  securityLevel = "公开",
 }: AutonomousEditorProps) {
   const agentData = initialAgentData || AGENTS_DETAIL_DATA[agentId] || null;
   const initialConfigSource = initialAgentData ?? agentData;
@@ -2454,6 +2457,7 @@ export function AutonomousEditor({
         open={kbSelectorOpen}
         onOpenChange={setKbSelectorOpen}
         onSelect={handleAddKnowledgeBase}
+        callerSecurityLevel={securityLevel}
       />
 
       {/* Retrieval Settings Dialog */}
@@ -2481,6 +2485,7 @@ export function AutonomousEditor({
           handleAddWorkflow(workflow);
         }}
         preferredWorkflow={preferredWorkflow}
+        callerSecurityLevel={securityLevel}
       />
 
       {/* Plugin Selector Dialog */}
