@@ -310,14 +310,14 @@ export function WorkflowResultPanel({
 
               {/* 警告 */}
               {result.warnings.length > 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <div className={`rounded-lg border p-3 ${result.status === "failed" ? "border-rose-200 bg-rose-50" : "border-yellow-200 bg-yellow-50"}`}>
                   <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="w-4 h-4 text-yellow-600" />
-                    <span className="text-sm font-medium text-yellow-900">警告</span>
+                    <AlertCircle className={`h-4 w-4 ${result.status === "failed" ? "text-rose-600" : "text-yellow-600"}`} />
+                    <span className={`text-sm font-medium ${result.status === "failed" ? "text-rose-900" : "text-yellow-900"}`}>{result.status === "failed" ? "错误信息" : "警告"}</span>
                   </div>
                   <div className="space-y-1">
                     {result.warnings.map((warning, index) => (
-                      <div key={index} className="text-xs text-yellow-800">
+                      <div key={index} className={`text-xs ${result.status === "failed" ? "text-rose-800" : "text-yellow-800"}`}>
                         {warning}
                       </div>
                     ))}

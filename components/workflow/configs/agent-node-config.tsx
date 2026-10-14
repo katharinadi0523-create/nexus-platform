@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Grid2x2, X, Trash2 } from "lucide-react";
+import { Plus, Grid2x2, X, Trash2, CircleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Node, Edge } from "reactflow";
 import { VariableSelector } from "../variable-selector";
+import { toast } from "sonner";
 
 interface Agent {
   id: string;
@@ -22,6 +23,8 @@ interface Agent {
   status: string;
   desc: string;
   updatedAt: string;
+  version?: string;
+  recommended?: boolean;
 }
 
 interface AgentNodeData {
@@ -30,6 +33,17 @@ interface AgentNodeData {
   agentName?: string;
   inputVariables?: Array<{ name: string; type: string; value?: string }>;
   outputVariables?: Array<{ name: string; type: string }>;
+  currentVersion?: string;
+  latestVersion?: string;
+  latestPublishedAt?: string;
+  latestVersionDescription?: string;
+  hasVersionUpdate?: boolean;
+  versionUpdateDismissed?: boolean;
+  ignoredVersion?: string;
+  availabilityStatus?: "available" | "version-disabled" | "agent-disabled";
+  agentUnavailableMessage?: string;
+  runtimeError?: string;
+  showReferenceAlerts?: boolean;
 }
 
 interface AgentNodeConfigProps {
@@ -38,6 +52,8 @@ interface AgentNodeConfigProps {
   currentNodeId?: string;
   nodes?: Node[];
   edges?: Edge[];
+  readOnly?: boolean;
+  onRequestDraftAction?: (action: "update" | "reconfigure") => void;
 }
 
 const typeOptions = [
@@ -77,6 +93,8 @@ export function AgentNodeConfig({
   currentNodeId = "",
   nodes = [],
   edges = [],
+  readOnly = false,
+  onRequestDraftAction,
 }: AgentNodeConfigProps) {
   const [description, setDescription] = useState(nodeData?.description || "");
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(
@@ -96,24 +114,31 @@ export function AgentNodeConfig({
   >(
     nodeData?.inputVariables || []
   );
-  const [outputVariables, setOutputVariables] = useState<
-    Array<{ name: string; type: string }>
-  >(
-    nodeData?.outputVariables || [
-      { name: "answer", type: "String" },
-      { name: "ruleIntervention", type: "String" },
-    ]
-  );
+  const outputVariables = nodeData?.outputVariables || [
+    { name: "answer", type: "String" },
+    { name: "ruleIntervention", type: "String" },
+  ];
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
+  const [reconfigureCandidate, setReconfigureCandidate] = useState<Agent | null>(null);
 
   const handleSelectAgent = (agent: Agent) => {
     setSelectedAgent(agent);
+    setReconfigureCandidate(null);
     setAgentDialogOpen(false);
     // 更新节点数据
-    const updated = {
+    const updated: AgentNodeData = {
       ...nodeData,
       agentId: agent.id,
       agentName: agent.name,
+      currentVersion: agent.version || "V1",
+      latestVersion: agent.version || "V2",
+      latestPublishedAt: "2026-07-27 10:20:15",
+      latestVersionDescription: "优化数据校验及异常处理",
+      hasVersionUpdate: true,
+      versionUpdateDismissed: false,
+      availabilityStatus: "available",
+      agentUnavailableMessage: undefined,
+      runtimeError: undefined,
       // 根据选择的智能体，可以预设输入输出变量
       inputVariables: inputVariables.length > 0 ? inputVariables : [
         { name: "query", type: "string", value: "" },
@@ -161,8 +186,137 @@ export function AgentNodeConfig({
     onUpdate({ ...nodeData, inputVariables: updated });
   };
 
+  const agentDisabled = nodeData?.availabilityStatus === "agent-disabled";
+  const versionDisabled = nodeData?.availabilityStatus === "version-disabled";
+  const referenceUnavailable = agentDisabled || versionDisabled;
+  const showReferenceAlerts = nodeData?.showReferenceAlerts !== false;
+  const hasPendingVersionUpdate = Boolean(
+    nodeData?.hasVersionUpdate && nodeData.latestVersion !== nodeData.ignoredVersion
+  );
+  const hasIgnoredCurrentUpdate = Boolean(
+    nodeData?.hasVersionUpdate && nodeData.latestVersion === nodeData.ignoredVersion
+  );
+
   return (
     <div className="space-y-6">
+      {selectedAgent && showReferenceAlerts && referenceUnavailable ? (
+        <section className="rounded-lg border border-rose-200 bg-rose-50/70 p-4">
+          <div className="flex items-center gap-2">
+            <CircleAlert className="h-4 w-4 text-rose-600" />
+            <h3 className="text-sm font-semibold text-rose-950">引用资源已停用</h3>
+            <span className="ml-auto rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">已停用</span>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-rose-800">
+            引用资源已停用，请重新配置。
+          </p>
+          <p className="mt-2 text-xs text-rose-600">当前引用：{nodeData?.agentName} · {nodeData?.currentVersion}。未处理时，运行至该节点将调用失败。</p>
+          <div className="mt-4 flex justify-end border-t border-rose-200 pt-3">
+            <Button
+              type="button"
+              size="sm"
+              className="bg-rose-600 text-white hover:bg-rose-700"
+              onClick={() => {
+                if (readOnly) onRequestDraftAction?.("reconfigure");
+                setReconfigureCandidate(
+                  versionDisabled && nodeData?.latestVersion && nodeData.latestVersion !== nodeData.currentVersion
+                    ? {
+                        ...selectedAgent,
+                        id: `${selectedAgent.id}-${nodeData.latestVersion}`,
+                        version: nodeData.latestVersion,
+                        recommended: true,
+                        status: "可用",
+                        desc: `当前资源最新可用版本 · ${nodeData.latestVersion}`,
+                        updatedAt: nodeData.latestPublishedAt || "",
+                      }
+                    : null
+                );
+                setSelectedAgent(null);
+                setAgentDialogOpen(true);
+              }}
+            >
+              重新配置
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
+      {selectedAgent && showReferenceAlerts && !agentDisabled && !versionDisabled && nodeData?.currentVersion && nodeData?.latestVersion ? (
+        <section className={`rounded-lg border p-4 ${hasPendingVersionUpdate ? "border-amber-200 bg-amber-50/60" : "border-slate-200 bg-slate-50"}`}>
+          <div className="flex items-center gap-2">
+            <CircleAlert className={`h-4 w-4 ${hasPendingVersionUpdate ? "text-amber-500" : hasIgnoredCurrentUpdate ? "text-slate-400" : "text-emerald-500"}`} />
+            <h3 className="text-sm font-semibold text-slate-900">版本信息</h3>
+            {hasPendingVersionUpdate ? (
+              <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">有新版本</span>
+            ) : hasIgnoredCurrentUpdate ? (
+              <span className="ml-auto rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">本次已忽略</span>
+            ) : (
+              <span className="ml-auto rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">已是最新</span>
+            )}
+          </div>
+          <dl className="mt-3 grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+            <dt className="text-slate-500">当前版本</dt>
+            <dd className="font-medium text-slate-800">{nodeData.currentVersion}</dd>
+            <dt className="text-slate-500">最新可用版本</dt>
+            <dd className="font-medium text-slate-800">{nodeData.latestVersion}</dd>
+            <dt className="text-slate-500">发布时间</dt>
+            <dd className="text-slate-700">{nodeData.latestPublishedAt || "—"}</dd>
+            <dt className="text-slate-500">最新版本描述</dt>
+            <dd className="leading-5 text-slate-700">{nodeData.latestVersionDescription || "—"}</dd>
+          </dl>
+          {nodeData.hasVersionUpdate ? (
+            <div className={`mt-4 flex justify-end gap-2 border-t pt-3 ${hasPendingVersionUpdate ? "border-amber-200" : "border-slate-200"}`}>
+              {hasPendingVersionUpdate ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={readOnly}
+                  className={readOnly ? "cursor-not-allowed" : undefined}
+                  onClick={() => {
+                    onUpdate({
+                      ...nodeData,
+                      versionUpdateDismissed: true,
+                      ignoredVersion: nodeData.latestVersion,
+                    });
+                    toast.info(`已忽略 ${nodeData.latestVersion}，节点继续使用 ${nodeData.currentVersion}；新版本发布时将再次提醒`);
+                  }}
+                >
+                  本次忽略
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                className="bg-blue-600 text-white hover:bg-blue-700"
+                onClick={() => {
+                  if (readOnly) {
+                    onRequestDraftAction?.("update");
+                    return;
+                  }
+                  onUpdate({
+                    ...nodeData,
+                    currentVersion: nodeData.latestVersion,
+                    hasVersionUpdate: false,
+                    versionUpdateDismissed: false,
+                    ignoredVersion: undefined,
+                  });
+                  toast.success(`已在当前草稿更新至 ${nodeData.latestVersion}，重新发布后生效`);
+                }}
+              >
+                {readOnly ? "复制到草稿并更新" : "立即更新"}
+              </Button>
+            </div>
+          ) : null}
+          {hasIgnoredCurrentUpdate ? (
+            <p className="mt-3 text-xs text-slate-500">节点继续使用 {nodeData.currentVersion}；后续发布新版本时将再次提醒。</p>
+          ) : null}
+        </section>
+      ) : null}
+
+      <fieldset
+        disabled={readOnly}
+        className="space-y-6 border-0 p-0 disabled:[&_button]:cursor-not-allowed disabled:[&_button]:opacity-60 disabled:[&_input]:cursor-not-allowed disabled:[&_input]:bg-slate-100 disabled:[&_select]:cursor-not-allowed disabled:[&_textarea]:cursor-not-allowed disabled:[&_textarea]:bg-slate-100"
+      >
       {/* 描述 */}
       <div>
         <Input
@@ -217,7 +371,10 @@ export function AgentNodeConfig({
                 <DialogTitle>选择智能体</DialogTitle>
               </DialogHeader>
               <div className="mt-4 space-y-2 max-h-[400px] overflow-y-auto">
-                {PUBLISHED_AGENTS.map((agent) => (
+                {[
+                  ...(reconfigureCandidate ? [reconfigureCandidate] : []),
+                  ...PUBLISHED_AGENTS.filter((agent) => agent.id !== reconfigureCandidate?.id),
+                ].map((agent) => (
                   <button
                     key={agent.id}
                     onClick={() => handleSelectAgent(agent)}
@@ -230,6 +387,9 @@ export function AgentNodeConfig({
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-slate-900 mb-1">
                           {agent.name}
+                          {agent.recommended ? (
+                            <span className="ml-2 rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">最新可用版本</span>
+                          ) : null}
                         </div>
                         <div className="text-xs text-slate-500">{agent.desc}</div>
                         <div className="text-xs text-slate-400 mt-1">
@@ -327,6 +487,7 @@ export function AgentNodeConfig({
           ))}
         </div>
       </div>
+      </fieldset>
     </div>
   );
 }
