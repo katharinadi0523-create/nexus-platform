@@ -32,6 +32,10 @@ import {
 } from "@/components/security/security-level-badge";
 import { SecurityLevelPicker } from "@/components/security/security-level-picker";
 import {
+  ApprovalInteractionPanel,
+  type ApprovalFeedback,
+} from "@/components/security/approval-interaction-panel";
+import {
   buildSecurityLevelSelectOptions,
   isHighSecurityLevel,
   getApprovalActionState,
@@ -39,6 +43,16 @@ import {
   type SecurityLevel,
 } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
+
+function createApprovalRequestId() {
+  return `AF-${Date.now().toString().slice(-8)}`;
+}
+
+function formatApprovalTime() {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+}
 
 interface AgentDetailData {
   type: "autonomous" | "workflow";
@@ -232,6 +246,20 @@ export default function AgentDetailPage() {
   const [draftSecurityLevel, setDraftSecurityLevel] = useState<SecurityLevel>(
     agentProfile?.securityLevel ?? "公开"
   );
+  const [securityChangeError, setSecurityChangeError] = useState("");
+  const [pendingSecurityRequest, setPendingSecurityRequest] = useState<{
+    requestId: string;
+    fromLevel: SecurityLevel;
+    targetLevel: SecurityLevel;
+    reason: string;
+    submittedAt: string;
+  } | null>(null);
+  const [pendingPublishRequest, setPendingPublishRequest] = useState<{
+    requestId: string;
+    description: string;
+    submittedAt: string;
+  } | null>(null);
+  const [approvalFeedback, setApprovalFeedback] = useState<ApprovalFeedback | null>(null);
 
   const isPublished = publishStatus === "已发布";
 
@@ -310,25 +338,7 @@ export default function AgentDetailPage() {
     );
   };
 
-  const handlePublishConfirm = () => {
-    const description = versionDescription.trim();
-    if (!description || isHistorical) return;
-    const approvalAction = getApprovalActionState(approvalStatus);
-    if (approvalAction.publishLocked) {
-      toast.info(approvalAction.publishTitle ?? "审批中，暂不可发布。");
-      return;
-    }
-    if (isHighSecurityLevel(securityLevel)) {
-      setApprovalStatus("publish");
-      setPublishDialogOpen(false);
-      setVersionDescription("");
-      toast.success(
-        isPublished
-          ? `已提交至基础管控平台：${displayName}，结果回传前仍按当前已发布版本运行。`
-          : `已提交至基础管控平台：${displayName}，结果回传并发布成功后方可生效。`
-      );
-      return;
-    }
+  const finalizePublish = (description: string, requestId?: string) => {
     const sourceVersion = versions.find((version) => version.isLatest) ?? versions[0];
     if (!sourceVersion) return;
 
@@ -378,7 +388,46 @@ export default function AgentDetailPage() {
     setHistoryOpen(true);
     setPublishStatus("已发布");
     setApprovalStatus("none");
+    setPendingPublishRequest(null);
+    if (requestId) {
+      setApprovalFeedback({
+        tone: "success",
+        title: "发布审批已通过",
+        description: `${nextVersionLabel} 已生成并沿用资源当前密级「${securityLevel}」，已有版本与引用关系未被自动替换。`,
+        requestId,
+        canTestDuplicate: true,
+      });
+    }
     toast.success(`${nextVersionLabel} \u53d1\u5e03\u6210\u529f`);
+  };
+
+  const handlePublishConfirm = () => {
+    const description = versionDescription.trim();
+    if (!description || isHistorical) return;
+    const approvalAction = getApprovalActionState(approvalStatus);
+    if (approvalAction.publishLocked) {
+      toast.info(approvalAction.publishTitle ?? "审批中，暂不可发布。");
+      return;
+    }
+    if (isHighSecurityLevel(securityLevel)) {
+      const requestId = createApprovalRequestId();
+      setPendingPublishRequest({
+        requestId,
+        description,
+        submittedAt: formatApprovalTime(),
+      });
+      setApprovalFeedback(null);
+      setApprovalStatus("publish");
+      setPublishDialogOpen(false);
+      setVersionDescription("");
+      toast.success(
+        isPublished
+          ? `已提交至基础管控平台：${displayName}，结果回传前仍按当前已发布版本运行。`
+          : `已提交至基础管控平台：${displayName}，结果回传并发布成功后方可生效。`
+      );
+      return;
+    }
+    finalizePublish(description);
   };
 
   const handleVersionAvailabilityChange = (
@@ -467,22 +516,45 @@ export default function AgentDetailPage() {
   function handleSubmitSecurityChange() {
     const reason = securityChangeDraft.reason.trim();
     if (!reason) {
+      setSecurityChangeError("请填写申请原因后再提交。申请原因会随审批单发送至基础管控平台。");
       toast.error("请填写申请原因。");
       return;
     }
     if (securityChangeDraft.targetLevel === securityLevel) {
+      setSecurityChangeError("目标密级必须高于当前密级。");
       toast.error("请选择与当前不同的目标密级。");
       return;
     }
+    const requestId = createApprovalRequestId();
+    setPendingSecurityRequest({
+      requestId,
+      fromLevel: securityLevel,
+      targetLevel: securityChangeDraft.targetLevel,
+      reason,
+      submittedAt: formatApprovalTime(),
+    });
+    setSecurityChangeError("");
+    setApprovalFeedback(null);
     setApprovalStatus("securityChange");
     setSecurityChangeOpen(false);
-    toast.success("已提交至基础管控平台，结果回传前资源保持原密级。");
+    toast.success(`申请单 ${requestId} 已提交至基础管控平台，结果回传前资源保持原密级。`);
+  }
+
+  function handleSimulateApprovalStartFailure() {
+    setSecurityChangeError("审批发起失败：未获取到基础管控平台申请单号。资源状态未变化，请稍后重试。");
+    toast.error("审批发起失败，申请未提交。资源状态未变化。");
   }
 
   function handleSaveDraftSecurity() {
+    const previousLevel = securityLevel;
     setSecurityLevel(draftSecurityLevel);
     setDraftSecurityOpen(false);
-    toast.success("密级已更新。");
+    setApprovalFeedback({
+      tone: "success",
+      title: "密级已直接更新",
+      description: `资源首次成功发布前无需审批，已从「${previousLevel}」提升为「${draftSecurityLevel}」；本次升密不生成新版本。`,
+    });
+    toast.success("密级已更新，首次发布前升密无需审批。");
   }
 
   function getDefaultSecurityTarget() {
@@ -492,6 +564,88 @@ export default function AgentDetailPage() {
       )?.value ?? securityLevel
     );
   }
+
+  function clearPendingApproval() {
+    setPendingSecurityRequest(null);
+    setPendingPublishRequest(null);
+    setApprovalStatus("none");
+  }
+
+  function handleApprovalResult(result: "approved" | "rejected" | "withdrawn" | "writebackFailed") {
+    const requestId = pendingSecurityRequest?.requestId ?? pendingPublishRequest?.requestId;
+
+    if (result === "writebackFailed") {
+      setApprovalFeedback({
+        tone: "danger",
+        title: "审批结果回写失败",
+        description: "已收到基础管控平台结果，但 AF 尚未完成业务状态更新。资源保持原状态且继续锁定，避免误更新或重复执行。",
+        requestId,
+        canRetry: true,
+      });
+      toast.error("结果回写失败，资源状态未变化。");
+      return;
+    }
+
+    if (result === "approved") {
+      if (approvalStatus === "securityChange" && pendingSecurityRequest) {
+        const { targetLevel, fromLevel } = pendingSecurityRequest;
+        setSecurityLevel(targetLevel);
+        setApprovalFeedback({
+          tone: "success",
+          title: "密级提升已生效",
+          description: `资源已从「${fromLevel}」提升为「${targetLevel}」。草稿和全部历史版本统一使用新密级，系统已重新执行访问与引用校验。`,
+          requestId,
+          canTestDuplicate: true,
+        });
+        clearPendingApproval();
+        toast.success(`资源密级已更新为「${targetLevel}」。`);
+        return;
+      }
+      if (approvalStatus === "publish" && pendingPublishRequest) {
+        finalizePublish(pendingPublishRequest.description, pendingPublishRequest.requestId);
+        return;
+      }
+      setApprovalFeedback({
+        tone: "success",
+        title: "审批已通过",
+        description: "AF 已按审批结果完成对应业务状态更新，并恢复可用操作入口。",
+        requestId,
+        canTestDuplicate: true,
+      });
+      clearPendingApproval();
+      return;
+    }
+
+    const rejected = result === "rejected";
+    setApprovalFeedback({
+      tone: rejected ? "warning" : "info",
+      title: rejected ? "审批已驳回" : "申请已撤回",
+      description: rejected
+        ? "待审批操作未执行，资源保持原业务状态；编辑、发布和密级修改入口已恢复。"
+        : "撤回已完成，待审批操作未执行，资源保持原业务状态；相关操作入口已恢复。",
+      requestId,
+    });
+    clearPendingApproval();
+    toast.info(rejected ? "审批已驳回，资源保持原状态。" : "申请已撤回，资源保持原状态。");
+  }
+
+  function handleDuplicateApprovalCallback() {
+    setApprovalFeedback((current) => current ? {
+      ...current,
+      tone: "info",
+      title: "重复回调已忽略",
+      description: "该申请单已经处理完成，本次重复回调未再次修改密级、生成版本或执行其他业务操作。",
+      canTestDuplicate: false,
+    } : current);
+    toast.info("重复审批回调已幂等忽略。");
+  }
+
+  const activeApprovalRequest = pendingSecurityRequest ?? pendingPublishRequest;
+  const activeApprovalSummary = pendingSecurityRequest
+    ? `申请将资源密级从「${pendingSecurityRequest.fromLevel}」提升为「${pendingSecurityRequest.targetLevel}」。审批通过前仍按「${pendingSecurityRequest.fromLevel}」控制访问。申请原因：${pendingSecurityRequest.reason}`
+    : pendingPublishRequest
+      ? `待发布配置及版本描述已固定。审批通过并发布成功后才生成 ${nextVersionLabel}。`
+      : undefined;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[linear-gradient(180deg,#fbfcfe_0%,#f5f7fb_45%,#eef4ff_100%)]">
@@ -524,6 +678,7 @@ export default function AgentDetailPage() {
                 title={approvalAction.securityChangeTitle ?? "申请修改密级"}
                  onClick={() => {
                    setSecurityChangeDraft({ targetLevel: getDefaultSecurityTarget(), reason: "" });
+                   setSecurityChangeError("");
                    setSecurityChangeOpen(true);
                  }}
                 className={cn(
@@ -661,15 +816,28 @@ export default function AgentDetailPage() {
             {"\u8fd4\u56de\u5f53\u524d\u8349\u7a3f"}
           </Button>
         </div>
-      ) : approvalStatus !== "none" ? (
-        <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm text-amber-900">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span className="font-medium">{approvalAction.configTitle}</span>
-          <span className="text-amber-800">
-            等待基础管控平台回传结果；当前草稿保持只读，不能保存、发布、升密、停用或还原版本，已有发布版本继续按原状态运行。
-          </span>
-        </div>
-      ) : restoredDraft?.issues.length ? (
+      ) : null}
+
+      {!isHistorical ? (
+        <ApprovalInteractionPanel
+          pending={approvalStatus !== "none" && !approvalFeedback?.canRetry}
+          approvalLabel={approvalAction.configTitle}
+          summary={activeApprovalSummary}
+          requestId={activeApprovalRequest?.requestId}
+          submittedAt={activeApprovalRequest?.submittedAt}
+          existingVersionContinues={isPublished}
+          feedback={approvalFeedback}
+          onApprove={() => handleApprovalResult("approved")}
+          onReject={() => handleApprovalResult("rejected")}
+          onWithdraw={() => handleApprovalResult("withdrawn")}
+          onWritebackFailure={() => handleApprovalResult("writebackFailed")}
+          onRetry={() => handleApprovalResult("approved")}
+          onDuplicateCallback={handleDuplicateApprovalCallback}
+          onDismissFeedback={() => setApprovalFeedback(null)}
+        />
+      ) : null}
+
+      {!isHistorical && approvalStatus === "none" && !approvalFeedback && restoredDraft?.issues.length ? (
         <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-6 py-3 text-sm text-amber-900">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <div className="flex items-center gap-2 font-medium">
@@ -850,6 +1018,27 @@ export default function AgentDetailPage() {
                 setSecurityChangeDraft((current) => ({ ...current, targetLevel }))
               }
             />
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-900">审批通过后的影响预览</p>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-slate-600">作用于整个资源</span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {[
+                  ["版本", `草稿及全部历史版本统一使用「${securityChangeDraft.targetLevel}」，升密不生成新版本。`],
+                  ["访问", `密级低于「${securityChangeDraft.targetLevel}」的用户将失去查看、编辑和使用权限。`],
+                  ["引用", "已发布版本保留原引用记录；不合法引用运行时阻断，当前草稿提示重新配置。"],
+                  ["通知", "AF 重新执行权限校验，并通知受影响的直接引用资源负责人。"],
+                ].map(([label, text]) => (
+                  <div key={label} className="flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-slate-600">
+                    <span className="flex h-5 min-w-8 items-center justify-center rounded-md bg-white px-1.5 font-semibold text-slate-800 shadow-sm ring-1 ring-slate-200">
+                      {label}
+                    </span>
+                    <span className="leading-5">{text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="agent-security-reason" className="text-sm font-semibold text-slate-900">
                 <span className="text-rose-500">*</span>申请原因
@@ -858,16 +1047,39 @@ export default function AgentDetailPage() {
                 id="agent-security-reason"
                 value={securityChangeDraft.reason}
                 onChange={(event) =>
-                  setSecurityChangeDraft((current) => ({
-                    ...current,
-                    reason: event.target.value,
-                  }))
+                  {
+                    setSecurityChangeDraft((current) => ({
+                      ...current,
+                      reason: event.target.value,
+                    }));
+                    if (event.target.value.trim()) setSecurityChangeError("");
+                  }
                 }
                 rows={4}
                 placeholder="请说明需要提升密级的业务原因、数据范围或风险依据"
-                className="resize-none rounded-2xl border-slate-200 bg-slate-50/60 px-4 py-3 focus-visible:bg-white"
+                aria-invalid={Boolean(securityChangeError)}
+                className={cn(
+                  "resize-none rounded-2xl bg-slate-50/60 px-4 py-3 focus-visible:bg-white",
+                  securityChangeError ? "border-rose-300 focus-visible:ring-rose-200" : "border-slate-200"
+                )}
               />
-              <p className="text-xs text-slate-400">申请原因将随请求一并提交至基础管控平台。</p>
+              {securityChangeError ? (
+                <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>{securityChangeError}</span>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">申请原因将随请求一并提交至基础管控平台。</p>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-700">原型验收案例</p>
+                <p className="mt-0.5 text-xs text-slate-500">验证审批发起失败时不锁定资源、不改变密级，并允许用户重试。</p>
+              </div>
+              <Button type="button" size="sm" variant="outline" className="h-8 bg-white text-xs" onClick={handleSimulateApprovalStartFailure}>
+                模拟发起失败
+              </Button>
             </div>
           </div>
           <DialogFooter className="border-t border-slate-100 bg-slate-50/80 px-6 py-4">
