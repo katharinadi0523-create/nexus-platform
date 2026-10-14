@@ -6,11 +6,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   History,
-  Layers3,
-  Network,
   Rocket,
-  ShieldCheck,
-  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -24,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { AgentLogsView } from "@/components/agent/agent-logs-view";
 import { WorkflowEditor } from "@/components/workflow/workflow-editor";
@@ -39,7 +36,6 @@ import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBad
 import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
-import { SecurityLevelPicker } from "@/components/security/security-level-picker";
 import {
   ApprovalInteractionPanel,
   type ApprovalFeedback,
@@ -655,6 +651,10 @@ export default function AgentDetailPage() {
     : pendingPublishRequest
       ? `${nextVersionLabel} 发布申请已提交，审批通过后才会生成新版本。`
       : undefined;
+  const securityChangeOptions = buildSecurityLevelSelectOptions({ currentLevel: securityLevel }).filter(
+    (option) => !option.disabled
+  );
+  const canRaiseSecurityLevel = securityChangeOptions.length > 0;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[linear-gradient(180deg,#fbfcfe_0%,#f5f7fb_45%,#eef4ff_100%)]">
@@ -680,44 +680,54 @@ export default function AgentDetailPage() {
                 className={isPublished ? "bg-slate-100 text-slate-400" : undefined}
               />
             </span>
-            {isPublished ? (
+            {approvalStatus === "none" && isPublished && canRaiseSecurityLevel ? (
               <button
                 type="button"
-                disabled={approvalAction.securityChangeLocked}
-                title={approvalAction.securityChangeTitle ?? "申请修改密级"}
-                 onClick={() => {
-                   setSecurityChangeDraft({ targetLevel: getDefaultSecurityTarget(), reason: "" });
-                   setSecurityChangeError("");
-                   setSecurityChangeOpen(true);
-                 }}
-                className={cn(
-                  "text-xs font-medium",
-                  approvalAction.securityChangeLocked
-                    ? "cursor-not-allowed text-slate-400"
-                    : "text-blue-600 hover:text-blue-700"
-                )}
+                title="申请修改密级"
+                onClick={() => {
+                  setSecurityChangeDraft({ targetLevel: getDefaultSecurityTarget(), reason: "" });
+                  setSecurityChangeError("");
+                  setSecurityChangeOpen(true);
+                }}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700"
               >
                 修改
               </button>
-            ) : (
+            ) : approvalStatus === "none" && !isPublished && canRaiseSecurityLevel ? (
               <button
                 type="button"
-                disabled={approvalAction.securityChangeLocked}
-                title={approvalAction.securityChangeTitle ?? "调整密级"}
-                 onClick={() => {
-                   setDraftSecurityLevel(getDefaultSecurityTarget());
-                   setDraftSecurityOpen(true);
-                 }}
-                className={cn(
-                  "text-xs font-medium",
-                  approvalAction.securityChangeLocked
-                    ? "cursor-not-allowed text-slate-400"
-                    : "text-blue-600 hover:text-blue-700"
-                )}
+                title="调整密级"
+                onClick={() => {
+                  setDraftSecurityLevel(getDefaultSecurityTarget());
+                  setDraftSecurityOpen(true);
+                }}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700"
               >
                 调整密级
               </button>
-            )}
+            ) : null}
+            <ApprovalInteractionPanel
+              pending={approvalStatus !== "none" && !approvalFeedback?.canRetry}
+              approvalLabel={
+                pendingSecurityRequest
+                  ? "密级提升审批中"
+                  : pendingPublishRequest
+                    ? "发布审批中"
+                    : approvalAction.configTitle
+              }
+              summary={activeApprovalSummary}
+              requestId={activeApprovalRequest?.requestId}
+              submittedAt={activeApprovalRequest?.submittedAt}
+              existingVersionContinues={isPublished}
+              feedback={approvalFeedback}
+              onApprove={() => handleApprovalResult("approved")}
+              onReject={() => handleApprovalResult("rejected")}
+              onWithdraw={() => handleApprovalResult("withdrawn")}
+              onWritebackFailure={() => handleApprovalResult("writebackFailed")}
+              onRetry={() => handleApprovalResult("approved")}
+              onDuplicateCallback={handleDuplicateApprovalCallback}
+              onDismissFeedback={() => setApprovalFeedback(null)}
+            />
           </div>
         </div>
 
@@ -825,31 +835,6 @@ export default function AgentDetailPage() {
             {"\u8fd4\u56de\u5f53\u524d\u8349\u7a3f"}
           </Button>
         </div>
-      ) : null}
-
-      {!isHistorical ? (
-        <ApprovalInteractionPanel
-          pending={approvalStatus !== "none" && !approvalFeedback?.canRetry}
-          approvalLabel={
-            pendingSecurityRequest
-              ? "密级提升审批中"
-              : pendingPublishRequest
-                ? "发布审批中"
-                : approvalAction.configTitle
-          }
-          summary={activeApprovalSummary}
-          requestId={activeApprovalRequest?.requestId}
-          submittedAt={activeApprovalRequest?.submittedAt}
-          existingVersionContinues={isPublished}
-          feedback={approvalFeedback}
-          onApprove={() => handleApprovalResult("approved")}
-          onReject={() => handleApprovalResult("rejected")}
-          onWithdraw={() => handleApprovalResult("withdrawn")}
-          onWritebackFailure={() => handleApprovalResult("writebackFailed")}
-          onRetry={() => handleApprovalResult("approved")}
-          onDuplicateCallback={handleDuplicateApprovalCallback}
-          onDismissFeedback={() => setApprovalFeedback(null)}
-        />
       ) : null}
 
       {!isHistorical && approvalStatus === "none" && !approvalFeedback && restoredDraft?.issues.length ? (
@@ -969,31 +954,36 @@ export default function AgentDetailPage() {
       </Dialog>
 
       <Dialog open={draftSecurityOpen} onOpenChange={setDraftSecurityOpen}>
-        <DialogContent className="grid max-h-[calc(100vh-1.5rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-slate-200 p-0 shadow-2xl sm:max-w-[640px]">
-          <DialogHeader className="border-b border-slate-100">
-            <div className="px-6 py-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <DialogTitle className="text-lg text-slate-950">提升密级</DialogTitle>
-                  <DialogDescription className="mt-1 text-slate-500">
-                    当前资源尚未发布，保存后立即生效
-                  </DialogDescription>
-                </div>
-              </div>
-            </div>
+        <DialogContent className="gap-0 p-0 sm:max-w-[600px]">
+          <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <DialogTitle className="text-xl font-semibold text-slate-950">修改密级</DialogTitle>
           </DialogHeader>
-          <div className="min-h-0 overflow-y-auto px-6 py-5">
-            <SecurityLevelPicker
-              currentLevel={securityLevel}
-              value={draftSecurityLevel}
-              onValueChange={setDraftSecurityLevel}
-              mode="direct"
-            />
+          <div className="space-y-5 px-6 py-5">
+            <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-lg bg-slate-50 px-4 py-3 text-sm">
+              <span className="text-slate-400">资源名称</span>
+              <span className="truncate text-slate-800">{displayName}</span>
+              <span className="text-slate-400">资源类型</span>
+              <span className="text-slate-800">{isWorkflow ? "工作流智能体" : "自主规划智能体"}</span>
+              <span className="text-slate-400">当前密级</span>
+              <SecurityLevelBadge level={securityLevel} />
+            </div>
+            <div className="space-y-2">
+              <Label>
+                <span className="text-rose-500">*</span> 目标密级
+              </Label>
+              <Select
+                value={draftSecurityLevel}
+                onValueChange={(value) => setDraftSecurityLevel(value as SecurityLevel)}
+                options={securityChangeOptions}
+                className="h-10 bg-white"
+              />
+              <p className="text-xs text-slate-400">仅可选择高于当前密级且不超过你权限范围的密级。</p>
+            </div>
+            <div className="rounded-md bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
+              保存后立即生效，资源及全部版本将统一使用新密级；本次调整不会生成新版本。
+            </div>
           </div>
-          <DialogFooter className="flex-row justify-end border-t border-slate-100 bg-slate-50/80 px-6 py-4">
+          <DialogFooter className="flex-row justify-end border-t border-slate-100 px-6 py-4">
             <Button type="button" variant="outline" onClick={() => setDraftSecurityOpen(false)}>
               取消
             </Button>
@@ -1010,50 +1000,51 @@ export default function AgentDetailPage() {
       </Dialog>
 
       <Dialog open={securityChangeOpen} onOpenChange={setSecurityChangeOpen}>
-        <DialogContent className="grid max-h-[calc(100vh-1.5rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-slate-200 p-0 shadow-2xl sm:max-w-[640px]">
-          <DialogHeader className="border-b border-slate-100">
-            <div className="px-6 py-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <DialogTitle className="text-lg text-slate-950">提升密级</DialogTitle>
-                  <DialogDescription className="mt-1 text-slate-500">
-                    提交申请后进入审批流程，审批通过后生效
-                  </DialogDescription>
-                </div>
-              </div>
-            </div>
+        <DialogContent className="grid max-h-[calc(100vh-1.5rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:max-w-[600px]">
+          <DialogHeader className="border-b border-slate-100 px-6 py-5 text-left">
+            <DialogTitle className="text-xl font-semibold text-slate-950">申请修改密级</DialogTitle>
           </DialogHeader>
-          <div className="min-h-0 space-y-4 overflow-y-auto px-6 py-5">
-            <SecurityLevelPicker
-              currentLevel={securityLevel}
-              value={securityChangeDraft.targetLevel}
-              onValueChange={(targetLevel) =>
-                setSecurityChangeDraft((current) => ({ ...current, targetLevel }))
-              }
-            />
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-              <p className="text-sm font-medium text-slate-900">生效后</p>
-              <div className="mt-3 space-y-2.5">
-                <div className="flex items-start gap-2.5 text-xs leading-5 text-slate-600">
-                  <Layers3 className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-                  <span>该资源及所有历史版本统一调整为「{securityChangeDraft.targetLevel}」</span>
-                </div>
-                <div className="flex items-start gap-2.5 text-xs leading-5 text-slate-600">
-                  <Users className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-                  <span>密级低于「{securityChangeDraft.targetLevel}」的用户将无法查看、编辑或使用</span>
-                </div>
-                <div className="flex items-start gap-2.5 text-xs leading-5 text-slate-600">
-                  <Network className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-                  <span>系统将重新校验引用关系，不符合要求的调用会被拦截</span>
-                </div>
-              </div>
+          <div className="min-h-0 space-y-5 overflow-y-auto px-6 py-5">
+            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-700">
+              <AlertTriangle className="mt-1 h-4 w-4 shrink-0" />
+              <span>
+                提升密级需要提交审批。审批通过前资源仍按当前密级运行；审批期间不可编辑、发布、删除或再次提交申请。
+              </span>
             </div>
+
+            <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-lg bg-slate-50 px-4 py-3 text-sm">
+              <span className="text-slate-400">资源名称</span>
+              <span className="truncate text-slate-800">{displayName}</span>
+              <span className="text-slate-400">资源类型</span>
+              <span className="text-slate-800">{isWorkflow ? "工作流智能体" : "自主规划智能体"}</span>
+              <span className="text-slate-400">当前密级</span>
+              <SecurityLevelBadge level={securityLevel} />
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="agent-security-reason" className="text-sm font-medium text-slate-900">
-                申请原因<span className="ml-1 text-rose-500">*</span>
+              <Label>
+                <span className="text-rose-500">*</span> 目标密级
+              </Label>
+              <Select
+                value={securityChangeDraft.targetLevel}
+                onValueChange={(value) =>
+                  setSecurityChangeDraft((current) => ({
+                    ...current,
+                    targetLevel: value as SecurityLevel,
+                  }))
+                }
+                options={securityChangeOptions}
+                className="h-10 bg-white"
+              />
+              <p className="text-xs text-slate-400">仅展示高于当前密级且在你权限范围内的可选密级。</p>
+              <p className="rounded-md bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-700">
+                审批通过后，资源及全部版本将统一调整为「{securityChangeDraft.targetLevel}」；低于该密级的用户将无法访问。
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="agent-security-reason">
+                <span className="text-rose-500">*</span> 申请原因
               </Label>
               <Textarea
                 id="agent-security-reason"
@@ -1067,11 +1058,11 @@ export default function AgentDetailPage() {
                     if (event.target.value.trim()) setSecurityChangeError("");
                   }
                 }
-                rows={3}
-                placeholder="例如：该智能体包含设备故障明细，需要限制访问范围"
+                rows={4}
+                placeholder="请说明提升密级的业务原因"
                 aria-invalid={Boolean(securityChangeError)}
                 className={cn(
-                  "resize-none rounded-xl bg-white px-3 py-2.5 focus-visible:bg-white",
+                  "resize-none border-slate-200 bg-white shadow-none",
                   securityChangeError ? "border-rose-300 focus-visible:ring-rose-200" : "border-slate-200"
                 )}
               />
@@ -1081,12 +1072,8 @@ export default function AgentDetailPage() {
                   <span>{securityChangeError}</span>
                 </div>
               ) : (
-                <p className="text-xs text-slate-400">请说明需要提升密级的业务原因，便于审批人判断。</p>
+                <p className="text-xs text-slate-400">申请原因将提交给审批人，请准确说明业务背景。</p>
               )}
-            </div>
-            <div className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>提交后，当前草稿将暂时只读；已发布版本可继续使用。</span>
             </div>
             <details className="text-xs text-slate-400">
               <summary className="cursor-pointer select-none hover:text-slate-600">原型演示</summary>
@@ -1098,7 +1085,7 @@ export default function AgentDetailPage() {
               </div>
             </details>
           </div>
-          <DialogFooter className="flex-row justify-end border-t border-slate-100 bg-slate-50/80 px-6 py-4">
+          <DialogFooter className="flex-row justify-end border-t border-slate-100 px-6 py-4">
             <Button type="button" variant="outline" onClick={() => setSecurityChangeOpen(false)}>
               取消
             </Button>
@@ -1108,7 +1095,7 @@ export default function AgentDetailPage() {
               className="min-w-28 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
               onClick={handleSubmitSecurityChange}
             >
-              提交升密申请
+              提交审批
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 export type ApprovalFeedbackTone = "success" | "warning" | "danger" | "info";
@@ -44,22 +45,22 @@ interface ApprovalInteractionPanelProps {
 
 const FEEDBACK_STYLES: Record<
   ApprovalFeedbackTone,
-  { wrapper: string; icon: typeof CheckCircle2 }
+  { trigger: string; icon: typeof CheckCircle2 }
 > = {
   success: {
-    wrapper: "border-emerald-200 bg-emerald-50 text-emerald-950",
+    trigger: "border-emerald-200 bg-emerald-50 text-emerald-700",
     icon: CheckCircle2,
   },
   warning: {
-    wrapper: "border-amber-200 bg-amber-50 text-amber-950",
+    trigger: "border-amber-200 bg-amber-50 text-amber-700",
     icon: AlertTriangle,
   },
   danger: {
-    wrapper: "border-rose-200 bg-rose-50 text-rose-950",
+    trigger: "border-rose-200 bg-rose-50 text-rose-700",
     icon: CircleX,
   },
   info: {
-    wrapper: "border-blue-200 bg-blue-50 text-blue-950",
+    trigger: "border-blue-200 bg-blue-50 text-blue-700",
     icon: ShieldAlert,
   },
 };
@@ -80,109 +81,112 @@ export function ApprovalInteractionPanel({
   onDuplicateCallback,
   onDismissFeedback,
 }: ApprovalInteractionPanelProps) {
-  if (pending) {
-    return (
-      <div className="shrink-0 border-b border-blue-100 bg-blue-50/90 px-6 py-3 text-sm text-slate-900">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700">
-              <Clock3 className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
+  if (!pending && !feedback) return null;
+
+  const feedbackStyle = feedback ? FEEDBACK_STYLES[feedback.tone] : null;
+  const StateIcon = pending ? Clock3 : feedbackStyle?.icon ?? ShieldAlert;
+  const stateTitle = pending ? approvalLabel ?? "审批中" : feedback?.title ?? "状态更新";
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors",
+            pending
+              ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+              : feedbackStyle?.trigger
+          )}
+        >
+          <StateIcon className="h-3.5 w-3.5" />
+          <span>{stateTitle}</span>
+          <ChevronDown className="h-3 w-3 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[420px] max-w-[calc(100vw-2rem)] p-0">
+        <div className="border-b border-slate-100 px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold">{approvalLabel ?? "申请审批中"}</span>
-                {requestId ? (
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
-                    {requestId}
+                <p className="text-sm font-semibold text-slate-900">{stateTitle}</p>
+                {requestId || feedback?.requestId ? (
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">
+                    {requestId ?? feedback?.requestId}
                   </span>
                 ) : null}
               </div>
-              <p className="mt-1 text-slate-700">{summary ?? "申请已提交，等待审批结果。"}</p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                审批期间当前草稿暂时只读。
-                {existingVersionContinues ? " 已发布版本可继续使用。" : ""}
-                {submittedAt ? ` 提交于 ${submittedAt}` : ""}
+              <p className="mt-1 text-xs leading-5 text-slate-600">
+                {pending ? summary ?? "申请已提交，等待审批结果。" : feedback?.description}
               </p>
             </div>
+            {!pending && onDismissFeedback ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 shrink-0"
+                aria-label="关闭状态提示"
+                onClick={onDismissFeedback}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
           </div>
-
-          <details className="group rounded-lg border border-blue-100 bg-white/70 text-xs text-slate-600">
-            <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 font-medium hover:text-slate-900">
-              原型演示
-              <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="border-t border-blue-100 p-2.5">
-              <p className="mb-2 text-[11px] text-slate-400">仅用于演示审批结果，正式产品不展示</p>
-              <div className="flex flex-wrap gap-1.5">
-                <Button type="button" size="sm" className="h-7 bg-emerald-600 px-2.5 text-xs text-white hover:bg-emerald-700" onClick={onApprove}>
-                  通过
-                </Button>
-                <Button type="button" size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={onReject}>
-                  驳回
-                </Button>
-                <Button type="button" size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={onWithdraw}>
-                  撤回
-                </Button>
-                <Button type="button" size="sm" variant="outline" className="h-7 border-rose-200 px-2.5 text-xs text-rose-700 hover:bg-rose-50" onClick={onWritebackFailure}>
-                  同步失败
-                </Button>
-              </div>
-            </div>
-          </details>
         </div>
-      </div>
-    );
-  }
 
-  if (!feedback) return null;
-  const style = FEEDBACK_STYLES[feedback.tone];
-  const FeedbackIcon = style.icon;
-
-  return (
-    <div className={cn("shrink-0 border-b px-6 py-3 text-sm", style.wrapper)}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <FeedbackIcon className="mt-0.5 h-5 w-5 shrink-0" />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold">{feedback.title}</span>
-              {feedback.requestId ? (
-                <span className="rounded-full border border-current/15 bg-white/60 px-2 py-0.5 text-[11px] opacity-80">
-                  {feedback.requestId}
-                </span>
+        <div className="space-y-3 px-4 py-3">
+          {pending ? (
+            <>
+              <div className="rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                审批期间当前草稿不可编辑、发布或执行其他受控操作。
+                {existingVersionContinues ? " 已发布版本可继续使用。" : ""}
+              </div>
+              {submittedAt ? (
+                <p className="text-xs text-slate-400">提交时间：{submittedAt}</p>
               ) : null}
-            </div>
-            <p className="mt-0.5 opacity-85">{feedback.description}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {feedback.canRetry && onRetry ? (
-            <Button type="button" size="sm" variant="outline" className="h-8 bg-white/75" onClick={onRetry}>
-              <RefreshCcw className="h-3.5 w-3.5" />
-              重试
-            </Button>
-          ) : null}
-          {feedback.canTestDuplicate && onDuplicateCallback ? (
-            <details className="group relative">
-              <summary className="flex h-8 cursor-pointer list-none items-center gap-1 rounded-md border bg-white/75 px-2.5 text-xs font-medium">
-                原型演示
-                <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
-              </summary>
-              <div className="absolute right-0 top-10 z-20 w-52 rounded-lg border bg-white p-2 shadow-lg">
-                <Button type="button" size="sm" variant="ghost" className="h-8 w-full justify-start text-xs" onClick={onDuplicateCallback}>
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  模拟重复结果
+              <details className="text-xs text-slate-400">
+                <summary className="cursor-pointer select-none hover:text-slate-600">原型演示</summary>
+                <div className="mt-2 rounded-md border border-dashed border-slate-200 bg-slate-50 p-2.5">
+                  <p className="mb-2 text-[11px]">以下操作仅用于演示审批结果，正式产品不展示。</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button type="button" size="sm" className="h-7 bg-emerald-600 px-2.5 text-xs text-white hover:bg-emerald-700" onClick={onApprove}>
+                      通过
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={onReject}>
+                      驳回
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={onWithdraw}>
+                      撤回
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 border-rose-200 px-2.5 text-xs text-rose-700" onClick={onWritebackFailure}>
+                      同步失败
+                    </Button>
+                  </div>
+                </div>
+              </details>
+            </>
+          ) : (
+            <>
+              {feedback?.canRetry && onRetry ? (
+                <Button type="button" size="sm" variant="outline" className="h-8" onClick={onRetry}>
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                  重试
                 </Button>
-              </div>
-            </details>
-          ) : null}
-          {onDismissFeedback ? (
-            <Button type="button" size="icon" variant="ghost" className="h-8 w-8" aria-label="关闭状态提示" onClick={onDismissFeedback}>
-              <X className="h-4 w-4" />
-            </Button>
-          ) : null}
+              ) : null}
+              {feedback?.canTestDuplicate && onDuplicateCallback ? (
+                <details className="text-xs text-slate-400">
+                  <summary className="cursor-pointer select-none hover:text-slate-600">原型演示</summary>
+                  <Button type="button" size="sm" variant="ghost" className="mt-2 h-8 text-xs" onClick={onDuplicateCallback}>
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    模拟重复结果
+                  </Button>
+                </details>
+              ) : null}
+            </>
+          )}
         </div>
-      </div>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
