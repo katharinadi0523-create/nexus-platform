@@ -2,7 +2,16 @@
 
 import { useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, History, Rocket, ShieldCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  History,
+  Layers3,
+  Network,
+  Rocket,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -392,8 +401,8 @@ export default function AgentDetailPage() {
     if (requestId) {
       setApprovalFeedback({
         tone: "success",
-        title: "发布审批已通过",
-        description: `${nextVersionLabel} 已生成并沿用资源当前密级「${securityLevel}」，已有版本与引用关系未被自动替换。`,
+        title: `${nextVersionLabel} 已发布`,
+        description: `新版本已生成，并沿用资源密级「${securityLevel}」。`,
         requestId,
         canTestDuplicate: true,
       });
@@ -422,8 +431,8 @@ export default function AgentDetailPage() {
       setVersionDescription("");
       toast.success(
         isPublished
-          ? `已提交至基础管控平台：${displayName}，结果回传前仍按当前已发布版本运行。`
-          : `已提交至基础管控平台：${displayName}，结果回传并发布成功后方可生效。`
+          ? `${nextVersionLabel} 发布申请已提交，当前已发布版本可继续使用。`
+          : `${nextVersionLabel} 发布申请已提交，审批通过后生效。`
       );
       return;
     }
@@ -516,7 +525,7 @@ export default function AgentDetailPage() {
   function handleSubmitSecurityChange() {
     const reason = securityChangeDraft.reason.trim();
     if (!reason) {
-      setSecurityChangeError("请填写申请原因后再提交。申请原因会随审批单发送至基础管控平台。");
+      setSecurityChangeError("请填写申请原因后再提交。");
       toast.error("请填写申请原因。");
       return;
     }
@@ -537,11 +546,11 @@ export default function AgentDetailPage() {
     setApprovalFeedback(null);
     setApprovalStatus("securityChange");
     setSecurityChangeOpen(false);
-    toast.success(`申请单 ${requestId} 已提交至基础管控平台，结果回传前资源保持原密级。`);
+    toast.success(`升密申请已提交，审批通过前资源保持「${securityLevel}」。`);
   }
 
   function handleSimulateApprovalStartFailure() {
-    setSecurityChangeError("审批发起失败：未获取到基础管控平台申请单号。资源状态未变化，请稍后重试。");
+    setSecurityChangeError("申请提交失败，资源密级未发生变化。请稍后重试。");
     toast.error("审批发起失败，申请未提交。资源状态未变化。");
   }
 
@@ -551,8 +560,8 @@ export default function AgentDetailPage() {
     setDraftSecurityOpen(false);
     setApprovalFeedback({
       tone: "success",
-      title: "密级已直接更新",
-      description: `资源首次成功发布前无需审批，已从「${previousLevel}」提升为「${draftSecurityLevel}」；本次升密不生成新版本。`,
+      title: `密级已提升至「${draftSecurityLevel}」`,
+      description: `资源首次发布前可直接调整。本次由「${previousLevel}」提升，不会生成新版本。`,
     });
     toast.success("密级已更新，首次发布前升密无需审批。");
   }
@@ -577,12 +586,12 @@ export default function AgentDetailPage() {
     if (result === "writebackFailed") {
       setApprovalFeedback({
         tone: "danger",
-        title: "审批结果回写失败",
-        description: "已收到基础管控平台结果，但 AF 尚未完成业务状态更新。资源保持原状态且继续锁定，避免误更新或重复执行。",
+        title: "状态同步失败",
+        description: "审批结果暂未同步完成，资源保持原状态。请稍后重试。",
         requestId,
         canRetry: true,
       });
-      toast.error("结果回写失败，资源状态未变化。");
+      toast.error("状态同步失败，资源保持原状态。");
       return;
     }
 
@@ -592,8 +601,8 @@ export default function AgentDetailPage() {
         setSecurityLevel(targetLevel);
         setApprovalFeedback({
           tone: "success",
-          title: "密级提升已生效",
-          description: `资源已从「${fromLevel}」提升为「${targetLevel}」。草稿和全部历史版本统一使用新密级，系统已重新执行访问与引用校验。`,
+          title: `密级已提升至「${targetLevel}」`,
+          description: `该资源及全部版本已由「${fromLevel}」统一调整，系统将重新校验访问和引用关系。`,
           requestId,
           canTestDuplicate: true,
         });
@@ -607,8 +616,8 @@ export default function AgentDetailPage() {
       }
       setApprovalFeedback({
         tone: "success",
-        title: "审批已通过",
-        description: "AF 已按审批结果完成对应业务状态更新，并恢复可用操作入口。",
+        title: "申请已处理",
+        description: "资源状态已更新，相关操作已恢复。",
         requestId,
         canTestDuplicate: true,
       });
@@ -619,32 +628,32 @@ export default function AgentDetailPage() {
     const rejected = result === "rejected";
     setApprovalFeedback({
       tone: rejected ? "warning" : "info",
-      title: rejected ? "审批已驳回" : "申请已撤回",
+      title: rejected ? "申请未通过" : "申请已撤回",
       description: rejected
-        ? "待审批操作未执行，资源保持原业务状态；编辑、发布和密级修改入口已恢复。"
-        : "撤回已完成，待审批操作未执行，资源保持原业务状态；相关操作入口已恢复。",
+        ? "资源保持原状态，相关操作已恢复。"
+        : "资源保持原状态，相关操作已恢复。",
       requestId,
     });
     clearPendingApproval();
-    toast.info(rejected ? "审批已驳回，资源保持原状态。" : "申请已撤回，资源保持原状态。");
+    toast.info(rejected ? "申请未通过，资源保持原状态。" : "申请已撤回，资源保持原状态。");
   }
 
   function handleDuplicateApprovalCallback() {
     setApprovalFeedback((current) => current ? {
       ...current,
       tone: "info",
-      title: "重复回调已忽略",
-      description: "该申请单已经处理完成，本次重复回调未再次修改密级、生成版本或执行其他业务操作。",
+      title: "重复结果已忽略",
+      description: "该申请已经处理完成，本次重复结果未再次修改密级或生成版本。",
       canTestDuplicate: false,
     } : current);
-    toast.info("重复审批回调已幂等忽略。");
+    toast.info("重复结果已忽略。");
   }
 
   const activeApprovalRequest = pendingSecurityRequest ?? pendingPublishRequest;
   const activeApprovalSummary = pendingSecurityRequest
-    ? `申请将资源密级从「${pendingSecurityRequest.fromLevel}」提升为「${pendingSecurityRequest.targetLevel}」。审批通过前仍按「${pendingSecurityRequest.fromLevel}」控制访问。申请原因：${pendingSecurityRequest.reason}`
+    ? `已申请从「${pendingSecurityRequest.fromLevel}」提升至「${pendingSecurityRequest.targetLevel}」。审批通过前仍按原密级控制访问。`
     : pendingPublishRequest
-      ? `待发布配置及版本描述已固定。审批通过并发布成功后才生成 ${nextVersionLabel}。`
+      ? `${nextVersionLabel} 发布申请已提交，审批通过后才会生成新版本。`
       : undefined;
 
   return (
@@ -821,7 +830,13 @@ export default function AgentDetailPage() {
       {!isHistorical ? (
         <ApprovalInteractionPanel
           pending={approvalStatus !== "none" && !approvalFeedback?.canRetry}
-          approvalLabel={approvalAction.configTitle}
+          approvalLabel={
+            pendingSecurityRequest
+              ? "密级提升审批中"
+              : pendingPublishRequest
+                ? "发布审批中"
+                : approvalAction.configTitle
+          }
           summary={activeApprovalSummary}
           requestId={activeApprovalRequest?.requestId}
           submittedAt={activeApprovalRequest?.submittedAt}
@@ -935,7 +950,7 @@ export default function AgentDetailPage() {
                 : "bg-blue-50 text-blue-800"
             )}>
               {isHighSecurityLevel(securityLevel)
-                ? `当前为${securityLevel}级资源。AF 将固定待发布配置并提交至基础管控平台；结果回传且发布成功后才生成 ${nextVersionLabel}，等待期间草稿不可编辑。`
+                ? `此资源为${securityLevel}级，发布需要审批。提交后本次配置将锁定；审批通过后生成 ${nextVersionLabel}，当前已发布版本不受影响。`
                 : `${nextVersionLabel} 将沿用资源当前密级，发布成功后生成新版本记录。`}
             </div>
           </div>
@@ -947,24 +962,24 @@ export default function AgentDetailPage() {
               onClick={handlePublishConfirm}
               className="rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300"
             >
-              {isHighSecurityLevel(securityLevel) ? "提交发布审批" : "确认发布"}
+              {isHighSecurityLevel(securityLevel) ? "提交发布申请" : "确认发布"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={draftSecurityOpen} onOpenChange={setDraftSecurityOpen}>
-        <DialogContent className="grid max-h-[calc(100vh-1.5rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-0 p-0 shadow-2xl sm:max-w-[720px]">
-          <DialogHeader>
-            <div className="bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600 px-6 py-5 text-white">
+        <DialogContent className="grid max-h-[calc(100vh-1.5rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-slate-200 p-0 shadow-2xl sm:max-w-[640px]">
+          <DialogHeader className="border-b border-slate-100">
+            <div className="px-6 py-5">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div>
-                  <DialogTitle className="text-lg text-white">调整资源密级</DialogTitle>
-                  <DialogDescription className="mt-1 text-blue-100">
-                    首次发布前可直接升密，不会生成新的资源版本
+                  <DialogTitle className="text-lg text-slate-950">提升密级</DialogTitle>
+                  <DialogDescription className="mt-1 text-slate-500">
+                    当前资源尚未发布，保存后立即生效
                   </DialogDescription>
                 </div>
               </div>
@@ -975,9 +990,10 @@ export default function AgentDetailPage() {
               currentLevel={securityLevel}
               value={draftSecurityLevel}
               onValueChange={setDraftSecurityLevel}
+              mode="direct"
             />
           </div>
-          <DialogFooter className="border-t border-slate-100 bg-slate-50/80 px-6 py-4">
+          <DialogFooter className="flex-row justify-end border-t border-slate-100 bg-slate-50/80 px-6 py-4">
             <Button type="button" variant="outline" onClick={() => setDraftSecurityOpen(false)}>
               取消
             </Button>
@@ -994,23 +1010,23 @@ export default function AgentDetailPage() {
       </Dialog>
 
       <Dialog open={securityChangeOpen} onOpenChange={setSecurityChangeOpen}>
-        <DialogContent className="grid max-h-[calc(100vh-1.5rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-0 p-0 shadow-2xl sm:max-w-[720px]">
-          <DialogHeader>
-            <div className="bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600 px-6 py-5 text-white">
+        <DialogContent className="grid max-h-[calc(100vh-1.5rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden border-slate-200 p-0 shadow-2xl sm:max-w-[640px]">
+          <DialogHeader className="border-b border-slate-100">
+            <div className="px-6 py-5">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div>
-                  <DialogTitle className="text-lg text-white">申请提升资源密级</DialogTitle>
-                  <DialogDescription className="mt-1 text-blue-100">
-                    AF 提交申请并锁定配置，审批由基础管控平台完成
+                  <DialogTitle className="text-lg text-slate-950">提升密级</DialogTitle>
+                  <DialogDescription className="mt-1 text-slate-500">
+                    提交申请后进入审批流程，审批通过后生效
                   </DialogDescription>
                 </div>
               </div>
             </div>
           </DialogHeader>
-          <div className="min-h-0 space-y-5 overflow-y-auto px-6 py-5">
+          <div className="min-h-0 space-y-4 overflow-y-auto px-6 py-5">
             <SecurityLevelPicker
               currentLevel={securityLevel}
               value={securityChangeDraft.targetLevel}
@@ -1018,30 +1034,26 @@ export default function AgentDetailPage() {
                 setSecurityChangeDraft((current) => ({ ...current, targetLevel }))
               }
             />
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-slate-900">审批通过后的影响预览</p>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-slate-600">作用于整个资源</span>
-              </div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {[
-                  ["版本", `草稿及全部历史版本统一使用「${securityChangeDraft.targetLevel}」，升密不生成新版本。`],
-                  ["访问", `密级低于「${securityChangeDraft.targetLevel}」的用户将失去查看、编辑和使用权限。`],
-                  ["引用", "已发布版本保留原引用记录；不合法引用运行时阻断，当前草稿提示重新配置。"],
-                  ["通知", "AF 重新执行权限校验，并通知受影响的直接引用资源负责人。"],
-                ].map(([label, text]) => (
-                  <div key={label} className="flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-slate-600">
-                    <span className="flex h-5 min-w-8 items-center justify-center rounded-md bg-white px-1.5 font-semibold text-slate-800 shadow-sm ring-1 ring-slate-200">
-                      {label}
-                    </span>
-                    <span className="leading-5">{text}</span>
-                  </div>
-                ))}
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+              <p className="text-sm font-medium text-slate-900">生效后</p>
+              <div className="mt-3 space-y-2.5">
+                <div className="flex items-start gap-2.5 text-xs leading-5 text-slate-600">
+                  <Layers3 className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                  <span>该资源及所有历史版本统一调整为「{securityChangeDraft.targetLevel}」</span>
+                </div>
+                <div className="flex items-start gap-2.5 text-xs leading-5 text-slate-600">
+                  <Users className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                  <span>密级低于「{securityChangeDraft.targetLevel}」的用户将无法查看、编辑或使用</span>
+                </div>
+                <div className="flex items-start gap-2.5 text-xs leading-5 text-slate-600">
+                  <Network className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+                  <span>系统将重新校验引用关系，不符合要求的调用会被拦截</span>
+                </div>
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="agent-security-reason" className="text-sm font-semibold text-slate-900">
-                <span className="text-rose-500">*</span>申请原因
+              <Label htmlFor="agent-security-reason" className="text-sm font-medium text-slate-900">
+                申请原因<span className="ml-1 text-rose-500">*</span>
               </Label>
               <Textarea
                 id="agent-security-reason"
@@ -1055,11 +1067,11 @@ export default function AgentDetailPage() {
                     if (event.target.value.trim()) setSecurityChangeError("");
                   }
                 }
-                rows={4}
-                placeholder="请说明需要提升密级的业务原因、数据范围或风险依据"
+                rows={3}
+                placeholder="例如：该智能体包含设备故障明细，需要限制访问范围"
                 aria-invalid={Boolean(securityChangeError)}
                 className={cn(
-                  "resize-none rounded-2xl bg-slate-50/60 px-4 py-3 focus-visible:bg-white",
+                  "resize-none rounded-xl bg-white px-3 py-2.5 focus-visible:bg-white",
                   securityChangeError ? "border-rose-300 focus-visible:ring-rose-200" : "border-slate-200"
                 )}
               />
@@ -1069,20 +1081,24 @@ export default function AgentDetailPage() {
                   <span>{securityChangeError}</span>
                 </div>
               ) : (
-                <p className="text-xs text-slate-400">申请原因将随请求一并提交至基础管控平台。</p>
+                <p className="text-xs text-slate-400">请说明需要提升密级的业务原因，便于审批人判断。</p>
               )}
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-3">
-              <div>
-                <p className="text-xs font-semibold text-slate-700">原型验收案例</p>
-                <p className="mt-0.5 text-xs text-slate-500">验证审批发起失败时不锁定资源、不改变密级，并允许用户重试。</p>
-              </div>
-              <Button type="button" size="sm" variant="outline" className="h-8 bg-white text-xs" onClick={handleSimulateApprovalStartFailure}>
-                模拟发起失败
-              </Button>
+            <div className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>提交后，当前草稿将暂时只读；已发布版本可继续使用。</span>
             </div>
+            <details className="text-xs text-slate-400">
+              <summary className="cursor-pointer select-none hover:text-slate-600">原型演示</summary>
+              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2">
+                <span>模拟申请提交失败，验证资源状态不变且可以重试。</span>
+                <Button type="button" size="sm" variant="outline" className="h-7 shrink-0 bg-white text-xs" onClick={handleSimulateApprovalStartFailure}>
+                  模拟失败
+                </Button>
+              </div>
+            </details>
           </div>
-          <DialogFooter className="border-t border-slate-100 bg-slate-50/80 px-6 py-4">
+          <DialogFooter className="flex-row justify-end border-t border-slate-100 bg-slate-50/80 px-6 py-4">
             <Button type="button" variant="outline" onClick={() => setSecurityChangeOpen(false)}>
               取消
             </Button>
@@ -1092,7 +1108,7 @@ export default function AgentDetailPage() {
               className="min-w-28 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
               onClick={handleSubmitSecurityChange}
             >
-              提交申请
+              提交升密申请
             </Button>
           </DialogFooter>
         </DialogContent>
