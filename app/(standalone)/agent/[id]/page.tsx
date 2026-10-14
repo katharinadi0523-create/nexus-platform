@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { AlertTriangle, ArrowLeft, History, Rocket } from "lucide-react";
+import { AlertTriangle, ArrowLeft, History, Rocket, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { AgentLogsView } from "@/components/agent/agent-logs-view";
 import { WorkflowEditor } from "@/components/workflow/workflow-editor";
@@ -31,6 +30,7 @@ import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBad
 import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
+import { SecurityLevelPicker } from "@/components/security/security-level-picker";
 import {
   buildSecurityLevelSelectOptions,
   isHighSecurityLevel,
@@ -485,6 +485,14 @@ export default function AgentDetailPage() {
     toast.success("密级已更新。");
   }
 
+  function getDefaultSecurityTarget() {
+    return (
+      buildSecurityLevelSelectOptions({ currentLevel: securityLevel }).find(
+        (option) => !option.disabled
+      )?.value ?? securityLevel
+    );
+  }
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[linear-gradient(180deg,#fbfcfe_0%,#f5f7fb_45%,#eef4ff_100%)]">
       <header className="relative flex h-20 flex-none items-center justify-between border-b border-slate-200/80 bg-white/80 px-6 backdrop-blur">
@@ -514,10 +522,10 @@ export default function AgentDetailPage() {
                 type="button"
                 disabled={approvalAction.securityChangeLocked}
                 title={approvalAction.securityChangeTitle ?? "申请修改密级"}
-                onClick={() => {
-                  setSecurityChangeDraft({ targetLevel: securityLevel, reason: "" });
-                  setSecurityChangeOpen(true);
-                }}
+                 onClick={() => {
+                   setSecurityChangeDraft({ targetLevel: getDefaultSecurityTarget(), reason: "" });
+                   setSecurityChangeOpen(true);
+                 }}
                 className={cn(
                   "text-xs font-medium",
                   approvalAction.securityChangeLocked
@@ -532,10 +540,10 @@ export default function AgentDetailPage() {
                 type="button"
                 disabled={approvalAction.securityChangeLocked}
                 title={approvalAction.securityChangeTitle ?? "调整密级"}
-                onClick={() => {
-                  setDraftSecurityLevel(securityLevel);
-                  setDraftSecurityOpen(true);
-                }}
+                 onClick={() => {
+                   setDraftSecurityLevel(getDefaultSecurityTarget());
+                   setDraftSecurityOpen(true);
+                 }}
                 className={cn(
                   "text-xs font-medium",
                   approvalAction.securityChangeLocked
@@ -778,27 +786,39 @@ export default function AgentDetailPage() {
       </Dialog>
 
       <Dialog open={draftSecurityOpen} onOpenChange={setDraftSecurityOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="grid max-h-[calc(100vh-1.5rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-0 p-0 shadow-2xl sm:max-w-[720px]">
           <DialogHeader>
-            <DialogTitle>调整密级</DialogTitle>
+            <div className="bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600 px-6 py-5 text-white">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg text-white">调整资源密级</DialogTitle>
+                  <DialogDescription className="mt-1 text-blue-100">
+                    首次发布前可直接升密，不会生成新的资源版本
+                  </DialogDescription>
+                </div>
+              </div>
+            </div>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <Label>
-              <span className="text-rose-500">*</span>密级
-            </Label>
-            <Select
+          <div className="min-h-0 overflow-y-auto px-6 py-5">
+            <SecurityLevelPicker
+              currentLevel={securityLevel}
               value={draftSecurityLevel}
-              onValueChange={(value) => setDraftSecurityLevel(value as SecurityLevel)}
-              options={buildSecurityLevelSelectOptions({ currentLevel: securityLevel })}
-              className="h-10 max-w-xs"
+              onValueChange={setDraftSecurityLevel}
             />
-            <p className="text-xs text-slate-400">禁止降密，且不可超过当前用户密级。</p>
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t border-slate-100 bg-slate-50/80 px-6 py-4">
             <Button type="button" variant="outline" onClick={() => setDraftSecurityOpen(false)}>
               取消
             </Button>
-            <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" onClick={handleSaveDraftSecurity}>
+            <Button
+              type="button"
+              disabled={draftSecurityLevel === securityLevel}
+              className="min-w-24 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
+              onClick={handleSaveDraftSecurity}
+            >
               保存
             </Button>
           </DialogFooter>
@@ -806,32 +826,32 @@ export default function AgentDetailPage() {
       </Dialog>
 
       <Dialog open={securityChangeOpen} onOpenChange={setSecurityChangeOpen}>
-        <DialogContent className="sm:max-w-[560px]">
+        <DialogContent className="grid max-h-[calc(100vh-1.5rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-0 p-0 shadow-2xl sm:max-w-[720px]">
           <DialogHeader>
-            <DialogTitle>申请修改密级</DialogTitle>
+            <div className="bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600 px-6 py-5 text-white">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/20">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg text-white">申请提升资源密级</DialogTitle>
+                  <DialogDescription className="mt-1 text-blue-100">
+                    AF 提交申请并锁定配置，审批由基础管控平台完成
+                  </DialogDescription>
+                </div>
+              </div>
+            </div>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              当前密级：<span className="font-medium text-slate-900">{securityLevel}</span>
-            </div>
+          <div className="min-h-0 space-y-5 overflow-y-auto px-6 py-5">
+            <SecurityLevelPicker
+              currentLevel={securityLevel}
+              value={securityChangeDraft.targetLevel}
+              onValueChange={(targetLevel) =>
+                setSecurityChangeDraft((current) => ({ ...current, targetLevel }))
+              }
+            />
             <div className="space-y-2">
-              <Label>
-                <span className="text-rose-500">*</span>目标密级
-              </Label>
-              <Select
-                value={securityChangeDraft.targetLevel}
-                onValueChange={(value) =>
-                  setSecurityChangeDraft((current) => ({
-                    ...current,
-                    targetLevel: value as SecurityLevel,
-                  }))
-                }
-                options={buildSecurityLevelSelectOptions({ currentLevel: securityLevel })}
-                className="h-10 max-w-xs"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="agent-security-reason">
+              <Label htmlFor="agent-security-reason" className="text-sm font-semibold text-slate-900">
                 <span className="text-rose-500">*</span>申请原因
               </Label>
               <Textarea
@@ -844,21 +864,23 @@ export default function AgentDetailPage() {
                   }))
                 }
                 rows={4}
-                placeholder="请说明修改密级的原因"
-                className="resize-none"
+                placeholder="请说明需要提升密级的业务原因、数据范围或风险依据"
+                className="resize-none rounded-2xl border-slate-200 bg-slate-50/60 px-4 py-3 focus-visible:bg-white"
               />
+              <p className="text-xs text-slate-400">申请原因将随请求一并提交至基础管控平台。</p>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t border-slate-100 bg-slate-50/80 px-6 py-4">
             <Button type="button" variant="outline" onClick={() => setSecurityChangeOpen(false)}>
               取消
             </Button>
             <Button
               type="button"
-              className="bg-blue-600 text-white hover:bg-blue-700"
+              disabled={securityChangeDraft.targetLevel === securityLevel}
+              className="min-w-28 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
               onClick={handleSubmitSecurityChange}
             >
-              提交审批
+              提交申请
             </Button>
           </DialogFooter>
         </DialogContent>
