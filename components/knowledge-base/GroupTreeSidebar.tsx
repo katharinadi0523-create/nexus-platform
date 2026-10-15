@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
+import { ResourceDeleteApprovalDialog } from "@/components/security/resource-delete-approval-dialog";
 import { cn } from "@/lib/utils";
 import {
   knowledgeBaseGroupsV2,
@@ -318,6 +319,8 @@ export function GroupTreeSidebar({
     targetLevel: "公开" as SecurityLevel,
     reason: "",
   });
+  const [deleteTarget, setDeleteTarget] = useState<KnowledgeBaseGroup | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
 
   function handleRequestAddChild(parent: KnowledgeBaseGroup, level: number) {
     const nextDepth = level + 2;
@@ -392,12 +395,8 @@ export function GroupTreeSidebar({
     }
     const level = group.securityLevel ?? "公开";
     if (isHighSecurityLevel(level)) {
-      setGroups((current) =>
-        updateGroupById(current, group.id, { approvalStatus: "delete" })
-      );
-      toast.success(
-        `已提交删除审批：群组「${group.name}」，审批通过前仍按当前版本运行。`
-      );
+      setDeleteTarget(group);
+      setDeleteReason("");
       return;
     }
     setGroups((current) => removeGroupById(current, group.id));
@@ -405,6 +404,22 @@ export function GroupTreeSidebar({
       onSelectGroup({ id: "all", name: "全部群组", securityLevel: "机密" });
     }
     toast.success(`已删除群组「${group.name}」`);
+  }
+
+  function handleSubmitDeleteApproval() {
+    if (!deleteTarget) return;
+    if (!deleteReason.trim()) {
+      toast.error("请填写申请原因。");
+      return;
+    }
+    setGroups((current) =>
+      updateGroupById(current, deleteTarget.id, { approvalStatus: "delete" })
+    );
+    setDeleteTarget(null);
+    setDeleteReason("");
+    toast.success(
+      `已提交删除审批：群组「${deleteTarget.name}」，审批通过前仍保持当前状态。`
+    );
   }
 
   function handleConfirmForm() {
@@ -699,6 +714,23 @@ export function GroupTreeSidebar({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ResourceDeleteApprovalDialog
+        open={Boolean(deleteTarget)}
+        resourceName={deleteTarget?.name ?? ""}
+        resourceType="知识库群组"
+        securityLevel={deleteTarget?.securityLevel ?? "公开"}
+        reason={deleteReason}
+        impactDescription="审批通过后将删除该群组。若群组下仍有子群组或知识库，系统会在执行删除前校验关联资源，未完成清理时不会删除。"
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteReason("");
+          }
+        }}
+        onReasonChange={setDeleteReason}
+        onSubmit={handleSubmitDeleteApproval}
+      />
     </div>
   );
 }

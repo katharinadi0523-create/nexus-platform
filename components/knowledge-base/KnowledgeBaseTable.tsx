@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ResourceDeleteApprovalDialog } from "@/components/security/resource-delete-approval-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -97,6 +98,8 @@ export function KnowledgeBaseTable({ selectedGroup }: KnowledgeBaseTableProps) {
   const [rowsState, setRowsState] = useState<KnowledgeBaseRowV2[]>(() =>
     knowledgeBasesV2.map(normalizeRow)
   );
+  const [deleteTarget, setDeleteTarget] = useState<KnowledgeBaseRowV2 | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
 
   /* eslint-disable react-hooks/set-state-in-effect -- Graph RAG rows are persisted in browser localStorage. */
   useEffect(() => {
@@ -140,25 +143,37 @@ export function KnowledgeBaseTable({ selectedGroup }: KnowledgeBaseTableProps) {
 
     const level = item.securityLevel ?? "公开";
     if (isHighSecurityLevel(level)) {
-      setRowsState((current) =>
-        current.map((row) =>
-          row.id === item.id ? { ...row, approvalStatus: "delete" } : row
-        )
-      );
-      setGraphRagRows((current) =>
-        current.map((row) =>
-          row.id === item.id ? { ...row, approvalStatus: "delete" } : row
-        )
-      );
-      toast.success(
-        `已提交删除审批：${item.name}，审批通过前仍按当前版本运行。`
-      );
+      setDeleteTarget(item);
+      setDeleteReason("");
       return;
     }
 
     setRowsState((current) => current.filter((row) => row.id !== item.id));
     setGraphRagRows((current) => current.filter((row) => row.id !== item.id));
     toast.success(`已删除：${item.name}`);
+  }
+
+  function handleSubmitDeleteApproval() {
+    if (!deleteTarget) return;
+    if (!deleteReason.trim()) {
+      toast.error("请填写申请原因。");
+      return;
+    }
+    setRowsState((current) =>
+      current.map((row) =>
+        row.id === deleteTarget.id ? { ...row, approvalStatus: "delete" } : row
+      )
+    );
+    setGraphRagRows((current) =>
+      current.map((row) =>
+        row.id === deleteTarget.id ? { ...row, approvalStatus: "delete" } : row
+      )
+    );
+    setDeleteTarget(null);
+    setDeleteReason("");
+    toast.success(
+      `已提交删除审批：${deleteTarget.name}，审批通过前仍保持当前状态。`
+    );
   }
 
   return (
@@ -369,6 +384,23 @@ export function KnowledgeBaseTable({ selectedGroup }: KnowledgeBaseTableProps) {
           </TableBody>
         </Table>
       </div>
+
+      <ResourceDeleteApprovalDialog
+        open={Boolean(deleteTarget)}
+        resourceName={deleteTarget?.name ?? ""}
+        resourceType="知识库"
+        securityLevel={deleteTarget?.securityLevel ?? "公开"}
+        reason={deleteReason}
+        impactDescription="审批通过后将删除该知识库及其文档和相关配置，已有资源引用将无法继续使用该知识库。"
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteReason("");
+          }
+        }}
+        onReasonChange={setDeleteReason}
+        onSubmit={handleSubmitDeleteApproval}
+      />
     </div>
   );
 }
