@@ -7,8 +7,9 @@ import { ChatWorkspace } from "@/components/my-claw/chat/chat-workspace";
 function MyClawChatPageInner() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("sessionId");
+  const messageId = searchParams.get("message");
 
-  return <ChatWorkspace sessionId={sessionId} />;
+  return <ChatWorkspace sessionId={sessionId} messageId={messageId} />;
 }
 
 export default function MyClawChatPage() {

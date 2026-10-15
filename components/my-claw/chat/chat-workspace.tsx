@@ -18,6 +18,7 @@ import { ResearchWorkspace } from "./research-workspace";
 
 interface ChatWorkspaceProps {
   sessionId?: string | null;
+  messageId?: string | null;
 }
 
 function BlankChatPanel() {
@@ -56,12 +57,24 @@ function BlankChatPanel() {
   );
 }
 
-export function ChatWorkspace({ sessionId }: ChatWorkspaceProps) {
+export function ChatWorkspace({ sessionId, messageId }: ChatWorkspaceProps) {
   const { setActiveSession } = useMyClaw();
 
   useEffect(() => {
     setActiveSession(sessionId ?? null);
   }, [sessionId, setActiveSession]);
+
+  useEffect(() => {
+    if (!messageId) return;
+    const scrollTimer = window.setTimeout(() => {
+      document
+        .getElementById(`personal-message-${messageId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    return () => {
+      window.clearTimeout(scrollTimer);
+    };
+  }, [messageId, sessionId]);
 
   if (!sessionId) {
     return <BlankChatPanel />;
@@ -74,12 +87,17 @@ export function ChatWorkspace({ sessionId }: ChatWorkspaceProps) {
   }
 
   if (session.kind === "expense") {
-    return <ExpenseChatPanel />;
+    return <ExpenseChatPanel highlightedMessageId={messageId} />;
   }
 
   if (session.kind === "research_multi_agent") {
-    return <ResearchWorkspace />;
+    return <ResearchWorkspace highlightedMessageId={messageId} />;
   }
 
-  return <EnterpriseSessionPanel session={session} />;
+  return (
+    <EnterpriseSessionPanel
+      session={session}
+      highlightedMessageId={messageId}
+    />
+  );
 }

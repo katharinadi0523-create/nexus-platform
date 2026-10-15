@@ -508,7 +508,11 @@ function SubAgentPanel({
   );
 }
 
-export function ResearchWorkspace() {
+export function ResearchWorkspace({
+  highlightedMessageId,
+}: {
+  highlightedMessageId?: string | null;
+}) {
   const detail = useMemo(() => getPersonalClawDetail(), []);
   const mainSender = RESEARCH_AGENTS.main.name;
   const { syncSummonedAgents, setSelectedAgentId } = useMyClaw();
@@ -617,13 +621,22 @@ export function ResearchWorkspace() {
               </div>
             ) : (
               snapshot.mainMessages.map((message) => (
-                <MainMessageView
+                <div
                   key={message.id}
-                  message={message}
-                  mainSender={mainSender}
-                  onOpenTask={openTask}
-                  onClarify={handleClarify}
-                />
+                  id={`personal-message-${message.id}`}
+                  className={cn(
+                    "rounded-xl transition-shadow duration-300",
+                    message.id === highlightedMessageId &&
+                      "ring-2 ring-[#8fb5f6] ring-offset-4 ring-offset-[#f8f9fb]",
+                  )}
+                >
+                  <MainMessageView
+                    message={message}
+                    mainSender={mainSender}
+                    onOpenTask={openTask}
+                    onClarify={handleClarify}
+                  />
+                </div>
               ))
             )}
           </div>
