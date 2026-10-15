@@ -91,11 +91,15 @@ function Metric({
   value: number;
 }) {
   return (
-    <span className="inline-flex items-center gap-2">
-      <span className={cn("h-2 w-2 rounded-full", dot)} />
-      <span>{label}</span>
-      <strong className="text-2xl font-semibold text-slate-950">{value}</strong>
-    </span>
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5">
+      <span className="flex min-w-0 items-center gap-2">
+        <span className={cn("h-2 w-2 shrink-0 rounded-full", dot)} />
+        <span className="whitespace-nowrap text-xs text-slate-600">{label}</span>
+      </span>
+      <strong className="shrink-0 text-lg font-semibold tabular-nums text-slate-950">
+        {value}
+      </strong>
+    </div>
   );
 }
 
@@ -342,66 +346,72 @@ export default function KnowledgeBaseDetailPage() {
             </div>
           </section>
           <section className="border border-slate-200 bg-white p-5">
-            <h2 className="mb-5 font-semibold text-slate-950">文档概览</h2>
-            <div className="mb-5 text-sm text-slate-500">
-              共{documents.length}个
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-semibold text-slate-950">文档概览</h2>
+              <span className="text-sm text-slate-500">
+                共{documents.length}个
+              </span>
             </div>
-            <div className="space-y-5 rounded bg-slate-50 px-6 py-5 text-sm text-slate-600">
-              <div className="flex items-center gap-7">
-                <span>使用状态</span>
-                <Metric
-                  dot="bg-emerald-500"
-                  label="已启用"
-                  value={
-                    documents.filter((item) => item.usageStatus === "已启用")
-                      .length
-                  }
-                />
-                <Metric
-                  dot="bg-slate-400"
-                  label="已停用"
-                  value={
-                    documents.filter((item) => item.usageStatus === "已停用")
-                      .length
-                  }
-                />
+            <div className="space-y-4 rounded-md bg-slate-50 p-4">
+              <div>
+                <div className="mb-2 text-xs font-medium text-slate-500">使用状态</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Metric
+                    dot="bg-emerald-500"
+                    label="已启用"
+                    value={
+                      documents.filter((item) => item.usageStatus === "已启用")
+                        .length
+                    }
+                  />
+                  <Metric
+                    dot="bg-slate-400"
+                    label="已停用"
+                    value={
+                      documents.filter((item) => item.usageStatus === "已停用")
+                        .length
+                    }
+                  />
+                </div>
               </div>
-              <div className="flex items-center gap-7">
-                <span>处理状态</span>
-                <Metric
-                  dot="bg-emerald-500"
-                  label="已启用"
-                  value={
-                    documents.filter((item) => item.processStatus === "已启用")
-                      .length
-                  }
-                />
-                <Metric
-                  dot="bg-slate-400"
-                  label="已停用"
-                  value={
-                    documents.filter((item) => item.processStatus === "已停用")
-                      .length
-                  }
-                />
-                <Metric
-                  dot="bg-red-500"
-                  label="解析失败"
-                  value={
-                    documents.filter(
-                      (item) => item.processStatus === "解析失败"
-                    ).length
-                  }
-                />
-                <Metric
-                  dot="bg-amber-500"
-                  label="切片失败"
-                  value={
-                    documents.filter(
-                      (item) => item.processStatus === "切片失败"
-                    ).length
-                  }
-                />
+              <div>
+                <div className="mb-2 text-xs font-medium text-slate-500">处理状态</div>
+                <div className="grid grid-cols-4 gap-2">
+                  <Metric
+                    dot="bg-emerald-500"
+                    label="已启用"
+                    value={
+                      documents.filter((item) => item.processStatus === "已启用")
+                        .length
+                    }
+                  />
+                  <Metric
+                    dot="bg-slate-400"
+                    label="已停用"
+                    value={
+                      documents.filter((item) => item.processStatus === "已停用")
+                        .length
+                    }
+                  />
+                  <Metric
+                    dot="bg-red-500"
+                    label="解析失败"
+                    value={
+                      documents.filter(
+                        (item) => item.processStatus === "解析失败"
+                      ).length
+                    }
+                  />
+                  <Metric
+                    dot="bg-amber-500"
+                    label="切片失败"
+                    value={
+                      documents.filter(
+                        (item) => item.processStatus === "切片失败"
+                      ).length
+                    }
+                  />
+                </div>
               </div>
             </div>
           </section>
@@ -450,12 +460,14 @@ export default function KnowledgeBaseDetailPage() {
               value={basicInfo.description || "--"}
             />
             <BasicInfoItem label="群组" value={detail.groupName} />
-            <div>
-              <div className="mb-1 text-sm text-slate-500">知识库密级</div>
-              <div className="flex items-center gap-2 pt-0.5">
+            <div className="grid grid-cols-[90px_1fr] items-center gap-4 text-sm">
+              <span className="text-slate-500">知识库密级</span>
+              <div className="flex min-w-0 items-center gap-2">
                 <SecurityLevelBadge level={securityLevel} />
+                <span className="whitespace-nowrap text-xs text-slate-400">
+                  库内文档同步继承
+                </span>
               </div>
-              <p className="mt-1.5 text-xs text-slate-400">库内文档继承该密级</p>
             </div>
             <BasicInfoItem label="创建配置" value="--" />
             <BasicInfoItem label="创建人" value={detail.createdBy} />

@@ -328,12 +328,14 @@ function OverviewStat({
   };
 
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-3 py-2.5">
-      <div className="flex items-center gap-2 text-sm text-slate-700">
-        <span className="font-medium">{count}个</span>
-        <span className={cn("h-2 w-2 rounded-full", colorMap[color])} />
-        <span>{label}</span>
-      </div>
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5">
+      <span className="flex min-w-0 items-center gap-2">
+        <span className={cn("h-2 w-2 shrink-0 rounded-full", colorMap[color])} />
+        <span className="whitespace-nowrap text-xs text-slate-600">{label}</span>
+      </span>
+      <strong className="shrink-0 text-lg font-semibold tabular-nums text-slate-950">
+        {count}
+      </strong>
     </div>
   );
 }
@@ -1035,10 +1037,12 @@ export function TemplateKnowledgeBaseDetail({
             </div>
             <div>
               <div className="mb-1 text-sm text-slate-500">知识库密级</div>
-              <div className="flex items-center gap-2 pt-0.5">
+              <div className="flex min-w-0 items-center gap-2 pt-0.5">
                 <SecurityLevelBadge level={basicInfo.securityLevel} />
+                <span className="whitespace-nowrap text-xs text-slate-400">
+                  库内文档同步继承
+                </span>
               </div>
-              <p className="mt-1.5 text-xs text-slate-400">库内文档继承该密级</p>
             </div>
             <div>
               <div className="mb-1 text-sm text-slate-500">创建配置</div>
