@@ -22,6 +22,31 @@ export const SECURITY_LEVELS: SecurityLevel[] = [
 /** 低密：公开、内部；其余为高密 */
 export const LOW_SECURITY_LEVELS: SecurityLevel[] = ["公开", "内部"];
 
+/**
+ * 高密资源删除审批的统一口径：
+ * - 秘密、机密、绝密资源删除必须审批；
+ * - 唯一例外是知识库文件，当前版本删除无需审批。
+ */
+export type DeleteApprovalResourceType =
+  | "agent"
+  | "workflow-agent"
+  | "claw"
+  | "multi-agent"
+  | "workflow"
+  | "knowledge-base"
+  | "knowledge-base-group"
+  | "knowledge-base-file";
+
+export const HIGH_SECURITY_DELETE_APPROVAL_RULE =
+  "秘密、机密、绝密资源删除必须提交审批；知识库文件删除除外。";
+
+export function requiresResourceDeleteApproval(
+  resourceType: DeleteApprovalResourceType,
+  level: SecurityLevel
+): boolean {
+  return resourceType !== "knowledge-base-file" && isHighSecurityLevel(level);
+}
+
 /** 原型演示：当前登录用户密级上限 */
 export const CURRENT_USER_SECURITY_LEVEL: SecurityLevel = "机密";
 

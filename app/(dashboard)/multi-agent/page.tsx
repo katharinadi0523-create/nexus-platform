@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
+import { ResourceDeleteApprovalDialog } from "@/components/security/resource-delete-approval-dialog";
 import {
   getPublishedMultiAgents,
   removePublishedMultiAgent,
@@ -39,7 +40,7 @@ import {
 } from "@/lib/published-multi-agents";
 import {
   getApprovalActionState,
-  isHighSecurityLevel,
+  requiresResourceDeleteApproval,
 } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
 
@@ -52,11 +53,9 @@ export default function MultiAgentListPage() {
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
   const [publishedMultiAgents, setPublishedMultiAgents] = useState<
     PublishedMultiAgentItem[]
-  >([]);
-
-  useEffect(() => {
-    setPublishedMultiAgents(getPublishedMultiAgents());
-  }, []);
+  >(() => getPublishedMultiAgents());
+  const [deleteTarget, setDeleteTarget] = useState<PublishedMultiAgentItem | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
 
   const filteredAgents = useMemo(() => {
     const query = searchQuery.toLowerCase();
@@ -100,19 +99,33 @@ export default function MultiAgentListPage() {
       return;
     }
 
-    if (isHighSecurityLevel(agent.securityLevel) && agent.status === "已发布") {
-      upsertPublishedMultiAgent({
-        ...agent,
-        approvalStatus: "delete",
-      });
-      setPublishedMultiAgents(getPublishedMultiAgents());
-      toast.success(`已提交删除审批：${agent.name}，审批通过前仍按当前已发布版本运行。`);
+    if (requiresResourceDeleteApproval("multi-agent", agent.securityLevel)) {
+      setDeleteTarget(agent);
+      setDeleteReason("");
       return;
     }
 
     removePublishedMultiAgent(agent.id);
     setPublishedMultiAgents(getPublishedMultiAgents());
     toast.success(`已删除：${agent.name}`);
+  };
+
+  const submitDeleteApproval = () => {
+    if (!deleteTarget) return;
+    if (!deleteReason.trim()) {
+      toast.error("请填写申请原因。");
+      return;
+    }
+    upsertPublishedMultiAgent({
+      ...deleteTarget,
+      approvalStatus: "delete",
+    });
+    setPublishedMultiAgents(getPublishedMultiAgents());
+    setDeleteTarget(null);
+    setDeleteReason("");
+    toast.success(
+      `已提交删除审批：${deleteTarget.name}，审批通过前资源保持当前状态。`
+    );
   };
 
   const handlePageChange = (page: number) => {
@@ -443,6 +456,23 @@ export default function MultiAgentListPage() {
           </div>
         </div>
       )}
+
+      <ResourceDeleteApprovalDialog
+        open={Boolean(deleteTarget)}
+        resourceName={deleteTarget?.name ?? ""}
+        resourceType="多智能体"
+        securityLevel={deleteTarget?.securityLevel ?? "公开"}
+        reason={deleteReason}
+        impactDescription="审批通过后将删除该多智能体及其配置，已有调用和引用将无法继续使用该资源。"
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteReason("");
+          }
+        }}
+        onReasonChange={setDeleteReason}
+        onSubmit={submitDeleteApproval}
+      />
     </div>
   );
 }

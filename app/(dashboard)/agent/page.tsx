@@ -39,10 +39,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SecurityLevelBadge } from "@/components/security/security-level-badge";
+import { ResourceDeleteApprovalDialog } from "@/components/security/resource-delete-approval-dialog";
 import { getAllAgents, type AgentProfile } from "@/lib/agent-data";
 import {
   getApprovalActionState,
-  isHighSecurityLevel,
+  requiresResourceDeleteApproval,
   type ApprovalStatus,
   type SecurityLevel,
 } from "@/lib/security-level";
@@ -103,6 +104,8 @@ export default function AgentPage() {
   const [deleteTarget, setDeleteTarget] = useState<Agent | null>(null);
   const [deleteBlockedOpen, setDeleteBlockedOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteApprovalOpen, setDeleteApprovalOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
   const [agents, setAgents] = useState<Agent[]>(buildDemoAgents);
 
   const filteredAgents = agents.filter(
@@ -146,27 +149,42 @@ export default function AgentPage() {
       setDeleteBlockedOpen(true);
       return;
     }
+    if (
+      requiresResourceDeleteApproval(
+        agent.type === "工作流智能体" ? "workflow-agent" : "agent",
+        agent.securityLevel
+      )
+    ) {
+      setDeleteReason("");
+      setDeleteApprovalOpen(true);
+      return;
+    }
     setDeleteConfirmOpen(true);
   };
 
   const confirmDelete = () => {
     if (!deleteTarget) return;
 
-    if (isHighSecurityLevel(deleteTarget.securityLevel) && deleteTarget.status === "已发布") {
-      setAgents((current) =>
-        current.map((row) =>
-          row.id === deleteTarget.id ? { ...row, approvalStatus: "delete" } : row
-        )
-      );
-      setDeleteConfirmOpen(false);
-      toast.success(`已提交删除审批：${deleteTarget.name}`);
-      setDeleteTarget(null);
-      return;
-    }
-
     setAgents((current) => current.filter((row) => row.id !== deleteTarget.id));
     setDeleteConfirmOpen(false);
     toast.success(`已删除：${deleteTarget.name}`);
+    setDeleteTarget(null);
+  };
+
+  const submitDeleteApproval = () => {
+    if (!deleteTarget) return;
+    if (!deleteReason.trim()) {
+      toast.error("请填写申请原因。");
+      return;
+    }
+    setAgents((current) =>
+      current.map((row) =>
+        row.id === deleteTarget.id ? { ...row, approvalStatus: "delete" } : row
+      )
+    );
+    setDeleteApprovalOpen(false);
+    setDeleteReason("");
+    toast.success(`已提交删除审批：${deleteTarget.name}，审批通过前资源保持当前状态。`);
     setDeleteTarget(null);
   };
 
@@ -528,6 +546,24 @@ export default function AgentPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ResourceDeleteApprovalDialog
+        open={deleteApprovalOpen}
+        resourceName={deleteTarget?.name ?? ""}
+        resourceType={deleteTarget?.type ?? "智能体"}
+        securityLevel={deleteTarget?.securityLevel ?? "公开"}
+        reason={deleteReason}
+        impactDescription="审批通过后将删除该资源的当前草稿、全部历史版本及相关配置，已有引用将无法继续使用该资源。"
+        onOpenChange={(open) => {
+          setDeleteApprovalOpen(open);
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteReason("");
+          }
+        }}
+        onReasonChange={setDeleteReason}
+        onSubmit={submitDeleteApproval}
+      />
     </div>
   );
 }

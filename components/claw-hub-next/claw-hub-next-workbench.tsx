@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { AgentBomBadge } from "@/components/claw-hub-next/agent-bom-badge";
 import { buildAgentBomTreeFromListItem } from "@/components/claw-hub-next/agent-bom-tree";
 import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
+import { ResourceDeleteApprovalDialog } from "@/components/security/resource-delete-approval-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -27,7 +28,7 @@ import {
   type ClawHubListItem,
   type ClawSecurityLevel,
 } from "@/lib/mock/claw-hub-next";
-import { getApprovalActionState } from "@/lib/security-level";
+import { getApprovalActionState, requiresResourceDeleteApproval } from "@/lib/security-level";
 import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 
@@ -132,6 +133,8 @@ export function ClawHubNextWorkbench() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [publishValidationOpen, setPublishValidationOpen] = useState(false);
   const [publishTarget, setPublishTarget] = useState<ClawHubListItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ClawHubListItem | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
   const [createDraft, setCreateDraft] = useState<CreateClawDraft>(EMPTY_CREATE_DRAFT);
   const deferredKeyword = useDeferredValue(keyword);
 
@@ -237,25 +240,39 @@ export function ClawHubNextWorkbench() {
       return;
     }
 
-    if (isHighSecurityLevel(item.securityLevel) && item.publishStatus === "已发布") {
-      setClaws((current) =>
-        current.map((claw) =>
-          claw.id === item.id
-            ? {
-                ...claw,
-                approvalStatus: "delete",
-                updatedAt: formatNow(),
-                updatedBy: CURRENT_OPERATOR,
-              }
-            : claw
-        )
-      );
-      toast.success(`已提交删除审批：${item.name}，审批通过前仍按当前已发布版本运行。`);
+    if (requiresResourceDeleteApproval("claw", item.securityLevel)) {
+      setDeleteTarget(item);
+      setDeleteReason("");
       return;
     }
 
     setClaws((current) => current.filter((claw) => claw.id !== item.id));
     toast.success(`已删除：${item.name}`);
+  }
+
+  function handleSubmitDeleteApproval() {
+    if (!deleteTarget) return;
+    if (!deleteReason.trim()) {
+      toast.error("请填写申请原因。");
+      return;
+    }
+    setClaws((current) =>
+      current.map((claw) =>
+        claw.id === deleteTarget.id
+          ? {
+              ...claw,
+              approvalStatus: "delete",
+              updatedAt: formatNow(),
+              updatedBy: CURRENT_OPERATOR,
+            }
+          : claw
+      )
+    );
+    setDeleteTarget(null);
+    setDeleteReason("");
+    toast.success(
+      `已提交删除审批：${deleteTarget.name}，审批通过前资源保持当前状态。`
+    );
   }
 
   function handleOpenCreateDialog() {
@@ -606,6 +623,23 @@ export function ClawHubNextWorkbench() {
         }}
         agentName={publishTarget?.name ?? ""}
         onValidationPassed={handlePublishValidationPassed}
+      />
+
+      <ResourceDeleteApprovalDialog
+        open={Boolean(deleteTarget)}
+        resourceName={deleteTarget?.name ?? ""}
+        resourceType="Claw"
+        securityLevel={deleteTarget?.securityLevel ?? "公开"}
+        reason={deleteReason}
+        impactDescription="审批通过后将删除该 Claw 及其全部配置，已有调用和关联资源将无法继续使用该 Claw。"
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteReason("");
+          }
+        }}
+        onReasonChange={setDeleteReason}
+        onSubmit={handleSubmitDeleteApproval}
       />
     </div>
   );

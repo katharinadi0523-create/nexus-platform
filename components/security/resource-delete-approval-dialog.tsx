@@ -12,7 +12,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SecurityLevelBadge } from "@/components/security/security-level-badge";
-import type { SecurityLevel } from "@/lib/security-level";
+import {
+  HIGH_SECURITY_DELETE_APPROVAL_RULE,
+  type SecurityLevel,
+} from "@/lib/security-level";
 
 interface ResourceDeleteApprovalDialogProps {
   open: boolean;
@@ -48,7 +51,8 @@ export function ResourceDeleteApprovalDialog({
           <div className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
             <p>
-              删除申请提交后，审批通过前资源保持当前状态；审批通过后将永久删除，且无法恢复。
+              {HIGH_SECURITY_DELETE_APPROVAL_RULE}
+              申请提交后，审批通过前资源保持当前状态；审批通过后将永久删除，且无法恢复。
             </p>
           </div>
 

@@ -35,6 +35,7 @@ import {
   getSecurityLevelRank,
   isHighSecurityLevel,
   maxSecurityLevel,
+  requiresResourceDeleteApproval,
   type ApprovalStatus,
   type SecurityLevel,
 } from "@/lib/security-level";
@@ -394,7 +395,7 @@ export function GroupTreeSidebar({
       return;
     }
     const level = group.securityLevel ?? "公开";
-    if (isHighSecurityLevel(level)) {
+    if (requiresResourceDeleteApproval("knowledge-base-group", level)) {
       setDeleteTarget(group);
       setDeleteReason("");
       return;

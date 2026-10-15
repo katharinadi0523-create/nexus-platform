@@ -40,7 +40,7 @@ import {
 import { loadCreatedKnowledgeBases } from "@/lib/mock/knowledge-base-list";
 import {
   getApprovalActionState,
-  isHighSecurityLevel,
+  requiresResourceDeleteApproval,
   type ApprovalStatus,
   type SecurityLevel,
 } from "@/lib/security-level";
@@ -142,7 +142,7 @@ export function KnowledgeBaseTable({ selectedGroup }: KnowledgeBaseTableProps) {
     }
 
     const level = item.securityLevel ?? "公开";
-    if (isHighSecurityLevel(level)) {
+    if (requiresResourceDeleteApproval("knowledge-base", level)) {
       setDeleteTarget(item);
       setDeleteReason("");
       return;
