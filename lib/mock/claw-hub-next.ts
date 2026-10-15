@@ -29,6 +29,8 @@ export interface ClawHubListItem {
   publishStatus: ClawPublishStatus;
   /** 高密审批中状态，默认 none */
   approvalStatus?: ClawApprovalStatus;
+  /** 当前审批申请说明，仅用于原型展示 */
+  approvalReason?: string;
   model: string;
   updatedAt: string;
   updatedBy: string;

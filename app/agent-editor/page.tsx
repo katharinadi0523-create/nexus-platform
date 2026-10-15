@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   Send,
@@ -31,6 +32,14 @@ import { TerminologySelector, type Terminology } from "@/components/agent-editor
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { checkSensitiveContent } from "@/lib/content-filter";
 import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBadge";
 import { LogsTable, type LogEntry } from "@/components/agent/logs-table";
@@ -40,6 +49,7 @@ import { TraceView } from "@/components/agent/trace-view";
 import type { ExecutionStep } from "@/lib/agent-data";
 import {
   buildSecurityLevelOptionsUpToUser,
+  isHighSecurityLevel,
   type SecurityLevel,
 } from "@/lib/security-level";
 
@@ -107,6 +117,8 @@ export default function AgentEditorPage() {
   const [appName, setAppName] = useState("");
   const [appDescription, setAppDescription] = useState("");
   const [securityLevel, setSecurityLevel] = useState<SecurityLevel>("公开");
+  const [createApprovalOpen, setCreateApprovalOpen] = useState(false);
+  const [createApprovalReason, setCreateApprovalReason] = useState("");
   const [prompt, setPrompt] = useState("");
   const [expandedSections, setExpandedSections] = useState({
     knowledge: true,
@@ -821,6 +833,34 @@ export default function AgentEditorPage() {
     handleSendMessage(question);
   };
 
+  const handleCreateAgent = () => {
+    if (!appName.trim()) {
+      toast.error("请填写智能体名称。");
+      return;
+    }
+    if (!appDescription.trim()) {
+      toast.error("请填写智能体描述。");
+      return;
+    }
+    if (isHighSecurityLevel(securityLevel)) {
+      setCreateApprovalOpen(true);
+      return;
+    }
+    toast.success(`已创建自主规划智能体：${appName.trim()}`);
+    router.push("/agent");
+  };
+
+  const handleSubmitCreateApproval = () => {
+    if (!createApprovalReason.trim()) {
+      toast.error("请填写高密智能体创建申请原因。");
+      return;
+    }
+    setCreateApprovalOpen(false);
+    setCreateApprovalReason("");
+    toast.success(`已提交创建审批：${appName.trim()}，审批通过后方可进入配置或使用。`);
+    router.push("/agent");
+  };
+
   // Sync opening statement to chat history
   useEffect(() => {
     if (openingStatement.trim()) {
@@ -888,9 +928,9 @@ export default function AgentEditorPage() {
             protectionTaskId="1"
             protectionTypes={["policy", "lexicon"]}
           />
-          <Button className="bg-slate-900 text-white hover:bg-slate-800">
+          <Button className="bg-slate-900 text-white hover:bg-slate-800" onClick={handleCreateAgent}>
           <Rocket className="w-4 h-4" />
-          发布
+          {isHighSecurityLevel(securityLevel) ? "提交创建申请" : "创建"}
           </Button>
         </div>
       </header>
@@ -1847,6 +1887,61 @@ export default function AgentEditorPage() {
           <LogsTable data={MOCK_PREVIEW_LOGS} />
         )}
       </main>
+
+      <Dialog
+        open={createApprovalOpen}
+        onOpenChange={(open) => {
+          setCreateApprovalOpen(open);
+          if (!open) setCreateApprovalReason("");
+        }}
+      >
+        <DialogContent className="max-w-[560px] gap-0 overflow-hidden rounded-lg p-0">
+          <DialogHeader className="border-b border-slate-200 px-6 py-5">
+            <DialogTitle>提交自主规划智能体创建申请</DialogTitle>
+            <DialogDescription className="mt-2 leading-6 text-slate-500">
+              当前选择“{securityLevel}”密级，审批通过后方可进入配置或使用。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 px-6 py-5">
+            <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-lg bg-slate-50 px-4 py-3 text-sm">
+              <span className="text-slate-400">资源名称</span>
+              <span className="truncate text-slate-800">{appName.trim()}</span>
+              <span className="text-slate-400">资源类型</span>
+              <span className="text-slate-800">自主规划智能体</span>
+              <span className="text-slate-400">资源密级</span>
+              <span className="text-slate-800">{securityLevel}</span>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="agent-create-approval-reason" className="text-sm font-medium text-slate-800">
+                <span className="mr-1 text-rose-500">*</span>申请原因
+              </label>
+              <div className="relative">
+                <textarea
+                  id="agent-create-approval-reason"
+                  value={createApprovalReason}
+                  maxLength={500}
+                  rows={4}
+                  onChange={(event) => setCreateApprovalReason(event.target.value)}
+                  placeholder="请说明创建该高密智能体的业务背景、使用场景和必要性"
+                  className="w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2.5 pb-8 text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+                <span className="absolute bottom-2.5 right-3 text-xs text-slate-400">{createApprovalReason.length}/500</span>
+              </div>
+              <p className="text-xs text-slate-400">申请原因仅用于创建审批，不会作为智能体描述展示。</p>
+            </div>
+          </div>
+          <DialogFooter className="border-t border-slate-200 px-6 py-4">
+            <Button variant="outline" onClick={() => setCreateApprovalOpen(false)}>取消</Button>
+            <Button
+              onClick={handleSubmitCreateApproval}
+              disabled={!createApprovalReason.trim()}
+              className="bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300"
+            >
+              提交创建申请
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Knowledge Base Selector Dialog */}
       <KnowledgeBaseSelector

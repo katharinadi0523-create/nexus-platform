@@ -227,6 +227,7 @@ export default function AgentDetailPage() {
   const currentDraftConfigRef = useRef<unknown>(null);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [versionDescription, setVersionDescription] = useState("");
+  const [publishApprovalReason, setPublishApprovalReason] = useState("");
   const [entityDisabled, setEntityDisabled] = useState(false);
   const batchDisabledVersionIds = useRef<Set<string>>(new Set());
 
@@ -261,7 +262,9 @@ export default function AgentDetailPage() {
   } | null>(null);
   const [pendingPublishRequest, setPendingPublishRequest] = useState<{
     requestId: string;
+    action: "create" | "publish";
     description: string;
+    approvalReason: string;
     submittedAt: string;
   } | null>(null);
   const [approvalFeedback, setApprovalFeedback] = useState<ApprovalFeedback | null>(null);
@@ -389,6 +392,7 @@ export default function AgentDetailPage() {
     setVersions((current) => [newVersion, ...current.map((version) => ({ ...version, isLatest: false }))]);
     setRestoredDraft({ sourceLabel: "", issues: [] });
     setVersionDescription("");
+    setPublishApprovalReason("");
     setPublishDialogOpen(false);
     setHistoryOpen(true);
     setPublishStatus("已发布");
@@ -408,7 +412,8 @@ export default function AgentDetailPage() {
 
   const handlePublishConfirm = () => {
     const description = versionDescription.trim();
-    if (!description || isHistorical) return;
+    const approvalReason = publishApprovalReason.trim();
+    if (!description || (isHighSecurityLevel(securityLevel) && !approvalReason) || isHistorical) return;
     const approvalAction = getApprovalActionState(approvalStatus);
     if (approvalAction.publishLocked) {
       toast.info(approvalAction.publishTitle ?? "审批中，暂不可发布。");
@@ -418,17 +423,20 @@ export default function AgentDetailPage() {
       const requestId = createApprovalRequestId();
       setPendingPublishRequest({
         requestId,
+        action: isPublished ? "publish" : "create",
         description,
+        approvalReason,
         submittedAt: formatApprovalTime(),
       });
       setApprovalFeedback(null);
-      setApprovalStatus("publish");
+      setApprovalStatus(isPublished ? "publish" : "create");
       setPublishDialogOpen(false);
       setVersionDescription("");
+      setPublishApprovalReason("");
       toast.success(
         isPublished
           ? `${nextVersionLabel} 发布申请已提交，当前已发布版本可继续使用。`
-          : `${nextVersionLabel} 发布申请已提交，审批通过后生效。`
+          : "高密智能体创建申请已提交，审批通过后方可进入配置或使用。"
       );
       return;
     }
@@ -694,7 +702,9 @@ export default function AgentDetailPage() {
   const activeApprovalSummary = pendingSecurityRequest
     ? `已申请从「${pendingSecurityRequest.fromLevel}」提升至「${pendingSecurityRequest.targetLevel}」。审批通过前仍按原密级控制访问。`
     : pendingPublishRequest
-      ? `${nextVersionLabel} 发布申请已提交，审批通过后才会生成新版本。`
+      ? pendingPublishRequest.action === "create"
+        ? "高密智能体创建申请已提交，审批通过后方可进入配置或使用。"
+        : `${nextVersionLabel} 发布申请已提交，审批通过后才会生成新版本。`
       : undefined;
   const securityChangeOptions = buildSecurityLevelSelectOptions({ currentLevel: securityLevel }).filter(
     (option) => !option.disabled
@@ -902,16 +912,25 @@ export default function AgentDetailPage() {
         open={publishDialogOpen}
         onOpenChange={(open) => {
           setPublishDialogOpen(open);
-          if (!open) setVersionDescription("");
+          if (!open) {
+            setVersionDescription("");
+            setPublishApprovalReason("");
+          }
         }}
       >
-        <DialogContent className="max-w-[520px] gap-0 overflow-hidden rounded-lg p-0">
-          <DialogHeader className="border-b border-slate-200 px-5 py-4">
-            <DialogTitle>{isWorkflow ? "\u53d1\u5e03\u5de5\u4f5c\u6d41\u667a\u80fd\u4f53" : "\u53d1\u5e03\u667a\u80fd\u4f53\u5e94\u7528"}</DialogTitle>
+        <DialogContent className="flex max-h-[calc(100vh-32px)] max-w-[560px] flex-col gap-0 overflow-hidden rounded-lg p-0">
+          <DialogHeader className="shrink-0 border-b border-slate-200 px-5 py-4">
+            <DialogTitle>
+              {!isPublished && isHighSecurityLevel(securityLevel)
+                ? `提交${isWorkflow ? "工作流智能体" : "自主规划智能体"}创建申请`
+                : isWorkflow
+                  ? "发布工作流智能体"
+                  : "发布智能体应用"}
+            </DialogTitle>
             <DialogDescription className="sr-only">{"\u786e\u8ba4\u7248\u672c\u53f7\u5e76\u586b\u5199\u672c\u6b21\u53d1\u5e03\u8bf4\u660e"}</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 px-5 py-5">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-800">{"\u7248\u672c\u53f7"}</label>
               <div className="flex h-11 items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3">
@@ -938,7 +957,7 @@ export default function AgentDetailPage() {
                   aria-label={"\u7248\u672c\u63cf\u8ff0"}
                   value={versionDescription}
                   maxLength={500}
-                  rows={5}
+                  rows={4}
                   onChange={(event) => setVersionDescription(event.target.value)}
                   placeholder={"\u8bf7\u8f93\u5165\u672c\u6b21\u53d1\u5e03\u7684\u4e3b\u8981\u53d8\u66f4\uff0c\u4f8b\u5982\uff1a\u65b0\u589e\u5de5\u4f5c\u6d41\u8c03\u7528\u3001\u4f18\u5316\u89d2\u8272\u6307\u4ee4\u3001\u4fee\u590d\u77e5\u8bc6\u5e93\u56de\u7b54\u5f02\u5e38\u2026"}
                   className="w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2.5 pb-8 text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -947,6 +966,28 @@ export default function AgentDetailPage() {
               </div>
             </div>
 
+            {isHighSecurityLevel(securityLevel) && (
+              <div className="space-y-2">
+                <label htmlFor="publish-approval-reason" className="text-sm font-medium text-slate-800">
+                  <span className="mr-1 text-rose-500">*</span>申请原因
+                </label>
+                <div className="relative">
+                  <textarea
+                    id="publish-approval-reason"
+                    aria-label="申请原因"
+                    value={publishApprovalReason}
+                    maxLength={500}
+                    rows={3}
+                    onChange={(event) => setPublishApprovalReason(event.target.value)}
+                    placeholder="请说明发布该高密资源的业务原因、使用场景和必要性"
+                    className="w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2.5 pb-8 text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                  <span className="absolute bottom-2.5 right-3 text-xs text-slate-400">{publishApprovalReason.length}/500</span>
+                </div>
+                <p className="text-xs text-slate-400">该内容将随发布申请提交给审批人，不写入版本记录。</p>
+              </div>
+            )}
+
             <div className={cn(
               "rounded-md px-3 py-2.5 text-xs leading-5",
               isHighSecurityLevel(securityLevel)
@@ -954,19 +995,23 @@ export default function AgentDetailPage() {
                 : "bg-blue-50 text-blue-800"
             )}>
               {isHighSecurityLevel(securityLevel)
-                ? `此资源为${securityLevel}级，发布需要审批。提交后本次配置将锁定；审批通过后生成 ${nextVersionLabel}，当前已发布版本不受影响。`
+                ? !isPublished
+                  ? `当前资源为${securityLevel}。版本描述用于记录初始配置，申请原因将用于创建审批；审批通过后方可进入配置或使用。`
+                  : `当前资源为${securityLevel}。版本描述将写入版本记录，申请原因将用于发布审批；审批通过后生成 ${nextVersionLabel}，当前已发布版本不受影响。`
                 : `${nextVersionLabel} 将沿用资源当前密级，发布成功后生成新版本记录。`}
             </div>
           </div>
 
-          <DialogFooter className="border-t border-slate-200 px-5 py-4">
+          <DialogFooter className="shrink-0 border-t border-slate-200 bg-white px-5 py-4">
             <Button variant="outline" onClick={() => setPublishDialogOpen(false)} className="rounded-md">{"\u53d6\u6d88"}</Button>
             <Button
-              disabled={!versionDescription.trim()}
+              disabled={!versionDescription.trim() || (isHighSecurityLevel(securityLevel) && !publishApprovalReason.trim())}
               onClick={handlePublishConfirm}
               className="rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300"
             >
-              {isHighSecurityLevel(securityLevel) ? "提交发布申请" : "确认发布"}
+              {isHighSecurityLevel(securityLevel)
+                ? isPublished ? "提交发布申请" : "提交创建申请"
+                : "确认发布"}
             </Button>
           </DialogFooter>
         </DialogContent>

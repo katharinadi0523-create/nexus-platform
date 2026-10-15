@@ -16,6 +16,7 @@ export interface KnowledgeBaseListItem {
   groupName?: string;
   securityLevel?: SecurityLevel;
   approvalStatus?: ApprovalStatus;
+  approvalReason?: string;
 }
 
 const CREATED_KB_STORAGE_KEY = "nexus-created-knowledge-bases";
@@ -59,6 +60,7 @@ export interface CreateCustomKnowledgeBaseInput {
   createMethod?: KnowledgeBaseCreateMethod;
   securityLevel?: SecurityLevel;
   approvalStatus?: ApprovalStatus;
+  approvalReason?: string;
 }
 
 /** 创建知识库（写入本地存储，便于列表/详情读取） */
@@ -80,6 +82,7 @@ export function createCustomKnowledgeBase(
     groupName: group.groupName,
     securityLevel: input.securityLevel ?? "公开",
     approvalStatus: input.approvalStatus ?? "none",
+    approvalReason: input.approvalReason?.trim() || undefined,
   };
 
   const list = loadCreatedKnowledgeBases();

@@ -579,6 +579,7 @@ export function ClawDetailWorkbench({
   const [restoredDraft, setRestoredDraft] = useState<RestoredAgentDraft | null>({ sourceLabel: "", issues: [] });
   const [versionPublishOpen, setVersionPublishOpen] = useState(false);
   const [versionDescription, setVersionDescription] = useState("");
+  const [publishApprovalReason, setPublishApprovalReason] = useState("");
   const [entityDisabled, setEntityDisabled] = useState(false);
   const batchDisabledVersionIds = useRef<string[]>([]);
   const selectedVersion = versions.find((version) => version.id === selectedVersionId) ?? null;
@@ -1408,7 +1409,8 @@ export function ClawDetailWorkbench({
 
   function handleVersionPublishConfirm() {
     const description = versionDescription.trim();
-    if (!description || isHistorical) return;
+    const approvalReason = publishApprovalReason.trim();
+    if (!description || (isHighSecurityLevel(securityLevel) && !approvalReason) || isHistorical) return;
 
     const wasPublished = publishStatus === "已发布";
     const publishedName = entityName.trim() || detail.overview.name;
@@ -1458,22 +1460,23 @@ export function ClawDetailWorkbench({
 
     if (isMultiAgentMode) {
       if (isHighSecurityLevel(securityLevel)) {
-        setApprovalStatus("publish");
+        setApprovalStatus(wasPublished ? "publish" : "create");
         setVersionPublishOpen(false);
         setVersionDescription("");
+        setPublishApprovalReason("");
         upsertPublishedMultiAgent({
           id: detail.overview.id || `multi-agent-${Date.now()}`,
           name: publishedName,
           desc: entityDescription.trim() || detail.overview.summary,
           updatedAt: formatMultiAgentUpdatedAt(),
           securityLevel,
-          approvalStatus: "publish",
+          approvalStatus: wasPublished ? "publish" : "create",
           status: wasPublished ? "已发布" : "未发布",
         });
         toast.success(
           wasPublished
             ? `已提交发布审批：${publishedName}，审批通过前仍按当前已发布版本运行。`
-            : `已提交发布审批：${publishedName}，审批通过后方可生效。`
+            : `已提交创建审批：${publishedName}，审批通过后方可进入配置或使用。`
         );
         return;
       }
@@ -1490,13 +1493,14 @@ export function ClawDetailWorkbench({
     }
 
     if (!isMultiAgentMode && isHighSecurityLevel(securityLevel)) {
-      setApprovalStatus("publish");
+      setApprovalStatus(wasPublished ? "publish" : "create");
       setVersionPublishOpen(false);
       setVersionDescription("");
+      setPublishApprovalReason("");
       toast.success(
         wasPublished
           ? `已提交发布审批：${publishedName}，审批通过前仍按当前已发布版本运行。`
-          : `已提交发布审批：${publishedName}，审批通过后方可生效。`
+          : `已提交创建审批：${publishedName}，审批通过后方可进入配置或使用。`
       );
       return;
     }
@@ -1507,6 +1511,7 @@ export function ClawDetailWorkbench({
     setApprovalStatus("none");
     setRestoredDraft({ sourceLabel: "", issues: [] });
     setVersionDescription("");
+    setPublishApprovalReason("");
     setVersionPublishOpen(false);
     setVersionHistoryOpen(true);
     toast.success(`${nextVersionLabel} 发布成功`);
@@ -4084,12 +4089,19 @@ export function ClawDetailWorkbench({
         open={versionPublishOpen}
         entityLabel={entityLabel}
         versionLabel={nextVersionLabel}
+        securityLevel={securityLevel}
+        approvalKind={publishStatus === "已发布" ? "publish" : "create"}
         description={versionDescription}
+        approvalReason={publishApprovalReason}
         onOpenChange={(open) => {
           setVersionPublishOpen(open);
-          if (!open) setVersionDescription("");
+          if (!open) {
+            setVersionDescription("");
+            setPublishApprovalReason("");
+          }
         }}
         onDescriptionChange={setVersionDescription}
+        onApprovalReasonChange={setPublishApprovalReason}
         onConfirm={handleVersionPublishConfirm}
       />
       <ClawPublishValidationDialog

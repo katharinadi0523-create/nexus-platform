@@ -47,6 +47,7 @@ type CreateClawDraft = {
   primaryModel: string;
   storageVolume: string;
   securityLevel: ClawSecurityLevel;
+  approvalReason: string;
 };
 
 function getApprovalStatus(item: ClawHubListItem) {
@@ -124,6 +125,7 @@ const EMPTY_CREATE_DRAFT: CreateClawDraft = {
   primaryModel: PRESET_MODEL_IDS[0] ?? "Qwen3-32B",
   storageVolume: "",
   securityLevel: "公开",
+  approvalReason: "",
 };
 
 export function ClawHubNextWorkbench() {
@@ -314,6 +316,13 @@ export function ClawHubNextWorkbench() {
       return;
     }
 
+    const highSecurity = isHighSecurityLevel(createDraft.securityLevel);
+    const approvalReason = createDraft.approvalReason.trim();
+    if (highSecurity && !approvalReason) {
+      toast.error("请填写高密 Claw 创建申请原因。");
+      return;
+    }
+
     const nextClaw: ClawHubListItem = {
       id: `claw-${Date.now()}`,
       name,
@@ -324,6 +333,8 @@ export function ClawHubNextWorkbench() {
       owner: "默认项目组",
       status: "设计中",
       publishStatus: "未发布",
+      approvalStatus: highSecurity ? "create" : "none",
+      approvalReason: highSecurity ? approvalReason : undefined,
       model: createDraft.primaryModel,
       updatedAt: formatNow(),
       updatedBy: CURRENT_OPERATOR,
@@ -332,7 +343,11 @@ export function ClawHubNextWorkbench() {
 
     setClaws((current) => [nextClaw, ...current]);
     setCreateDialogOpen(false);
-    toast.success(`已创建：${name}`);
+    toast.success(
+      highSecurity
+        ? `已提交创建审批：${name}，审批通过前不可进入配置或使用。`
+        : `已创建：${name}`
+    );
   }
 
   return (
@@ -596,9 +611,28 @@ export function ClawHubNextWorkbench() {
                   className="h-10 max-w-xs border-slate-200 bg-white shadow-none focus:ring-0"
                 />
                 <p className="text-xs text-slate-400">
-                  仅展示不超过当前用户密级的可选项。
+                  仅展示不超过当前用户密级的可选项。公开、内部直接创建；秘密及以上需提交审批。
                 </p>
               </div>
+              {isHighSecurityLevel(createDraft.securityLevel) && (
+                <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/60 p-4 sm:col-span-2">
+                  <Label htmlFor="create-claw-approval-reason">
+                    <span className="text-rose-500">*</span>申请原因
+                  </Label>
+                  <textarea
+                    id="create-claw-approval-reason"
+                    value={createDraft.approvalReason}
+                    maxLength={500}
+                    onChange={(event) => handleCreateDraftChange("approvalReason", event.target.value)}
+                    placeholder="请说明创建该高密 Claw 的业务背景、使用场景和必要性"
+                    className="min-h-[92px] w-full resize-none rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-none outline-none focus:border-blue-500"
+                  />
+                  <div className="flex items-center justify-between text-xs text-amber-800">
+                    <span>申请原因将提交给审批人，不会作为 Claw 描述展示。</span>
+                    <span>{createDraft.approvalReason.length}/500</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -607,7 +641,7 @@ export function ClawHubNextWorkbench() {
               取消
             </Button>
             <Button type="button" className="bg-blue-600 text-white hover:bg-blue-700" onClick={handleCreateClaw}>
-              创建Claw
+              {isHighSecurityLevel(createDraft.securityLevel) ? "提交创建申请" : "创建Claw"}
             </Button>
           </DialogFooter>
         </DialogContent>

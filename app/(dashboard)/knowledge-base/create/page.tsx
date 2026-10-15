@@ -214,6 +214,8 @@ function StepOne({
   setDescription,
   securityLevel,
   setSecurityLevel,
+  approvalReason,
+  setApprovalReason,
 }: {
   name: string;
   setName: (value: string) => void;
@@ -221,6 +223,8 @@ function StepOne({
   setDescription: (value: string) => void;
   securityLevel: SecurityLevel;
   setSecurityLevel: (value: SecurityLevel) => void;
+  approvalReason: string;
+  setApprovalReason: (value: string) => void;
 }) {
   return (
     <div className="mx-auto w-full max-w-4xl space-y-7 py-8">
@@ -284,6 +288,25 @@ function StepOne({
             ）；高密创建将提交审批，通过后方可生效。
           </p>
         </div>
+
+        {isHighSecurityLevel(securityLevel) && (
+          <>
+            <FieldLabel required>申请原因</FieldLabel>
+            <div>
+              <Textarea
+                value={approvalReason}
+                onChange={(event) => setApprovalReason(event.target.value)}
+                maxLength={500}
+                placeholder="请说明创建该高密知识库的业务背景、使用场景和必要性"
+                className="min-h-24 resize-none"
+              />
+              <div className="mt-1 flex items-center justify-between text-xs">
+                <span className="text-slate-500">申请原因将随创建申请提交给审批人，不会作为知识库描述展示。</span>
+                <span className="text-slate-400">{approvalReason.length}/500</span>
+              </div>
+            </div>
+          </>
+        )}
 
         <FieldLabel>图标</FieldLabel>
         <div className="flex h-12 w-12 items-center justify-center rounded bg-blue-500 text-white">
@@ -816,14 +839,16 @@ function CreateKnowledgeBaseContent() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [securityLevel, setSecurityLevel] = useState<SecurityLevel>("公开");
+  const [approvalReason, setApprovalReason] = useState("");
   const [selectedEngines, setSelectedEngines] = useState(["fulltext", "semantic"]);
   const [submitting, setSubmitting] = useState(false);
 
   const nextDisabled = useMemo(
     () =>
       (currentStep === 1 && name.trim().length === 0) ||
+      (currentStep === 1 && isHighSecurityLevel(securityLevel) && approvalReason.trim().length === 0) ||
       (currentStep === 3 && submitting),
-    [currentStep, name, submitting]
+    [approvalReason, currentStep, name, securityLevel, submitting]
   );
 
   function handleFinish() {
@@ -831,6 +856,12 @@ function CreateKnowledgeBaseContent() {
     setSubmitting(true);
     try {
       const highSec = isHighSecurityLevel(securityLevel);
+      if (highSec && !approvalReason.trim()) {
+        toast.error("请填写高密知识库创建申请原因。");
+        setSubmitting(false);
+        setCurrentStep(1);
+        return;
+      }
       if (
         getSecurityLevelRank(securityLevel) >
         getSecurityLevelRank(ROOT_GROUP_SECURITY)
@@ -848,6 +879,7 @@ function CreateKnowledgeBaseContent() {
         createMethod: isTemplate ? "模板创建" : "自定义创建",
         securityLevel,
         approvalStatus: highSec ? "create" : "none",
+        approvalReason: highSec ? approvalReason : undefined,
       });
       if (highSec) {
         toast.success(
@@ -887,6 +919,8 @@ function CreateKnowledgeBaseContent() {
             setDescription={setDescription}
             securityLevel={securityLevel}
             setSecurityLevel={setSecurityLevel}
+            approvalReason={approvalReason}
+            setApprovalReason={setApprovalReason}
           />
         )}
         {currentStep === 2 && <StepTwo selectedEngines={selectedEngines} setSelectedEngines={setSelectedEngines} />}

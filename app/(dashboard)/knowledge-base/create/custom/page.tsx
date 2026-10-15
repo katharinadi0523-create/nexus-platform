@@ -124,6 +124,7 @@ export default function CreateCustomKnowledgeBasePage() {
   const [description, setDescription] = useState("");
   const [groupId, setGroupId] = useState("all");
   const [securityLevel, setSecurityLevel] = useState<SecurityLevel>("公开");
+  const [approvalReason, setApprovalReason] = useState("");
   const [nameTouched, setNameTouched] = useState(false);
   const [groupTouched, setGroupTouched] = useState(false);
   const [retrievalConfig, setRetrievalConfig] = useState<RetrievalConfigState>(
@@ -194,6 +195,10 @@ export default function CreateCustomKnowledgeBasePage() {
       toast.error("请先完善基本信息");
       return false;
     }
+    if (isHighSecurityLevel(securityLevel) && !approvalReason.trim()) {
+      toast.error("请填写高密知识库创建申请原因。");
+      return false;
+    }
     return true;
   };
 
@@ -247,12 +252,19 @@ export default function CreateCustomKnowledgeBasePage() {
     setSubmitting(true);
     try {
       const highSec = isHighSecurityLevel(securityLevel);
+      if (highSec && !approvalReason.trim()) {
+        toast.error("请填写高密知识库创建申请原因。");
+        setSubmitting(false);
+        setCurrentStep(1);
+        return;
+      }
       const created = createCustomKnowledgeBase({
         name,
         description,
         groupId,
         securityLevel,
         approvalStatus: highSec ? "create" : "none",
+        approvalReason: highSec ? approvalReason : undefined,
       });
       if (highSec) {
         toast.success(
@@ -393,6 +405,28 @@ export default function CreateCustomKnowledgeBasePage() {
               </p>
             </div>
 
+            {isHighSecurityLevel(securityLevel) && (
+              <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+                <div className="flex items-center gap-1">
+                  <Label htmlFor="kb-create-approval-reason" className="text-sm text-slate-700">申请原因</Label>
+                  <span className="text-red-500">*</span>
+                </div>
+                <div className="relative">
+                  <Textarea
+                    id="kb-create-approval-reason"
+                    value={approvalReason}
+                    maxLength={500}
+                    rows={4}
+                    placeholder="请说明创建该高密知识库的业务背景、使用场景和必要性"
+                    onChange={(event) => setApprovalReason(event.target.value)}
+                    className="resize-none bg-white pb-6"
+                  />
+                  <span className="absolute bottom-2 right-3 text-xs text-slate-400">{approvalReason.length}/500</span>
+                </div>
+                <p className="text-xs text-amber-800">当前为高密知识库。申请原因将提交给审批人，不会作为知识库描述展示。</p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label className="text-sm text-slate-700">图标</Label>
               <button
@@ -437,6 +471,7 @@ export default function CreateCustomKnowledgeBasePage() {
             <Button
               className="bg-[#2773ff] px-6 text-white hover:bg-[#1f63e0]"
               onClick={handleNext}
+              disabled={isHighSecurityLevel(securityLevel) && !approvalReason.trim()}
             >
               下一步
             </Button>
