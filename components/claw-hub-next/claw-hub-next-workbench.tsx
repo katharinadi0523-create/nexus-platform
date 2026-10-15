@@ -579,7 +579,7 @@ export function ClawHubNextWorkbench() {
                   className="h-10 max-w-xs border-slate-200 bg-white shadow-none focus:ring-0"
                 />
                 <p className="text-xs text-slate-400">
-                  公开、内部为低密；秘密及以上为高密。仅可选择不超过当前用户密级的选项。
+                  仅展示不超过当前用户密级的可选项。
                 </p>
               </div>
             </div>

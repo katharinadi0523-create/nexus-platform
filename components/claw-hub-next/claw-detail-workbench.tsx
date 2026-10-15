@@ -1871,34 +1871,6 @@ export function ClawDetailWorkbench({
                 >
                   {securityLevel}
                 </span>
-                {isPublished ? (
-                  <button
-                    type="button"
-                    onClick={handleOpenSecurityChangeDialog}
-                    disabled={approvalStatus === "securityChange"}
-                    title={
-                      approvalStatus === "securityChange"
-                        ? "密级修改审批中"
-                        : "申请修改密级"
-                    }
-                    className={cn(
-                      "text-xs font-medium transition-colors",
-                      approvalStatus === "securityChange"
-                        ? "cursor-not-allowed text-slate-400"
-                        : "text-blue-600 hover:text-blue-700"
-                    )}
-                  >
-                    修改
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleOpenBasicInfoDialog}
-                    className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                  >
-                    调整密级
-                  </button>
-                )}
               </div>
               <Input
                 value={entityDescription}
@@ -1938,24 +1910,6 @@ export function ClawDetailWorkbench({
               >
                 {securityLevel}
               </span>
-              {isPublished ? (
-                <button
-                  type="button"
-                  onClick={handleOpenSecurityChangeDialog}
-                  disabled={approvalStatus === "securityChange"}
-                  title={
-                    approvalStatus === "securityChange" ? "密级修改审批中" : "申请修改密级"
-                  }
-                  className={cn(
-                    "text-xs font-medium transition-colors",
-                    approvalStatus === "securityChange"
-                      ? "cursor-not-allowed text-slate-400"
-                      : "text-blue-600 hover:text-blue-700"
-                  )}
-                >
-                  修改
-                </button>
-              ) : null}
               {isPublished ? <ClawPublishedBadge /> : null}
               <div className="ml-1 flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3">
                 <span className="text-xs font-medium text-slate-500">多智能体</span>
@@ -3723,8 +3677,41 @@ export function ClawDetailWorkbench({
                 </p>
               </div>
             ) : (
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
-                已发布资源密级已锁定为「{securityLevel}」，如需调整请点击标题旁的「修改」申请审批。
+              <div className="space-y-2">
+                <Label>密级</Label>
+                <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-[4px] px-2 py-1 text-xs font-medium",
+                      isHighSecurityLevel(securityLevel)
+                        ? "bg-orange-50 text-orange-700"
+                        : "bg-slate-100 text-slate-600"
+                    )}
+                  >
+                    {securityLevel}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBasicInfoDialogOpen(false);
+                      handleOpenSecurityChangeDialog();
+                    }}
+                    disabled={approvalStatus === "securityChange"}
+                    title={
+                      approvalStatus === "securityChange"
+                        ? "密级修改审批中"
+                        : "申请修改密级"
+                    }
+                    className={cn(
+                      "text-sm font-medium transition-colors",
+                      approvalStatus === "securityChange"
+                        ? "cursor-not-allowed text-slate-400"
+                        : "text-blue-600 hover:text-blue-700"
+                    )}
+                  >
+                    修改
+                  </button>
+                </div>
               </div>
             )}
           </div>

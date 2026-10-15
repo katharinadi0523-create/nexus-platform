@@ -30,6 +30,7 @@ import { OntologyConfigDialog, type OntologyConfig } from "@/components/agent-ed
 import { TerminologySelector, type Terminology } from "@/components/agent-editor/TerminologySelector";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
 import { checkSensitiveContent } from "@/lib/content-filter";
 import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBadge";
 import { LogsTable, type LogEntry } from "@/components/agent/logs-table";
@@ -37,6 +38,10 @@ import { useModelCompatibility } from "@/lib/useModelCompatibility";
 import { CompatibilityIndicator } from "@/components/agent-editor/CompatibilityIndicator";
 import { TraceView } from "@/components/agent/trace-view";
 import type { ExecutionStep } from "@/lib/agent-data";
+import {
+  buildSecurityLevelOptionsUpToUser,
+  type SecurityLevel,
+} from "@/lib/security-level";
 
 // Mock 预览与调试日志数据（模拟用户在创建过程中进行的对话测试）
 const MOCK_PREVIEW_LOGS: LogEntry[] = [
@@ -99,6 +104,9 @@ const MOCK_PREVIEW_LOGS: LogEntry[] = [
 export default function AgentEditorPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"config" | "logs">("config");
+  const [appName, setAppName] = useState("");
+  const [appDescription, setAppDescription] = useState("");
+  const [securityLevel, setSecurityLevel] = useState<SecurityLevel>("公开");
   const [prompt, setPrompt] = useState("");
   const [expandedSections, setExpandedSections] = useState({
     knowledge: true,
@@ -897,11 +905,52 @@ export default function AgentEditorPage() {
             <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center">
               <span className="text-slate-600 font-semibold text-lg">AI</span>
             </div>
-            <div>
-                  <h2 className="font-semibold text-slate-900">创建自主规划智能体</h2>
-              <p className="text-sm text-slate-500">角色指令</p>
+            <div className="min-w-0">
+              <h2 className="truncate font-semibold text-slate-900">
+                {appName.trim() || "创建自主规划智能体"}
+              </h2>
+              <p className="text-sm text-slate-500">基础信息</p>
             </div>
           </div>
+          <div className="mb-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="space-y-1.5">
+              <label htmlFor="create-agent-name" className="text-sm text-slate-700">
+                <span className="text-rose-500">*</span> 名称
+              </label>
+              <input
+                id="create-agent-name"
+                value={appName}
+                onChange={(event) => setAppName(event.target.value.slice(0, 50))}
+                placeholder="请输入智能体名称"
+                className="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="create-agent-description" className="text-sm text-slate-700">
+                <span className="text-rose-500">*</span> 描述
+              </label>
+              <textarea
+                id="create-agent-description"
+                value={appDescription}
+                onChange={(event) => setAppDescription(event.target.value.slice(0, 100))}
+                placeholder="请输入智能体描述"
+                rows={2}
+                className="w-full resize-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-700">
+                <span className="text-rose-500">*</span> 密级
+              </label>
+              <Select
+                value={securityLevel}
+                onValueChange={(value) => setSecurityLevel(value as SecurityLevel)}
+                options={buildSecurityLevelOptionsUpToUser()}
+                className="h-9 bg-white"
+              />
+            </div>
+          </div>
+          <div className="mb-2 text-sm font-medium text-slate-700">角色指令</div>
           <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -1804,6 +1853,7 @@ export default function AgentEditorPage() {
         open={kbSelectorOpen}
         onOpenChange={setKbSelectorOpen}
         onSelect={handleAddKnowledgeBase}
+        callerSecurityLevel={securityLevel}
       />
 
       {/* Retrieval Settings Dialog */}
@@ -1821,6 +1871,7 @@ export default function AgentEditorPage() {
         open={workflowSelectorOpen}
         onOpenChange={setWorkflowSelectorOpen}
         onSelect={handleAddWorkflow}
+        callerSecurityLevel={securityLevel}
       />
 
       {/* Plugin Selector Dialog */}

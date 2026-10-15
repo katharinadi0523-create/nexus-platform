@@ -16,18 +16,28 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { SecurityLevelBadge } from "@/components/security/security-level-badge";
+import type { SecurityLevel } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
 
 interface BasicConfigSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   readOnly?: boolean;
+  securityLevel?: SecurityLevel;
+  onSecurityLevelChangeRequest?: () => void;
+  securityLevelChangeDisabled?: boolean;
+  securityLevelChangeTitle?: string;
 }
 
 export function BasicConfigSheet({
   open,
   onOpenChange,
   readOnly = false,
+  securityLevel = "公开",
+  onSecurityLevelChangeRequest,
+  securityLevelChangeDisabled = false,
+  securityLevelChangeTitle = "修改密级",
 }: BasicConfigSheetProps) {
   const [appName, setAppName] = useState("");
   const [appDescription, setAppDescription] = useState("");
@@ -100,6 +110,29 @@ export function BasicConfigSheet({
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-500">密级</span>
+              <SecurityLevelBadge level={securityLevel} />
+            </div>
+            {onSecurityLevelChangeRequest ? (
+              <button
+                type="button"
+                onClick={onSecurityLevelChangeRequest}
+                disabled={readOnly || securityLevelChangeDisabled}
+                title={securityLevelChangeTitle}
+                className={cn(
+                  "text-sm font-medium transition-colors",
+                  readOnly || securityLevelChangeDisabled
+                    ? "cursor-not-allowed text-slate-400"
+                    : "text-blue-600 hover:text-blue-700"
+                )}
+              >
+                修改
+              </button>
+            ) : null}
           </div>
 
           <Separator />

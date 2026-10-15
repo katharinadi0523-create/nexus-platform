@@ -488,6 +488,19 @@ export default function AgentDetailPage() {
           }}
           onOpenNodeConfig={() => setHistoryOpen(false)}
           onRequestDraftAction={handleHistoricalReferenceAction}
+          onSecurityLevelChangeRequest={handleOpenSecurityEditor}
+          securityLevelChangeDisabled={
+            isHistorical || approvalStatus !== "none" || !canRaiseSecurityLevel
+          }
+          securityLevelChangeTitle={
+            isHistorical
+              ? "历史版本不可修改密级"
+              : approvalStatus !== "none"
+                ? approvalAction.securityChangeTitle ?? "审批中，暂不可修改密级"
+                : canRaiseSecurityLevel
+                  ? "修改密级"
+                  : "当前已是可选最高密级"
+          }
         />
       ) : (
         <fieldset disabled={configReadOnly} className="h-full w-full min-w-0 border-0 p-0">
@@ -503,6 +516,19 @@ export default function AgentDetailPage() {
             }}
             onNameChange={setDisplayName}
             securityLevel={securityLevel}
+            onSecurityLevelChangeRequest={handleOpenSecurityEditor}
+            securityLevelChangeDisabled={
+              isHistorical || approvalStatus !== "none" || !canRaiseSecurityLevel
+            }
+            securityLevelChangeTitle={
+              isHistorical
+                ? "历史版本不可修改密级"
+                : approvalStatus !== "none"
+                  ? approvalAction.securityChangeTitle ?? "审批中，暂不可修改密级"
+                  : canRaiseSecurityLevel
+                    ? "修改密级"
+                    : "当前已是可选最高密级"
+            }
           />
         </fieldset>
       )}
@@ -568,6 +594,25 @@ export default function AgentDetailPage() {
         (option) => !option.disabled
       )?.value ?? securityLevel
     );
+  }
+
+  function handleOpenSecurityEditor() {
+    if (approvalStatus !== "none") {
+      toast.info(approvalAction.securityChangeTitle ?? "审批中，暂不可修改密级。");
+      return;
+    }
+    if (!canRaiseSecurityLevel) {
+      toast.info("当前已是可选最高密级。");
+      return;
+    }
+    if (isPublished) {
+      setSecurityChangeDraft({ targetLevel: getDefaultSecurityTarget(), reason: "" });
+      setSecurityChangeError("");
+      setSecurityChangeOpen(true);
+      return;
+    }
+    setDraftSecurityLevel(getDefaultSecurityTarget());
+    setDraftSecurityOpen(true);
   }
 
   function clearPendingApproval() {
@@ -680,32 +725,6 @@ export default function AgentDetailPage() {
                 className={isPublished ? "bg-slate-100 text-slate-400" : undefined}
               />
             </span>
-            {approvalStatus === "none" && isPublished && canRaiseSecurityLevel ? (
-              <button
-                type="button"
-                title="申请修改密级"
-                onClick={() => {
-                  setSecurityChangeDraft({ targetLevel: getDefaultSecurityTarget(), reason: "" });
-                  setSecurityChangeError("");
-                  setSecurityChangeOpen(true);
-                }}
-                className="text-xs font-medium text-blue-600 hover:text-blue-700"
-              >
-                修改
-              </button>
-            ) : approvalStatus === "none" && !isPublished && canRaiseSecurityLevel ? (
-              <button
-                type="button"
-                title="调整密级"
-                onClick={() => {
-                  setDraftSecurityLevel(getDefaultSecurityTarget());
-                  setDraftSecurityOpen(true);
-                }}
-                className="text-xs font-medium text-blue-600 hover:text-blue-700"
-              >
-                调整密级
-              </button>
-            ) : null}
             <ApprovalInteractionPanel
               pending={approvalStatus !== "none" && !approvalFeedback?.canRetry}
               approvalLabel={

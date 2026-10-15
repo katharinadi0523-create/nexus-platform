@@ -51,6 +51,9 @@ interface WorkflowEditorProps {
   onOpenNodeConfig?: () => void;
   onRequestDraftAction?: (action: "update" | "reconfigure") => void;
   securityLevel?: SecurityLevel;
+  onSecurityLevelChangeRequest?: () => void;
+  securityLevelChangeDisabled?: boolean;
+  securityLevelChangeTitle?: string;
 }
 
 // 定义节点类型
@@ -191,6 +194,9 @@ export function WorkflowEditor({
   onOpenNodeConfig,
   onRequestDraftAction,
   securityLevel = "公开",
+  onSecurityLevelChangeRequest,
+  securityLevelChangeDisabled = false,
+  securityLevelChangeTitle = "修改密级",
 }: WorkflowEditorProps) {
   // 根据 agentId 加载工作流数据，如果没有则使用默认值
   const workflowData = agentId ? getWorkflowByAgentId(agentId) : null;
@@ -522,6 +528,10 @@ export function WorkflowEditor({
         open={basicConfigOpen}
         onOpenChange={setBasicConfigOpen}
         readOnly={readOnly}
+        securityLevel={securityLevel}
+        onSecurityLevelChangeRequest={onSecurityLevelChangeRequest}
+        securityLevelChangeDisabled={securityLevelChangeDisabled}
+        securityLevelChangeTitle={securityLevelChangeTitle}
       />
     </div>
   );

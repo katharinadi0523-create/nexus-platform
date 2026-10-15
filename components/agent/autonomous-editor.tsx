@@ -195,6 +195,9 @@ interface AutonomousEditorProps {
   onNameChange?: (name: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   securityLevel?: SecurityLevel;
+  onSecurityLevelChangeRequest?: () => void;
+  securityLevelChangeDisabled?: boolean;
+  securityLevelChangeTitle?: string;
 }
 
 type PresetPlugin = {
@@ -569,6 +572,9 @@ export function AutonomousEditor({
   onNameChange,
   onDirtyChange,
   securityLevel = "公开",
+  onSecurityLevelChangeRequest,
+  securityLevelChangeDisabled = false,
+  securityLevelChangeTitle = "修改密级",
 }: AutonomousEditorProps) {
   const agentData = initialAgentData || AGENTS_DETAIL_DATA[agentId] || null;
   const initialConfigSource = initialAgentData ?? agentData;
@@ -1194,7 +1200,7 @@ export function AutonomousEditor({
                       className="group relative shrink-0"
                       aria-label="选择智能体头像"
                     >
-                      <AgentAvatarTile presetId={selectedAvatarPresetId} size="lg" />
+                      <AgentAvatarTile presetId={selectedAvatarPresetId} size="md" />
                       <span className="absolute -bottom-1 -right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white bg-slate-900 text-white shadow-lg transition-transform group-hover:scale-105">
                         <Palette className="h-3.5 w-3.5" />
                       </span>
@@ -1274,6 +1280,28 @@ export function AutonomousEditor({
                       <div className="absolute bottom-4 right-4 text-xs text-slate-400">
                         {appDescription.length}/100
                       </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 border-t border-slate-200/80 pt-3">
+                      <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+                        <span className="text-xs text-slate-500">密级</span>
+                        <SecurityLevelBadge level={securityLevel} />
+                      </div>
+                      {onSecurityLevelChangeRequest ? (
+                        <button
+                          type="button"
+                          onClick={onSecurityLevelChangeRequest}
+                          disabled={securityLevelChangeDisabled}
+                          title={securityLevelChangeTitle}
+                          className={cn(
+                            "shrink-0 whitespace-nowrap text-xs font-medium transition-colors",
+                            securityLevelChangeDisabled
+                              ? "cursor-not-allowed text-slate-400"
+                              : "text-blue-600 hover:text-blue-700"
+                          )}
+                        >
+                          修改
+                        </button>
+                      ) : null}
                     </div>
                 </div>
               </div>
