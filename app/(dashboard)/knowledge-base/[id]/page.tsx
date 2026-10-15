@@ -10,6 +10,7 @@ import {
   Copy,
   FileText,
   Search,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -222,6 +223,12 @@ export default function KnowledgeBaseDetailPage() {
   const [configOpen, setConfigOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [basicInfo, setBasicInfo] = useState({
+    name: detail.name,
+    description: detail.description ?? "",
+  });
+  const [basicInfoDraft, setBasicInfoDraft] = useState(basicInfo);
+  const [basicInfoOpen, setBasicInfoOpen] = useState(false);
   const [securityLevel] = useState<SecurityLevel>(
     detail.securityLevel ?? "公开"
   );
@@ -284,7 +291,7 @@ export default function KnowledgeBaseDetailPage() {
           </Button>
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-semibold text-slate-950">
-              {detail.name}
+              {basicInfo.name}
             </h1>
             <span className="inline-flex items-center gap-1 text-sm text-slate-700">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -401,50 +408,54 @@ export default function KnowledgeBaseDetailPage() {
         </div>
 
         <section>
-          <div className="mb-5 flex items-center gap-3">
-            <h2 className="font-semibold text-slate-950">基本信息</h2>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-500">
-              编辑基本信息
-            </Button>
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="font-semibold text-slate-950">基本信息</h2>
+              <p className="mt-1 text-xs text-slate-400">查看知识库归属、创建信息与当前密级</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 px-3 text-slate-500"
+                onClick={() => {
+                  setBasicInfoDraft(basicInfo);
+                  setBasicInfoOpen(true);
+                }}
+              >
+                编辑基本信息
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={approvalStatus === "securityChange"}
+                title={approvalStatus === "securityChange" ? "密级调整审批中" : "申请调整密级"}
+                onClick={() => {
+                  setSecurityDraft({ targetLevel: securityLevel, reason: "" });
+                  setSecurityChangeOpen(true);
+                }}
+                className="h-8 border-slate-200 bg-white px-3 text-slate-600"
+              >
+                <ShieldCheck className="mr-1.5 h-4 w-4" />
+                {approvalStatus === "securityChange" ? "密级审批中" : "申请调整密级"}
+              </Button>
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-x-12 gap-y-5">
-            <BasicInfoItem label="知识库名称" value={detail.name} />
+            <BasicInfoItem label="知识库名称" value={basicInfo.name} />
             <BasicInfoItem
               label="描述"
-              value={detail.description || "--"}
+              value={basicInfo.description || "--"}
             />
             <BasicInfoItem label="群组" value={detail.groupName} />
             <div>
-              <div className="mb-1 text-sm text-slate-500">
-                知识库密级 <span className="text-red-500">*</span>
-              </div>
-              <div className="flex items-center gap-2">
+              <div className="mb-1 text-sm text-slate-500">知识库密级</div>
+              <div className="flex items-center gap-2 pt-0.5">
                 <SecurityLevelBadge level={securityLevel} />
-                <button
-                  type="button"
-                  disabled={approvalStatus === "securityChange"}
-                  title={
-                    approvalStatus === "securityChange"
-                      ? "密级修改审批中"
-                      : "申请修改密级"
-                  }
-                  onClick={() => {
-                    setSecurityDraft({
-                      targetLevel: securityLevel,
-                      reason: "",
-                    });
-                    setSecurityChangeOpen(true);
-                  }}
-                  className={cn(
-                    "text-xs font-medium",
-                    approvalStatus === "securityChange"
-                      ? "cursor-not-allowed text-slate-400"
-                      : "text-blue-600 hover:text-blue-700"
-                  )}
-                >
-                  修改密级
-                </button>
               </div>
+              <p className="mt-1.5 text-xs text-slate-400">库内文档继承该密级</p>
             </div>
             <BasicInfoItem label="创建配置" value="--" />
             <BasicInfoItem label="创建人" value={detail.createdBy} />
@@ -649,14 +660,86 @@ export default function KnowledgeBaseDetailPage() {
         knowledgeBaseSecurityLevel={securityLevel}
       />
 
+      <Dialog open={basicInfoOpen} onOpenChange={setBasicInfoOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>编辑基本信息</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="v2-kb-name">
+                <span className="text-rose-500">*</span>知识库名称
+              </Label>
+              <Input
+                id="v2-kb-name"
+                value={basicInfoDraft.name}
+                maxLength={50}
+                onChange={(event) =>
+                  setBasicInfoDraft((current) => ({ ...current, name: event.target.value }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="v2-kb-description">描述</Label>
+              <Textarea
+                id="v2-kb-description"
+                value={basicInfoDraft.description}
+                maxLength={200}
+                rows={4}
+                onChange={(event) =>
+                  setBasicInfoDraft((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
+                className="resize-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>所属群组</Label>
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+                {detail.groupName}
+              </div>
+              <p className="text-xs text-slate-400">所属群组与密级不在基本信息中修改。</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setBasicInfoOpen(false)}>
+              取消
+            </Button>
+            <Button
+              type="button"
+              className="bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => {
+                const nextName = basicInfoDraft.name.trim();
+                if (!nextName) {
+                  toast.error("请输入知识库名称。");
+                  return;
+                }
+                setBasicInfo({
+                  name: nextName,
+                  description: basicInfoDraft.description.trim(),
+                });
+                setBasicInfoOpen(false);
+                toast.success("基本信息已更新。");
+              }}
+            >
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={securityChangeOpen} onOpenChange={setSecurityChangeOpen}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle>申请修改密级</DialogTitle>
+            <DialogTitle>申请调整密级</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
-              当前知识库已存在文件。审批通过后，将一并修改当前知识库及库内所有文件的密级。
+              {documents.length > 0
+                ? `当前知识库已有 ${documents.length} 个文档。审批通过后，将同步调整知识库及库内全部文档的密级。`
+                : "当前知识库暂无文档。审批通过后将调整知识库密级，后续导入文档自动继承新密级。"}
             </div>
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
               当前知识库密级：
@@ -701,7 +784,7 @@ export default function KnowledgeBaseDetailPage() {
                   }))
                 }
                 rows={4}
-                placeholder="请说明修改密级的原因"
+                placeholder="请说明调整密级的原因"
                 className="resize-none"
               />
             </div>
@@ -725,7 +808,7 @@ export default function KnowledgeBaseDetailPage() {
                 setApprovalStatus("securityChange");
                 setSecurityChangeOpen(false);
                 toast.success(
-                  "已提交密级修改审批。审批通过后，AF 侧将同步更新知识库及库内所有文件密级。"
+                  "已提交密级调整审批。审批通过后，AF 侧将同步更新知识库及库内所有文件密级。"
                 );
               }}
             >

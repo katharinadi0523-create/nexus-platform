@@ -144,7 +144,6 @@ function GroupNode({
   onSelect,
   onRequestAddChild,
   onRequestEdit,
-  onRequestChangeSecurity,
   onRequestDelete,
 }: {
   group: KnowledgeBaseGroup;
@@ -153,7 +152,6 @@ function GroupNode({
   onSelect: (group: KnowledgeBaseGroup) => void;
   onRequestAddChild: (parent: KnowledgeBaseGroup, level: number) => void;
   onRequestEdit: (group: KnowledgeBaseGroup) => void;
-  onRequestChangeSecurity: (group: KnowledgeBaseGroup) => void;
   onRequestDelete: (group: KnowledgeBaseGroup) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -243,25 +241,6 @@ function GroupNode({
         </button>
         <button
           type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onRequestChangeSecurity(group);
-          }}
-          disabled={approvalStatus === "securityChange"}
-          title={
-            approvalStatus === "securityChange" ? "密级修改审批中" : "修改密级"
-          }
-          className={cn(
-            "mr-0.5 hidden h-6 shrink-0 items-center rounded px-1 text-[11px] font-medium opacity-0 transition-opacity group-hover:inline-flex group-hover:opacity-100 focus-visible:opacity-100",
-            approvalStatus === "securityChange"
-              ? "cursor-not-allowed text-slate-300"
-              : "text-blue-600 hover:bg-white"
-          )}
-        >
-          修改密级
-        </button>
-        <button
-          type="button"
           onClick={handleAddChild}
           disabled={!canAddChild}
           title={
@@ -311,7 +290,6 @@ function GroupNode({
             onSelect={onSelect}
             onRequestAddChild={onRequestAddChild}
             onRequestEdit={onRequestEdit}
-            onRequestChangeSecurity={onRequestChangeSecurity}
             onRequestDelete={onRequestDelete}
           />
         ))}
@@ -367,7 +345,7 @@ export function GroupTreeSidebar({
 
   function handleRequestChangeSecurity(group: KnowledgeBaseGroup) {
     if (group.approvalStatus === "securityChange") {
-      toast.info("密级修改审批中，请等待审批结果。");
+      toast.info("密级调整审批中，请等待审批结果。");
       return;
     }
     setSecurityTarget(group);
@@ -537,7 +515,7 @@ export function GroupTreeSidebar({
       })
     );
     setSecurityChangeOpen(false);
-    toast.success("已提交密级修改审批，审批通过后方可生效。");
+    toast.success("已提交密级调整审批，审批通过后方可生效。");
   }
 
   const parentDepth = parentLevel + 1;
@@ -561,7 +539,6 @@ export function GroupTreeSidebar({
             onSelect={onSelectGroup}
             onRequestAddChild={handleRequestAddChild}
             onRequestEdit={handleRequestEdit}
-            onRequestChangeSecurity={handleRequestChangeSecurity}
             onRequestDelete={handleRequestDelete}
           />
         ))}
@@ -599,16 +576,44 @@ export function GroupTreeSidebar({
             </div>
             <div className="space-y-2">
               <Label>
-                <span className="text-rose-500">*</span>群组密级
+                {formMode === "create" ? <span className="text-rose-500">*</span> : null}
+                群组密级
               </Label>
-              <Select
-                value={draftSecurityLevel}
-                onValueChange={(value) => setDraftSecurityLevel(value as SecurityLevel)}
-                options={formSecurityOptions}
-                className="h-10 max-w-xs border-slate-200 bg-white shadow-none focus:ring-0"
-              />
+              {formMode === "create" ? (
+                <Select
+                  value={draftSecurityLevel}
+                  onValueChange={(value) => setDraftSecurityLevel(value as SecurityLevel)}
+                  options={formSecurityOptions}
+                  className="h-10 max-w-xs border-slate-200 bg-white shadow-none focus:ring-0"
+                />
+              ) : (
+                <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <SecurityLevelBadge level={editingGroup?.securityLevel ?? "公开"} />
+                    <span className="text-xs text-slate-500">已创建群组的密级需单独申请调整</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={editingGroup?.approvalStatus === "securityChange"}
+                    onClick={() => {
+                      if (!editingGroup) return;
+                      setFormOpen(false);
+                      handleRequestChangeSecurity(editingGroup);
+                    }}
+                    className="h-8 shrink-0 bg-white"
+                  >
+                    {editingGroup?.approvalStatus === "securityChange"
+                      ? "密级审批中"
+                      : "申请调整密级"}
+                  </Button>
+                </div>
+              )}
               <p className="text-xs text-slate-400">
-                父级群组密级不得低于子群组及子知识库密级；子级密级不可高于父级。可选范围同时受当前项目角色密级限制。
+                {formMode === "create"
+                  ? "子级密级不可高于父级群组，可选范围同时受当前项目角色密级限制。"
+                  : "密级调整通过审批后生效，群组名称修改不受影响。"}
               </p>
             </div>
           </div>
@@ -630,7 +635,7 @@ export function GroupTreeSidebar({
       <Dialog open={securityChangeOpen} onOpenChange={setSecurityChangeOpen}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle>申请修改密级</DialogTitle>
+            <DialogTitle>申请调整密级</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
@@ -675,7 +680,7 @@ export function GroupTreeSidebar({
                   }))
                 }
                 rows={4}
-                placeholder="请说明修改密级的原因"
+                placeholder="请说明调整密级的原因"
                 className="resize-none"
               />
             </div>

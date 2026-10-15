@@ -10,6 +10,7 @@ import {
   Loader2,
   Pencil,
   Search,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -965,16 +966,36 @@ export function TemplateKnowledgeBaseDetail({
 
         {/* Basic info */}
         <div className="rounded-lg border border-slate-200 bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-900">基本信息</h2>
-            <button
-              type="button"
-              onClick={() => setEditingBasic((v) => !v)}
-              className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-              aria-label="编辑基本信息"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">基本信息</h2>
+              <p className="mt-1 text-xs text-slate-400">查看知识库归属、创建信息与当前密级</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setEditingBasic((v) => !v)}
+                className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                aria-label="编辑基本信息"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={approvalStatus === "securityChange"}
+                title={approvalStatus === "securityChange" ? "密级调整审批中" : "申请调整密级"}
+                onClick={() => {
+                  setSecurityDraft({ targetLevel: basicInfo.securityLevel, reason: "" });
+                  setSecurityChangeOpen(true);
+                }}
+                className="h-8 border-slate-200 bg-white px-3 text-slate-600"
+              >
+                <ShieldCheck className="mr-1.5 h-4 w-4" />
+                {approvalStatus === "securityChange" ? "密级审批中" : "申请调整密级"}
+              </Button>
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-3">
             <div>
@@ -1013,37 +1034,11 @@ export function TemplateKnowledgeBaseDetail({
               <div className="text-sm text-slate-900">{basicInfo.groupName}</div>
             </div>
             <div>
-              <div className="mb-1 flex items-center gap-2 text-sm text-slate-500">
-                <span>知识库密级</span>
-                <span className="text-red-500">*</span>
-              </div>
-              <div className="flex items-center gap-2">
+              <div className="mb-1 text-sm text-slate-500">知识库密级</div>
+              <div className="flex items-center gap-2 pt-0.5">
                 <SecurityLevelBadge level={basicInfo.securityLevel} />
-                <button
-                  type="button"
-                  disabled={approvalStatus === "securityChange"}
-                  title={
-                    approvalStatus === "securityChange"
-                      ? "密级修改审批中"
-                      : "申请修改密级"
-                  }
-                  onClick={() => {
-                    setSecurityDraft({
-                      targetLevel: basicInfo.securityLevel,
-                      reason: "",
-                    });
-                    setSecurityChangeOpen(true);
-                  }}
-                  className={cn(
-                    "text-xs font-medium",
-                    approvalStatus === "securityChange"
-                      ? "cursor-not-allowed text-slate-400"
-                      : "text-blue-600 hover:text-blue-700"
-                  )}
-                >
-                  修改密级
-                </button>
               </div>
+              <p className="mt-1.5 text-xs text-slate-400">库内文档继承该密级</p>
             </div>
             <div>
               <div className="mb-1 text-sm text-slate-500">创建配置</div>
@@ -1099,11 +1094,13 @@ export function TemplateKnowledgeBaseDetail({
       <Dialog open={securityChangeOpen} onOpenChange={setSecurityChangeOpen}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle>申请修改密级</DialogTitle>
+            <DialogTitle>申请调整密级</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
-              当前知识库已存在文件。审批通过后，将一并修改当前知识库及库内所有文件的密级。
+              {documents.length > 0
+                ? `当前知识库已有 ${documents.length} 个文档。审批通过后，将同步调整知识库及库内全部文档的密级。`
+                : "当前知识库暂无文档。审批通过后将调整知识库密级，后续导入文档自动继承新密级。"}
             </div>
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
               当前知识库密级：
@@ -1148,7 +1145,7 @@ export function TemplateKnowledgeBaseDetail({
                   }))
                 }
                 rows={4}
-                placeholder="请说明修改密级的原因"
+                placeholder="请说明调整密级的原因"
                 className="resize-none"
               />
             </div>
@@ -1172,7 +1169,7 @@ export function TemplateKnowledgeBaseDetail({
                 setApprovalStatus("securityChange");
                 setSecurityChangeOpen(false);
                 toast.success(
-                  "已提交密级修改审批。审批通过后，AF 侧将同步更新知识库及库内所有文件密级。"
+                  "已提交密级调整审批。审批通过后，AF 侧将同步更新知识库及库内所有文件密级。"
                 );
               }}
             >
