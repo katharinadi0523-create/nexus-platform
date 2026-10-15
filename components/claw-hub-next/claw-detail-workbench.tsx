@@ -1871,6 +1871,24 @@ export function ClawDetailWorkbench({
                 >
                   {securityLevel}
                 </span>
+                <button
+                  type="button"
+                  onClick={isPublished ? handleOpenSecurityChangeDialog : handleOpenBasicInfoDialog}
+                  disabled={isPublished && approvalStatus === "securityChange"}
+                  title={
+                    isPublished && approvalStatus === "securityChange"
+                      ? "密级修改审批中"
+                      : "修改密级"
+                  }
+                  className={cn(
+                    "shrink-0 text-xs font-medium transition-colors",
+                    isPublished && approvalStatus === "securityChange"
+                      ? "cursor-not-allowed text-slate-400"
+                      : "text-blue-600 hover:text-blue-700"
+                  )}
+                >
+                  修改
+                </button>
               </div>
               <Input
                 value={entityDescription}
@@ -1910,6 +1928,24 @@ export function ClawDetailWorkbench({
               >
                 {securityLevel}
               </span>
+              <button
+                type="button"
+                onClick={isPublished ? handleOpenSecurityChangeDialog : handleOpenBasicInfoDialog}
+                disabled={isPublished && approvalStatus === "securityChange"}
+                title={
+                  isPublished && approvalStatus === "securityChange"
+                    ? "密级修改审批中"
+                    : "修改密级"
+                }
+                className={cn(
+                  "shrink-0 text-xs font-medium transition-colors",
+                  isPublished && approvalStatus === "securityChange"
+                    ? "cursor-not-allowed text-slate-400"
+                    : "text-blue-600 hover:text-blue-700"
+                )}
+              >
+                修改
+              </button>
               {isPublished ? <ClawPublishedBadge /> : null}
               <div className="ml-1 flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3">
                 <span className="text-xs font-medium text-slate-500">多智能体</span>
