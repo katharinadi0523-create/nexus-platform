@@ -27,6 +27,10 @@ import { MyClawFilesPage } from "@/components/my-claw/files/files-page";
 import { MyClawSettingsPage } from "@/components/my-claw/settings/settings-page";
 import { useMyClaw } from "@/components/my-claw/provider";
 import { ClawClientKnowledgePage } from "@/components/claw-client/knowledge-page";
+import { ClarifyDemoSessionPanel } from "@/components/claw-client/clarify/clarify-demo-session-panel";
+import { useClarifyRuntime } from "@/components/claw-client/clarify/clarify-runtime";
+import { ClarifyStatusCapsule } from "@/components/claw-client/clarify/clarify-status-capsule";
+import { getMyClawSession } from "@/lib/mock/my-claw/sessions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -141,6 +145,7 @@ function VersionSwitch({ compact = false }: { compact?: boolean }) {
 
 function BasicSessionList({ activeSessionId }: { activeSessionId?: string | null }) {
   const { sessions, setActiveSession } = useMyClaw();
+  const clarifyRuntime = useClarifyRuntime();
   const groupedSessions = useMemo(
     () => ({
       pinned: sessions.filter((item) => item.pinned),
@@ -162,20 +167,24 @@ function BasicSessionList({ activeSessionId }: { activeSessionId?: string | null
             <div className="space-y-0.5">
               {items.map((session) => {
                 const selected = session.id === activeSessionId;
+                const clarifyProjection = clarifyRuntime?.project(session.id) ?? null;
                 return (
                   <Link
                     key={session.id}
                     href={hrefFor("chat", session.id)}
                     onClick={() => setActiveSession(session.id)}
                     className={cn(
-                      "block truncate rounded-md px-2.5 py-2 text-[13px] transition-colors",
+                      "flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] transition-colors",
                       selected
                         ? "bg-[#e8f0fb] font-medium text-[#245db9]"
                         : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
                     )}
                     title={session.title}
                   >
-                    {session.title}
+                    <span className="min-w-0 flex-1 truncate">{session.title}</span>
+                    {clarifyProjection && clarifyRuntime ? (
+                      <ClarifyStatusCapsule projection={clarifyProjection} />
+                    ) : null}
                   </Link>
                 );
               })}
@@ -329,7 +338,9 @@ function ClientSidebar({ tab, sessionId }: { tab: ClientTab; sessionId?: string 
 export function ClawClientWorkbench({ tab: rawTab, sessionId, messageId }: { tab: string | null; sessionId?: string | null; messageId?: string | null }) {
   const tab = normalizeTab(rawTab);
   let content: React.ReactNode;
-  if (tab === "chat") content = <ChatWorkspace sessionId={sessionId} messageId={messageId} />;
+  const chatSession = tab === "chat" && sessionId ? getMyClawSession(sessionId) : undefined;
+  if (chatSession?.kind === "clarify_demo") content = <ClarifyDemoSessionPanel key={chatSession.id} session={chatSession} />;
+  else if (tab === "chat") content = <ChatWorkspace sessionId={sessionId} messageId={messageId} />;
   else if (tab === "agents") content = <AgentsPlaza />;
   else if (tab === "skills") content = <MyClawSkillsHub />;
   else if (tab === "plugins") content = <MyClawPluginsHub />;

@@ -12,6 +12,7 @@ export type MyClawSessionKind =
   | "expense"
   | "enterprise_session"
   | "research_multi_agent"
+  | "clarify_demo"
   | "blank";
 
 export interface MyClawSessionListItem {

@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { ClarifyRuntimeProvider } from "@/components/claw-client/clarify/clarify-runtime";
 import { MyClawProvider } from "@/components/my-claw/provider";
 
 /**
@@ -7,5 +9,11 @@ import { MyClawProvider } from "@/components/my-claw/provider";
 export default function ClawClientLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return <MyClawProvider navigationBasePath="/claw-client">{children}</MyClawProvider>;
+  return (
+    <MyClawProvider navigationBasePath="/claw-client">
+      <Suspense fallback={null}>
+        <ClarifyRuntimeProvider>{children}</ClarifyRuntimeProvider>
+      </Suspense>
+    </MyClawProvider>
+  );
 }

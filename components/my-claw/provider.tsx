@@ -17,6 +17,7 @@ import {
   type AutomationTask,
   type MyClawSessionListItem,
 } from "@/lib/mock/my-claw";
+import { CLAW_CLIENT_CLARIFY_SESSIONS } from "@/lib/mock/my-claw/clarify-demo";
 
 const RESEARCH_SUMMON_IDS = new Set([
   RESEARCH_CLAW_ID,
@@ -77,7 +78,11 @@ export function MyClawProvider({
     [navigationBasePath],
   );
   const [sessions, setSessions] = useState<MyClawSessionListItem[]>(() =>
-    MY_CLAW_SESSIONS.map((session) => ({ ...session }))
+    [
+      // 澄清交互示例只在基础使用端展示。
+      ...(navigationBasePath === "/claw-client" ? CLAW_CLIENT_CLARIFY_SESSIONS : []),
+      ...MY_CLAW_SESSIONS,
+    ].map((session) => ({ ...session }))
   );
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [summonedAgentIds, setSummonedAgentIds] = useState<string[]>([
