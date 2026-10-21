@@ -41,6 +41,7 @@ import {
   type KnowledgeDocumentRow,
 } from "@/lib/mock-knowledge-base-v2";
 import { HitTestingView } from "@/components/knowledge-base/HitTestingView";
+import { KnowledgeBaseConfigDrawer } from "@/components/knowledge-base/KnowledgeBaseConfigDrawer";
 import { GraphRetrievalDrawer } from "@/components/knowledge-base/GraphRetrievalDrawer";
 import {
   Dialog,
@@ -642,6 +643,7 @@ export function TemplateKnowledgeBaseDetail({
   const [documents, setDocuments] = useState<KbDocument[]>([]);
   const [docsReady, setDocsReady] = useState(false);
   const [editingBasic, setEditingBasic] = useState(false);
+  const [configDrawerOpen, setConfigDrawerOpen] = useState(false);
   const [graphDrawerOpen, setGraphDrawerOpen] = useState(false);
   const [basicInfo, setBasicInfo] = useState({
     name: meta.name,
@@ -853,7 +855,7 @@ export function TemplateKnowledgeBaseDetail({
                 <button
                   type="button"
                   className="text-sm text-[#2773ff] hover:underline"
-                  onClick={() => toast.message("查看检索配置详情")}
+                  onClick={() => setConfigDrawerOpen(true)}
                 >
                   查看详情
                 </button>
@@ -1090,6 +1092,8 @@ export function TemplateKnowledgeBaseDetail({
           knowledgeBaseSecurityLevel={basicInfo.securityLevel}
         />
       </div>
+
+      <KnowledgeBaseConfigDrawer open={configDrawerOpen} onOpenChange={setConfigDrawerOpen} snapshot={meta.retrievalSnapshot} knowledgeBaseId={meta.id} />
 
       <GraphRetrievalDrawer
         open={graphDrawerOpen}

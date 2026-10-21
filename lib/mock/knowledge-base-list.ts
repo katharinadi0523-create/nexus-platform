@@ -1,5 +1,18 @@
 import type { ApprovalStatus, SecurityLevel } from "@/lib/security-level";
 
+import type { RetrievalConfigState } from "@/components/knowledge-base/RetrievalConfigStep";
+import type { RetrievalStrategy } from "@/components/knowledge-base/HybridStrategyStep";
+
+export interface KnowledgeBaseRetrievalSnapshot {
+  retrieval: RetrievalConfigState;
+  strategies: RetrievalStrategy[];
+  contentTags?: string[];
+  documentTags?: string[];
+  metadataEnabled?: boolean;
+  chunking?: Partial<Record<import("@/components/knowledge-base/RetrievalConfigStep").RetrievalEngineId, { strategies: string[]; fixedLength?: number }>>;
+  autoChunk?: boolean;
+}
+
 export type KnowledgeBaseCreateMethod = "模板创建" | "自定义创建";
 export type KnowledgeBaseStatus = "已启用" | "已停用";
 
@@ -16,6 +29,7 @@ export interface KnowledgeBaseListItem {
   groupName?: string;
   securityLevel?: SecurityLevel;
   approvalStatus?: ApprovalStatus;
+  retrievalSnapshot?: KnowledgeBaseRetrievalSnapshot;
 }
 
 const CREATED_KB_STORAGE_KEY = "nexus-created-knowledge-bases";
@@ -59,6 +73,7 @@ export interface CreateCustomKnowledgeBaseInput {
   createMethod?: KnowledgeBaseCreateMethod;
   securityLevel?: SecurityLevel;
   approvalStatus?: ApprovalStatus;
+  retrievalSnapshot?: KnowledgeBaseRetrievalSnapshot;
 }
 
 /** 创建知识库（写入本地存储，便于列表/详情读取） */
@@ -78,6 +93,7 @@ export function createCustomKnowledgeBase(
     createTime: now,
     description: input.description?.trim() || undefined,
     groupName: group.groupName,
+    retrievalSnapshot: input.retrievalSnapshot,
     securityLevel: input.securityLevel ?? "公开",
     approvalStatus: input.approvalStatus ?? "none",
   };
@@ -371,4 +387,12 @@ export function getKnowledgeBaseMeta(
   const created = loadCreatedKnowledgeBases().find((kb) => kb.id === id);
   if (created) return created;
   return allKnowledgeBases.find((kb) => kb.id === id) ?? null;
+}
+
+export function updateKnowledgeBaseRetrieval(id: string, snapshot: KnowledgeBaseRetrievalSnapshot) {
+  const meta = getKnowledgeBaseMeta(id);
+  if (!meta) throw new Error("未找到知识库");
+  const updated = { ...meta, retrievalSnapshot: snapshot, updateTime: formatNow() };
+  saveCreatedKnowledgeBases([updated, ...loadCreatedKnowledgeBases().filter(item => item.id !== id)]);
+  return updated;
 }
