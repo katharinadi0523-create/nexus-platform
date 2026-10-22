@@ -1450,14 +1450,6 @@ export function AutonomousEditor({
                       )}
                     </button>
                     <div className="ml-3 flex shrink-0 items-center gap-2">
-                      {selectedKnowledgeBases.some((kb) =>
-                        isReferenceUnavailable(kb.securityLevel, securityLevel)
-                      ) ? (
-                        <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-700">
-                          <CircleAlert className="h-4 w-4" />
-                          有无权限资源
-                        </span>
-                      ) : null}
                       {selectedKnowledgeBases.length > 0 && (
                         <button
                           onClick={(e) => {
@@ -1540,8 +1532,7 @@ export function AutonomousEditor({
                                     </span>
                                   )}
                                   {unavailable ? (
-                                    <span className="inline-flex items-center gap-1 rounded bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
-                                      <CircleAlert className="h-3.5 w-3.5" />
+                                    <span className="rounded bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
                                       无权限
                                     </span>
                                   ) : null}
@@ -1551,11 +1542,7 @@ export function AutonomousEditor({
                                     </span>
                                   )}
                                 </div>
-                                {unavailable ? (
-                                  <p className="mt-1 text-xs leading-5 text-rose-700">
-                                    该知识库已升至「{kb.securityLevel}」，高于当前智能体「{securityLevel}」。原配置位置已保留，不会自动替换，但当前不可调用。
-                                  </p>
-                                ) : kb.itemCount > 0 ? (
+                                {kb.itemCount > 0 ? (
                                   <p className="mt-1 text-xs text-slate-500">
                                     已关联 {kb.itemCount} 个文档
                                   </p>
@@ -1899,14 +1886,6 @@ export function AutonomousEditor({
                       )}
                     </button>
                     <div className="flex items-center gap-2">
-                      {selectedWorkflows.some((workflow) =>
-                        isReferenceUnavailable(workflow.securityLevel, securityLevel)
-                      ) ? (
-                        <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-700">
-                          <CircleAlert className="h-4 w-4" />
-                          有无权限资源
-                        </span>
-                      ) : null}
                       {selectedWorkflows.length > 0 && workflowUpdateState === "pending" && (
                         <button
                           type="button"
@@ -2020,21 +1999,14 @@ export function AutonomousEditor({
                                     </span>
                                   )}
                                   {isReferenceUnavailable(workflow.securityLevel, securityLevel) ? (
-                                    <span className="inline-flex items-center gap-1 rounded bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
-                                      <CircleAlert className="h-3.5 w-3.5" />
+                                    <span className="rounded bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
                                       无权限
                                     </span>
                                   ) : null}
                                 </div>
-                                {isReferenceUnavailable(workflow.securityLevel, securityLevel) ? (
-                                  <div className="mt-1 text-xs leading-5 text-rose-700">
-                                    该工作流已升至「{workflow.securityLevel}」，高于当前智能体「{securityLevel}」。原配置位置已保留，不会自动替换，但当前不可调用。
-                                  </div>
-                                ) : (
-                                  <div className="mt-1 text-xs text-slate-500">
-                                    {workflow.description}
-                                  </div>
-                                )}
+                                <div className="mt-1 text-xs text-slate-500">
+                                  {workflow.description}
+                                </div>
                               </div>
                               {index === 0 ? (
                                 <>
