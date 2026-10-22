@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { SecurityLevelBadge } from "@/components/security/security-level-badge";
+import { getSecurityLevelRank, type SecurityLevel } from "@/lib/security-level";
 import type {
   ClawKnowledgeAssets,
   DatabaseRow,
@@ -119,6 +121,27 @@ function KnowledgeLevelBadge({ level }: { level: KnowledgeBaseLevel }) {
     >
       {level}
     </span>
+  );
+}
+
+function SecurityAccessCell({
+  resourceLevel = "公开",
+  currentLevel,
+}: {
+  resourceLevel?: SecurityLevel;
+  currentLevel: SecurityLevel;
+}) {
+  const unavailable = getSecurityLevelRank(resourceLevel) > getSecurityLevelRank(currentLevel);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <SecurityLevelBadge level={resourceLevel} />
+      {unavailable ? (
+        <span className="rounded bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
+          无权限
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -288,6 +311,7 @@ export interface ClawKnowledgeAssetsSectionProps {
   activePanel: KnowledgePanelKey;
   onActivePanelChange: (panel: KnowledgePanelKey) => void;
   assets: ClawKnowledgeAssets;
+  currentSecurityLevel: SecurityLevel;
   onDeleteKnowledgeBase: (id: string) => void;
   onDeleteDatabase: (id: string) => void;
   onDeleteOntology: (id: string) => void;
@@ -302,6 +326,7 @@ export function ClawKnowledgeAssetsSection({
   activePanel,
   onActivePanelChange,
   assets,
+  currentSecurityLevel,
   onDeleteKnowledgeBase,
   onDeleteDatabase,
   onDeleteOntology,
@@ -327,28 +352,28 @@ export function ClawKnowledgeAssetsSection({
   const filteredKnowledgeBases = useMemo(
     () =>
       assets.knowledgeBases.filter((row) =>
-        textIncludesQuery([row.name, row.type, row.description, row.creator, row.updatedAt], normalizedQuery)
+        textIncludesQuery([row.name, row.type, row.securityLevel, row.description, row.creator, row.updatedAt], normalizedQuery)
       ),
     [assets.knowledgeBases, normalizedQuery]
   );
   const filteredDatabases = useMemo(
     () =>
       assets.databases.filter((row) =>
-        textIncludesQuery([row.name, row.dbType, row.description, row.creator, row.updatedAt], normalizedQuery)
+        textIncludesQuery([row.name, row.dbType, row.securityLevel, row.description, row.creator, row.updatedAt], normalizedQuery)
       ),
     [assets.databases, normalizedQuery]
   );
   const filteredOntologyObjects = useMemo(
     () =>
       assets.ontologyObjects.filter((row) =>
-        textIncludesQuery([row.name, row.scene, row.description, row.creator, row.updatedAt], normalizedQuery)
+        textIncludesQuery([row.name, row.scene, row.securityLevel, row.description, row.creator, row.updatedAt], normalizedQuery)
       ),
     [assets.ontologyObjects, normalizedQuery]
   );
   const filteredTermBanks = useMemo(
     () =>
       assets.termBanks.filter((row) =>
-        textIncludesQuery([row.name, row.description, row.creator, row.updatedAt], normalizedQuery)
+        textIncludesQuery([row.name, row.securityLevel, row.description, row.creator, row.updatedAt], normalizedQuery)
       ),
     [assets.termBanks, normalizedQuery]
   );
@@ -470,13 +495,13 @@ export function ClawKnowledgeAssetsSection({
           {total === 0 ? (
             <EmptyKnowledgeState label={searchQuery.trim() ? "没有匹配条件的资源。" : EMPTY_LABELS[activePanel]} />
           ) : activePanel === "knowledge-base" ? (
-            <KnowledgeBaseTable rows={pageRows as KnowledgeBaseRow[]} onDelete={onDeleteKnowledgeBase} />
+            <KnowledgeBaseTable rows={pageRows as KnowledgeBaseRow[]} currentSecurityLevel={currentSecurityLevel} onDelete={onDeleteKnowledgeBase} />
           ) : activePanel === "database" ? (
-            <DatabaseTable rows={pageRows as DatabaseRow[]} onDelete={onDeleteDatabase} />
+            <DatabaseTable rows={pageRows as DatabaseRow[]} currentSecurityLevel={currentSecurityLevel} onDelete={onDeleteDatabase} />
           ) : activePanel === "ontology" ? (
-            <OntologyTable rows={pageRows as OntologyObjectRow[]} onDelete={onDeleteOntology} />
+            <OntologyTable rows={pageRows as OntologyObjectRow[]} currentSecurityLevel={currentSecurityLevel} onDelete={onDeleteOntology} />
           ) : (
-            <TermBankTable rows={pageRows as TermBankRow[]} onDelete={onDeleteTermBank} />
+            <TermBankTable rows={pageRows as TermBankRow[]} currentSecurityLevel={currentSecurityLevel} onDelete={onDeleteTermBank} />
           )}
         </div>
 
@@ -500,16 +525,19 @@ export function ClawKnowledgeAssetsSection({
 
 function KnowledgeBaseTable({
   rows,
+  currentSecurityLevel,
   onDelete,
 }: {
   rows: KnowledgeBaseRow[];
+  currentSecurityLevel: SecurityLevel;
   onDelete: (id: string) => void;
 }) {
   return (
-    <Table className="min-w-[1080px] table-fixed">
+    <Table className="min-w-[1190px] table-fixed">
       <TableHeader>
         <TableRow className="border-slate-200 hover:bg-transparent">
           <TableHead className="w-[300px] px-4 text-sm font-semibold text-slate-900">知识库名称</TableHead>
+          <TableHead className="w-[130px] px-4 text-sm font-semibold text-slate-900">密级</TableHead>
           <TableHead className="w-[110px] px-4 text-sm font-semibold text-slate-900">
             <span className="inline-flex items-center">类型<HeaderIcon type="filter" /></span>
           </TableHead>
@@ -528,6 +556,9 @@ function KnowledgeBaseTable({
           <TableRow key={row.id} className="h-[62px] border-slate-200 bg-white hover:bg-slate-50/40">
             <TableCell className="px-4 py-2 align-middle">
               <NameCell panel="knowledge-base" name={row.name} />
+            </TableCell>
+            <TableCell className="px-4 py-2 align-middle">
+              <SecurityAccessCell resourceLevel={row.securityLevel} currentLevel={currentSecurityLevel} />
             </TableCell>
             <TableCell className="px-4 py-2 align-middle">
               <KnowledgeLevelBadge level={row.type} />
@@ -551,16 +582,19 @@ function KnowledgeBaseTable({
 
 function DatabaseTable({
   rows,
+  currentSecurityLevel,
   onDelete,
 }: {
   rows: DatabaseRow[];
+  currentSecurityLevel: SecurityLevel;
   onDelete: (id: string) => void;
 }) {
   return (
-    <Table className="min-w-[1080px] table-fixed">
+    <Table className="min-w-[1190px] table-fixed">
       <TableHeader>
         <TableRow className="border-slate-200 hover:bg-transparent">
           <TableHead className="w-[300px] px-4 text-sm font-semibold text-slate-900">数据库名称</TableHead>
+          <TableHead className="w-[130px] px-4 text-sm font-semibold text-slate-900">密级</TableHead>
           <TableHead className="w-[130px] px-4 text-sm font-semibold text-slate-900">
             <span className="inline-flex items-center">类型<HeaderIcon type="filter" /></span>
           </TableHead>
@@ -579,6 +613,9 @@ function DatabaseTable({
           <TableRow key={row.id} className="h-[62px] border-slate-200 bg-white hover:bg-slate-50/40">
             <TableCell className="px-4 py-2 align-middle">
               <NameCell panel="database" name={row.name} />
+            </TableCell>
+            <TableCell className="px-4 py-2 align-middle">
+              <SecurityAccessCell resourceLevel={row.securityLevel} currentLevel={currentSecurityLevel} />
             </TableCell>
             <TableCell className="px-4 py-2 align-middle text-sm text-slate-800">{row.dbType}</TableCell>
             <TableCell className="px-4 py-2 align-middle">
@@ -600,16 +637,19 @@ function DatabaseTable({
 
 function OntologyTable({
   rows,
+  currentSecurityLevel,
   onDelete,
 }: {
   rows: OntologyObjectRow[];
+  currentSecurityLevel: SecurityLevel;
   onDelete: (id: string) => void;
 }) {
   return (
-    <Table className="min-w-[1080px] table-fixed">
+    <Table className="min-w-[1190px] table-fixed">
       <TableHeader>
         <TableRow className="border-slate-200 hover:bg-transparent">
           <TableHead className="w-[300px] px-4 text-sm font-semibold text-slate-900">本体对象名称</TableHead>
+          <TableHead className="w-[130px] px-4 text-sm font-semibold text-slate-900">密级</TableHead>
           <TableHead className="w-[140px] px-4 text-sm font-semibold text-slate-900">本体场景</TableHead>
           <TableHead className="w-[320px] px-4 text-sm font-semibold text-slate-900">描述</TableHead>
           <TableHead className="w-[140px] px-4 text-sm font-semibold text-slate-900">
@@ -626,6 +666,9 @@ function OntologyTable({
           <TableRow key={row.id} className="h-[62px] border-slate-200 bg-white hover:bg-slate-50/40">
             <TableCell className="px-4 py-2 align-middle">
               <NameCell panel="ontology" name={row.name} />
+            </TableCell>
+            <TableCell className="px-4 py-2 align-middle">
+              <SecurityAccessCell resourceLevel={row.securityLevel} currentLevel={currentSecurityLevel} />
             </TableCell>
             <TableCell className="px-4 py-2 align-middle text-sm text-slate-800">{row.scene}</TableCell>
             <TableCell className="px-4 py-2 align-middle">
@@ -647,16 +690,19 @@ function OntologyTable({
 
 function TermBankTable({
   rows,
+  currentSecurityLevel,
   onDelete,
 }: {
   rows: TermBankRow[];
+  currentSecurityLevel: SecurityLevel;
   onDelete: (id: string) => void;
 }) {
   return (
-    <Table className="min-w-[980px] table-fixed">
+    <Table className="min-w-[1090px] table-fixed">
       <TableHeader>
         <TableRow className="border-slate-200 hover:bg-transparent">
           <TableHead className="w-[340px] px-4 text-sm font-semibold text-slate-900">术语库名称</TableHead>
+          <TableHead className="w-[130px] px-4 text-sm font-semibold text-slate-900">密级</TableHead>
           <TableHead className="w-[360px] px-4 text-sm font-semibold text-slate-900">描述</TableHead>
           <TableHead className="w-[140px] px-4 text-sm font-semibold text-slate-900">
             <span className="inline-flex items-center">创建人<HeaderIcon type="filter" /></span>
@@ -672,6 +718,9 @@ function TermBankTable({
           <TableRow key={row.id} className="h-[62px] border-slate-200 bg-white hover:bg-slate-50/40">
             <TableCell className="px-4 py-2 align-middle">
               <NameCell panel="term-bank" name={row.name} />
+            </TableCell>
+            <TableCell className="px-4 py-2 align-middle">
+              <SecurityAccessCell resourceLevel={row.securityLevel} currentLevel={currentSecurityLevel} />
             </TableCell>
             <TableCell className="px-4 py-2 align-middle">
               <DescriptionCell>{row.description}</DescriptionCell>

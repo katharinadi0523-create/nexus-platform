@@ -20,6 +20,7 @@ import type {
   CapabilityScope,
   ClawCapabilityConfig,
   ClawKnowledgeAssets,
+  ClawSecurityLevel,
 } from "@/lib/mock/claw-hub-next";
 import { CLAW_AGENT_MD_PLACEHOLDER } from "@/lib/mock/claw-hub-next";
 import type { ModelParamKey } from "@/lib/model-schemas";
@@ -100,6 +101,7 @@ export type MultiAgentMainAgentConfigProps = {
   activeKnowledgePanel: KnowledgePanelKey;
   onActiveKnowledgePanelChange: (panel: KnowledgePanelKey) => void;
   knowledgeAssets: ClawKnowledgeAssets;
+  currentSecurityLevel: ClawSecurityLevel;
   onDeleteKnowledgeBase: (id: string) => void;
   onDeleteDatabase: (id: string) => void;
   onDeleteOntology: (id: string) => void;
@@ -145,6 +147,7 @@ export function MultiAgentMainAgentConfig({
   activeKnowledgePanel,
   onActiveKnowledgePanelChange,
   knowledgeAssets,
+  currentSecurityLevel,
   onDeleteKnowledgeBase,
   onDeleteDatabase,
   onDeleteOntology,
@@ -342,6 +345,7 @@ export function MultiAgentMainAgentConfig({
             activePanel={activeKnowledgePanel}
             onActivePanelChange={onActiveKnowledgePanelChange}
             assets={knowledgeAssets}
+            currentSecurityLevel={currentSecurityLevel}
             onDeleteKnowledgeBase={onDeleteKnowledgeBase}
             onDeleteDatabase={onDeleteDatabase}
             onDeleteOntology={onDeleteOntology}

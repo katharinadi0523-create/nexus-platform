@@ -288,6 +288,7 @@ export function mergeClawKnowledgeSelections(
       enabled: true,
       documentCount: selection.documentCount,
       updatedAt: selection.updatedAt,
+      securityLevel: "内部",
     };
 
     const existingIndex = existingIndexMap.get(selection.id);

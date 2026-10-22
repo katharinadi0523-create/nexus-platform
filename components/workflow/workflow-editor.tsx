@@ -99,9 +99,10 @@ const initialNodes: Node[] = [
     type: "agent",
     position: { x: 700, y: 60 },
     data: {
-      description: "设备维修判断与预测",
-      agentId: "device-03",
-      agentName: "设备维修判断与预测",
+      description: "智能分析金融交易数据，识别异常模式和潜在风险。",
+      agentId: "anti-fl-07",
+      agentName: "反FL分析智能体",
+      securityLevel: "机密",
       currentVersion: "V1",
       latestVersion: "V2",
       latestPublishedAt: "2026-07-27 10:20:15",
@@ -288,8 +289,10 @@ export function WorkflowEditor({
 
   const selectedNode = useMemo(() => {
     const node = nodes.find((item) => item.id === selectedNodeId) || null;
-    return node ? { ...node, data: { ...node.data, showReferenceAlerts } } : null;
-  }, [nodes, selectedNodeId, showReferenceAlerts]);
+    return node
+      ? { ...node, data: { ...node.data, showReferenceAlerts, callerSecurityLevel: securityLevel } }
+      : null;
+  }, [nodes, securityLevel, selectedNodeId, showReferenceAlerts]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -351,7 +354,10 @@ export function WorkflowEditor({
     
     try {
       const result = await executeWorkflow(
-        nodes,
+        nodes.map((node) => ({
+          ...node,
+          data: { ...node.data, callerSecurityLevel: securityLevel },
+        })),
         edges,
         (partialResult) => {
           // 实时更新运行结果，显示执行进度
@@ -376,7 +382,7 @@ export function WorkflowEditor({
     } finally {
       setIsExecuting(false);
     }
-  }, [nodes, edges]);
+  }, [nodes, edges, securityLevel]);
 
   const handleNodeClickFromResult = useCallback((nodeId: string) => {
     // 点击结果面板中的节点时，高亮画布上的对应节点
@@ -410,7 +416,7 @@ export function WorkflowEditor({
           <ReactFlow
             nodes={nodes.map((node) => ({
               ...node,
-              data: { ...node.data, showReferenceAlerts },
+              data: { ...node.data, showReferenceAlerts, callerSecurityLevel: securityLevel },
             }))}
             edges={edges}
             onNodesChange={readOnly ? undefined : onNodesChange}

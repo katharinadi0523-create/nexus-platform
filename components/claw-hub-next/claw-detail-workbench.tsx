@@ -1231,6 +1231,7 @@ export function ClawDetailWorkbench({
           creator: prev?.creator ?? creatorFallback,
           updatedAt: sel.updatedAt,
           enabled: true,
+          securityLevel: prev?.securityLevel ?? "内部",
         });
       });
       return { ...current, knowledgeBases: Array.from(byId.values()) };
@@ -2345,6 +2346,7 @@ export function ClawDetailWorkbench({
                   activeKnowledgePanel={activeKnowledgePanel}
                   onActiveKnowledgePanelChange={setActiveKnowledgePanel}
                   knowledgeAssets={knowledgeAssets}
+                  currentSecurityLevel={securityLevel}
                   onDeleteKnowledgeBase={handleDeleteKnowledgeBase}
                   onDeleteDatabase={handleDeleteDatabase}
                   onDeleteOntology={handleDeleteOntologyObject}
@@ -2578,6 +2580,7 @@ export function ClawDetailWorkbench({
               activePanel={activeKnowledgePanel}
               onActivePanelChange={setActiveKnowledgePanel}
               assets={knowledgeAssets}
+              currentSecurityLevel={securityLevel}
               onDeleteKnowledgeBase={handleDeleteKnowledgeBase}
               onDeleteDatabase={handleDeleteDatabase}
               onDeleteOntology={handleDeleteOntologyObject}

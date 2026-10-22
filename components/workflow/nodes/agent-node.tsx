@@ -4,6 +4,8 @@ import { NodeProps } from "reactflow";
 import { Bot, ChevronRight, ChevronDown, CircleAlert } from "lucide-react";
 import { BaseNode } from "./base-node";
 import { Handle, Position } from "reactflow";
+import { SecurityLevelBadge } from "@/components/security/security-level-badge";
+import { getSecurityLevelRank, type SecurityLevel } from "@/lib/security-level";
 
 interface AgentNodeData {
   agentId?: string;
@@ -21,6 +23,8 @@ interface AgentNodeData {
   availabilityStatus?: "available" | "version-disabled" | "agent-disabled";
   agentUnavailableMessage?: string;
   runtimeError?: string;
+  securityLevel?: SecurityLevel;
+  callerSecurityLevel?: SecurityLevel;
 }
 
 export function AgentNode(props: NodeProps<AgentNodeData>) {
@@ -30,7 +34,12 @@ export function AgentNode(props: NodeProps<AgentNodeData>) {
   const outputVariables = data?.outputVariables || [];
   const agentDisabled = data?.availabilityStatus === "agent-disabled";
   const versionDisabled = data?.availabilityStatus === "version-disabled";
-  const unavailable = agentDisabled || versionDisabled;
+  const securityUnavailable = Boolean(
+    data?.securityLevel &&
+      data?.callerSecurityLevel &&
+      getSecurityLevelRank(data.securityLevel) > getSecurityLevelRank(data.callerSecurityLevel)
+  );
+  const unavailable = securityUnavailable || agentDisabled || versionDisabled;
   const hasPendingVersionUpdate = Boolean(
     data?.showReferenceAlerts &&
       data?.hasVersionUpdate &&
@@ -39,7 +48,7 @@ export function AgentNode(props: NodeProps<AgentNodeData>) {
 
   return (
     <div className="relative">
-      {data?.showReferenceAlerts && unavailable ? (
+      {data?.showReferenceAlerts && (agentDisabled || versionDisabled) ? (
         <span
           title="引用资源已停用，请重新配置"
           aria-label="引用资源已停用，请重新配置"
@@ -75,9 +84,16 @@ export function AgentNode(props: NodeProps<AgentNodeData>) {
                 <div className={`flex h-4 w-4 items-center justify-center rounded ${unavailable ? "bg-rose-100" : "bg-blue-100"}`}>
                   <div className={`h-2 w-2 rounded-sm ${unavailable ? "bg-rose-500" : "bg-blue-600"}`} />
                 </div>
-                <span className={`text-xs ${unavailable ? "text-rose-700" : "text-slate-700"}`}>{data.agentName}</span>
-                {unavailable ? (
-                  <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                <span className={`min-w-0 truncate text-xs ${unavailable ? "text-rose-700" : "text-slate-700"}`}>{data.agentName}</span>
+                {data.securityLevel ? (
+                  <SecurityLevelBadge level={data.securityLevel} className="shrink-0 px-1.5 py-0.5 text-[10px]" />
+                ) : null}
+                {securityUnavailable ? (
+                  <span className="shrink-0 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                    无权限
+                  </span>
+                ) : agentDisabled || versionDisabled ? (
+                  <span className="shrink-0 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
                     已停用
                   </span>
                 ) : null}

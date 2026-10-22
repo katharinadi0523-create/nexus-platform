@@ -201,6 +201,10 @@ export function AgentNodeConfig({
 
   const agentDisabled = nodeData?.availabilityStatus === "agent-disabled";
   const versionDisabled = nodeData?.availabilityStatus === "version-disabled";
+  const securityUnavailable = Boolean(
+    selectedAgent &&
+      getSecurityLevelRank(selectedAgent.securityLevel) > getSecurityLevelRank(callerSecurityLevel)
+  );
   const referenceUnavailable = agentDisabled || versionDisabled;
   const showReferenceAlerts = nodeData?.showReferenceAlerts !== false;
   const hasPendingVersionUpdate = Boolean(
@@ -357,7 +361,14 @@ export function AgentNodeConfig({
                 <div className="text-sm font-medium text-slate-900 mb-1">
                   智能体名称: {selectedAgent.name}
                 </div>
-                <SecurityLevelBadge level={selectedAgent.securityLevel} className="mb-1 px-1.5 py-0.5" />
+                <div className="mb-1 flex items-center gap-2">
+                  <SecurityLevelBadge level={selectedAgent.securityLevel} className="px-1.5 py-0.5" />
+                  {securityUnavailable ? (
+                    <span className="rounded bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
+                      无权限
+                    </span>
+                  ) : null}
+                </div>
                 <div className="text-xs text-slate-500">
                   {selectedAgent.updatedAt || "2025-12-20 21:03:15"}
                 </div>

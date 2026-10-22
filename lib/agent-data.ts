@@ -908,7 +908,9 @@ const MOCK_AGENTS: Record<string, AgentProfile> = {
     name: '数据清洗工作流',
     type: 'workflow',
     description: '自动化数据清洗和预处理工作流，支持多数据源输入和标准化输出。',
-    updatedAt: '2026-01-08 14:20:00'
+    updatedAt: '2026-01-08 14:20:00',
+    securityLevel: '秘密',
+    publishStatus: '已发布',
   },
   'writing-04': {
     id: 'writing-04',

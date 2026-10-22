@@ -121,6 +121,7 @@ export interface CapabilityKnowledgeItem {
   enabled: boolean;
   documentCount: number;
   updatedAt: string;
+  securityLevel?: SecurityLevel;
 }
 
 export interface ClawCapabilityConfig {
@@ -141,6 +142,7 @@ export interface KnowledgeBaseRow {
   creator: string;
   updatedAt: string;
   enabled: boolean;
+  securityLevel?: SecurityLevel;
 }
 
 export interface DatabaseRow {
@@ -151,6 +153,7 @@ export interface DatabaseRow {
   creator: string;
   updatedAt: string;
   enabled: boolean;
+  securityLevel?: SecurityLevel;
 }
 
 export interface OntologyObjectRow {
@@ -161,6 +164,7 @@ export interface OntologyObjectRow {
   creator: string;
   updatedAt: string;
   enabled: boolean;
+  securityLevel?: SecurityLevel;
 }
 
 export interface TermBankRow {
@@ -170,6 +174,7 @@ export interface TermBankRow {
   creator: string;
   updatedAt: string;
   enabled: boolean;
+  securityLevel?: SecurityLevel;
 }
 
 export interface ClawKnowledgeAssets {
@@ -193,6 +198,7 @@ export function buildKnowledgeAssetsFromLegacy(
       creator: tenantCreator,
       updatedAt: item.updatedAt,
       enabled: item.enabled,
+      securityLevel: item.securityLevel ?? "内部",
     })),
     ...knowledge.claw.map((item) => ({
       id: item.id,
@@ -202,6 +208,7 @@ export function buildKnowledgeAssetsFromLegacy(
       creator: defaultCreator,
       updatedAt: item.updatedAt,
       enabled: item.enabled,
+      securityLevel: item.securityLevel ?? "机密",
     })),
   ];
 
@@ -216,6 +223,7 @@ export function buildKnowledgeAssetsFromLegacy(
         creator: tenantCreator,
         updatedAt: "2026-04-01 10:00",
         enabled: true,
+        securityLevel: "内部",
       },
       {
         id: "db-neo4j-demo",
@@ -225,6 +233,7 @@ export function buildKnowledgeAssetsFromLegacy(
         creator: defaultCreator,
         updatedAt: "2026-03-28 09:00",
         enabled: true,
+        securityLevel: "机密",
       },
     ],
     ontologyObjects: [
@@ -236,6 +245,7 @@ export function buildKnowledgeAssetsFromLegacy(
         creator: defaultCreator,
         updatedAt: "2026-04-02 11:20",
         enabled: true,
+        securityLevel: "秘密",
       },
     ],
     termBanks: [
@@ -246,6 +256,7 @@ export function buildKnowledgeAssetsFromLegacy(
         creator: tenantCreator,
         updatedAt: "2026-03-30 15:00",
         enabled: true,
+        securityLevel: "公开",
       },
     ],
   };
@@ -4195,10 +4206,10 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
     review: { id: "research-paper-compliance", name: "论文规范检查工具", description: "按同行评审口径检查方法、证据、逻辑与写作规范。", enabled: true, badge: "Claw配置", meta: "工作流", kind: "workflow", origin: "claw_only" },
   } satisfies Record<string, CapabilityToolItem>;
   const researchKnowledge = {
-    project: { id: "research-project-knowledge", name: "科研项目资料库", description: "沉淀研究问题、实验方案、数据说明和阶段结论。", enabled: true, documentCount: 86, updatedAt: listItem.updatedAt },
-    papers: { id: "research-public-paper-corpus", name: "公开学术论文库", description: "公开论文元数据、摘要与来源索引。", enabled: true, documentCount: 128430, updatedAt: "2026-07-10 18:20" },
-    evidence: { id: "research-evidence-library", name: "核心文献证据库", description: "保存已筛选文献、证据矩阵、引用片段与证据边界。", enabled: true, documentCount: 312, updatedAt: listItem.updatedAt },
-    standards: { id: "research-writing-standards", name: "论文写作与审核规范库", description: "提供论文结构、引用格式、图表规范与同行评审检查项。", enabled: true, documentCount: 42, updatedAt: "2026-07-09 16:40" },
+    project: { id: "research-project-knowledge", name: "科研项目资料库", description: "沉淀研究问题、实验方案、数据说明和阶段结论。", enabled: true, documentCount: 86, updatedAt: listItem.updatedAt, securityLevel: "秘密" },
+    papers: { id: "research-public-paper-corpus", name: "公开学术论文库", description: "公开论文元数据、摘要与来源索引。", enabled: true, documentCount: 128430, updatedAt: "2026-07-10 18:20", securityLevel: "公开" },
+    evidence: { id: "research-evidence-library", name: "核心文献证据库", description: "保存已筛选文献、证据矩阵、引用片段与证据边界。", enabled: true, documentCount: 312, updatedAt: listItem.updatedAt, securityLevel: "机密" },
+    standards: { id: "research-writing-standards", name: "论文写作与审核规范库", description: "提供论文结构、引用格式、图表规范与同行评审检查项。", enabled: true, documentCount: 42, updatedAt: "2026-07-09 16:40", securityLevel: "内部" },
   } satisfies Record<string, CapabilityKnowledgeItem>;
   const researchAgents: CapabilityAgentItem[] = [
     {
@@ -4404,6 +4415,7 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
             enabled: true,
             documentCount: 128430,
             updatedAt: "2026-07-10 18:20",
+            securityLevel: "公开",
           },
         ] : [
           {
@@ -4423,6 +4435,7 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
             enabled: true,
             documentCount: 86,
             updatedAt: listItem.updatedAt,
+            securityLevel: "秘密",
           },
           {
             id: "research-evidence-library",
@@ -4431,6 +4444,7 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
             enabled: true,
             documentCount: 312,
             updatedAt: listItem.updatedAt,
+            securityLevel: "机密",
           },
           {
             id: "research-writing-standards",
@@ -4439,6 +4453,7 @@ function buildFallbackDetail(listItem: ClawHubListItem): ClawDetailData {
             enabled: true,
             documentCount: 42,
             updatedAt: "2026-07-09 16:40",
+            securityLevel: "内部",
           },
         ] : [
           {

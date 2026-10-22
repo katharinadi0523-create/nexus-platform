@@ -4,6 +4,7 @@
  */
 
 import { Node, Edge } from "reactflow";
+import { getSecurityLevelRank, type SecurityLevel } from "@/lib/security-level";
 
 // ==================== 类型定义 ====================
 
@@ -182,6 +183,15 @@ function getMockOutput(node: Node): any {
 
   // Agent节点
   if (nodeType === "agent") {
+    const referencedSecurityLevel = node.data?.securityLevel as SecurityLevel | undefined;
+    const callerSecurityLevel = node.data?.callerSecurityLevel as SecurityLevel | undefined;
+    if (
+      referencedSecurityLevel &&
+      callerSecurityLevel &&
+      getSecurityLevelRank(referencedSecurityLevel) > getSecurityLevelRank(callerSecurityLevel)
+    ) {
+      throw new Error("无权限");
+    }
     if (node.data?.availabilityStatus === "version-disabled") {
       throw new Error(
         node.data?.runtimeError ||
