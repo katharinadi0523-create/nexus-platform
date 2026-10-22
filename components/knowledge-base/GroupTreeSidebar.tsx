@@ -33,7 +33,6 @@ import {
   buildSecurityLevelOptions,
   getApprovalActionState,
   getSecurityLevelRank,
-  isHighSecurityLevel,
   maxSecurityLevel,
   requiresResourceDeleteApproval,
   type ApprovalStatus,
@@ -437,21 +436,16 @@ export function GroupTreeSidebar({
         toast.error("子群组密级不可高于父级群组密级。");
         return;
       }
-      const highSec = isHighSecurityLevel(draftSecurityLevel);
       const nextChild: KnowledgeBaseGroupNode = {
         id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         name,
         securityLevel: draftSecurityLevel,
-        approvalStatus: highSec ? "create" : "none",
+        approvalStatus: "none",
         children: [],
       };
       setGroups((current) => insertChildById(current, parentGroup.id, nextChild));
       setFormOpen(false);
-      toast.success(
-        highSec
-          ? `已提交创建审批：子群组「${name}」，审批通过后方可生效。`
-          : `已在「${parentGroup.name}」下新增子群组「${name}」`
-      );
+      toast.success(`已在「${parentGroup.name}」下新增子群组「${name}」`);
       return;
     }
 
@@ -471,16 +465,10 @@ export function GroupTreeSidebar({
       toast.error("群组密级不可高于父级群组密级。");
       return;
     }
-    const highSecUpgrade =
-      isHighSecurityLevel(draftSecurityLevel) &&
-      !isHighSecurityLevel(editingGroup.securityLevel ?? "公开") &&
-      draftSecurityLevel !== (editingGroup.securityLevel ?? "公开");
-
     setGroups((current) =>
       updateGroupById(current, editingGroup.id, {
         name,
         securityLevel: draftSecurityLevel,
-        ...(highSecUpgrade ? { approvalStatus: "create" as const } : {}),
       })
     );
     if (selectedGroup?.id === editingGroup.id) {
@@ -491,11 +479,7 @@ export function GroupTreeSidebar({
       });
     }
     setFormOpen(false);
-    toast.success(
-      highSecUpgrade
-        ? `群组「${name}」密级变更已提交审批。`
-        : `已更新群组「${name}」`
-    );
+    toast.success(`已更新群组「${name}」`);
   }
 
   function handleSubmitSecurityChange() {
@@ -628,7 +612,7 @@ export function GroupTreeSidebar({
               )}
               <p className="text-xs text-slate-400">
                 {formMode === "create"
-                  ? "子级密级不可高于父级群组，可选范围同时受当前项目角色密级限制。"
+                  ? "群组密级用于限制群组内可创建资源的最高密级，创建群组无需审批。子级密级不可高于父级群组。"
                   : "密级调整通过审批后生效，群组名称修改不受影响。"}
               </p>
             </div>
@@ -642,7 +626,7 @@ export function GroupTreeSidebar({
               className="bg-blue-600 text-white hover:bg-blue-700"
               onClick={handleConfirmForm}
             >
-              确定
+              {formMode === "create" ? "创建群组" : "保存"}
             </Button>
           </DialogFooter>
         </DialogContent>

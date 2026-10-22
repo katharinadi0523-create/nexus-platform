@@ -268,7 +268,7 @@ export default function CreateCustomKnowledgeBasePage() {
       });
       if (highSec) {
         toast.success(
-          `已提交创建审批：${created.name}，审批通过后方可生效。`
+          `已提交创建审批：${created.name}。审批通过前不可编辑、导入或使用。`
         );
         router.push("/knowledge-base");
       } else {
@@ -401,7 +401,7 @@ export default function CreateCustomKnowledgeBasePage() {
               />
               <p className="text-xs text-slate-400">
                 知识库密级不可高于所属群组密级（当前群组：{parentGroupSecurityLevel}
-                ），且不超过项目角色密级。高密创建将提交审批。
+                ），且不超过项目角色密级。公开、内部直接创建；秘密、机密需提交审批。
               </p>
             </div>
 
@@ -423,7 +423,9 @@ export default function CreateCustomKnowledgeBasePage() {
                   />
                   <span className="absolute bottom-2 right-3 text-xs text-slate-400">{approvalReason.length}/500</span>
                 </div>
-                <p className="text-xs text-amber-800">当前为高密知识库。申请原因将提交给审批人，不会作为知识库描述展示。</p>
+                <p className="text-xs leading-5 text-amber-800">
+                  申请原因将提交给审批人，不会作为知识库描述展示。审批通过前，知识库不可进入编辑、导入或使用。
+                </p>
               </div>
             )}
 

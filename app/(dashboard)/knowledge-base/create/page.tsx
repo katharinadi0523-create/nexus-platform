@@ -285,7 +285,7 @@ function StepOne({
           />
           <p className="mt-2 text-xs text-slate-500">
             知识库密级不可高于所属群组密级（当前：{ROOT_GROUP_SECURITY}
-            ）；高密创建将提交审批，通过后方可生效。
+            ）；公开、内部直接创建，秘密、机密需填写申请原因并提交审批。
           </p>
         </div>
 
@@ -301,7 +301,9 @@ function StepOne({
                 className="min-h-24 resize-none"
               />
               <div className="mt-1 flex items-center justify-between text-xs">
-                <span className="text-slate-500">申请原因将随创建申请提交给审批人，不会作为知识库描述展示。</span>
+                <span className="text-slate-500">
+                  申请原因将随创建申请提交给审批人，不会作为知识库描述展示。审批通过前不可编辑、导入或使用。
+                </span>
                 <span className="text-slate-400">{approvalReason.length}/500</span>
               </div>
             </div>
@@ -883,7 +885,7 @@ function CreateKnowledgeBaseContent() {
       });
       if (highSec) {
         toast.success(
-          `已提交创建审批：${created.name}，审批通过后方可生效。`
+          `已提交创建审批：${created.name}。审批通过前不可编辑、导入或使用。`
         );
         router.push("/knowledge-base");
         return;

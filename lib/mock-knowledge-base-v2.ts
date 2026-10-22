@@ -70,7 +70,6 @@ export const knowledgeBaseGroupsV2: KnowledgeBaseGroupNode[] = [
             id: "level-3",
             name: "三级目录",
             securityLevel: "秘密",
-            approvalStatus: "create",
             children: [
               {
                 id: "level-4",
