@@ -66,7 +66,21 @@ interface AgentDetailData {
   prompt: string;
   openingStatement: string;
   suggestedQuestions: string[];
-  workflows?: Array<{ id: string; name: string; description?: string; updateTime?: string }>;
+  knowledgeBases?: Array<{
+    id: string;
+    name: string;
+    itemCount: number;
+    createTime: string;
+    source?: string;
+    securityLevel?: SecurityLevel;
+  }>;
+  workflows?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    updateTime?: string;
+    securityLevel?: SecurityLevel;
+  }>;
   plugins?: unknown;
   ontologies?: Array<{ id: string; name: string; description?: string }>;
   terminologies?: Array<{ id: string; name: string }>;
@@ -122,18 +136,29 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
     prompt: "你是一个设备维修专家，能够分析传感器数据并预测故障...",
     openingStatement: "你好，我是设备维修助手。请提供传感器数据，我将为您分析设备状态。",
     suggestedQuestions: ["分析当前传感器读数", "预测设备故障概率"],
+    knowledgeBases: [
+      {
+        id: "kb-project-ready-30s",
+        name: "项目准备测试_30s",
+        itemCount: 1,
+        createTime: "2026-10-19 13:59:35",
+        securityLevel: "秘密",
+      },
+    ],
     workflows: [
       {
         id: "workflow-device-inspection",
         name: "设备巡检工作流",
         description: "执行设备巡检、异常识别与维修建议生成。",
         updateTime: "2026-08-18 15:08:26",
+        securityLevel: "内部",
       },
       {
         id: "workflow-device-alert",
         name: "设备告警联动工作流",
         description: "联动告警通知与设备处置流程。",
         updateTime: "2026-07-26 11:42:08",
+        securityLevel: "秘密",
       },
     ],
     plugins: ["Sensor Data Analyzer"],

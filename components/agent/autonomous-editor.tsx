@@ -53,7 +53,11 @@ import {
 } from "@/components/ui/tooltip";
 import type { MemoryVariable } from "@/lib/types/agent";
 import { SecurityLevelBadge } from "@/components/security/security-level-badge";
-import { SECURITY_LEVELS, type SecurityLevel } from "@/lib/security-level";
+import {
+  getSecurityLevelRank,
+  SECURITY_LEVELS,
+  type SecurityLevel,
+} from "@/lib/security-level";
 import { cn } from "@/lib/utils";
 
 // 定义详细数据源
@@ -65,7 +69,21 @@ interface AgentDetailData {
   prompt: string;
   openingStatement: string;
   suggestedQuestions: string[];
-  workflows?: Array<{ id: string; name: string; description?: string; updateTime?: string }>;
+  knowledgeBases?: Array<{
+    id: string;
+    name: string;
+    itemCount: number;
+    createTime: string;
+    source?: string;
+    securityLevel?: SecurityLevel;
+  }>;
+  workflows?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    updateTime?: string;
+    securityLevel?: SecurityLevel;
+  }>;
   plugins?: unknown;
   ontologies?: Array<{ id: string; name: string; description?: string }>;
   terminologies?: Array<{ id: string; name: string }>;
@@ -111,18 +129,29 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
       "分析当前传感器读数",
       "预测设备故障概率",
     ],
+    knowledgeBases: [
+      {
+        id: "kb-project-ready-30s",
+        name: "项目准备测试_30s",
+        itemCount: 1,
+        createTime: "2026-10-19 13:59:35",
+        securityLevel: "秘密",
+      },
+    ],
     workflows: [
       {
         id: "workflow-device-inspection",
         name: "设备巡检工作流",
         description: "执行设备巡检、异常识别与维修建议生成。",
         updateTime: "2026-08-18 15:08:26",
+        securityLevel: "内部",
       },
       {
         id: "workflow-device-alert",
         name: "设备告警联动工作流",
         description: "联动告警通知与设备处置流程。",
         updateTime: "2026-07-26 11:42:08",
+        securityLevel: "秘密",
       },
     ],
     plugins: ["Sensor Data Analyzer"],
@@ -265,6 +294,7 @@ function normalizeWorkflows(input: unknown): WorkflowType[] {
         name?: unknown;
         description?: unknown;
         updateTime?: unknown;
+        securityLevel?: unknown;
       };
 
       if (typeof obj.id !== "string" || typeof obj.name !== "string") return null;
@@ -274,9 +304,22 @@ function normalizeWorkflows(input: unknown): WorkflowType[] {
         name: obj.name,
         description: typeof obj.description === "string" ? obj.description : "",
         updateTime: typeof obj.updateTime === "string" ? obj.updateTime : "",
+        securityLevel: SECURITY_LEVELS.includes(obj.securityLevel as SecurityLevel)
+          ? (obj.securityLevel as SecurityLevel)
+          : undefined,
       } satisfies WorkflowType;
     })
     .filter((x): x is WorkflowType => !!x);
+}
+
+function isReferenceUnavailable(
+  referenceLevel: SecurityLevel | undefined,
+  callerLevel: SecurityLevel
+): boolean {
+  return Boolean(
+    referenceLevel &&
+      getSecurityLevelRank(referenceLevel) > getSecurityLevelRank(callerLevel)
+  );
 }
 
 function normalizeMCPs(input: unknown): MCP[] {
@@ -1407,6 +1450,14 @@ export function AutonomousEditor({
                       )}
                     </button>
                     <div className="ml-3 flex shrink-0 items-center gap-2">
+                      {selectedKnowledgeBases.some((kb) =>
+                        isReferenceUnavailable(kb.securityLevel, securityLevel)
+                      ) ? (
+                        <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-700">
+                          <CircleAlert className="h-4 w-4" />
+                          有无权限资源
+                        </span>
+                      ) : null}
                       {selectedKnowledgeBases.length > 0 && (
                         <button
                           onClick={(e) => {
@@ -1447,53 +1498,79 @@ export function AutonomousEditor({
                       {selectedKnowledgeBases.length === 0 ? (
                         <div className={EMPTY_PANEL_CLASS}>暂无知识库，点击右上角添加</div>
                       ) : (
-                        selectedKnowledgeBases.map((kb) => (
-                          <div
-                            key={kb.id}
-                            className="flex items-center gap-3 rounded-[20px] border border-slate-200 bg-[linear-gradient(135deg,#fbfdff_0%,#f8fafc_100%)] p-4"
-                          >
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-700">
-                              <FileText className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className="truncate text-sm font-medium text-slate-900">
-                                  {kb.name}
-                                </span>
-                                {kb.securityLevel ? (
-                                  <SecurityLevelBadge
-                                    level={kb.securityLevel}
-                                    className="px-1.5 py-0.5"
-                                  />
-                                ) : (
-                                  <span
-                                    className="inline-flex shrink-0 items-center whitespace-nowrap rounded-[4px] bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-500"
-                                    title="该知识库尚未同步密级，请确认后再使用"
-                                  >
-                                    密级未同步
-                                  </span>
-                                )}
-                                {kb.source && (
-                                  <span className="min-w-0 truncate text-xs text-slate-500">
-                                    ({kb.source.split("/").pop()})
-                                  </span>
-                                )}
-                              </div>
-                              {kb.itemCount > 0 && (
-                                <p className="mt-1 text-xs text-slate-500">
-                                  已关联 {kb.itemCount} 个文档
-                                </p>
+                        selectedKnowledgeBases.map((kb) => {
+                          const unavailable = isReferenceUnavailable(
+                            kb.securityLevel,
+                            securityLevel
+                          );
+                          return (
+                            <div
+                              key={kb.id}
+                              className={cn(
+                                "flex items-center gap-3 rounded-[20px] border p-4",
+                                unavailable
+                                  ? "border-rose-200 bg-rose-50/60"
+                                  : "border-slate-200 bg-[linear-gradient(135deg,#fbfdff_0%,#f8fafc_100%)]"
                               )}
-                            </div>
-                            <button
-                              onClick={() => handleRemoveKnowledgeBase(kb.id)}
-                              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-200"
-                              title="取消挂载"
                             >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ))
+                              <div className={cn(
+                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl",
+                                unavailable
+                                  ? "bg-rose-100 text-rose-700"
+                                  : "bg-indigo-50 text-indigo-700"
+                              )}>
+                                <FileText className="h-4 w-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                  <span className="truncate text-sm font-medium text-slate-900">
+                                    {kb.name}
+                                  </span>
+                                  {kb.securityLevel ? (
+                                    <SecurityLevelBadge
+                                      level={kb.securityLevel}
+                                      className="px-1.5 py-0.5"
+                                    />
+                                  ) : (
+                                    <span
+                                      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-[4px] bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-500"
+                                      title="该知识库尚未同步密级，请确认后再使用"
+                                    >
+                                      密级未同步
+                                    </span>
+                                  )}
+                                  {unavailable ? (
+                                    <span className="inline-flex items-center gap-1 rounded bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
+                                      <CircleAlert className="h-3.5 w-3.5" />
+                                      无权限
+                                    </span>
+                                  ) : null}
+                                  {kb.source && (
+                                    <span className="min-w-0 truncate text-xs text-slate-500">
+                                      ({kb.source.split("/").pop()})
+                                    </span>
+                                  )}
+                                </div>
+                                {unavailable ? (
+                                  <p className="mt-1 text-xs leading-5 text-rose-700">
+                                    该知识库已升至「{kb.securityLevel}」，高于当前智能体「{securityLevel}」。原配置位置已保留，不会自动替换，但当前不可调用。
+                                  </p>
+                                ) : kb.itemCount > 0 ? (
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    已关联 {kb.itemCount} 个文档
+                                  </p>
+                                ) : null}
+                              </div>
+                              <button
+                                onClick={() => handleRemoveKnowledgeBase(kb.id)}
+                                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-200"
+                                title="取消挂载"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   )}
@@ -1822,6 +1899,14 @@ export function AutonomousEditor({
                       )}
                     </button>
                     <div className="flex items-center gap-2">
+                      {selectedWorkflows.some((workflow) =>
+                        isReferenceUnavailable(workflow.securityLevel, securityLevel)
+                      ) ? (
+                        <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-700">
+                          <CircleAlert className="h-4 w-4" />
+                          有无权限资源
+                        </span>
+                      ) : null}
                       {selectedWorkflows.length > 0 && workflowUpdateState === "pending" && (
                         <button
                           type="button"
@@ -1837,7 +1922,11 @@ export function AutonomousEditor({
                           有更新
                         </button>
                       )}
-                      {selectedWorkflows.some((workflow) => workflow.id === "workflow-device-alert") && (
+                      {selectedWorkflows.some(
+                        (workflow) =>
+                          workflow.id === "workflow-device-alert" &&
+                          !isReferenceUnavailable(workflow.securityLevel, securityLevel)
+                      ) && (
                         <button
                           type="button"
                           onClick={(event) => {
@@ -1900,18 +1989,52 @@ export function AutonomousEditor({
                           {selectedWorkflows.map((workflow, index) => (
                             <div
                               key={workflow.id}
-                              className="flex items-center gap-3 rounded-[20px] border border-slate-200 bg-[linear-gradient(135deg,#fbfdff_0%,#f8fafc_100%)] p-4"
+                              className={cn(
+                                "flex items-center gap-3 rounded-[20px] border p-4",
+                                isReferenceUnavailable(workflow.securityLevel, securityLevel)
+                                  ? "border-rose-200 bg-rose-50/60"
+                                  : "border-slate-200 bg-[linear-gradient(135deg,#fbfdff_0%,#f8fafc_100%)]"
+                              )}
                             >
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                              <div className={cn(
+                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl",
+                                isReferenceUnavailable(workflow.securityLevel, securityLevel)
+                                  ? "bg-rose-100 text-rose-700"
+                                  : "bg-emerald-50 text-emerald-700"
+                              )}>
                                 <Workflow className="h-4 w-4" />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="text-sm font-medium text-slate-900">
-                                  {workflow.name}
+                                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                  <span className="truncate text-sm font-medium text-slate-900">
+                                    {workflow.name}
+                                  </span>
+                                  {workflow.securityLevel ? (
+                                    <SecurityLevelBadge
+                                      level={workflow.securityLevel}
+                                      className="px-1.5 py-0.5"
+                                    />
+                                  ) : (
+                                    <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                                      密级未同步
+                                    </span>
+                                  )}
+                                  {isReferenceUnavailable(workflow.securityLevel, securityLevel) ? (
+                                    <span className="inline-flex items-center gap-1 rounded bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
+                                      <CircleAlert className="h-3.5 w-3.5" />
+                                      无权限
+                                    </span>
+                                  ) : null}
                                 </div>
-                                <div className="mt-1 text-xs text-slate-500">
-                                  {workflow.description}
-                                </div>
+                                {isReferenceUnavailable(workflow.securityLevel, securityLevel) ? (
+                                  <div className="mt-1 text-xs leading-5 text-rose-700">
+                                    该工作流已升至「{workflow.securityLevel}」，高于当前智能体「{securityLevel}」。原配置位置已保留，不会自动替换，但当前不可调用。
+                                  </div>
+                                ) : (
+                                  <div className="mt-1 text-xs text-slate-500">
+                                    {workflow.description}
+                                  </div>
+                                )}
                               </div>
                               {index === 0 ? (
                                 <>
@@ -1976,7 +2099,8 @@ export function AutonomousEditor({
                                     <span className="rounded bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-600">已更新</span>
                                   ) : null}
                                 </>
-                              ) : workflow.id === "workflow-device-alert" ? (
+                              ) : workflow.id === "workflow-device-alert" &&
+                                !isReferenceUnavailable(workflow.securityLevel, securityLevel) ? (
                                 <>
                                   <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">V3</span>
                                   {showReferenceAlerts ? <span className="rounded bg-rose-50 px-2 py-1 text-xs font-medium text-rose-600">已停用</span> : null}
