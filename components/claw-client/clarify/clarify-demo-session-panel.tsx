@@ -10,7 +10,7 @@ import {
 } from "@/components/claw-hub-next/conversation-timeline";
 import type { ConversationMessageWithAudit } from "@/components/claw-hub-next/detail/utils";
 import { ComposerWithAgents } from "@/components/my-claw/chat/composer-with-agents";
-import { formatClarifyAnswer, resolveClarifyMode } from "@/lib/claw-clarify";
+import { formatClarifyAnswer } from "@/lib/claw-clarify";
 import {
   buildClarifyDemoSteps,
   getClarifyDemoScenario,
@@ -93,14 +93,11 @@ function ClarifyDemoSteps({ steps }: { steps: ClarifyDemoStep[] }) {
 
 const MODE_TITLE = {
   answered: "已获得回答",
-  partial: "部分回答",
-  // 用户跳过与超时自动继续，对 Claw 来说都是「未回答」。
-  skipped_all: "未回答",
   auto_continued: "未回答",
 } as const;
 
 /**
- * 澄清交互示例会话：用户请求 → Claw 发起澄清 → 回答 / 跳过 / 超时自动继续 → 最终回复
+ * 澄清交互示例会话：用户请求 → Claw 发起澄清 → 回答 / 超时自动继续 → 最终回复
  * （说明所作假设，或说明受阻原因）。
  */
 export function ClarifyDemoSessionPanel({ session }: { session: MyClawSessionListItem }) {
@@ -202,7 +199,7 @@ export function ClarifyDemoSessionPanel({ session }: { session: MyClawSessionLis
                       {result
                         ? answerText
                           ? `→ ${answerText}`
-                          : "→ 未回答"
+                          : `→ ${MODE_TITLE[result.mode]}`
                         : "→ 等待回答"}
                     </p>
                   </div>
@@ -223,13 +220,7 @@ export function ClarifyDemoSessionPanel({ session }: { session: MyClawSessionLis
               questions={scenario.questions}
               secondsLeft={projection.secondsLeft}
               onFirstInteraction={() => runtime.snooze(session.id)}
-              onSubmit={(answers) =>
-                runtime.resolve(
-                  session.id,
-                  answers,
-                  resolveClarifyMode(scenario.questions, answers, false),
-                )
-              }
+              onSubmit={(answers) => runtime.resolve(session.id, answers, "answered")}
             />
           ) : null}
           <ComposerWithAgents
