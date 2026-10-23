@@ -139,6 +139,7 @@ export default function LoginPage() {
 
       if (!response.ok) {
         setError(data.error ?? "登录失败，请稍后重试");
+        setIsSubmitting(false);
         return;
       }
 
@@ -208,7 +209,7 @@ export default function LoginPage() {
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900 tracking-tight">欢迎回来</h2>
             <p className="mt-2 text-sm text-gray-500">
-              登录您的账号以继续使用平台
+              可直接点击登录，或使用账号密码登录
             </p>
           </div>
 

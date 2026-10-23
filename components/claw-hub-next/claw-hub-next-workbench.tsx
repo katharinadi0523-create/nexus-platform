@@ -32,7 +32,9 @@ import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
 import { cn } from "@/lib/utils";
 
 const CURRENT_OPERATOR = "RowanDI";
-const PERSONAL_CLAW_URL = "/my-claw";
+// Claw Hub's “我的Claw” entry is the everyday/basic client. Project collaboration
+// remains available from the shape switcher inside the client.
+const PERSONAL_CLAW_URL = "/claw-client";
 const STATIC_CLAW_IDS = new Set(clawHubList.map((item) => item.id));
 const STORAGE_VOLUME_OPTIONS = [
   { value: "s3://juicefs-vol-001", label: "GF专用存储卷" },

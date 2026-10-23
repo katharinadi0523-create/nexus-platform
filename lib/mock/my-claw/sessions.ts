@@ -1,3 +1,4 @@
+import { CLAW_CLIENT_CLARIFY_SESSIONS } from "./clarify-demo";
 import type { MyClawSessionListItem } from "./types";
 
 /**
@@ -82,7 +83,10 @@ export const MY_CLAW_SESSIONS: MyClawSessionListItem[] = [
 export function getMyClawSession(
   id: string
 ): MyClawSessionListItem | undefined {
-  return MY_CLAW_SESSIONS.find((session) => session.id === id);
+  return (
+    MY_CLAW_SESSIONS.find((session) => session.id === id) ??
+    CLAW_CLIENT_CLARIFY_SESSIONS.find((session) => session.id === id)
+  );
 }
 
 export function getPinnedMyClawSessions(): MyClawSessionListItem[] {

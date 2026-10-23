@@ -17,6 +17,7 @@ import {
   type AutomationTask,
   type MyClawSessionListItem,
 } from "@/lib/mock/my-claw";
+import { CLAW_CLIENT_CLARIFY_SESSIONS } from "@/lib/mock/my-claw/clarify-demo";
 
 const RESEARCH_SUMMON_IDS = new Set([
   RESEARCH_CLAW_ID,
@@ -54,10 +55,34 @@ interface MyClawContextValue {
 
 const MyClawContext = createContext<MyClawContextValue | null>(null);
 
-export function MyClawProvider({ children }: { children: ReactNode }) {
+export function MyClawProvider({
+  children,
+  navigationBasePath = "/my-claw",
+}: {
+  children: ReactNode;
+  /** Keeps personal-Claw actions inside the selected product shape. */
+  navigationBasePath?: "/my-claw" | "/claw-client";
+}) {
   const router = useRouter();
+  const chatHref = useCallback(
+    (sessionId?: string) => {
+      if (navigationBasePath === "/claw-client") {
+        return sessionId
+          ? `/claw-client?sessionId=${encodeURIComponent(sessionId)}`
+          : "/claw-client";
+      }
+      return sessionId
+        ? `/my-claw/chat?sessionId=${encodeURIComponent(sessionId)}`
+        : "/my-claw/chat";
+    },
+    [navigationBasePath],
+  );
   const [sessions, setSessions] = useState<MyClawSessionListItem[]>(() =>
-    MY_CLAW_SESSIONS.map((session) => ({ ...session }))
+    [
+      // 澄清交互示例只在基础使用端展示。
+      ...(navigationBasePath === "/claw-client" ? CLAW_CLIENT_CLARIFY_SESSIONS : []),
+      ...MY_CLAW_SESSIONS,
+    ].map((session) => ({ ...session }))
   );
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [summonedAgentIds, setSummonedAgentIds] = useState<string[]>([
@@ -184,16 +209,14 @@ export function MyClawProvider({ children }: { children: ReactNode }) {
           ];
         });
         setActiveSessionId(RESEARCH_SESSION_ID);
-        router.push(
-          `/my-claw/chat?sessionId=${encodeURIComponent(RESEARCH_SESSION_ID)}`
-        );
+        router.push(chatHref(RESEARCH_SESSION_ID));
         return;
       }
 
       // Non-research agents: summon into chat (blank / current draft host).
-      router.push("/my-claw/chat");
+      router.push(chatHref());
     },
-    [router]
+    [chatHref, router]
   );
 
   const dismissAgent = useCallback((agentId: string) => {

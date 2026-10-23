@@ -1,5 +1,7 @@
 "use client";
 
+import { KNOWLEDGE_BASE_CHUNK_OPTIONS as SEMANTIC_LIKE_CHUNK_OPTIONS } from "@/lib/knowledge-base-chunk-options";
+
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { FileText, Info, Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,17 +44,7 @@ const documentTagOptions = [
 ];
 const contentTagOptions = ["奶茶", "门店经营", "供应商", "定价", "售后"];
 
-const SEMANTIC_LIKE_CHUNK_OPTIONS = [
-  "智能切片",
-  "按常见标识符切分",
-  "按长度切分",
-  "按语义切分",
-  "按页切分",
-  "按分隔符递归切分",
-  "自定义正则切分",
-  "按句子切分",
-  "按层级切分",
-] as const;
+
 
 function formatFileSize(size: number) {
   if (size >= 1024 * 1024) {
@@ -523,17 +515,7 @@ export function ImportDocumentDrawer({
                     name: "全文检索",
                     values: fulltextChunks,
                     setValues: setFulltextChunks,
-                    options: [
-                      "智能切片",
-                      "按常见标识符切分",
-                      "按长度切分",
-                      "按语义切分",
-                      "按页切分",
-                      "按分隔符递归切分",
-                      "自定义正则切分",
-                      "按句子切分",
-                      "按层级切分",
-                    ],
+                    options: [...SEMANTIC_LIKE_CHUNK_OPTIONS],
                   },
                   {
                     name: "PageIndex 检索",

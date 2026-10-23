@@ -20,6 +20,8 @@ export type ConversationSearchSource = "personal" | "project";
 export interface SearchableConversationMessage {
   id: string;
   content: string;
+  authorLabel: string;
+  role: "user" | "agent";
 }
 
 export interface SearchableConversation {
@@ -37,12 +39,19 @@ export interface SearchableConversation {
 export interface ConversationSearchHit {
   conversation: SearchableConversation;
   matchCount: number;
-  snippet: string;
-  matchedMessageId?: string;
+  score: number;
+  matchedMessages: ConversationSearchMessageHit[];
   titleMatched: boolean;
 }
 
+export interface ConversationSearchMessageHit {
+  message: SearchableConversationMessage;
+  matchCount: number;
+  snippet: string;
+}
+
 const SNIPPET_RADIUS = 28;
+const RECENT_CONVERSATION_LIMIT = 12;
 
 export function countExactMatches(haystack: string, needle: string): number {
   if (!haystack || !needle) return 0;
@@ -121,7 +130,12 @@ export function getPersonalSearchableMessages(
         if (node.type !== "user" && node.type !== "output") return [];
         const content = node.timeline.message.content?.trim();
         if (!content) return [];
-        return [{ id: node.timeline.message.id, content }];
+        return [{
+          id: node.timeline.message.id,
+          content,
+          authorLabel: node.type === "user" ? "你" : MY_CLAW_BRAND_NAME,
+          role: node.type === "user" ? "user" : "agent",
+        }];
       });
   }
 
@@ -130,7 +144,12 @@ export function getPersonalSearchableMessages(
       if (node.type !== "user" && node.type !== "output") return [];
       const content = node.timeline.message.content?.trim();
       if (!content) return [];
-      return [{ id: node.timeline.message.id, content }];
+      return [{
+        id: node.timeline.message.id,
+        content,
+        authorLabel: node.type === "user" ? "你" : node.timeline.message.sender,
+        role: node.type === "user" ? "user" : "agent",
+      }];
     });
   }
 
@@ -142,6 +161,9 @@ export function getPersonalSearchableMessages(
       .map((message) => ({
         id: message.id,
         content: (message.text ?? "").trim(),
+        authorLabel:
+          message.role === "user" ? "你" : RESEARCH_AGENTS.main.name,
+        role: message.role === "user" ? "user" : "agent",
       }));
   }
 
@@ -193,8 +215,9 @@ export function toProjectSearchableConversation(options: {
   project: CollaborationProject | undefined;
   messages: ProjectMessage[];
   getActor: (id: string) => AgentActor | undefined;
+  getUser: (id: string) => { name: string } | undefined;
 }): SearchableConversation | null {
-  const { conversation, project, messages, getActor } = options;
+  const { conversation, project, messages, getActor, getUser } = options;
   if (!project || project.status !== "active" || conversation.archivedAt) {
     return null;
   }
@@ -204,6 +227,11 @@ export function toProjectSearchableConversation(options: {
     .map((message) => ({
       id: message.id,
       content: message.content.trim(),
+      authorLabel:
+        message.author.kind === "human"
+          ? getUser(message.author.id)?.name ?? "用户"
+          : getActor(message.author.id)?.name ?? "Agent",
+      role: message.author.kind === "human" ? "user" as const : "agent" as const,
     }))
     .filter((message) => message.content.length > 0);
 
@@ -223,34 +251,27 @@ export function toProjectSearchableConversation(options: {
   };
 }
 
-function pickSnippet(conversation: SearchableConversation, query: string): {
-  snippet: string;
-  matchedMessageId?: string;
-} {
+function findMatchedMessages(
+  conversation: SearchableConversation,
+  query: string,
+): ConversationSearchMessageHit[] {
   const needle = query.trim();
-  if (!needle) {
-    return { snippet: extractSnippet(conversation.preview, "") };
-  }
+  if (!needle) return [];
 
-  let best:
-    | { message: SearchableConversationMessage; matchCount: number }
-    | undefined;
-  for (const message of conversation.messages) {
-    const matchCount = countExactMatches(message.content, needle);
-    if (matchCount === 0) continue;
-    if (!best || matchCount > best.matchCount) {
-      best = { message, matchCount };
-    }
-  }
-
-  if (best) {
-    return {
-      snippet: extractSnippet(best.message.content, needle),
-      matchedMessageId: best.message.id,
-    };
-  }
-
-  return { snippet: extractSnippet(conversation.preview, "") };
+  return conversation.messages
+    .map((message, index) => ({
+      message,
+      matchCount: countExactMatches(message.content, needle),
+      snippet: extractSnippet(message.content, needle),
+      index,
+    }))
+    .filter((hit) => hit.matchCount > 0)
+    .sort((a, b) => b.matchCount - a.matchCount || b.index - a.index)
+    .map((hit) => ({
+      message: hit.message,
+      matchCount: hit.matchCount,
+      snippet: hit.snippet,
+    }));
 }
 
 export function searchConversations(
@@ -265,10 +286,12 @@ export function searchConversations(
         (a, b) =>
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
       )
+      .slice(0, RECENT_CONVERSATION_LIMIT)
       .map((conversation) => ({
         conversation,
         matchCount: 0,
-        snippet: extractSnippet(conversation.preview, ""),
+        score: 0,
+        matchedMessages: [],
         titleMatched: false,
       }));
   }
@@ -278,23 +301,24 @@ export function searchConversations(
       const titleMatched =
         countExactMatches(conversation.title, needle) > 0;
       const titleCount = countExactMatches(conversation.title, needle);
-      const contentCount = conversation.messages.reduce(
-        (sum, message) => sum + countExactMatches(message.content, needle),
+      const matchedMessages = findMatchedMessages(conversation, needle);
+      const contentCount = matchedMessages.reduce(
+        (sum, hit) => sum + hit.matchCount,
         0,
       );
       const matchCount = titleCount + contentCount;
-      const { snippet, matchedMessageId } = pickSnippet(conversation, needle);
+      const bestMessageScore = matchedMessages[0]?.matchCount ?? 0;
       return {
         conversation,
         matchCount,
-        snippet,
-        matchedMessageId,
+        score: titleCount * 3 + bestMessageScore,
+        matchedMessages,
         titleMatched,
       };
     })
     .filter((hit) => hit.matchCount > 0)
     .sort((a, b) => {
-      if (a.matchCount !== b.matchCount) return b.matchCount - a.matchCount;
+      if (a.score !== b.score) return b.score - a.score;
       return (
         new Date(b.conversation.updatedAt).getTime() -
         new Date(a.conversation.updatedAt).getTime()
@@ -302,10 +326,14 @@ export function searchConversations(
     });
 }
 
-export function buildConversationHref(hit: ConversationSearchHit): string {
-  const { conversation, matchedMessageId } = hit;
-  if (conversation.source === "project" && matchedMessageId) {
-    return `${conversation.href}?message=${encodeURIComponent(matchedMessageId)}`;
+export function buildConversationHref(
+  hit: ConversationSearchHit,
+  messageId?: string,
+): string {
+  const { conversation } = hit;
+  if (messageId) {
+    const separator = conversation.href.includes("?") ? "&" : "?";
+    return `${conversation.href}${separator}message=${encodeURIComponent(messageId)}`;
   }
   return conversation.href;
 }

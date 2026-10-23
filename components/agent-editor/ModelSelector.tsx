@@ -40,6 +40,8 @@ import {
 export type ModelParams = ModelParamValues;
 
 export interface ModelSelectorProps {
+  /** Override the preset catalog for specialized model types. */
+  presetModelOptions?: readonly string[];
   selectedModel?: string;
   modelParams?: ModelParams;
   onModelChange?: (model: string) => void;
@@ -56,7 +58,6 @@ export interface ModelSelectorProps {
   hiddenParamKeys?: readonly ModelParamKey[];
 }
 
-const presetModels = PRESET_MODEL_IDS;
 const exclusiveModels = EXCLUSIVE_MODEL_IDS;
 
 // Tooltip 文案
@@ -114,7 +115,9 @@ export function ModelSelector({
   triggerClassName,
   presetOnly = false,
   hiddenParamKeys,
+  presetModelOptions,
 }: ModelSelectorProps) {
+  const presetModels = presetModelOptions ?? PRESET_MODEL_IDS;
   const hiddenParamKeySet = useMemo(
     () => new Set<ModelParamKey>(hiddenParamKeys ?? []),
     [hiddenParamKeys]

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import ReactFlow, {
   Background,
   BaseEdge,
@@ -33,7 +33,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ChevronLeft, ChevronRight, MoreHorizontal, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type EntityKind = "movie" | "actor";
@@ -57,6 +62,8 @@ interface EntityNodeData {
   kind: EntityKind;
   properties: Record<string, string>;
   selected?: boolean;
+  /** 结果预览按类型筛选时，非匹配节点降低透明度 */
+  dimmed?: boolean;
 }
 
 interface RelationEdgeData {
@@ -67,7 +74,13 @@ interface RelationEdgeData {
 type PanelSelection =
   | { type: "overview" }
   | { type: "node"; id: string }
-  | { type: "edge"; id: string };
+  | { type: "edge"; id: string }
+  /** 结果预览：按实体类型高亮（* 表示全部） */
+  | { type: "entityType"; kind: EntityKind | "all" }
+  /** 结果预览：按关系类型高亮（* 表示全部） */
+  | { type: "relationType"; label: string }
+  /** 画布搜索：同时高亮多个匹配的实体与关系 */
+  | { type: "search"; nodeIds: string[]; edgeIds: string[] };
 
 const MOVIE_COLOR = "#22c55e";
 const ACTOR_COLOR = "#a855f7";
@@ -93,11 +106,16 @@ const centerHandleStyle: CSSProperties = {
 function EntityNode({ data, selected }: NodeProps<EntityNodeData>) {
   const color = data.kind === "movie" ? MOVIE_COLOR : ACTOR_COLOR;
   const isSelected = Boolean(selected || data.selected);
+  const isDimmed = Boolean(data.dimmed);
 
   return (
     <div
-      className="relative"
-      style={{ width: NODE_SIZE, height: NODE_SIZE }}
+      className="relative transition-opacity duration-200"
+      style={{
+        width: NODE_SIZE,
+        height: NODE_SIZE,
+        opacity: isDimmed ? 0.22 : 1,
+      }}
     >
       <Handle
         id="center-source"
@@ -759,6 +777,8 @@ interface GraphCanvasProps {
   edges: Edge<RelationEdgeData>[];
   onEdgesChange: ReturnType<typeof useEdgesState>[2];
   setEdges: ReturnType<typeof useEdgesState>[1];
+  /** 外部请求将某个实体居中到视口（如结果预览列表选中） */
+  focusNodeRequest?: { nodeId: string; token: number } | null;
 }
 
 function GraphCanvas({
@@ -770,8 +790,11 @@ function GraphCanvas({
   edges,
   onEdgesChange,
   setEdges,
+  focusNodeRequest,
 }: GraphCanvasProps) {
   const { fitView } = useReactFlow();
+  const edgesRef = useRef(edges);
+  edgesRef.current = edges;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -781,35 +804,155 @@ function GraphCanvas({
   }, [fitView]);
 
   useEffect(() => {
-    setNodes((prev) =>
-      prev.map((node) => ({
-        ...node,
-        selected: selection.type === "node" && selection.id === node.id,
-      }))
+    if (!focusNodeRequest?.nodeId) return;
+    const timer = window.setTimeout(() => {
+      fitView({
+        nodes: [{ id: focusNodeRequest.nodeId }],
+        padding: 0.5,
+        duration: 300,
+      });
+    }, 30);
+    return () => window.clearTimeout(timer);
+  }, [focusNodeRequest, fitView]);
+
+  useEffect(() => {
+    const entityTypeFilter =
+      selection.type === "entityType" ? selection.kind : null;
+    const relationTypeFilter =
+      selection.type === "relationType" ? selection.label : null;
+    const searchNodeIds =
+      selection.type === "search" ? new Set(selection.nodeIds) : null;
+    const searchEdgeIds =
+      selection.type === "search" ? new Set(selection.edgeIds) : null;
+    const currentEdges = edgesRef.current;
+
+    const highlightedNodeIds = new Set<string>();
+    if (relationTypeFilter || selection.type === "edge" || selection.type === "node") {
+      currentEdges.forEach((edge) => {
+        if (selection.type === "edge" && edge.id === selection.id) {
+          highlightedNodeIds.add(edge.source);
+          highlightedNodeIds.add(edge.target);
+          return;
+        }
+        if (selection.type === "node") {
+          if (edge.source === selection.id || edge.target === selection.id) {
+            highlightedNodeIds.add(edge.source);
+            highlightedNodeIds.add(edge.target);
+          }
+          return;
+        }
+        if (relationTypeFilter) {
+          const edgeLabel = edge.data?.label || "";
+          const match =
+            relationTypeFilter === "*" || edgeLabel === relationTypeFilter;
+          if (match) {
+            highlightedNodeIds.add(edge.source);
+            highlightedNodeIds.add(edge.target);
+          }
+        }
+      });
+      if (selection.type === "node") {
+        highlightedNodeIds.add(selection.id);
+      }
+    }
+
+    if (searchNodeIds || searchEdgeIds) {
+      searchNodeIds?.forEach((id) => highlightedNodeIds.add(id));
+      currentEdges.forEach((edge) => {
+        if (searchEdgeIds?.has(edge.id)) {
+          highlightedNodeIds.add(edge.source);
+          highlightedNodeIds.add(edge.target);
+        }
+      });
+    }
+
+    setNodes((prevNodes) =>
+      prevNodes.map((node) => {
+        const isFocusNode =
+          selection.type === "node" && selection.id === node.id;
+
+        let selected = isFocusNode;
+        let dimmed = false;
+
+        if (entityTypeFilter) {
+          const match =
+            entityTypeFilter === "all" || node.data.kind === entityTypeFilter;
+          selected = match;
+          dimmed = !match;
+        } else if (
+          relationTypeFilter ||
+          selection.type === "edge" ||
+          selection.type === "node" ||
+          selection.type === "search"
+        ) {
+          const match = highlightedNodeIds.has(node.id);
+          selected = match;
+          dimmed = !match;
+        }
+
+        return {
+          ...node,
+          selected,
+          data: {
+            ...node.data,
+            selected,
+            dimmed,
+          },
+        };
+      })
     );
+
     setEdges((prev) =>
-      prev.map((edge) => ({
-        ...edge,
-        selected: selection.type === "edge" && selection.id === edge.id,
-        style: {
-          ...edge.style,
-          stroke:
-            selection.type === "edge" && selection.id === edge.id
-              ? "#2773ff"
-              : "#94a3b8",
-          strokeWidth:
-            selection.type === "edge" && selection.id === edge.id ? 2.5 : 1.5,
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 14,
-          height: 14,
-          color:
-            selection.type === "edge" && selection.id === edge.id
-              ? "#2773ff"
-              : "#94a3b8",
-        },
-      }))
+      prev.map((edge) => {
+        const edgeLabel = edge.data?.label || "";
+        const isSingleSelected =
+          selection.type === "edge" && selection.id === edge.id;
+
+        let active = isSingleSelected;
+        let dimmed = false;
+
+        if (relationTypeFilter) {
+          const match =
+            relationTypeFilter === "*" || edgeLabel === relationTypeFilter;
+          active = match;
+          dimmed = !match;
+        } else if (selection.type === "search") {
+          const match = Boolean(searchEdgeIds?.has(edge.id));
+          active = match;
+          dimmed = !match;
+        } else if (entityTypeFilter) {
+          dimmed = entityTypeFilter !== "all";
+          active = false;
+        } else if (selection.type === "node") {
+          const connected =
+            edge.source === selection.id || edge.target === selection.id;
+          active = connected;
+          dimmed = !connected;
+        } else if (selection.type === "overview") {
+          active = false;
+          dimmed = false;
+        }
+
+        const stroke = active ? "#2773ff" : "#94a3b8";
+        const strokeWidth = active ? 2.5 : 1.5;
+
+        return {
+          ...edge,
+          selected: active,
+          style: {
+            ...edge.style,
+            stroke,
+            strokeWidth,
+            opacity: dimmed ? 0.18 : 1,
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 14,
+            height: 14,
+            color: stroke,
+          },
+        };
+      })
     );
   }, [selection, setNodes, setEdges]);
 
@@ -830,6 +973,93 @@ function GraphCanvas({
   const onPaneClick = useCallback(() => {
     onSelect({ type: "overview" });
   }, [onSelect]);
+
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) {
+      return { entities: [] as Node<EntityNodeData>[], relations: [] as Edge<RelationEdgeData>[] };
+    }
+    const entities = nodes.filter((node) =>
+      node.data.label.toLowerCase().includes(q)
+    );
+    const relations = edges.filter((edge) => {
+      const label = (edge.data?.label || "").toLowerCase();
+      const sourceLabel =
+        nodes.find((n) => n.id === edge.source)?.data.label.toLowerCase() || "";
+      const targetLabel =
+        nodes.find((n) => n.id === edge.target)?.data.label.toLowerCase() || "";
+      return (
+        label.includes(q) ||
+        sourceLabel.includes(q) ||
+        targetLabel.includes(q) ||
+        `${sourceLabel}${label}${targetLabel}`.includes(q)
+      );
+    });
+    return { entities, relations };
+  }, [searchQuery, nodes, edges]);
+
+  const applySearchHighlight = useCallback(
+    (entities: Node<EntityNodeData>[], relations: Edge<RelationEdgeData>[]) => {
+      const nodeIds = entities.map((n) => n.id);
+      const edgeIds = relations.map((e) => e.id);
+      if (nodeIds.length === 0 && edgeIds.length === 0) {
+        onSelect({ type: "overview" });
+        return;
+      }
+      onSelect({ type: "search", nodeIds, edgeIds });
+      const focusNodes = [
+        ...entities.map((n) => ({ id: n.id })),
+        ...relations.flatMap((e) => [{ id: e.source }, { id: e.target }]),
+      ];
+      if (focusNodes.length > 0) {
+        window.setTimeout(() => {
+          fitView({
+            nodes: focusNodes,
+            padding: 0.35,
+            duration: 300,
+          });
+        }, 30);
+      }
+    },
+    [fitView, onSelect]
+  );
+
+  const handleSearchQueryChange = (value: string) => {
+    setSearchQuery(value);
+    const q = value.trim().toLowerCase();
+    if (!q) {
+      onSelect({ type: "overview" });
+      return;
+    }
+    const entities = nodes.filter((node) =>
+      node.data.label.toLowerCase().includes(q)
+    );
+    const relations = edges.filter((edge) => {
+      const label = (edge.data?.label || "").toLowerCase();
+      const sourceLabel =
+        nodes.find((n) => n.id === edge.source)?.data.label.toLowerCase() || "";
+      const targetLabel =
+        nodes.find((n) => n.id === edge.target)?.data.label.toLowerCase() || "";
+      return (
+        label.includes(q) ||
+        sourceLabel.includes(q) ||
+        targetLabel.includes(q) ||
+        `${sourceLabel}${label}${targetLabel}`.includes(q)
+      );
+    });
+    applySearchHighlight(entities, relations);
+  };
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    if (selection.type === "search") {
+      onSelect({ type: "overview" });
+    }
+  };
 
   return (
     <ReactFlow
@@ -865,18 +1095,167 @@ function GraphCanvas({
         position="top-right"
         className="!overflow-hidden !rounded-md !border-slate-200 !shadow-md"
       />
+      <div className="absolute right-3 top-[118px] z-10">
+        <button
+          type="button"
+          title="搜索实体或关系"
+          aria-label="搜索实体或关系"
+          onClick={() => {
+            if (searchOpen) {
+              closeSearch();
+            } else {
+              setSearchOpen(true);
+            }
+          }}
+          className={cn(
+            "flex h-[26px] w-[26px] items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-50",
+            searchOpen && "border-[#2773ff]/40 bg-blue-50 text-[#2773ff]"
+          )}
+        >
+          <Search className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {searchOpen ? (
+        <div className="absolute right-12 top-3 z-20 w-[280px] overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+          <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
+            <Search className="h-4 w-4 shrink-0 text-slate-400" />
+            <Input
+              autoFocus
+              value={searchQuery}
+              onChange={(e) => handleSearchQueryChange(e.target.value)}
+              placeholder="模糊搜索实体或关系"
+              className="h-8 border-0 px-0 shadow-none focus-visible:ring-0"
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  closeSearch();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="rounded p-1 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+              onClick={closeSearch}
+              aria-label="关闭搜索"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="max-h-64 overflow-y-auto p-2">
+            {!searchQuery.trim() ? (
+              <p className="px-2 py-6 text-center text-xs text-slate-400">
+                输入关键词搜索实体或关系
+              </p>
+            ) : searchResults.entities.length === 0 &&
+              searchResults.relations.length === 0 ? (
+              <p className="px-2 py-6 text-center text-xs text-slate-400">
+                未找到匹配结果
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {searchResults.entities.length > 0 ? (
+                  <div>
+                    <div className="mb-1 px-2 text-[11px] font-medium text-slate-400">
+                      实体（{searchResults.entities.length}）
+                    </div>
+                    <div className="space-y-0.5">
+                      {searchResults.entities.map((node) => (
+                        <button
+                          key={node.id}
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                          onClick={() => {
+                            onSelect({ type: "node", id: node.id });
+                            window.setTimeout(() => {
+                              fitView({
+                                nodes: [{ id: node.id }],
+                                padding: 0.5,
+                                duration: 300,
+                              });
+                            }, 30);
+                          }}
+                        >
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{
+                              backgroundColor:
+                                node.data.kind === "movie"
+                                  ? MOVIE_COLOR
+                                  : ACTOR_COLOR,
+                            }}
+                          />
+                          <span className="truncate">{node.data.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {searchResults.relations.length > 0 ? (
+                  <div>
+                    <div className="mb-1 px-2 text-[11px] font-medium text-slate-400">
+                      关系（{searchResults.relations.length}）
+                    </div>
+                    <div className="space-y-0.5">
+                      {searchResults.relations.map((edge) => {
+                        const sourceLabel =
+                          nodes.find((n) => n.id === edge.source)?.data.label ||
+                          edge.source;
+                        const targetLabel =
+                          nodes.find((n) => n.id === edge.target)?.data.label ||
+                          edge.target;
+                        const relationName = edge.data?.label || "关系";
+                        return (
+                          <button
+                            key={edge.id}
+                            type="button"
+                            className="flex w-full flex-col rounded px-2 py-1.5 text-left hover:bg-slate-50"
+                            onClick={() => {
+                              onSelect({ type: "edge", id: edge.id });
+                              window.setTimeout(() => {
+                                fitView({
+                                  nodes: [
+                                    { id: edge.source },
+                                    { id: edge.target },
+                                  ],
+                                  padding: 0.4,
+                                  duration: 300,
+                                });
+                              }, 30);
+                            }}
+                          >
+                            <span className="text-sm text-slate-700">
+                              {relationName}
+                            </span>
+                            <span className="truncate text-[11px] text-slate-400">
+                              {sourceLabel} → {targetLabel}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </ReactFlow>
   );
 }
 
 function PropertyPanel({
   selection,
+  onSelect,
+  onPickEntity,
   nodes,
   edges,
   onUpdateEntityName,
   variant = "default",
 }: {
   selection: PanelSelection;
+  onSelect: (selection: PanelSelection) => void;
+  onPickEntity: (nodeId: string) => void;
   nodes: Node<EntityNodeData>[];
   edges: Edge<RelationEdgeData>[];
   onUpdateEntityName: (nodeId: string, name: string) => void;
@@ -897,6 +1276,11 @@ function PropertyPanel({
   const primaryLabel = variant === "document" ? "标的" : "电影";
   const secondaryLabel = variant === "document" ? "主体" : "演员";
   const relationLabel = variant === "document" ? "关联" : "参演";
+
+  const activeEntityKind =
+    selection.type === "entityType" ? selection.kind : null;
+  const activeRelationLabel =
+    selection.type === "relationType" ? selection.label : null;
 
   if (selection.type === "node") {
     const node = liveNodeMap[selection.id];
@@ -977,25 +1361,65 @@ function PropertyPanel({
       <div className="flex-1 space-y-6 overflow-y-auto p-4">
         <section>
           <h4 className="mb-3 text-sm font-medium text-slate-800">
-            节点（{totalNodes}）
+            实体（{totalNodes}）
           </h4>
           <div className="flex flex-wrap gap-2">
             <StatTag
               label="*"
               count={totalNodes}
               className="bg-violet-100 text-violet-700"
+              active={activeEntityKind === "all"}
+              onClick={() =>
+                onSelect(
+                  activeEntityKind === "all"
+                    ? { type: "overview" }
+                    : { type: "entityType", kind: "all" }
+                )
+              }
             />
             <StatTag
               label={primaryLabel}
               count={movieCount}
               dotColor={MOVIE_COLOR}
               className="bg-emerald-50 text-emerald-700"
+              active={activeEntityKind === "movie"}
+              onClick={() =>
+                onSelect(
+                  activeEntityKind === "movie"
+                    ? { type: "overview" }
+                    : { type: "entityType", kind: "movie" }
+                )
+              }
+              moreAction={
+                <EntityInstanceListPopover
+                  typeLabel={primaryLabel}
+                  kind="movie"
+                  nodes={nodes}
+                  onPick={onPickEntity}
+                />
+              }
             />
             <StatTag
               label={secondaryLabel}
               count={actorCount}
               dotColor={ACTOR_COLOR}
               className="bg-purple-50 text-purple-700"
+              active={activeEntityKind === "actor"}
+              onClick={() =>
+                onSelect(
+                  activeEntityKind === "actor"
+                    ? { type: "overview" }
+                    : { type: "entityType", kind: "actor" }
+                )
+              }
+              moreAction={
+                <EntityInstanceListPopover
+                  typeLabel={secondaryLabel}
+                  kind="actor"
+                  nodes={nodes}
+                  onPick={onPickEntity}
+                />
+              }
             />
           </div>
         </section>
@@ -1005,14 +1429,37 @@ function PropertyPanel({
             关系（{relationCount}）
           </h4>
           <div className="flex flex-wrap gap-2">
-            <RelationTag label="*" count={relationCount} />
-            <RelationTag label={relationLabel} count={relationCount} />
+            <RelationTag
+              label="*"
+              count={relationCount}
+              active={activeRelationLabel === "*"}
+              onClick={() =>
+                onSelect(
+                  activeRelationLabel === "*"
+                    ? { type: "overview" }
+                    : { type: "relationType", label: "*" }
+                )
+              }
+            />
+            <RelationTag
+              label={relationLabel}
+              count={relationCount}
+              active={activeRelationLabel === relationLabel}
+              onClick={() =>
+                onSelect(
+                  activeRelationLabel === relationLabel
+                    ? { type: "overview" }
+                    : { type: "relationType", label: relationLabel }
+                )
+              }
+            />
           </div>
         </section>
 
         <section className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-xs leading-relaxed text-slate-500">
           <p className="mb-1 font-medium text-slate-600">操作提示</p>
-          <p>点击实体查看实体属性；点击连线查看关系属性。</p>
+          <p>点击实体类型或关系名称，可在画布中高亮对应内容。</p>
+          <p className="mt-1">点击实体节点查看实体属性；点击连线查看关系属性。</p>
           <p className="mt-1">点击画布空白区域可返回结果概览。</p>
         </section>
       </div>
@@ -1243,6 +1690,10 @@ export function GraphRetrievalDrawer({
   });
   const [nodes, setNodes, onNodesChange] = useNodesState(seedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(seedEdges);
+  const [focusNodeRequest, setFocusNodeRequest] = useState<{
+    nodeId: string;
+    token: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -1251,6 +1702,7 @@ export function GraphRetrievalDrawer({
     const nextEdges =
       variant === "document" ? documentInitialEdges : initialEdges;
     setSelection({ type: "overview" });
+    setFocusNodeRequest(null);
     setNodes(nextNodes);
     setEdges(nextEdges);
   }, [open, variant, setNodes, setEdges]);
@@ -1258,6 +1710,7 @@ export function GraphRetrievalDrawer({
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setSelection({ type: "overview" });
+      setFocusNodeRequest(null);
       setNodes(
         variant === "document" ? documentInitialNodes : initialNodes
       );
@@ -1291,6 +1744,11 @@ export function GraphRetrievalDrawer({
     [setNodes]
   );
 
+  const handlePickEntity = useCallback((nodeId: string) => {
+    setSelection({ type: "node", id: nodeId });
+    setFocusNodeRequest({ nodeId, token: Date.now() });
+  }, []);
+
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
@@ -1317,6 +1775,7 @@ export function GraphRetrievalDrawer({
                     edges={edges}
                     onEdgesChange={onEdgesChange}
                     setEdges={setEdges}
+                    focusNodeRequest={focusNodeRequest}
                   />
                 </div>
               </ReactFlowProvider>
@@ -1326,6 +1785,8 @@ export function GraphRetrievalDrawer({
           <aside className="flex h-full w-[300px] shrink-0 flex-col border-l border-slate-200 bg-white">
             <PropertyPanel
               selection={selection}
+              onSelect={setSelection}
+              onPickEntity={handlePickEntity}
               nodes={nodes}
               edges={edges}
               onUpdateEntityName={updateEntityName}
@@ -1338,39 +1799,196 @@ export function GraphRetrievalDrawer({
   );
 }
 
+const ENTITY_LIST_PAGE_SIZE = 5;
+
+function EntityInstanceListPopover({
+  typeLabel,
+  kind,
+  nodes,
+  onPick,
+}: {
+  typeLabel: string;
+  kind: EntityKind;
+  nodes: Node<EntityNodeData>[];
+  onPick: (nodeId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [page, setPage] = useState(1);
+
+  const instances = useMemo(
+    () => nodes.filter((node) => node.data.kind === kind),
+    [nodes, kind]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(instances.length / ENTITY_LIST_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageItems = instances.slice(
+    (currentPage - 1) * ENTITY_LIST_PAGE_SIZE,
+    currentPage * ENTITY_LIST_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    if (open) setPage(1);
+  }, [open, kind]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="ml-0.5 rounded p-0.5 text-current/70 hover:bg-black/5 hover:text-current"
+          title={`查看全部${typeLabel}`}
+          aria-label={`查看全部${typeLabel}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="left"
+        className="w-[320px] p-0"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-slate-100 px-3 py-2">
+          <div className="text-sm font-medium text-slate-800">
+            {typeLabel}实体列表
+          </div>
+          <div className="text-xs text-slate-400">共 {instances.length} 个</div>
+        </div>
+        {instances.length === 0 ? (
+          <div className="px-3 py-8 text-center text-xs text-slate-400">
+            暂无实体实例
+          </div>
+        ) : (
+          <>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-xs text-slate-500">
+                  <th className="px-3 py-2 font-medium">实体类型</th>
+                  <th className="px-3 py-2 font-medium">实体名称</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageItems.map((node) => (
+                  <tr
+                    key={node.id}
+                    className="cursor-pointer border-b border-slate-50 hover:bg-blue-50/60"
+                    onClick={() => {
+                      onPick(node.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <td className="px-3 py-2 text-slate-600">{typeLabel}</td>
+                    <td className="px-3 py-2 font-medium text-slate-800">
+                      {node.data.label}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {totalPages > 1 ? (
+              <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2">
+                <span className="text-xs text-slate-400">
+                  {currentPage} / {totalPages}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={currentPage <= 1}
+                    className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    aria-label="上一页"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages}
+                    className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    aria-label="下一页"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function StatTag({
   label,
   count,
   className,
   dotColor,
+  active,
+  onClick,
+  moreAction,
 }: {
   label: string;
   count: number;
   className?: string;
   dotColor?: string;
+  active?: boolean;
+  onClick?: () => void;
+  moreAction?: ReactNode;
 }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
-        className
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all",
+        className,
+        active && "ring-2 ring-[#2773ff] ring-offset-1"
       )}
     >
-      {dotColor && (
-        <span
-          className="h-2 w-2 rounded-full"
-          style={{ backgroundColor: dotColor }}
-        />
-      )}
-      {label}（{count}）
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "inline-flex items-center gap-1.5",
+          onClick && "cursor-pointer hover:opacity-90"
+        )}
+      >
+        {dotColor && (
+          <span
+            className="h-2 w-2 rounded-full"
+            style={{ backgroundColor: dotColor }}
+          />
+        )}
+        {label}（{count}）
+      </button>
+      {moreAction}
     </span>
   );
 }
 
-function RelationTag({ label, count }: { label: string; count: number }) {
+function RelationTag({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active?: boolean;
+  onClick?: () => void;
+}) {
   return (
-    <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 [clip-path:polygon(8%_0,100%_0,92%_100%,0_100%)]">
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center rounded-md border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 transition-all [clip-path:polygon(8%_0,100%_0,92%_100%,0_100%)]",
+        active && "border-[#2773ff] bg-blue-50 text-[#2773ff] ring-2 ring-[#2773ff] ring-offset-1",
+        onClick && "cursor-pointer hover:bg-slate-200/80"
+      )}
+    >
       {label}（{count}）
-    </span>
+    </button>
   );
 }
