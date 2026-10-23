@@ -10,6 +10,7 @@ import {
   Edit,
   Trash2,
   ChevronUp,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import {
+  AddInterventionDialog,
+  type InterventionDraft,
+} from "@/components/agent/add-intervention-dialog";
+import { SyncToQaLibraryDialog } from "@/components/agent/sync-to-qa-library-dialog";
 
 // 干预数据接口
 export interface Intervention {
@@ -79,6 +85,19 @@ export function InterventionList({ data = DEFAULT_INTERVENTIONS }: InterventionL
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+
+  const handleAddInterventions = (items: InterventionDraft[]) => {
+    setInterventions((prev) => {
+      const maxId = prev.reduce((max, item) => Math.max(max, item.id), 0);
+      const nextItems = items.map((item, index) => ({
+        ...item,
+        id: maxId + index + 1,
+      }));
+      return [...nextItems, ...prev];
+    });
+  };
 
   // 过滤数据
   const filteredInterventions = interventions.filter((item) => {
@@ -238,11 +257,18 @@ export function InterventionList({ data = DEFAULT_INTERVENTIONS }: InterventionL
 
           {/* Right: 设置和添加 */}
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setSyncDialogOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              同步至问答库
+            </Button>
             <Button variant="outline">
               <Settings className="h-4 w-4 mr-2" />
               问答干预设置
             </Button>
-            <Button className="bg-blue-600 hover:bg-blue-700">
+            <Button
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={() => setAddDialogOpen(true)}
+            >
               <Plus className="h-4 w-4 mr-2" />
               添加问答对
             </Button>
@@ -357,6 +383,17 @@ export function InterventionList({ data = DEFAULT_INTERVENTIONS }: InterventionL
           </div>
         )}
       </div>
+
+      <AddInterventionDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+        onAdd={handleAddInterventions}
+      />
+      <SyncToQaLibraryDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        pairCount={interventions.length}
+      />
     </div>
   );
 }

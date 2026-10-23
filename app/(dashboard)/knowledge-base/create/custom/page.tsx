@@ -265,6 +265,7 @@ export default function CreateCustomKnowledgeBasePage() {
         securityLevel,
         approvalStatus: highSec ? "create" : "none",
         approvalReason: highSec ? approvalReason : undefined,
+        retrievalSnapshot: { retrieval: retrievalConfig, strategies: hybridStrategies },
       });
       if (highSec) {
         toast.success(

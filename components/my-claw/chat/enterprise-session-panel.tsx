@@ -339,8 +339,10 @@ function EnterpriseNodeView({
  */
 export function EnterpriseSessionPanel({
   session,
+  highlightedMessageId,
 }: {
   session: MyClawSessionListItem;
+  highlightedMessageId?: string | null;
 }) {
   const detail = useMemo(() => getPersonalClawDetail(), []);
   const [phase, setPhase] = useState(() =>
@@ -380,19 +382,34 @@ export function EnterpriseSessionPanel({
                 {ENTERPRISE_FLOW_MAX_PHASE}
               </span>
             </div>
-            {view.nodes.map((node) => (
-              <EnterpriseNodeView
-                key={node.key}
-                node={node}
-                expanded={Boolean(expanded[node.key])}
-                onToggle={() =>
-                  setExpanded((current) => ({
-                    ...current,
-                    [node.key]: !current[node.key],
-                  }))
-                }
-              />
-            ))}
+            {view.nodes.map((node) => {
+              const messageId =
+                node.type === "user" || node.type === "output"
+                  ? node.timeline.message.id
+                  : undefined;
+              return (
+                <div
+                  key={node.key}
+                  id={messageId ? `personal-message-${messageId}` : undefined}
+                  className={cn(
+                    "rounded-xl transition-shadow duration-300",
+                    messageId === highlightedMessageId &&
+                      "ring-2 ring-[#8fb5f6] ring-offset-4 ring-offset-[#f8f9fb]",
+                  )}
+                >
+                  <EnterpriseNodeView
+                    node={node}
+                    expanded={Boolean(expanded[node.key])}
+                    onToggle={() =>
+                      setExpanded((current) => ({
+                        ...current,
+                        [node.key]: !current[node.key],
+                      }))
+                    }
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
         <div className="shrink-0 px-4 py-4 lg:px-8 lg:py-5">

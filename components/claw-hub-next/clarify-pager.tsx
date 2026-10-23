@@ -8,6 +8,8 @@ export interface ClarifyOption {
   label: string;
   value: string;
   summary?: string;
+  /** 推荐项：放在首位并标注「推荐」。 */
+  recommended?: boolean;
 }
 
 export interface ClarifyQuestion {

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Settings } from "lucide-react";
+import { ChevronDown, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   MY_CLAW_BRAND_ICON_SRC,
@@ -104,6 +104,36 @@ export function MyClawSidebar() {
           </div>
           <div className="truncate text-[11px] text-[#5a6779]">我的空间</div>
         </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="切换 Claw 使用形态"
+              className="flex h-7 items-center gap-0.5 rounded-md border border-[#dbe3ef] px-1.5 text-[10px] font-medium text-[#52657d] hover:border-[#adc5ec] hover:bg-[#f6f9ff] hover:text-[#2773ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/40"
+            >
+              项目协作
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-52">
+            <DropdownMenuItem asChild>
+              <Link href="/claw-client" className="cursor-pointer">
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="font-medium">基础形态</span>
+                  <span className="text-[11px] font-normal text-slate-500">个人会话与能力管理</span>
+                </span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/my-claw" className="cursor-pointer">
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="font-medium">项目协作形态</span>
+                  <span className="text-[11px] font-normal text-slate-500">Project、事项与多人协作</span>
+                </span>
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <button
           type="button"
           aria-label="搜索会话"

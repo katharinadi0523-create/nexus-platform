@@ -30,12 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { KnowledgeBaseConfigDrawer as ConfigDrawer } from "@/components/knowledge-base/KnowledgeBaseConfigDrawer";
 import {
   Table,
   TableBody,
@@ -44,7 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { Textarea } from "@/components/ui/textarea";
 import {
   SecurityLevelBadge,
@@ -109,66 +104,6 @@ function BasicInfoItem({ label, value }: { label: string; value: string }) {
       <span className="text-slate-500">{label}</span>
       <span className="text-slate-900">{value}</span>
     </div>
-  );
-}
-
-function ConfigDrawer({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const [tab, setTab] = useState("retrieval");
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[520px] overflow-auto p-0 sm:max-w-none">
-        <SheetHeader className="border-b border-slate-200 px-6 py-5">
-          <SheetTitle>知识库检索配置</SheetTitle>
-        </SheetHeader>
-        <div className="px-6 py-5">
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList className="h-10 rounded-none bg-transparent p-0">
-              <TabsTrigger
-                value="retrieval"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent"
-              >
-                检索配置
-              </TabsTrigger>
-              <TabsTrigger
-                value="mixed"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent"
-              >
-                混合检索策略配置
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          {tab === "retrieval" ? (
-            <div className="mt-8 flex h-72 items-center justify-center text-sm text-slate-400">
-              暂无检索配置
-            </div>
-          ) : (
-            <div className="mt-6">
-              <div className="flex items-center justify-between border border-slate-200 px-4 py-3">
-                <span className="font-medium text-slate-900">检索策略（1）</span>
-                <Button variant="outline" size="sm">
-                  收起
-                </Button>
-              </div>
-              <div className="border-x border-b border-slate-200 px-4 py-5">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-800">检索策略_1</span>
-                  <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-500">
-                    待配置
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
   );
 }
 
@@ -664,7 +599,7 @@ export default function KnowledgeBaseDetailPage() {
         </section>
       </div>
 
-      <ConfigDrawer open={configOpen} onOpenChange={setConfigOpen} />
+      <ConfigDrawer open={configOpen} onOpenChange={setConfigOpen} knowledgeBaseId={id} snapshot={getKnowledgeBaseMeta(id)?.retrievalSnapshot} />
       <ImportDocumentDrawer
         open={importOpen}
         onOpenChange={setImportOpen}

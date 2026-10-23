@@ -34,6 +34,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ModelSelector } from "@/components/agent-editor/ModelSelector";
 import {
   Popover,
   PopoverContent,
@@ -104,7 +107,10 @@ export interface StrategyBusinessNode {
     rsfScoreWeight?: number;
     /** Weighted Merge / RSF：各前置内容检索器权重列表，每项范围 0.0~1.0 */
     mergeWeights?: MergeWeightItem[];
+    rankMode?: "reranker" | "reasoning" | "weighted";
     rankModel?: string;
+    rankReasoningModel?: string;
+    rankUserPrompt?: string;
     rankTopK?: number;
   };
 }
@@ -272,7 +278,10 @@ function createBusinessNode(
     };
   } else {
     base.config = {
+      rankMode: "reranker",
       rankModel: "bge-reranker-v2",
+      rankReasoningModel: "Qwen3-32B",
+      rankUserPrompt: "",
       rankTopK: 5,
     };
   }
@@ -1134,27 +1143,6 @@ function StrategyPipelineCanvas({
             {selected.node.kind === "retriever" && (
               <>
                 <div className="space-y-2">
-                  <Label className="text-sm text-slate-700">输入文档数量</Label>
-                  <div className="flex items-center gap-3">
-                    <Slider
-                      value={[selected.node.config.inputDocCount ?? 5]}
-                      min={1}
-                      max={20}
-                      step={1}
-                      onValueChange={(vals) =>
-                        updateSelectedConfig({
-                          inputDocCount: vals[0] ?? 5,
-                        })
-                      }
-                      className="flex-1 [&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
-                    />
-                    <span className="w-8 shrink-0 text-right text-xs tabular-nums text-slate-500">
-                      {selected.node.config.inputDocCount ?? 5}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
                   <Label className="text-sm text-slate-700">检索引擎</Label>
                   <Select
                     value={selected.node.config.engine || "fulltext"}
@@ -1183,6 +1171,14 @@ function StrategyPipelineCanvas({
                         });
                         return;
                       }
+                      if (engine === "pageindex") {
+                        updateSelectedConfig({
+                          engine,
+                          inputDocCount:
+                            selected.node.config.inputDocCount ?? 5,
+                        });
+                        return;
+                      }
                       updateSelectedConfig({ engine });
                     }}
                     options={[
@@ -1193,6 +1189,29 @@ function StrategyPipelineCanvas({
                     ]}
                   />
                 </div>
+
+                {selected.node.config.engine === "pageindex" && (
+                  <div className="space-y-2">
+                    <Label className="text-sm text-slate-700">输入文档数量</Label>
+                    <div className="flex items-center gap-3">
+                      <Slider
+                        value={[selected.node.config.inputDocCount ?? 5]}
+                        min={1}
+                        max={20}
+                        step={1}
+                        onValueChange={(vals) =>
+                          updateSelectedConfig({
+                            inputDocCount: vals[0] ?? 5,
+                          })
+                        }
+                        className="flex-1 [&_[data-slot=slider-range]]:bg-[#2773ff] [&_[data-slot=slider-thumb]]:border-[#2773ff]"
+                      />
+                      <span className="w-8 shrink-0 text-right text-xs tabular-nums text-slate-500">
+                        {selected.node.config.inputDocCount ?? 5}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {(selected.node.config.engine || "fulltext") === "graph" && (
                   <>
@@ -1574,38 +1593,66 @@ function StrategyPipelineCanvas({
             )}
 
             {selected.node.kind === "ranker" && (
-              <>
+              <div className="space-y-2">
+                <Label className="text-sm text-slate-700">排序模式</Label>
+                <Tabs
+                  value={selected.node.config.rankMode ?? "reranker"}
+                  onValueChange={(mode) =>
+                    updateSelectedConfig({
+                      rankMode: mode as "reranker" | "reasoning" | "weighted",
+                    })
+                  }
+                >
+                  <TabsList className="grid w-full grid-cols-3" aria-label="排序模式">
+                    <TabsTrigger value="reranker">Reranker</TabsTrigger>
+                    <TabsTrigger value="reasoning">推理</TabsTrigger>
+                    <TabsTrigger value="weighted">加权</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="reranker" className="space-y-2">
                 <div className="space-y-2">
-                  <Label className="text-sm text-slate-700">排序模型</Label>
-                  <Select
-                    value={selected.node.config.rankModel || "bge-reranker-v2"}
-                    onValueChange={(rankModel) =>
+                  <Label className="text-sm text-slate-700">模型</Label>
+                  <ModelSelector
+                    key={`${selected.node.id}-reranker`}
+                    selectedModel={selected.node.config.rankModel || "bge-reranker-v2"}
+                    onModelChange={(rankModel) =>
                       updateSelectedConfig({ rankModel })
                     }
-                    options={[
-                      { value: "bge-reranker-v2", label: "bge-reranker-v2" },
-                      {
-                        value: "bge-reranker-base",
-                        label: "bge-reranker-base",
-                      },
-                    ]}
+                    presetModelOptions={["bge-reranker-v2", "bge-reranker-base"]}
+                    presetOnly
+                    showParams={false}
+                    triggerClassName="w-full justify-between border border-slate-200 bg-white"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-sm text-slate-700">输出数量 TopK</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={selected.node.config.rankTopK ?? 5}
-                    onChange={(e) =>
-                      updateSelectedConfig({
-                        rankTopK: Number(e.target.value) || 1,
-                      })
-                    }
-                  />
-                </div>
-              </>
+                  </TabsContent>
+                  <TabsContent value="reasoning" className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm text-slate-700">模型</Label>
+                      <ModelSelector
+                        key={`${selected.node.id}-reasoning`}
+                        selectedModel={selected.node.config.rankReasoningModel ?? "Qwen3-32B"}
+                        onModelChange={(rankReasoningModel) => updateSelectedConfig({ rankReasoningModel })}
+                        showParams={false}
+                        triggerClassName="w-full justify-between border border-slate-200 bg-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`rank-prompt-${selected.node.id}`} className="text-sm text-slate-700">用户提示词</Label>
+                      <Textarea
+                        id={`rank-prompt-${selected.node.id}`}
+                        value={selected.node.config.rankUserPrompt ?? ""}
+                        onChange={(event) => updateSelectedConfig({ rankUserPrompt: event.target.value })}
+                        placeholder="请输入用于内容排序的用户提示词"
+                        className="min-h-32"
+                      />
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="weighted">
+                    <p className="text-sm leading-relaxed text-slate-500">
+                      加权模式将综合考虑多个重排序策略的结果，通过权重计算得出最终排序
+                    </p>
+                  </TabsContent>
+                </Tabs>
+              </div>
             )}
 
             <Button

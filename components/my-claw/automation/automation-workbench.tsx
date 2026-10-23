@@ -106,7 +106,12 @@ function LastRunStatusCell({ status }: { status: AutomationTask["last_run_status
   );
 }
 
-export function MyClawAutomationWorkbench() {
+export function MyClawAutomationWorkbench({
+  chatBasePath = "/my-claw/chat",
+}: {
+  /** Base client route used when an execution opens its related conversation. */
+  chatBasePath?: "/my-claw/chat" | "/claw-client";
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
@@ -361,7 +366,7 @@ export function MyClawAutomationWorkbench() {
 
   const handleViewExecution = (row: AutomationExecution) => {
     if (row.relatedSessionId) {
-      router.push(`/my-claw/chat?sessionId=${encodeURIComponent(row.relatedSessionId)}`);
+      router.push(`${chatBasePath}?sessionId=${encodeURIComponent(row.relatedSessionId)}`);
       return;
     }
     toast.info(row.resultSummary);

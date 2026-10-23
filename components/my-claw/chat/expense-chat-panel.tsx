@@ -13,6 +13,7 @@ import {
   type ExpenseRenderNode,
 } from "@/lib/mock/my-claw/expense-adapter";
 import { getPersonalClawDetail } from "@/lib/mock/my-claw/personal-claw";
+import { cn } from "@/lib/utils";
 import { ComposerWithAgents } from "./composer-with-agents";
 import { ExpenseNodeView } from "./expense-node-view";
 
@@ -106,7 +107,11 @@ function ExpenseInspector({ view }: { view: Pick<ExpenseConversationView, "inspe
   );
 }
 
-export function ExpenseChatPanel() {
+export function ExpenseChatPanel({
+  highlightedMessageId,
+}: {
+  highlightedMessageId?: string | null;
+}) {
   const detail = useMemo(() => getPersonalClawDetail(), []);
   const flow = useMemo(() => splitExpenseNodesForClarifyFlow(), []);
   const [draft, setDraft] = useState("");
@@ -196,19 +201,34 @@ export function ExpenseChatPanel() {
       >
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-4xl space-y-4">
-            {visibleNodes.map((node) => (
-              <ExpenseNodeView
-                key={node.key}
-                node={node}
-                expanded={Boolean(expanded[node.key])}
-                onToggle={() =>
-                  setExpanded((current) => ({
-                    ...current,
-                    [node.key]: !current[node.key],
-                  }))
-                }
-              />
-            ))}
+            {visibleNodes.map((node) => {
+              const messageId =
+                node.type === "user" || node.type === "output"
+                  ? node.timeline.message.id
+                  : undefined;
+              return (
+                <div
+                  key={node.key}
+                  id={messageId ? `personal-message-${messageId}` : undefined}
+                  className={cn(
+                    "rounded-xl transition-shadow duration-300",
+                    messageId === highlightedMessageId &&
+                      "ring-2 ring-[#8fb5f6] ring-offset-4 ring-offset-[#f8f9fb]",
+                  )}
+                >
+                  <ExpenseNodeView
+                    node={node}
+                    expanded={Boolean(expanded[node.key])}
+                    onToggle={() =>
+                      setExpanded((current) => ({
+                        ...current,
+                        [node.key]: !current[node.key],
+                      }))
+                    }
+                  />
+                </div>
+              );
+            })}
 
             {phase === "clarify" ? (
               <div onClick={(event) => event.stopPropagation()}>

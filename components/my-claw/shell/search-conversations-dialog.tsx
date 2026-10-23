@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import { useMyClaw } from "@/components/my-claw/provider";
 import { useProjectConversation } from "@/components/my-claw/project-conversation/project-conversation-provider";
 import {
@@ -25,6 +25,17 @@ import { cn } from "@/lib/utils";
 interface SearchConversationsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+function formatSearchTime(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function HighlightedText({
@@ -65,36 +76,74 @@ function HighlightedText({
 function SearchResultRow({
   hit,
   query,
-  onSelect,
+  onSelectConversation,
+  onSelectMessage,
 }: {
   hit: ConversationSearchHit;
   query: string;
-  onSelect: (hit: ConversationSearchHit) => void;
+  onSelectConversation: (hit: ConversationSearchHit) => void;
+  onSelectMessage: (hit: ConversationSearchHit, messageId: string) => void;
 }) {
   const highlight = query.trim().length > 0;
+  const [expanded, setExpanded] = useState(false);
+  const visibleMessages = expanded
+    ? hit.matchedMessages
+    : hit.matchedMessages.slice(0, 2);
+  const remainingCount = hit.matchedMessages.length - visibleMessages.length;
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(hit)}
-      className="flex w-full flex-col gap-1 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[#f8f9fb] focus-visible:bg-[#e8f0fb] focus-visible:outline-none"
-    >
-      <HighlightedText
-        text={hit.conversation.title}
-        query={highlight ? query : ""}
-        className="block truncate text-[14px] font-medium text-slate-900"
-      />
-      <div className="truncate text-[12px] leading-5 text-[#5a6779]">
-        {hit.conversation.agentName}
-      </div>
-      {hit.snippet ? (
+    <section className="border-b border-[#eef2f6] py-1 last:border-b-0">
+      <button
+        type="button"
+        onClick={() => onSelectConversation(hit)}
+        className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[#f8f9fb] focus-visible:bg-[#e8f0fb] focus-visible:outline-none"
+      >
         <HighlightedText
-          text={hit.snippet}
+          text={hit.conversation.title}
           query={highlight ? query : ""}
-          className="line-clamp-2 text-[12px] leading-5 text-slate-600"
+          className="min-w-0 flex-1 truncate text-[14px] font-medium text-slate-900"
         />
+        <time
+          dateTime={hit.conversation.updatedAt}
+          className="shrink-0 whitespace-nowrap text-[12px] leading-5 text-[#8a97a8]"
+        >
+          {formatSearchTime(hit.conversation.updatedAt)}
+        </time>
+      </button>
+
+      {visibleMessages.length > 0 ? (
+        <div className="pb-1 pl-3 pr-2">
+          {visibleMessages.map((messageHit) => (
+            <button
+              key={messageHit.message.id}
+              type="button"
+              onClick={() => onSelectMessage(hit, messageHit.message.id)}
+              className="group flex w-full items-start rounded-lg px-2 py-2 text-left transition-colors hover:bg-[#f8f9fb] focus-visible:bg-[#e8f0fb] focus-visible:outline-none"
+            >
+              <HighlightedText
+                text={messageHit.snippet}
+                query={highlight ? query : ""}
+                className="line-clamp-2 min-w-0 flex-1 text-[12px] leading-5 text-[#5a6779] group-hover:text-slate-700"
+              />
+            </button>
+          ))}
+          {remainingCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-[#5273a8] hover:bg-[#f3f6fb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2773ff]/30"
+            >
+              查看其余 {remainingCount} 条匹配消息
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          ) : null}
+        </div>
+      ) : !highlight && hit.conversation.preview ? (
+        <div className="px-5 pb-2 text-[12px] leading-5 text-[#8a97a8]">
+          <span className="line-clamp-1">{hit.conversation.preview}</span>
+        </div>
       ) : null}
-    </button>
+    </section>
   );
 }
 
@@ -109,6 +158,7 @@ export function SearchConversationsDialog({
     currentUserId,
     getProject,
     getActor,
+    getUser,
     getMessages,
   } = useProjectConversation();
   const [query, setQuery] = useState("");
@@ -122,6 +172,7 @@ export function SearchConversationsDialog({
         project: getProject(conversation.projectId),
         messages: getMessages(conversation.projectId, conversation.id),
         getActor,
+        getUser,
       });
       return item ? [item] : [];
     });
@@ -131,6 +182,7 @@ export function SearchConversationsDialog({
     getActor,
     getMessages,
     getProject,
+    getUser,
     sessions,
     state.threads,
   ]);
@@ -147,8 +199,8 @@ export function SearchConversationsDialog({
     if (!next) setQuery("");
   };
 
-  const handleSelect = (hit: ConversationSearchHit) => {
-    const href = buildConversationHref(hit);
+  const navigateToHit = (hit: ConversationSearchHit, messageId?: string) => {
+    const href = buildConversationHref(hit, messageId);
     if (hit.conversation.source === "personal") {
       setActiveSession(hit.conversation.id);
     }
@@ -159,7 +211,7 @@ export function SearchConversationsDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="flex h-[520px] max-h-[520px] w-full flex-col gap-0 overflow-hidden rounded-2xl border-[#e2e8f0] p-0 shadow-xl sm:max-w-[480px]"
+        className="flex h-[560px] max-h-[min(560px,calc(100vh-32px))] w-full flex-col gap-0 overflow-hidden rounded-xl border-[#e2e8f0] p-0 shadow-xl sm:max-w-[560px]"
       >
         <DialogHeader className="shrink-0 space-y-0 border-b border-[#eef2f6] px-5 py-4 text-left">
           <DialogTitle className="text-[15px] font-semibold text-slate-900">
@@ -194,10 +246,11 @@ export function SearchConversationsDialog({
             <div className="space-y-0.5">
               {hits.map((hit) => (
                 <SearchResultRow
-                  key={`${hit.conversation.source}-${hit.conversation.id}`}
+                  key={`${query.trim()}-${hit.conversation.source}-${hit.conversation.id}`}
                   hit={hit}
                   query={query}
-                  onSelect={handleSelect}
+                  onSelectConversation={navigateToHit}
+                  onSelectMessage={navigateToHit}
                 />
               ))}
             </div>
