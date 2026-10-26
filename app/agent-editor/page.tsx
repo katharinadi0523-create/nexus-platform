@@ -116,7 +116,7 @@ export default function AgentEditorPage() {
   const [activeTab, setActiveTab] = useState<"config" | "logs">("config");
   const [appName, setAppName] = useState("");
   const [appDescription, setAppDescription] = useState("");
-  const [securityLevel, setSecurityLevel] = useState<SecurityLevel>("公开");
+  const [securityLevel, setSecurityLevel] = useState<SecurityLevel | "">("");
   const [createApprovalOpen, setCreateApprovalOpen] = useState(false);
   const [createApprovalReason, setCreateApprovalReason] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -842,6 +842,10 @@ export default function AgentEditorPage() {
       toast.error("请填写智能体描述。");
       return;
     }
+    if (!securityLevel) {
+      toast.error("请选择密级。");
+      return;
+    }
     if (isHighSecurityLevel(securityLevel)) {
       setCreateApprovalOpen(true);
       return;
@@ -930,7 +934,7 @@ export default function AgentEditorPage() {
           />
           <Button className="bg-slate-900 text-white hover:bg-slate-800" onClick={handleCreateAgent}>
           <Rocket className="w-4 h-4" />
-          {isHighSecurityLevel(securityLevel) ? "提交创建申请" : "创建"}
+          {securityLevel && isHighSecurityLevel(securityLevel) ? "提交创建申请" : "创建"}
           </Button>
         </div>
       </header>
@@ -984,6 +988,7 @@ export default function AgentEditorPage() {
               </label>
               <Select
                 value={securityLevel}
+                placeholder="请选择密级"
                 onValueChange={(value) => setSecurityLevel(value as SecurityLevel)}
                 options={buildSecurityLevelOptionsUpToUser()}
                 className="h-9 bg-white"
@@ -1899,7 +1904,7 @@ export default function AgentEditorPage() {
           <DialogHeader className="border-b border-slate-200 px-6 py-5">
             <DialogTitle>提交自主规划智能体创建申请</DialogTitle>
             <DialogDescription className="mt-2 leading-6 text-slate-500">
-              当前选择“{securityLevel}”密级，审批通过后方可进入配置或使用。
+              当前选择“{securityLevel || "未设置"}”密级，审批通过后方可进入配置或使用。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
@@ -1909,7 +1914,7 @@ export default function AgentEditorPage() {
               <span className="text-slate-400">资源类型</span>
               <span className="text-slate-800">自主规划智能体</span>
               <span className="text-slate-400">资源密级</span>
-              <span className="text-slate-800">{securityLevel}</span>
+              <span className="text-slate-800">{securityLevel || "未设置"}</span>
             </div>
             <div className="space-y-2">
               <label htmlFor="agent-create-approval-reason" className="text-sm font-medium text-slate-800">
@@ -1948,7 +1953,7 @@ export default function AgentEditorPage() {
         open={kbSelectorOpen}
         onOpenChange={setKbSelectorOpen}
         onSelect={handleAddKnowledgeBase}
-        callerSecurityLevel={securityLevel}
+        callerSecurityLevel={securityLevel || "公开"}
       />
 
       {/* Retrieval Settings Dialog */}
@@ -1966,7 +1971,7 @@ export default function AgentEditorPage() {
         open={workflowSelectorOpen}
         onOpenChange={setWorkflowSelectorOpen}
         onSelect={handleAddWorkflow}
-        callerSecurityLevel={securityLevel}
+        callerSecurityLevel={securityLevel || "公开"}
       />
 
       {/* Plugin Selector Dialog */}

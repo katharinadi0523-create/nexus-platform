@@ -45,8 +45,12 @@ import { type ImportObjectType } from "@/lib/agent-import-export";
 
 interface WorkflowEditorProps {
   agentId: string;
+  creationMode?: boolean;
+  initialBasicConfigOpen?: boolean;
   initialName?: string;
   initialDescription?: string;
+  onNameChange?: (name: string) => void;
+  onDescriptionChange?: (description: string) => void;
   importResult?: "success" | "success_with_warnings" | null;
   importObjectType?: ImportObjectType;
   onBlockingIssueChange?: (hasIssues: boolean) => void;
@@ -59,6 +63,8 @@ interface WorkflowEditorProps {
   onOpenNodeConfig?: () => void;
   onRequestDraftAction?: (action: "update" | "reconfigure") => void;
   securityLevel?: SecurityLevel;
+  securityLevelSelected?: boolean;
+  onCreationSecurityLevelChange?: (level: SecurityLevel) => void;
   onSecurityLevelChangeRequest?: () => void;
   securityLevelChangeDisabled?: boolean;
   securityLevelChangeTitle?: string;
@@ -288,8 +294,12 @@ function buildImportedPrototypeNodes(_objectType: ImportObjectType, result: "suc
 
 export function WorkflowEditor({
   agentId,
+  creationMode = false,
+  initialBasicConfigOpen = false,
   initialName = "",
   initialDescription = "",
+  onNameChange,
+  onDescriptionChange,
   importResult = null,
   importObjectType = "workflow_agent",
   onBlockingIssueChange,
@@ -302,6 +312,8 @@ export function WorkflowEditor({
   onOpenNodeConfig,
   onRequestDraftAction,
   securityLevel = "公开",
+  securityLevelSelected = true,
+  onCreationSecurityLevelChange,
   onSecurityLevelChangeRequest,
   securityLevelChangeDisabled = false,
   securityLevelChangeTitle = "修改密级",
@@ -315,7 +327,7 @@ export function WorkflowEditor({
   const [edges, setEdges, onEdgesChange] = useEdgesState(defaultEdges);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodeLibraryOpen, setNodeLibraryOpen] = useState(false);
-  const [basicConfigOpen, setBasicConfigOpen] = useState(false);
+  const [basicConfigOpen, setBasicConfigOpen] = useState(initialBasicConfigOpen);
   const [runResult, setRunResult] = useState<FlowRuntimeResult | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const draftSnapshotRef = useRef<{ nodes: Node[]; edges: Edge[] }>({
@@ -690,9 +702,14 @@ export function WorkflowEditor({
         open={basicConfigOpen}
         onOpenChange={setBasicConfigOpen}
         readOnly={readOnly}
+        creationMode={creationMode}
         initialName={initialName}
         initialDescription={initialDescription}
+        onNameChange={onNameChange}
+        onDescriptionChange={onDescriptionChange}
         securityLevel={securityLevel}
+        securityLevelSelected={securityLevelSelected}
+        onCreationSecurityLevelChange={onCreationSecurityLevelChange}
         onSecurityLevelChangeRequest={onSecurityLevelChangeRequest}
         securityLevelChangeDisabled={securityLevelChangeDisabled}
         securityLevelChangeTitle={securityLevelChangeTitle}

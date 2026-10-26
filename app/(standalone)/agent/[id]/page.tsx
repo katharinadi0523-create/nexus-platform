@@ -278,12 +278,18 @@ export default function AgentDetailPage() {
 
   const initialDisplayName = createdName || agentData?.name || agentProfile?.name || "加载中...";
   const [displayName, setDisplayName] = useState(initialDisplayName);
+  const [draftDescription, setDraftDescription] = useState(
+    createdDescription || agentProfile?.description || ""
+  );
   const selectedVersion = versions.find((version) => version.id === selectedVersionId) ?? null;
   const [publishStatus, setPublishStatus] = useState<"已发布" | "未发布">(
     agentProfile?.publishStatus ?? "未发布"
   );
   const [securityLevel, setSecurityLevel] = useState<SecurityLevel>(
     createdSecurityLevel ?? agentProfile?.securityLevel ?? "公开"
+  );
+  const [creationSecurityLevelSelected, setCreationSecurityLevelSelected] = useState(
+    !isCreatingWorkflow || Boolean(createdSecurityLevel)
   );
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>(
     agentProfile?.approvalStatus ?? "none"
@@ -318,6 +324,12 @@ export default function AgentDetailPage() {
   const [hasBlockingIssues, setHasBlockingIssues] = useState(false);
 
   const isPublished = publishStatus === "已发布";
+  const creationBasicInfoComplete = !isCreatingWorkflow || Boolean(
+    displayName.trim() &&
+    displayName !== "未命名工作流智能体" &&
+    draftDescription.trim() &&
+    creationSecurityLevelSelected
+  );
 
   const isHistorical = Boolean(versionDetailMode && selectedVersion);
   const isVersionContext = Boolean(versionDetailMode && selectedVersion);
@@ -554,14 +566,26 @@ export default function AgentDetailPage() {
     >
       {isWorkflow ? (
         <WorkflowEditor
+          key={isCreatingWorkflow ? "workflow-create" : agentId}
           agentId={agentId}
-          initialName={displayName}
-          initialDescription={createdDescription || agentProfile?.description || ""}
+          creationMode={isCreatingWorkflow}
+          initialBasicConfigOpen={isCreatingWorkflow}
+          initialName={isCreatingWorkflow ? createdName : displayName}
+          initialDescription={isCreatingWorkflow ? createdDescription : draftDescription}
+          onNameChange={(name) => setDisplayName(name.trim() ? name : "未命名工作流智能体")}
+          onDescriptionChange={setDraftDescription}
           importResult={importResult}
           importObjectType="workflow_agent"
           onBlockingIssueChange={setHasBlockingIssues}
           readOnly={configReadOnly}
           securityLevel={securityLevel}
+          securityLevelSelected={creationSecurityLevelSelected}
+          onCreationSecurityLevelChange={(level) => {
+            setSecurityLevel(level);
+            setDraftSecurityLevel(level);
+            setSecurityChangeDraft({ targetLevel: level, reason: "" });
+            setCreationSecurityLevelSelected(true);
+          }}
           snapshotVersion={isHistorical ? selectedVersion?.label ?? null : null}
           showReferenceAlerts={!isHistorical}
           historicalConfigSnapshot={selectedVersion?.configSnapshot.editorState}
@@ -619,6 +643,10 @@ export default function AgentDetailPage() {
   );
 
   function handleOpenPublishDialog() {
+    if (!creationBasicInfoComplete) {
+      toast.error("请先在基本配置中填写名称、描述并选择密级。");
+      return;
+    }
     if (hasBlockingIssues) {
       toast.error("存在待关联或异常节点，请完成配置后再发布。");
       return;
@@ -809,10 +837,16 @@ export default function AgentDetailPage() {
               className={cn("shrink-0", isPublished && "cursor-not-allowed opacity-70")}
               title={isPublished ? "已发布密级已锁定" : undefined}
             >
-              <SecurityLevelBadge
-                level={securityLevel}
-                className={isPublished ? "bg-slate-100 text-slate-400" : undefined}
-              />
+              {isCreatingWorkflow && !creationSecurityLevelSelected ? (
+                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                  未设置密级
+                </span>
+              ) : (
+                <SecurityLevelBadge
+                  level={securityLevel}
+                  className={isPublished ? "bg-slate-100 text-slate-400" : undefined}
+                />
+              )}
             </span>
             {!isPublished ? (
               <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
@@ -942,10 +976,12 @@ export default function AgentDetailPage() {
           ) : null}
 
           <Button
-            disabled={isHistorical || approvalAction.publishLocked || hasBlockingIssues}
+            disabled={isHistorical || approvalAction.publishLocked || hasBlockingIssues || !creationBasicInfoComplete}
             title={
               isHistorical
                 ? "\u5386\u53f2\u7248\u672c\u4e0d\u53ef\u53d1\u5e03"
+                : !creationBasicInfoComplete
+                  ? "请先在基本配置中填写名称、描述并选择密级"
                 : hasBlockingIssues
                   ? "存在待关联或异常节点，完成配置后才能发布"
                   : approvalAction.publishTitle ?? "发布"
@@ -954,7 +990,11 @@ export default function AgentDetailPage() {
             className="rounded-2xl bg-slate-900 px-4 text-white shadow-[0_18px_40px_-24px_rgba(15,23,42,0.8)] hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Rocket className="h-4 w-4" />
-            发布
+            {isCreatingWorkflow
+              ? creationSecurityLevelSelected && isHighSecurityLevel(securityLevel)
+                ? "提交创建申请"
+                : "创建"
+              : "发布"}
           </Button>
         </div>
       </header>
@@ -965,12 +1005,6 @@ export default function AgentDetailPage() {
           result={importResult}
           operation={importOperation}
         />
-      ) : null}
-
-      {isCreatingWorkflow ? (
-        <div className="flex min-h-11 shrink-0 items-center border-b border-blue-200 bg-blue-50 px-6 py-2 text-sm text-blue-800">
-          工作流智能体草稿已创建。画布仅保留开始与结束节点，可从节点库继续编排。
-        </div>
       ) : null}
 
       {isHistorical && selectedVersion ? (
@@ -1044,6 +1078,8 @@ export default function AgentDetailPage() {
             <DialogTitle>
               {!isPublished && isHighSecurityLevel(securityLevel)
                 ? `提交${isWorkflow ? "工作流智能体" : "自主规划智能体"}创建申请`
+                : isCreatingWorkflow
+                  ? "创建工作流智能体"
                 : isWorkflow
                   ? "发布工作流智能体"
                   : "发布智能体应用"}
@@ -1132,7 +1168,7 @@ export default function AgentDetailPage() {
             >
               {isHighSecurityLevel(securityLevel)
                 ? isPublished ? "提交发布申请" : "提交创建申请"
-                : "确认发布"}
+                : isCreatingWorkflow ? "确认创建" : "确认发布"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1291,7 +1327,11 @@ export default function AgentDetailPage() {
         selectedVersionId={selectedVersionId}
         restoredDraft={restoredDraft}
         entityDisabled={entityDisabled}
-        securityLevel={securityLevel}
+        securityLevel={
+          isCreatingWorkflow && !creationSecurityLevelSelected
+            ? undefined
+            : securityLevel
+        }
         actionsLocked={approvalStatus !== "none"}
         lockedReason={approvalAction.configTitle}
         restoreConfirmOpen={restoreConfirmOpen}

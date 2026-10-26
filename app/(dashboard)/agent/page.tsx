@@ -21,9 +21,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -45,9 +42,7 @@ import { SecurityLevelBadge } from "@/components/security/security-level-badge";
 import { ResourceDeleteApprovalDialog } from "@/components/security/resource-delete-approval-dialog";
 import { getAllAgents, type AgentProfile } from "@/lib/agent-data";
 import {
-  buildSecurityLevelOptionsUpToUser,
   getApprovalActionState,
-  isHighSecurityLevel,
   requiresResourceDeleteApproval,
   type ApprovalStatus,
   type SecurityLevel,
@@ -114,19 +109,6 @@ export default function AgentPage() {
   const [deleteApprovalOpen, setDeleteApprovalOpen] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
   const [agents, setAgents] = useState<Agent[]>(buildDemoAgents);
-  const [workflowCreateOpen, setWorkflowCreateOpen] = useState(false);
-  const [workflowCreateDraft, setWorkflowCreateDraft] = useState<{
-    name: string;
-    description: string;
-    securityLevel: SecurityLevel | "";
-    approvalReason: string;
-  }>({
-    name: "",
-    description: "",
-    securityLevel: "",
-    approvalReason: "",
-  });
-  const [workflowCreateError, setWorkflowCreateError] = useState("");
 
   const filteredAgents = agents.filter(
     (agent) =>
@@ -206,76 +188,6 @@ export default function AgentPage() {
     setDeleteReason("");
     toast.success(`已提交删除审批：${deleteTarget.name}，审批通过前资源保持当前状态。`);
     setDeleteTarget(null);
-  };
-
-  const resetWorkflowCreateDraft = () => {
-    setWorkflowCreateDraft({
-      name: "",
-      description: "",
-      securityLevel: "",
-      approvalReason: "",
-    });
-    setWorkflowCreateError("");
-  };
-
-  const openWorkflowCreateDialog = () => {
-    resetWorkflowCreateDraft();
-    setWorkflowCreateOpen(true);
-  };
-
-  const submitWorkflowCreate = () => {
-    const name = workflowCreateDraft.name.trim();
-    const description = workflowCreateDraft.description.trim();
-    const securityLevel = workflowCreateDraft.securityLevel;
-    const approvalReason = workflowCreateDraft.approvalReason.trim();
-
-    if (!name) {
-      setWorkflowCreateError("请输入工作流智能体名称。");
-      return;
-    }
-    if (!description) {
-      setWorkflowCreateError("请输入工作流智能体描述。");
-      return;
-    }
-    if (!securityLevel) {
-      setWorkflowCreateError("请选择密级。");
-      return;
-    }
-    if (isHighSecurityLevel(securityLevel) && !approvalReason) {
-      setWorkflowCreateError("秘密、机密资源需填写申请原因。");
-      return;
-    }
-
-    setWorkflowCreateError("");
-    if (isHighSecurityLevel(securityLevel)) {
-      setAgents((current) => [
-        {
-          id: `workflow-pending-${Date.now()}`,
-          name,
-          type: "工作流智能体",
-          status: "未发布",
-          desc: description,
-          updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-          securityLevel,
-          approvalStatus: "create",
-        },
-        ...current,
-      ]);
-      setWorkflowCreateOpen(false);
-      resetWorkflowCreateDraft();
-      toast.success("创建申请已提交。审批通过前不可进入编辑或使用。");
-      return;
-    }
-
-    const searchParams = new URLSearchParams({
-      source: "create",
-      name,
-      description,
-      securityLevel,
-    });
-    setWorkflowCreateOpen(false);
-    resetWorkflowCreateDraft();
-    router.push(`/agent/workflow-new?${searchParams.toString()}`);
   };
 
   const handlePageChange = (page: number) => {
@@ -370,13 +282,13 @@ export default function AgentPage() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={openWorkflowCreateDialog}
+                  onClick={() => router.push("/agent/workflow-new?source=create")}
                   className="rounded-[4px] px-3 py-2"
                 >
                   <Workflow className="h-4 w-4 text-slate-500" />
                   <div>
                     <div className="text-sm font-medium">新建工作流智能体</div>
-                    <div className="mt-0.5 text-xs text-slate-500">填写基本信息和密级后创建</div>
+                    <div className="mt-0.5 text-xs text-slate-500">从空白编排开始创建</div>
                   </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -642,133 +554,6 @@ export default function AgentPage() {
           </div>
         </div>
       )}
-
-      <Dialog
-        open={workflowCreateOpen}
-        onOpenChange={(open) => {
-          setWorkflowCreateOpen(open);
-          if (!open) resetWorkflowCreateDraft();
-        }}
-      >
-        <DialogContent className="flex max-h-[90vh] max-w-[560px] flex-col overflow-hidden rounded-lg p-0">
-          <DialogHeader className="shrink-0 border-b border-slate-200 px-6 py-5">
-            <DialogTitle>创建工作流智能体</DialogTitle>
-            <DialogDescription className="pt-1 text-slate-500">
-              填写基本信息并选择密级。创建后从空白画布开始编排。
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="workflow-create-name">
-                  <span className="mr-1 text-rose-500">*</span>名称
-                </Label>
-                <span className="text-xs text-slate-400">{workflowCreateDraft.name.length}/50</span>
-              </div>
-              <Input
-                id="workflow-create-name"
-                value={workflowCreateDraft.name}
-                placeholder="请输入工作流智能体名称"
-                maxLength={50}
-                onChange={(event) => {
-                  setWorkflowCreateDraft((current) => ({ ...current, name: event.target.value }));
-                  setWorkflowCreateError("");
-                }}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="workflow-create-description">
-                  <span className="mr-1 text-rose-500">*</span>描述
-                </Label>
-                <span className="text-xs text-slate-400">{workflowCreateDraft.description.length}/200</span>
-              </div>
-              <Textarea
-                id="workflow-create-description"
-                value={workflowCreateDraft.description}
-                placeholder="请说明该工作流智能体负责的业务场景"
-                maxLength={200}
-                className="min-h-24 resize-none"
-                onChange={(event) => {
-                  setWorkflowCreateDraft((current) => ({ ...current, description: event.target.value }));
-                  setWorkflowCreateError("");
-                }}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>
-                <span className="mr-1 text-rose-500">*</span>密级
-              </Label>
-              <Select
-                value={workflowCreateDraft.securityLevel}
-                placeholder="请选择密级"
-                options={buildSecurityLevelOptionsUpToUser()}
-                onValueChange={(value) => {
-                  setWorkflowCreateDraft((current) => ({
-                    ...current,
-                    securityLevel: value as SecurityLevel,
-                    approvalReason: isHighSecurityLevel(value as SecurityLevel)
-                      ? current.approvalReason
-                      : "",
-                  }));
-                  setWorkflowCreateError("");
-                }}
-              />
-              <p className="text-xs leading-5 text-slate-500">
-                公开、内部可直接创建；秘密、机密需提交审批。仅展示当前角色可选密级。
-              </p>
-            </div>
-
-            {workflowCreateDraft.securityLevel && isHighSecurityLevel(workflowCreateDraft.securityLevel) ? (
-              <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                <div>
-                  <div className="text-sm font-medium text-amber-900">高密资源创建需审批</div>
-                  <p className="mt-1 text-xs leading-5 text-amber-800">
-                    审批通过前不可进入编辑、发布或使用。
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="workflow-create-reason">
-                    <span className="mr-1 text-rose-500">*</span>申请原因
-                  </Label>
-                  <Textarea
-                    id="workflow-create-reason"
-                    value={workflowCreateDraft.approvalReason}
-                    placeholder="请说明创建该高密工作流智能体的业务用途和必要性"
-                    maxLength={500}
-                    className="min-h-24 resize-none bg-white"
-                    onChange={(event) => {
-                      setWorkflowCreateDraft((current) => ({
-                        ...current,
-                        approvalReason: event.target.value,
-                      }));
-                      setWorkflowCreateError("");
-                    }}
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            {workflowCreateError ? (
-              <p className="text-sm text-rose-600" role="alert">{workflowCreateError}</p>
-            ) : null}
-          </div>
-
-          <DialogFooter className="shrink-0 border-t border-slate-200 px-6 py-4">
-            <Button variant="outline" onClick={() => setWorkflowCreateOpen(false)}>
-              取消
-            </Button>
-            <Button onClick={submitWorkflowCreate} className="bg-blue-600 text-white hover:bg-blue-700">
-              {workflowCreateDraft.securityLevel && isHighSecurityLevel(workflowCreateDraft.securityLevel)
-                ? "提交创建申请"
-                : "创建"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={deleteBlockedOpen} onOpenChange={setDeleteBlockedOpen}>
         <DialogContent className="max-w-[480px] rounded-lg">

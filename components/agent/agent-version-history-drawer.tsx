@@ -52,7 +52,7 @@ export function AgentVersionHistoryDrawer({
   selectedVersionId,
   restoredDraft,
   entityDisabled,
-  securityLevel = "公开",
+  securityLevel,
   actionsLocked = false,
   lockedReason,
   restoreConfirmOpen,
@@ -119,10 +119,18 @@ export function AgentVersionHistoryDrawer({
           <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs font-medium text-blue-900">资源当前密级</span>
-              <SecurityLevelBadge level={securityLevel} />
+              {securityLevel ? (
+                <SecurityLevelBadge level={securityLevel} />
+              ) : (
+                <span className="rounded bg-white/70 px-2 py-0.5 text-xs text-blue-700">
+                  未设置
+                </span>
+              )}
             </div>
             <p className="mt-1.5 text-xs leading-5 text-blue-700">
-              当前草稿与全部历史版本共用该密级；还原、停用或启用版本不会改变资源密级。
+              {securityLevel
+                ? "当前草稿与全部历史版本共用该密级；还原、停用或启用版本不会改变资源密级。"
+                : "创建后，当前草稿与全部历史版本将共用所选密级。"}
             </p>
           </div>
 
