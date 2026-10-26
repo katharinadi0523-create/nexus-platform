@@ -1,7 +1,7 @@
 "use client";
 
 import { Node, Edge } from "reactflow";
-import { X, Play, StopCircle, Sparkles, BookOpen, Network, Table, Filter, Database, BarChart3, Bot, GitBranch, Eye, Code, Package } from "lucide-react";
+import { X, Play, StopCircle, Sparkles, BookOpen, Network, Table, Filter, Database, BarChart3, Bot, GitBranch, Eye, Code, Package, AlertTriangle } from "lucide-react";
 import { StartNodeConfig } from "./configs/start-node-config";
 import { LLMNodeConfig } from "./configs/llm-node-config";
 import { KnowledgeNodeConfig } from "./configs/knowledge-node-config";
@@ -16,12 +16,14 @@ import { BranchNodeConfig } from "./configs/branch-node-config";
 import { IntentRecognizeNodeConfig } from "./configs/intent-recognize-node-config";
 import { CodeNodeConfig } from "./configs/code-node-config";
 import { MCPNodeConfig } from "./configs/mcp-node-config";
+import { WorkflowReferenceNodeConfig } from "./configs/workflow-reference-node-config";
+import { UnavailableObjectNodeConfig } from "./configs/unavailable-object-node-config";
 import { cn } from "@/lib/utils";
 import type { SecurityLevel } from "@/lib/security-level";
 
 interface NodeConfigPanelProps {
   selectedNode: Node | null;
-  onUpdateNode: (nodeId: string, data: any) => void;
+  onUpdateNode: (nodeId: string, data: object) => void;
   onClose: () => void;
   nodes?: Node[];
   edges?: Edge[];
@@ -30,40 +32,24 @@ interface NodeConfigPanelProps {
   callerSecurityLevel?: SecurityLevel;
 }
 
-const getNodeIcon = (type: string | undefined) => {
-  switch (type) {
-    case "start":
-      return Play;
-    case "end":
-      return StopCircle;
-    case "llm":
-      return Sparkles;
-    case "knowledge":
-      return BookOpen;
-    case "object-query":
-      return Network;
-    case "table-select":
-      return Table;
-    case "data-clarify":
-      return Filter;
-    case "data-query":
-      return Database;
-    case "data-visualize":
-      return BarChart3;
-    case "agent":
-      return Bot;
-    case "branch":
-      return GitBranch;
-    case "intent-recognize":
-      return Eye;
-    case "code":
-      return Code;
-    case "mcp":
-      return Package;
-    default:
-      return Play;
-  }
-};
+const NODE_ICONS = {
+  start: Play,
+  end: StopCircle,
+  llm: Sparkles,
+  knowledge: BookOpen,
+  "object-query": Network,
+  "table-select": Table,
+  "data-clarify": Filter,
+  "data-query": Database,
+  "data-visualize": BarChart3,
+  agent: Bot,
+  branch: GitBranch,
+  "intent-recognize": Eye,
+  code: Code,
+  mcp: Package,
+  "workflow-ref": GitBranch,
+  "unavailable-object": AlertTriangle,
+} as const;
 
 const getNodeLabel = (type: string | undefined) => {
   switch (type) {
@@ -95,6 +81,10 @@ const getNodeLabel = (type: string | undefined) => {
       return "代码";
     case "mcp":
       return "MCP";
+    case "workflow-ref":
+      return "工作流";
+    case "unavailable-object":
+      return "待关联节点";
     default:
       return "节点";
   }
@@ -127,6 +117,10 @@ const getNodeColor = (type: string | undefined) => {
       return "text-orange-600";
     case "mcp":
       return "text-green-600";
+    case "workflow-ref":
+      return "text-sky-600";
+    case "unavailable-object":
+      return "text-amber-600";
     default:
       return "text-slate-600";
   }
@@ -144,11 +138,11 @@ export function NodeConfigPanel({
 }: NodeConfigPanelProps) {
   if (!selectedNode) return null;
 
-  const Icon = getNodeIcon(selectedNode.type);
+  const Icon = NODE_ICONS[selectedNode.type as keyof typeof NODE_ICONS] ?? Play;
   const label = getNodeLabel(selectedNode.type);
   const iconColor = getNodeColor(selectedNode.type);
 
-  const handleUpdate = (data: any) => {
+  const handleUpdate = (data: object) => {
     onUpdateNode(selectedNode.id, data);
   };
 
@@ -173,6 +167,17 @@ export function NodeConfigPanel({
         disabled={readOnly && selectedNode.type !== "agent"}
         className="flex-1 overflow-y-auto border-0 p-4 disabled:[&_button]:cursor-not-allowed disabled:[&_button]:opacity-60 disabled:[&_input]:cursor-not-allowed disabled:[&_input]:bg-slate-100 disabled:[&_select]:cursor-not-allowed disabled:[&_textarea]:cursor-not-allowed disabled:[&_textarea]:bg-slate-100"
       >
+        {selectedNode.data?.importIssue ? (
+          <div className="mb-4 rounded-[6px] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <div className="flex items-center gap-2 font-semibold">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              {selectedNode.data.importIssue.title}
+            </div>
+            <p className="mt-1.5 leading-6">
+              {selectedNode.data.importIssue.message ?? `${selectedNode.data.importIssue.resourceName}：${selectedNode.data.importIssue.detail}。请在下方重新配置。`}
+            </p>
+          </div>
+        ) : null}
         {selectedNode.type === "start" && (
           <StartNodeConfig
             nodeData={selectedNode.data}
@@ -294,6 +299,18 @@ export function NodeConfigPanel({
             currentNodeId={selectedNode.id}
             nodes={nodes}
             edges={edges}
+          />
+        )}
+        {selectedNode.type === "workflow-ref" && (
+          <WorkflowReferenceNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
+          />
+        )}
+        {selectedNode.type === "unavailable-object" && (
+          <UnavailableObjectNodeConfig
+            nodeData={selectedNode.data}
+            onUpdate={handleUpdate}
           />
         )}
       </fieldset>

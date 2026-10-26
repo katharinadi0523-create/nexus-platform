@@ -48,6 +48,8 @@ import {
   type SecurityLevel,
 } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
+import { ImportConfigurationButton } from "@/components/import-export/import-configuration-dialog";
+import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
 
 interface Agent {
   id: string;
@@ -230,6 +232,29 @@ export default function AgentPage() {
           </div>
 
           <div className="flex items-center justify-end gap-2">
+            <ImportConfigurationButton
+              objectType="workflow_agent"
+              objectTypeChoices={["workflow_agent", "autonomous_agent"]}
+              destinationHref={{
+                workflow_agent: "/agent/flow-01?source=import&objectType=workflow_agent",
+                autonomous_agent: "/agent/osint-01?source=import&objectType=autonomous_agent",
+              }}
+              onImported={(preview) => {
+                setAgents((current) => [
+                  {
+                    id: `imported-${Date.now()}`,
+                    name: preview.objectName,
+                    type: preview.objectTypeLabel,
+                    status: "未发布",
+                    desc: preview.description,
+                    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+                    securityLevel: preview.securityLevel ?? "公开",
+                    approvalStatus: "none",
+                  },
+                  ...current,
+                ]);
+              }}
+            />
             <Button
               variant="outline"
               size="icon-sm"
@@ -246,11 +271,14 @@ export default function AgentPage() {
                   创建智能体
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 rounded-[6px] border-slate-200 p-1">
+              <DropdownMenuContent align="end" className="w-64 rounded-[6px] border-slate-200 p-1">
                 <DropdownMenuItem asChild className="rounded-[4px] px-3 py-2">
                   <Link href="/agent-editor" className="flex cursor-pointer items-center gap-2">
                     <Bot className="h-4 w-4 text-slate-500" />
-                    自主规划智能体
+                    <div>
+                      <div className="text-sm font-medium">新建自主规划智能体</div>
+                      <div className="mt-0.5 text-xs text-slate-500">从空白配置开始创建</div>
+                    </div>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -258,7 +286,10 @@ export default function AgentPage() {
                   className="rounded-[4px] px-3 py-2"
                 >
                   <Workflow className="h-4 w-4 text-slate-500" />
-                  工作流智能体
+                  <div>
+                    <div className="text-sm font-medium">新建工作流智能体</div>
+                    <div className="mt-0.5 text-xs text-slate-500">从空白画布开始创建</div>
+                  </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -418,6 +449,15 @@ export default function AgentPage() {
                         >
                           删除
                         </button>
+                        {isPublished ? (
+                          <ExportConfigurationButton
+                            objectType={isAutonomous ? "autonomous_agent" : "workflow_agent"}
+                            objectName={agent.name}
+                            sourceType="published"
+                            display="table-action"
+                            securityLevel={agent.securityLevel}
+                          />
+                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>

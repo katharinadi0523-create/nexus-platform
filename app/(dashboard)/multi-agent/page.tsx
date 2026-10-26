@@ -12,12 +12,6 @@ import {
   Search,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -35,7 +29,6 @@ import { ResourceDeleteApprovalDialog } from "@/components/security/resource-del
 import {
   getPublishedMultiAgents,
   removePublishedMultiAgent,
-  upsertPublishedMultiAgent,
   type PublishedMultiAgentItem,
 } from "@/lib/published-multi-agents";
 import {
@@ -184,14 +177,8 @@ export default function MultiAgentListPage() {
               <RefreshCw className="h-4 w-4" />
             </Button>
 
-            <Button
-              asChild
-              className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700"
-            >
-              <Link href="/multi-agent/create">
-                <Plus className="h-4 w-4" />
-                新建多智能体
-              </Link>
+            <Button asChild className="h-8 rounded-[4px] bg-blue-600 px-4 text-sm font-medium text-white shadow-none hover:bg-blue-700">
+              <Link href="/multi-agent/create"><Plus className="h-4 w-4" />新建多智能体</Link>
             </Button>
           </div>
         </div>

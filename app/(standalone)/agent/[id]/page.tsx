@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -33,6 +33,9 @@ import { AgentAvailabilityControl } from "@/components/agent/agent-availability-
 import { getAgentById } from "@/lib/agent-data";
 import { AGENT_VERSION_HISTORY, buildVersionCompositionData, type AgentVersionRecord } from "@/lib/mock/agent-version-management";
 import { ProtectionStatusBadge } from "@/components/security/ProtectionStatusBadge";
+import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
+import { ImportDraftNotice, type ImportDraftResult } from "@/components/import-export/import-draft-notice";
+import { ReferenceRelationshipDialog } from "@/components/reference-relations/reference-relationship-dialog";
 import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
@@ -42,6 +45,7 @@ import {
 } from "@/components/security/approval-interaction-panel";
 import {
   buildSecurityLevelSelectOptions,
+  SECURITY_LEVELS,
   isHighSecurityLevel,
   getApprovalActionState,
   type ApprovalStatus,
@@ -293,6 +297,9 @@ export default function AgentDetailPage() {
     submittedAt: string;
   } | null>(null);
   const [approvalFeedback, setApprovalFeedback] = useState<ApprovalFeedback | null>(null);
+  const [importResult, setImportResult] = useState<ImportDraftResult | null>(null);
+  const [importOperation, setImportOperation] = useState<"create" | "overwrite">("overwrite");
+  const [hasBlockingIssues, setHasBlockingIssues] = useState(false);
 
   const isPublished = publishStatus === "已发布";
 
@@ -305,6 +312,25 @@ export default function AgentDetailPage() {
     return Number.isInteger(parsed) ? Math.max(highest, parsed) : highest;
   }, 0) + 1;
   const nextVersionLabel = `V${nextVersionNumber}`;
+
+  useEffect(() => {
+    const urlSearchParams = new URLSearchParams(window.location.search);
+    const result = urlSearchParams.get("importResult");
+    if (result !== "success" && result !== "success_with_warnings") return;
+    setImportResult(result);
+    setImportOperation(urlSearchParams.get("importMode") === "overwrite" ? "overwrite" : "create");
+    setDisplayName(
+      urlSearchParams.get("objectType") === "autonomous_agent"
+        ? "开源情报分析助手"
+        : "智能客服分流助手"
+    );
+    const importedSecurityLevel = urlSearchParams.get("securityLevel") as SecurityLevel | null;
+    if (importedSecurityLevel && SECURITY_LEVELS.includes(importedSecurityLevel)) {
+      setSecurityLevel(importedSecurityLevel);
+      setDraftSecurityLevel(importedSecurityLevel);
+    }
+    setPublishStatus("未发布");
+  }, []);
 
   const handleSelectVersion = (versionId: string | null) => {
     setRestoreToDraftVersion(null);
@@ -510,6 +536,9 @@ export default function AgentDetailPage() {
       {isWorkflow ? (
         <WorkflowEditor
           agentId={agentId}
+          importResult={importResult}
+          importObjectType="workflow_agent"
+          onBlockingIssueChange={setHasBlockingIssues}
           readOnly={configReadOnly}
           securityLevel={securityLevel}
           snapshotVersion={isHistorical ? selectedVersion?.label ?? null : null}
@@ -569,6 +598,10 @@ export default function AgentDetailPage() {
   );
 
   function handleOpenPublishDialog() {
+    if (hasBlockingIssues) {
+      toast.error("存在待关联或异常节点，请完成配置后再发布。");
+      return;
+    }
     const action = getApprovalActionState(approvalStatus);
     if (action.publishLocked) {
       toast.info(action.publishTitle ?? "审批中，暂不可发布。");
@@ -832,6 +865,21 @@ export default function AgentDetailPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ReferenceRelationshipDialog
+            objectType={isWorkflow ? "workflow_agent" : "autonomous_agent"}
+            objectId={agentId}
+            objectName={displayName}
+            objectStatus={isPublished ? "已发布" : "草稿"}
+          />
+          {isPublished ? (
+            <ExportConfigurationButton
+              objectType={isWorkflow ? "workflow_agent" : "autonomous_agent"}
+              objectName={displayName}
+              sourceType="published"
+              sourceVersion="V3"
+              securityLevel={securityLevel}
+            />
+          ) : null}
           <ProtectionStatusBadge
             protectionTaskName="GF专属防护"
             protectionTaskId="1"
@@ -866,8 +914,14 @@ export default function AgentDetailPage() {
           </TooltipProvider>
 
           <Button
-            disabled={isHistorical || approvalAction.publishLocked}
-            title={isHistorical ? "\u5386\u53f2\u7248\u672c\u4e0d\u53ef\u53d1\u5e03" : approvalAction.publishTitle ?? "发布"}
+            disabled={isHistorical || approvalAction.publishLocked || hasBlockingIssues}
+            title={
+              isHistorical
+                ? "\u5386\u53f2\u7248\u672c\u4e0d\u53ef\u53d1\u5e03"
+                : hasBlockingIssues
+                  ? "存在待关联或异常节点，完成配置后才能发布"
+                  : approvalAction.publishTitle ?? "发布"
+            }
             onClick={handleOpenPublishDialog}
             className="rounded-2xl bg-slate-900 px-4 text-white shadow-[0_18px_40px_-24px_rgba(15,23,42,0.8)] hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -876,6 +930,14 @@ export default function AgentDetailPage() {
           </Button>
         </div>
       </header>
+
+      {importResult ? (
+        <ImportDraftNotice
+          objectType={isWorkflow ? "workflow_agent" : "autonomous_agent"}
+          result={importResult}
+          operation={importOperation}
+        />
+      ) : null}
 
       {isHistorical && selectedVersion ? (
         <div className="flex min-h-11 shrink-0 items-center justify-between gap-4 border-b border-blue-200 bg-blue-50 px-6 py-2 text-sm text-blue-800">

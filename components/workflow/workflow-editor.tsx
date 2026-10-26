@@ -32,6 +32,8 @@ import { IntentRecognizeNode } from "./nodes/intent-recognize-node";
 import { CodeNode } from "./nodes/code-node";
 import { GenericNode } from "./nodes/generic-node";
 import { MCPNode } from "./nodes/mcp-node";
+import { WorkflowReferenceNode } from "./nodes/workflow-reference-node";
+import { UnavailableObjectNode } from "./nodes/unavailable-object-node";
 import { NodeConfigPanel } from "./node-config-panel";
 import { NodeLibraryMenu } from "./node-library-menu";
 import { BasicConfigSheet } from "./basic-config-sheet";
@@ -39,9 +41,13 @@ import { executeWorkflow, FlowRuntimeResult } from "./workflow-runner";
 import { WorkflowResultPanel } from "./workflow-result-panel";
 import { getWorkflowByAgentId } from "@/lib/mock/workflow-data";
 import type { SecurityLevel } from "@/lib/security-level";
+import { type ImportObjectType } from "@/lib/agent-import-export";
 
 interface WorkflowEditorProps {
   agentId: string;
+  importResult?: "success" | "success_with_warnings" | null;
+  importObjectType?: ImportObjectType;
+  onBlockingIssueChange?: (hasIssues: boolean) => void;
   readOnly?: boolean;
   snapshotVersion?: string | null;
   showReferenceAlerts?: boolean;
@@ -73,6 +79,8 @@ const nodeTypes = {
   "intent-recognize": IntentRecognizeNode,
   code: CodeNode,
   mcp: MCPNode,
+  "workflow-ref": WorkflowReferenceNode,
+  "unavailable-object": UnavailableObjectNode,
   api: GenericNode,
   message: GenericNode,
   "object-query": ObjectQueryNode,
@@ -184,8 +192,103 @@ const initialEdges: Edge[] = [
   { id: "e7", source: "agent-disabled-demo", target: "llm-1", type: "smoothstep", animated: true },
   { id: "e8", source: "llm-1", target: "end-1", type: "smoothstep", animated: true },
 ];
+const importedPrototypeNodes: Node[] = [
+  { id: "import-start", type: "start", position: { x: 20, y: 430 }, data: { description: "接收售后问题" } },
+  {
+    id: "import-classify", type: "llm", position: { x: 340, y: 430 },
+    data: {
+      description: "问题分类", model: "DeepSeek-V3",
+      modelParams: { temperature: 0.2, max_tokens: 1024 },
+      prompt: "判断用户问题所属的售后类别，并输出分类结果。",
+      inputVariables: [{ name: "prompt", type: "string", value: "接收售后问题/query" }],
+      outputVariables: [{ name: "category", type: "string" }],
+    },
+  },
+  { id: "import-knowledge", type: "knowledge", position: { x: 680, y: 0 }, data: { description: "检索售后政策", knowledgeBaseName: "售后政策知识库", inputVariables: [{ name: "query", value: "问题分类/category" }] } },
+  { id: "import-database", type: "data-query", position: { x: 680, y: 270 }, data: { description: "查询客户订单", databaseName: "客户订单数据库", inputVariables: [{ name: "customerId", value: "接收售后问题/customerId" }], outputVariables: [{ name: "results", type: "array[object]" }] } },
+  { id: "import-ontology", type: "object-query", position: { x: 680, y: 560 }, data: { description: "查询产品本体", objectTypeName: "售后产品对象", inputVariables: [{ name: "productId", value: "接收售后问题/productId" }] } },
+  { id: "import-api", type: "api", position: { x: 680, y: 850 }, data: { label: "查询客户信息 API", referenceName: "客户信息查询 API", inputVariables: [{ name: "customerId", type: "string" }], outputVariables: [{ name: "profile", type: "object" }] } },
+  { id: "import-database-missing", type: "data-query", position: { x: 680, y: 1120 }, data: { description: "查询历史服务记录", databaseName: "历史服务数据库", inputVariables: [{ name: "customerId", value: "接收售后问题/customerId" }], outputVariables: [{ name: "results", type: "array[object]" }] } },
+  {
+    id: "import-workflow", type: "unavailable-object", position: { x: 1040, y: 0 },
+    data: { description: "执行退款审批", objectKind: "workflow", originalReference: "退款审批流程", originalVersion: "V3", originalSource: "原环境 / workflow-refund", referenceId: "workflow-refund", referenceName: "退款审批流程", inputVariables: [{ name: "request", type: "object", value: "问题分类/category" }], outputVariables: [{ name: "approvalResult", type: "object" }] },
+  },
+  {
+    id: "import-agent", type: "unavailable-object", position: { x: 1040, y: 280 },
+    data: { description: "复核处理建议", objectKind: "agent", originalReference: "售后分析智能体", originalVersion: "V4", originalSource: "原环境 / agent-service", referenceId: "agent-service", referenceName: "售后分析智能体", inputVariables: [{ name: "query", type: "string", value: "接收售后问题/query" }], outputVariables: [{ name: "answer", type: "string" }] },
+  },
+  {
+    id: "import-component", type: "unavailable-object", position: { x: 1040, y: 560 },
+    data: { description: "创建售后工单", objectKind: "component", originalReference: "工单中心组件", originalVersion: "V2", originalSource: "原环境 / component-ticket", originalComponentType: "插件", referenceId: "component-ticket", referenceName: "工单中心组件", inputVariables: [{ name: "category", type: "string", value: "问题分类/category" }], outputVariables: [{ name: "ticketId", type: "string" }] },
+  },
+  { id: "import-terminology", type: "message", position: { x: 1040, y: 850 }, data: { label: "Query 多轮改写", referenceName: "产品标准术语库", inputVariables: [{ name: "query", type: "string" }], outputVariables: [{ name: "rewrittenQuery", type: "string" }] } },
+  { id: "import-auth", type: "mcp", position: { x: 1040, y: 1120 }, data: { description: "调用全网检索服务", selectedMCP: { id: "mcp-web-search", name: "全网检索服务", description: "检索公开网络信息" }, inputVariables: [{ name: "query", type: "string", required: true }], outputVariables: [{ name: "result", type: "object" }] } },
+  {
+    id: "import-reply", type: "llm", position: { x: 1400, y: 430 },
+    data: { description: "生成处理回复", model: "Qwen3-32B", modelParams: { temperature: 0.7, max_tokens: 2048 }, prompt: "结合各节点结果生成面向用户的处理回复。", inputVariables: [{ name: "prompt", type: "string", value: "接收售后问题/query" }], outputVariables: [{ name: "text", type: "string" }] },
+  },
+  { id: "import-end", type: "end", position: { x: 1750, y: 430 }, data: { description: "返回处理结果" } },
+];
+
+const branchNodeIds = ["import-knowledge", "import-database", "import-ontology", "import-api", "import-database-missing", "import-workflow", "import-agent", "import-component", "import-terminology", "import-auth"];
+const importedPrototypeEdges: Edge[] = [
+  { id: "import-e-start", source: "import-start", target: "import-classify", type: "smoothstep", animated: true },
+  ...branchNodeIds.map((target) => ({ id: `import-e-classify-${target}`, source: "import-classify", target, type: "smoothstep", animated: true })),
+  ...branchNodeIds.map((source) => ({ id: `import-e-${source}-reply`, source, target: "import-reply", type: "smoothstep", animated: true })),
+  { id: "import-e-end", source: "import-reply", target: "import-end", type: "smoothstep", animated: true },
+];
+
+const IMPORT_ISSUES: Record<string, { title: string; resourceName: string; detail: string; message: string }> = {
+  "import-classify": { title: "模型服务不可用", resourceName: "DeepSeek-V3", detail: "当前不可用", message: "原模型“DeepSeek-V3”当前不可用，请重新选择模型。" },
+  "import-knowledge": { title: "知识库未匹配", resourceName: "售后政策知识库", detail: "未找到原知识库", message: "未找到原知识库“售后政策知识库”，请重新选择知识库。" },
+  "import-database": { title: "数据库无访问权限", resourceName: "客户订单数据库", detail: "当前用户无访问权限", message: "无权访问数据库“客户订单数据库”，请申请权限或重新选择数据库。" },
+  "import-ontology": { title: "本体资源未匹配", resourceName: "售后产品对象", detail: "未找到原本体对象类型", message: "未找到原本体或对象类型“售后产品对象”，请重新选择。" },
+  "import-api": { title: "API 不可用", resourceName: "客户信息查询 API", detail: "关联 API 当前不可用", message: "当前节点关联的 API“客户信息查询 API”不可用，请重新关联资源。" },
+  "import-database-missing": { title: "数据库未匹配", resourceName: "历史服务数据库", detail: "未找到原数据库", message: "未找到原数据库“历史服务数据库”，请重新选择数据库。" },
+  "import-workflow": { title: "工作流未恢复", resourceName: "退款审批流程", detail: "原关联对象未能恢复", message: "原工作流“退款审批流程”未能恢复，请重新选择工作流。" },
+  "import-agent": { title: "智能体未恢复", resourceName: "售后分析智能体", detail: "原关联对象未能恢复", message: "原智能体“售后分析智能体”未能恢复，请重新选择智能体。" },
+  "import-component": { title: "组件未恢复", resourceName: "工单中心组件", detail: "原关联对象未能恢复", message: "原组件“工单中心组件”未能恢复，请重新选择组件。" },
+  "import-terminology": { title: "术语库未匹配", resourceName: "产品标准术语库", detail: "未找到原术语库", message: "未找到原术语库“产品标准术语库”，请重新选择术语库。" },
+  "import-auth": { title: "鉴权信息缺失", resourceName: "全网检索服务", detail: "鉴权信息未随配置包导入", message: "“全网检索服务”的鉴权信息未导入，请重新完成鉴权。" },
+};
+
+function buildImportedPrototypeNodes(_objectType: ImportObjectType, result: "success" | "success_with_warnings") {
+  return importedPrototypeNodes.map((node) => {
+    const data = { ...node.data };
+    if (result === "success" && node.type === "unavailable-object") {
+      if (data.objectKind === "workflow") {
+        return { ...node, type: "workflow-ref", data: { ...data, workflowId: data.referenceId, workflowName: data.referenceName } };
+      }
+      if (data.objectKind === "agent") {
+        return { ...node, type: "agent", data: { ...data, agentId: data.referenceId, agentName: data.referenceName } };
+      }
+      return { ...node, type: "api", data: { ...data, label: "组件", referenceName: data.referenceName } };
+    }
+    if (result === "success") return { ...node, data };
+    const issue = IMPORT_ISSUES[node.id];
+    if (!issue) return { ...node, data };
+
+    if (node.id === "import-classify") data.model = "";
+    if (node.type === "unavailable-object") {
+      data.referenceId = "";
+      data.referenceName = "";
+    }
+    data.importIssue = issue;
+    return {
+      ...node,
+      data,
+      ...(node.type === "unavailable-object"
+        ? { selectable: true, draggable: true, deletable: true, connectable: false }
+        : {}),
+    };
+  });
+}
+
 export function WorkflowEditor({
   agentId,
+  importResult = null,
+  importObjectType = "workflow_agent",
+  onBlockingIssueChange,
   readOnly = false,
   snapshotVersion = null,
   showReferenceAlerts = true,
@@ -201,8 +304,8 @@ export function WorkflowEditor({
 }: WorkflowEditorProps) {
   // 根据 agentId 加载工作流数据，如果没有则使用默认值
   const workflowData = agentId ? getWorkflowByAgentId(agentId) : null;
-  const defaultNodes = workflowData?.nodes || initialNodes;
-  const defaultEdges = workflowData?.edges || initialEdges;
+  const defaultNodes = importResult ? buildImportedPrototypeNodes(importObjectType, importResult) : workflowData?.nodes || initialNodes;
+  const defaultEdges = importResult ? importedPrototypeEdges : workflowData?.edges || initialEdges;
 
   const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(defaultEdges);
@@ -221,12 +324,17 @@ export function WorkflowEditor({
 
   // 当 agentId 变化时，重新加载工作流数据
   useEffect(() => {
+    if (importResult) {
+      setNodes(buildImportedPrototypeNodes(importObjectType, importResult));
+      setEdges(importedPrototypeEdges);
+      return;
+    }
     const newWorkflowData = agentId ? getWorkflowByAgentId(agentId) : null;
     if (newWorkflowData) {
       setNodes(newWorkflowData.nodes);
       setEdges(newWorkflowData.edges);
     }
-  }, [agentId, setNodes, setEdges]);
+  }, [agentId, importObjectType, importResult, setNodes, setEdges]);
 
   // 当前草稿和各历史版本使用彼此独立的画布数据。进入历史版本时先保存
   // 当前草稿，再从该历史版本的固化快照重新加载；返回草稿时恢复原草稿。
@@ -310,12 +418,33 @@ export function WorkflowEditor({
     setSelectedNodeId(null);
   }, []);
 
+  const onSelectionChange = useCallback(({ nodes: selectedNodes }: { nodes: Node[] }) => {
+    setSelectedNodeId(selectedNodes[0]?.id ?? null);
+  }, []);
+
   const handleUpdateNode = useCallback(
-    (nodeId: string, data: Record<string, unknown>) => {
+    (nodeId: string, data: object) => {
       setNodes((nds) =>
-        nds.map((node) =>
-          node.id === nodeId ? { ...node, data: { ...node.data, ...data } } : node
-        )
+        nds.map((node) => {
+          if (node.id !== nodeId) return node;
+          const nextData = { ...node.data, ...data };
+          if (node.type === "unavailable-object" && nextData.referenceId) {
+            delete nextData.importIssue;
+            if (nextData.objectKind === "workflow") {
+              return { ...node, type: "workflow-ref", data: { ...nextData, workflowId: nextData.referenceId, workflowName: nextData.referenceName }, connectable: true, draggable: true };
+            }
+            if (nextData.objectKind === "agent") {
+              return { ...node, type: "agent", data: { ...nextData, agentId: nextData.referenceId, agentName: nextData.referenceName }, connectable: true, draggable: true };
+            }
+            return { ...node, type: "api", data: { ...nextData, label: nextData.originalComponentType ?? "组件" }, connectable: true, draggable: true };
+          }
+          const resourceReconfigured = (node.type === "knowledge" && nextData.knowledgeBaseId)
+            || (node.type === "mcp" && nextData.selectedMCP?.id !== node.data?.selectedMCP?.id)
+            || (node.type === "llm" && nextData.model)
+            || (node.type === "workflow-ref" && nextData.workflowId);
+          if (resourceReconfigured) delete nextData.importIssue;
+          return { ...node, data: nextData };
+        })
       );
     },
     [setNodes]
@@ -348,8 +477,8 @@ export function WorkflowEditor({
   }, []);
 
   const handleRun = useCallback(async () => {
+    if (nodes.some((node) => Boolean(node.data?.importIssue))) return;
     setIsExecuting(true);
-
     setRunResult(null); // 清空之前的结果
     
     try {
@@ -390,6 +519,26 @@ export function WorkflowEditor({
     // 可以在这里添加更多的高亮逻辑
   }, []);
 
+  const hasBlockingImportIssues = nodes.some((node) => Boolean(node.data?.importIssue));
+  const renderedNodes = useMemo(
+    () => nodes.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        showReferenceAlerts,
+        callerSecurityLevel: securityLevel,
+        ...(node.type === "unavailable-object"
+          ? { onOpenConfig: () => setSelectedNodeId(node.id) }
+          : {}),
+      },
+    })),
+    [nodes, securityLevel, showReferenceAlerts]
+  );
+
+  useEffect(() => {
+    onBlockingIssueChange?.(hasBlockingImportIssues);
+  }, [hasBlockingImportIssues, onBlockingIssueChange]);
+
   return (
     <div className="flex h-screen w-full overflow-hidden">
       {/* 中间画布区 */}
@@ -414,10 +563,7 @@ export function WorkflowEditor({
         {/* React Flow Canvas */}
         <div className="absolute inset-0">
           <ReactFlow
-            nodes={nodes.map((node) => ({
-              ...node,
-              data: { ...node.data, showReferenceAlerts, callerSecurityLevel: securityLevel },
-            }))}
+            nodes={renderedNodes}
             edges={edges}
             onNodesChange={readOnly ? undefined : onNodesChange}
             onEdgesChange={readOnly ? undefined : onEdgesChange}
@@ -426,6 +572,7 @@ export function WorkflowEditor({
             nodesConnectable={!readOnly}
             deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
             onNodeClick={onNodeClick}
+            onSelectionChange={onSelectionChange}
             onPaneClick={onPaneClick}
             onInit={onInit}
             nodeTypes={nodeTypes}
@@ -453,6 +600,10 @@ export function WorkflowEditor({
                   case "data-query":
                   case "data-visualize":
                     return "#a855f7";
+                  case "workflow-ref":
+                    return "#0ea5e9";
+                  case "unavailable-object":
+                    return "#f59e0b";
                   case "branch":
                   case "code":
                     return "#f97316";
@@ -496,7 +647,8 @@ export function WorkflowEditor({
             size="sm"
             className="gap-2 bg-green-600 hover:bg-green-700"
             onClick={handleRun}
-            disabled={isExecuting || readOnly}
+            disabled={isExecuting || readOnly || hasBlockingImportIssues}
+            title={hasBlockingImportIssues ? "存在待关联或异常节点，完成配置后才能运行" : undefined}
           >
             <Bug className="h-4 w-4" />
             {isExecuting ? "执行中..." : "运行"}
