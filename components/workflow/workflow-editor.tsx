@@ -45,6 +45,8 @@ import { type ImportObjectType } from "@/lib/agent-import-export";
 
 interface WorkflowEditorProps {
   agentId: string;
+  initialName?: string;
+  initialDescription?: string;
   importResult?: "success" | "success_with_warnings" | null;
   importObjectType?: ImportObjectType;
   onBlockingIssueChange?: (hasIssues: boolean) => void;
@@ -286,6 +288,8 @@ function buildImportedPrototypeNodes(_objectType: ImportObjectType, result: "suc
 
 export function WorkflowEditor({
   agentId,
+  initialName = "",
+  initialDescription = "",
   importResult = null,
   importObjectType = "workflow_agent",
   onBlockingIssueChange,
@@ -686,6 +690,8 @@ export function WorkflowEditor({
         open={basicConfigOpen}
         onOpenChange={setBasicConfigOpen}
         readOnly={readOnly}
+        initialName={initialName}
+        initialDescription={initialDescription}
         securityLevel={securityLevel}
         onSecurityLevelChangeRequest={onSecurityLevelChangeRequest}
         securityLevelChangeDisabled={securityLevelChangeDisabled}

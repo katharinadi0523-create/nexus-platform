@@ -24,6 +24,8 @@ interface BasicConfigSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   readOnly?: boolean;
+  initialName?: string;
+  initialDescription?: string;
   securityLevel?: SecurityLevel;
   onSecurityLevelChangeRequest?: () => void;
   securityLevelChangeDisabled?: boolean;
@@ -34,13 +36,15 @@ export function BasicConfigSheet({
   open,
   onOpenChange,
   readOnly = false,
+  initialName = "",
+  initialDescription = "",
   securityLevel = "公开",
   onSecurityLevelChangeRequest,
   securityLevelChangeDisabled = false,
   securityLevelChangeTitle = "修改密级",
 }: BasicConfigSheetProps) {
-  const [appName, setAppName] = useState("");
-  const [appDescription, setAppDescription] = useState("");
+  const [appName, setAppName] = useState(initialName);
+  const [appDescription, setAppDescription] = useState(initialDescription);
   const [openingStatement, setOpeningStatement] = useState("");
   const [suggestedQuestion, setSuggestedQuestion] = useState("");
   const [conversationRounds, setConversationRounds] = useState("0");

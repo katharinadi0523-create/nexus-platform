@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -225,14 +225,25 @@ const AGENTS_DETAIL_DATA: Record<string, AgentDetailData> = {
 export default function AgentDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const agentId = params?.id as string;
   const agentData = agentId ? AGENTS_DETAIL_DATA[agentId] || null : null;
   const agentProfile = agentId ? getAgentById(agentId) : null;
   const isCreatingWorkflow = agentId === "workflow-new";
+  const createdName = isCreatingWorkflow ? searchParams.get("name")?.trim() ?? "" : "";
+  const createdDescription = isCreatingWorkflow
+    ? searchParams.get("description")?.trim() ?? ""
+    : "";
+  const createdSecurityLevelValue = isCreatingWorkflow
+    ? searchParams.get("securityLevel") as SecurityLevel | null
+    : null;
+  const createdSecurityLevel = createdSecurityLevelValue && SECURITY_LEVELS.includes(createdSecurityLevelValue)
+    ? createdSecurityLevelValue
+    : undefined;
   const isWorkflow = agentProfile?.type === "workflow";
   const entityLabel = isWorkflow ? "工作流智能体" : "智能体";
   const initialObjectName = isCreatingWorkflow
-    ? "未命名工作流智能体"
+    ? createdName || "未命名工作流智能体"
     : isWorkflow
       ? "演示数据处理工作流智能体"
       : "演示设备运维智能体";
@@ -265,26 +276,26 @@ export default function AgentDetailPage() {
   const [entityDisabled, setEntityDisabled] = useState(false);
   const batchDisabledVersionIds = useRef<Set<string>>(new Set());
 
-  const initialDisplayName = agentData?.name || agentProfile?.name || "加载中...";
+  const initialDisplayName = createdName || agentData?.name || agentProfile?.name || "加载中...";
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const selectedVersion = versions.find((version) => version.id === selectedVersionId) ?? null;
   const [publishStatus, setPublishStatus] = useState<"已发布" | "未发布">(
     agentProfile?.publishStatus ?? "未发布"
   );
   const [securityLevel, setSecurityLevel] = useState<SecurityLevel>(
-    agentProfile?.securityLevel ?? "公开"
+    createdSecurityLevel ?? agentProfile?.securityLevel ?? "公开"
   );
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus>(
     agentProfile?.approvalStatus ?? "none"
   );
   const [securityChangeOpen, setSecurityChangeOpen] = useState(false);
   const [securityChangeDraft, setSecurityChangeDraft] = useState({
-    targetLevel: (agentProfile?.securityLevel ?? "公开") as SecurityLevel,
+    targetLevel: (createdSecurityLevel ?? agentProfile?.securityLevel ?? "公开") as SecurityLevel,
     reason: "",
   });
   const [draftSecurityOpen, setDraftSecurityOpen] = useState(false);
   const [draftSecurityLevel, setDraftSecurityLevel] = useState<SecurityLevel>(
-    agentProfile?.securityLevel ?? "公开"
+    createdSecurityLevel ?? agentProfile?.securityLevel ?? "公开"
   );
   const [securityChangeError, setSecurityChangeError] = useState("");
   const [pendingSecurityRequest, setPendingSecurityRequest] = useState<{
@@ -544,6 +555,8 @@ export default function AgentDetailPage() {
       {isWorkflow ? (
         <WorkflowEditor
           agentId={agentId}
+          initialName={displayName}
+          initialDescription={createdDescription || agentProfile?.description || ""}
           importResult={importResult}
           importObjectType="workflow_agent"
           onBlockingIssueChange={setHasBlockingIssues}
@@ -956,7 +969,7 @@ export default function AgentDetailPage() {
 
       {isCreatingWorkflow ? (
         <div className="flex min-h-11 shrink-0 items-center border-b border-blue-200 bg-blue-50 px-6 py-2 text-sm text-blue-800">
-          工作流智能体草稿已创建，并生成默认流程。可直接编辑基本信息、密级和节点配置，完成后运行或发布。
+          工作流智能体草稿已创建。画布仅保留开始与结束节点，可从节点库继续编排。
         </div>
       ) : null}
 
