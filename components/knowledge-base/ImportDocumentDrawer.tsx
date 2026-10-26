@@ -3,7 +3,16 @@
 import { KNOWLEDGE_BASE_CHUNK_OPTIONS as SEMANTIC_LIKE_CHUNK_OPTIONS } from "@/lib/knowledge-base-chunk-options";
 
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { FileText, Info, Plus, Trash2, Upload } from "lucide-react";
+import {
+  CircleCheck,
+  CircleX,
+  FileText,
+  Info,
+  Plus,
+  ShieldAlert,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -18,6 +27,10 @@ import { Switch } from "@/components/ui/switch";
 import {
   type KnowledgeDocumentRow,
 } from "@/lib/mock-knowledge-base-v2";
+import {
+  SECURITY_LEVELS,
+  type SecurityLevel,
+} from "@/lib/security-level";
 import { cn } from "@/lib/utils";
 
 type ImportFileKind = "text" | "table";
@@ -26,6 +39,9 @@ interface ImportQueueItem {
   id: string;
   file: File;
   kind: ImportFileKind;
+  validationStatus: "passed" | "failed";
+  detectedSecurityLevel?: SecurityLevel;
+  failureReason?: string;
 }
 
 interface MetadataFieldDraft {
@@ -59,6 +75,43 @@ function formatFileSize(size: number) {
 function fileTypeFromName(name: string) {
   const suffix = name.split(".").pop();
   return suffix ? suffix.toLowerCase() : "--";
+}
+
+function validateFileNameSecurityLevel(
+  fileName: string,
+  expectedLevel: SecurityLevel
+): Pick<
+  ImportQueueItem,
+  "validationStatus" | "detectedSecurityLevel" | "failureReason"
+> {
+  const detectedLevel = SECURITY_LEVELS.find((level) =>
+    [
+      `[${level}]`,
+      `【${level}】`,
+      `(${level})`,
+      `（${level}）`,
+    ].some((marker) => fileName.includes(marker))
+  );
+
+  if (!detectedLevel) {
+    return {
+      validationStatus: "failed",
+      failureReason: `文件名未包含密级标识，请按“[${expectedLevel}]文件名.ext”重命名后重新上传。`,
+    };
+  }
+
+  if (detectedLevel !== expectedLevel) {
+    return {
+      validationStatus: "failed",
+      detectedSecurityLevel: detectedLevel,
+      failureReason: `文件名密级为「${detectedLevel}」，与当前知识库密级「${expectedLevel}」不一致。`,
+    };
+  }
+
+  return {
+    validationStatus: "passed",
+    detectedSecurityLevel: detectedLevel,
+  };
 }
 
 function ToggleStrategyButton({
@@ -137,6 +190,12 @@ export function ImportDocumentDrawer({
   const showMixedImageText =
     parsingStrategies.includes("图片文字识别(OCR)") ||
     parsingStrategies.includes("图片解析");
+  const validQueue = queue.filter(
+    (item) => item.validationStatus === "passed"
+  );
+  const failedQueue = queue.filter(
+    (item) => item.validationStatus === "failed"
+  );
 
   function resetDraft() {
     setQueue([]);
@@ -183,7 +242,30 @@ export function ImportDocumentDrawer({
         id: `${file.name}-${file.size}-${file.lastModified}`,
         file,
         kind: fileKind,
+        ...validateFileNameSecurityLevel(
+          file.name,
+          knowledgeBaseSecurityLevel
+        ),
       })),
+    ]);
+  }
+
+  function addValidationExampleFiles() {
+    const mismatchedLevel =
+      knowledgeBaseSecurityLevel === "内部" ? "秘密" : "内部";
+    addFiles([
+      new File(["prototype"], `[${knowledgeBaseSecurityLevel}]设备维护规范.pdf`, {
+        type: "application/pdf",
+        lastModified: Date.now(),
+      }),
+      new File(["prototype"], `[${mismatchedLevel}]外部培训材料.pdf`, {
+        type: "application/pdf",
+        lastModified: Date.now() + 1,
+      }),
+      new File(["prototype"], "供应商操作手册.pdf", {
+        type: "application/pdf",
+        lastModified: Date.now() + 2,
+      }),
     ]);
   }
 
@@ -261,13 +343,13 @@ export function ImportDocumentDrawer({
   }
 
   function confirmImport() {
-    if (queue.length === 0) return;
+    if (validQueue.length === 0) return;
     if (!securityConfirmed) {
       return;
     }
     const now = new Date();
     const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-    const importedDocuments = queue.map<KnowledgeDocumentRow>((item, index) => ({
+    const importedDocuments = validQueue.map<KnowledgeDocumentRow>((item, index) => ({
       id: `local-doc-${item.id}-${index}`,
       name: item.file.name,
       type: fileTypeFromName(item.file.name),
@@ -363,11 +445,26 @@ export function ImportDocumentDrawer({
                       : "支持上传.xls .xlsx .csv文件;单次至多上传20个文件;每个文件不超过200MB"}
                   </p>
                 </button>
+                <div className="flex items-start justify-between gap-4 rounded-md border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs leading-5 text-blue-800">
+                  <span className="flex items-start gap-2">
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                    文件名必须包含与当前知识库一致的密级标识，例如
+                    <strong>[{knowledgeBaseSecurityLevel}]设备维护规范.pdf</strong>。
+                    缺失或不一致的文件将标记为上传失败，不进入解析。
+                  </span>
+                  <button
+                    type="button"
+                    className="shrink-0 font-medium text-blue-700 hover:underline"
+                    onClick={addValidationExampleFiles}
+                  >
+                    展示校验示例
+                  </button>
+                </div>
                 {queue.length > 0 && (
                   <div className="border border-slate-200">
                     <div className="flex h-10 items-center justify-between border-b border-slate-100 px-4 text-sm">
                       <span className="font-medium text-slate-900">
-                        待导入文件（{queue.length}）
+                        文件校验（通过 {validQueue.length} / 失败 {failedQueue.length}）
                       </span>
                       <button
                         type="button"
@@ -381,14 +478,49 @@ export function ImportDocumentDrawer({
                       {queue.map((item) => (
                         <div
                           key={item.id}
-                          className="flex items-center gap-3 px-4 py-3 text-sm"
+                          className={cn(
+                            "flex items-start gap-3 px-4 py-3 text-sm",
+                            item.validationStatus === "failed" && "bg-rose-50/60"
+                          )}
                         >
-                          <FileText className="h-4 w-4 text-blue-500" />
-                          <span className="min-w-0 flex-1 truncate text-slate-900">
-                            {item.file.name}
-                          </span>
+                          <FileText
+                            className={cn(
+                              "mt-0.5 h-4 w-4 shrink-0",
+                              item.validationStatus === "failed"
+                                ? "text-rose-500"
+                                : "text-blue-500"
+                            )}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-slate-900">
+                              {item.file.name}
+                            </div>
+                            {item.failureReason ? (
+                              <p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-rose-600">
+                                <CircleX className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                {item.failureReason}
+                              </p>
+                            ) : (
+                              <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald-600">
+                                <CircleCheck className="h-3.5 w-3.5" />
+                                文件名密级校验通过
+                              </p>
+                            )}
+                          </div>
                           <span className="text-slate-500">
                             {formatFileSize(item.file.size)}
+                          </span>
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded px-2 py-0.5 text-xs font-medium",
+                              item.validationStatus === "failed"
+                                ? "bg-rose-100 text-rose-700"
+                                : "bg-emerald-50 text-emerald-700"
+                            )}
+                          >
+                            {item.validationStatus === "failed"
+                              ? "上传失败"
+                              : "校验通过"}
                           </span>
                           <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
                             {item.kind === "text" ? "文本型数据" : "表格型数据"}
@@ -740,11 +872,13 @@ export function ImportDocumentDrawer({
           </div>
           <div className="flex gap-3">
             <Button
-              disabled={queue.length === 0 || !securityConfirmed}
+              disabled={validQueue.length === 0 || !securityConfirmed}
               className="rounded bg-blue-600 px-8 hover:bg-blue-700"
               onClick={confirmImport}
             >
-              确定
+              {failedQueue.length > 0
+                ? `导入通过校验的 ${validQueue.length} 个文件`
+                : "确定"}
             </Button>
             <Button
               variant="outline"
