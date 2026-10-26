@@ -282,13 +282,13 @@ export default function AgentPage() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => router.push("/agent/flow-01")}
+                  onClick={() => router.push("/agent/workflow-new")}
                   className="rounded-[4px] px-3 py-2"
                 >
                   <Workflow className="h-4 w-4 text-slate-500" />
                   <div>
                     <div className="text-sm font-medium">新建工作流智能体</div>
-                    <div className="mt-0.5 text-xs text-slate-500">从空白画布开始创建</div>
+                    <div className="mt-0.5 text-xs text-slate-500">进入完整编排页，并生成默认流程</div>
                   </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>

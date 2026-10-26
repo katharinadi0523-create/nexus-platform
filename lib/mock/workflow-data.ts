@@ -380,10 +380,82 @@ export const INTENT_ANALYSIS_WORKFLOW: {
 };
 
 /**
+ * 新建工作流智能体的默认编排。
+ * 进入创建页后直接提供一条可运行、可继续编辑的完整流程，避免只展示空白画布。
+ */
+export const NEW_WORKFLOW_AGENT_TEMPLATE: { nodes: Node[]; edges: Edge[] } = {
+  nodes: [
+    {
+      id: "new-start",
+      type: "start",
+      position: { x: 80, y: 320 },
+      data: { description: "接收用户问题" },
+    },
+    {
+      id: "new-intent",
+      type: "intent-recognize",
+      position: { x: 390, y: 320 },
+      data: {
+        description: "识别用户问题类型",
+        model: "Qwen3-32B",
+        inputVariables: [{ name: "query", type: "string" }],
+        intents: [
+          { name: "知识问答", description: "查询知识库并生成回答" },
+          { name: "任务处理", description: "进入任务处理流程" },
+        ],
+      },
+    },
+    {
+      id: "new-knowledge",
+      type: "knowledge",
+      position: { x: 730, y: 320 },
+      data: {
+        description: "检索与问题相关的知识内容",
+        knowledgeBaseName: "请选择知识库",
+        inputVariables: [{ name: "query", type: "string", value: "开始/query" }],
+        outputVariables: [
+          { name: "chunks", type: "array[object]" },
+          { name: "metadata", type: "object" },
+        ],
+      },
+    },
+    {
+      id: "new-llm",
+      type: "llm",
+      position: { x: 1070, y: 320 },
+      data: {
+        description: "结合用户问题与检索结果生成回复",
+        model: "Qwen3-32B",
+        prompt: "请根据用户问题和知识库检索结果，生成准确、简洁的回答。",
+        inputVariables: [
+          { name: "query", type: "string", value: "开始/query" },
+          { name: "context", type: "array[object]", value: "知识检索/chunks" },
+        ],
+        outputVariables: [{ name: "text", type: "string" }],
+      },
+    },
+    {
+      id: "new-end",
+      type: "end",
+      position: { x: 1410, y: 320 },
+      data: { description: "返回工作流执行结果" },
+    },
+  ],
+  edges: [
+    { id: "new-e-start-intent", source: "new-start", target: "new-intent", type: "smoothstep", animated: true },
+    { id: "new-e-intent-knowledge", source: "new-intent", sourceHandle: "intent-0", target: "new-knowledge", type: "smoothstep", animated: true },
+    { id: "new-e-knowledge-llm", source: "new-knowledge", target: "new-llm", type: "smoothstep", animated: true },
+    { id: "new-e-llm-end", source: "new-llm", target: "new-end", type: "smoothstep", animated: true },
+  ],
+};
+
+/**
  * 获取指定 Agent 的工作流图
  */
 export function getWorkflowByAgentId(agentId: string): { nodes: Node[]; edges: Edge[] } | null {
   switch (agentId) {
+    case "workflow-new":
+      return NEW_WORKFLOW_AGENT_TEMPLATE;
     case "agent-intent-analysis":
       return INTENT_ANALYSIS_WORKFLOW;
     default:

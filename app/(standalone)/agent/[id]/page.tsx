@@ -228,12 +228,17 @@ export default function AgentDetailPage() {
   const agentId = params?.id as string;
   const agentData = agentId ? AGENTS_DETAIL_DATA[agentId] || null : null;
   const agentProfile = agentId ? getAgentById(agentId) : null;
+  const isCreatingWorkflow = agentId === "workflow-new";
   const isWorkflow = agentProfile?.type === "workflow";
   const entityLabel = isWorkflow ? "工作流智能体" : "智能体";
-  const initialObjectName = isWorkflow ? "演示数据处理工作流智能体" : "演示设备运维智能体";
+  const initialObjectName = isCreatingWorkflow
+    ? "未命名工作流智能体"
+    : isWorkflow
+      ? "演示数据处理工作流智能体"
+      : "演示设备运维智能体";
   const [activeTab, setActiveTab] = useState<"config" | "logs">("config");
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [versions, setVersions] = useState<AgentVersionRecord[]>(() => AGENT_VERSION_HISTORY.map((version) => {
+  const [versions, setVersions] = useState<AgentVersionRecord[]>(() => isCreatingWorkflow ? [] : AGENT_VERSION_HISTORY.map((version) => {
     const snapshot = {
       ...version.snapshot,
       objectId: isWorkflow ? "demo-agent-workflow-001" : "demo-agent-autonomous-001",
@@ -399,18 +404,21 @@ export default function AgentDetailPage() {
 
   const finalizePublish = (description: string, requestId?: string) => {
     const sourceVersion = versions.find((version) => version.isLatest) ?? versions[0];
-    if (!sourceVersion) return;
+    const fallbackVersion = AGENT_VERSION_HISTORY[0];
+    if (!sourceVersion && !fallbackVersion) return;
 
     const now = new Date();
     const pad = (value: number) => String(value).padStart(2, "0");
     const publishedAt = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
     const versionSlug = nextVersionLabel.toLowerCase();
-    const resources = sourceVersion.resources.map((resource) => ({ ...resource, change: "未变化" as const }));
+    const resources = sourceVersion
+      ? sourceVersion.resources.map((resource) => ({ ...resource, change: "未变化" as const }))
+      : [];
     const snapshot = {
-      ...sourceVersion.snapshot,
+      ...(sourceVersion?.snapshot ?? fallbackVersion.snapshot),
       snapshotId: `demo-snapshot-agent-001-${versionSlug}`,
-      objectId: isWorkflow ? "demo-agent-workflow-001" : "demo-agent-autonomous-001",
-      objectName: isWorkflow ? "演示数据处理工作流智能体" : "演示设备运维智能体",
+      objectId: isCreatingWorkflow ? "workflow-new" : isWorkflow ? "demo-agent-workflow-001" : "demo-agent-autonomous-001",
+      objectName: displayName,
       objectType: isWorkflow ? "工作流智能体" as const : "自主规划智能体" as const,
       releaseRecord: `${nextVersionLabel} / demo-release-agent-001-${versionSlug}`,
       publisher: "用户A",
@@ -793,6 +801,11 @@ export default function AgentDetailPage() {
                 className={isPublished ? "bg-slate-100 text-slate-400" : undefined}
               />
             </span>
+            {!isPublished ? (
+              <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                草稿
+              </span>
+            ) : null}
             <ApprovalInteractionPanel
               pending={approvalStatus !== "none" && !approvalFeedback?.canRetry}
               approvalLabel={
@@ -893,25 +906,27 @@ export default function AgentDetailPage() {
             lockedReason={approvalAction.configTitle}
             onDisabledChange={handleEntityDisabledChange}
           />
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  aria-label="版本历史"
-                  aria-pressed={historyOpen}
-                  onClick={() => setHistoryOpen((open) => !open)}
-                  className={`h-10 w-10 rounded-xl border-slate-200 bg-white shadow-sm hover:bg-slate-50 ${
-                    historyOpen ? "border-blue-400 text-blue-600" : "text-slate-600"
-                  }`}
-                >
-                  <History className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>版本历史</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          {versions.length > 0 ? (
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="版本历史"
+                    aria-pressed={historyOpen}
+                    onClick={() => setHistoryOpen((open) => !open)}
+                    className={`h-10 w-10 rounded-xl border-slate-200 bg-white shadow-sm hover:bg-slate-50 ${
+                      historyOpen ? "border-blue-400 text-blue-600" : "text-slate-600"
+                    }`}
+                  >
+                    <History className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>版本历史</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : null}
 
           <Button
             disabled={isHistorical || approvalAction.publishLocked || hasBlockingIssues}
@@ -937,6 +952,12 @@ export default function AgentDetailPage() {
           result={importResult}
           operation={importOperation}
         />
+      ) : null}
+
+      {isCreatingWorkflow ? (
+        <div className="flex min-h-11 shrink-0 items-center border-b border-blue-200 bg-blue-50 px-6 py-2 text-sm text-blue-800">
+          工作流智能体草稿已创建，并生成默认流程。可直接编辑基本信息、密级和节点配置，完成后运行或发布。
+        </div>
       ) : null}
 
       {isHistorical && selectedVersion ? (

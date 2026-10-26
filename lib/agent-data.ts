@@ -1013,6 +1013,17 @@ export function normalizeAgentProfile(profile: AgentProfile): AgentProfile {
 }
 
 export function getAgentById(id: string): AgentProfile | undefined {
+  if (id === 'workflow-new') {
+    return normalizeAgentProfile({
+      id: 'workflow-new',
+      name: '未命名工作流智能体',
+      type: 'workflow',
+      description: '基于默认流程创建的工作流智能体草稿。',
+      updatedAt: '刚刚',
+      securityLevel: '公开',
+      publishStatus: '未发布',
+    });
+  }
   const profile = MOCK_AGENTS[id];
   return profile ? normalizeAgentProfile(profile) : undefined;
 }
