@@ -25,7 +25,7 @@ export const LOW_SECURITY_LEVELS: SecurityLevel[] = ["公开", "内部"];
 /**
  * 高密资源删除审批的统一口径：
  * - 秘密、机密、绝密资源删除必须审批；
- * - 唯一例外是知识库文件，当前版本删除无需审批。
+ * - 知识库文件继承所属知识库密级，同样适用该规则。
  */
 export type DeleteApprovalResourceType =
   | "agent"
@@ -38,13 +38,13 @@ export type DeleteApprovalResourceType =
   | "knowledge-base-file";
 
 export const HIGH_SECURITY_DELETE_APPROVAL_RULE =
-  "秘密、机密、绝密资源删除必须提交审批；知识库文件删除除外。";
+  "秘密、机密、绝密资源删除必须提交审批。";
 
 export function requiresResourceDeleteApproval(
-  resourceType: DeleteApprovalResourceType,
+  _resourceType: DeleteApprovalResourceType,
   level: SecurityLevel
 ): boolean {
-  return resourceType !== "knowledge-base-file" && isHighSecurityLevel(level);
+  return isHighSecurityLevel(level);
 }
 
 /** 原型演示：当前登录用户密级上限 */

@@ -312,3 +312,17 @@ export function getGroupSecurityLevelByName(
   return walk(groups) ?? "公开";
 }
 
+export function flattenKnowledgeBaseGroups(
+  groups: KnowledgeBaseGroupNode[],
+  depth = 0
+): Array<KnowledgeBaseGroupNode & { depth: number; securityLevel: SecurityLevel }> {
+  return groups.flatMap((group) => [
+    {
+      ...group,
+      depth,
+      securityLevel: group.securityLevel ?? "公开",
+    },
+    ...flattenKnowledgeBaseGroups(group.children ?? [], depth + 1),
+  ]);
+}
+

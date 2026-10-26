@@ -45,6 +45,7 @@ import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
 import {
+  flattenKnowledgeBaseGroups,
   getGroupSecurityLevelByName,
   getKnowledgeBaseV2,
   getKnowledgeDocumentsV2,
@@ -60,9 +61,12 @@ import { TemplateKnowledgeBaseDetail } from "@/components/knowledge-base/Templat
 import { ImportDocumentDrawer } from "@/components/knowledge-base/ImportDocumentDrawer";
 import {
   buildSecurityLevelSelectOptions,
+  getSecurityLevelRank,
+  requiresResourceDeleteApproval,
   type ApprovalStatus,
   type SecurityLevel,
 } from "@/lib/security-level";
+import { ResourceDeleteApprovalDialog } from "@/components/security/resource-delete-approval-dialog";
 import { cn } from "@/lib/utils";
 
 function SummaryItem({ label, value }: { label: string; value: string }) {
@@ -165,6 +169,7 @@ export default function KnowledgeBaseDetailPage() {
   const [basicInfo, setBasicInfo] = useState({
     name: detail.name,
     description: detail.description ?? "",
+    groupName: detail.groupName,
   });
   const [basicInfoDraft, setBasicInfoDraft] = useState(basicInfo);
   const [basicInfoOpen, setBasicInfoOpen] = useState(false);
@@ -179,6 +184,27 @@ export default function KnowledgeBaseDetailPage() {
     targetLevel: (detail.securityLevel ?? "公开") as SecurityLevel,
     reason: "",
   });
+  const [deleteApprovalTarget, setDeleteApprovalTarget] =
+    useState<KnowledgeDocumentRow | null>(null);
+  const [deleteApprovalReason, setDeleteApprovalReason] = useState("");
+  const [deleteApprovalPendingIds, setDeleteApprovalPendingIds] = useState<string[]>([]);
+
+  const groupOptions = useMemo(
+    () =>
+      flattenKnowledgeBaseGroups(knowledgeBaseGroupsV2).map((group) => {
+        const unavailable =
+          getSecurityLevelRank(group.securityLevel) < getSecurityLevelRank(securityLevel);
+        const prefix = group.depth > 0 ? `${"—".repeat(group.depth)} ` : "";
+        return {
+          value: group.name,
+          label: `${prefix}${group.name} · ${group.securityLevel}${
+            unavailable ? "（密级上限不足）" : ""
+          }`,
+          disabled: unavailable,
+        };
+      }),
+    [securityLevel]
+  );
 
   const filteredDocuments = documents.filter((document) =>
     document.name.toLowerCase().includes(search.toLowerCase())
@@ -200,6 +226,16 @@ export default function KnowledgeBaseDetailPage() {
     setDocuments((current) =>
       current.filter((document) => document.id !== id)
     );
+  }
+
+  function requestDeleteDocument(document: KnowledgeDocumentRow) {
+    if (requiresResourceDeleteApproval("knowledge-base-file", securityLevel)) {
+      setDeleteApprovalTarget(document);
+      setDeleteApprovalReason("");
+      return;
+    }
+    deleteDocument(document.id);
+    toast.success("文件已删除。");
   }
 
   if (!isKnowledgeBaseV2) {
@@ -394,7 +430,7 @@ export default function KnowledgeBaseDetailPage() {
               label="描述"
               value={basicInfo.description || "--"}
             />
-            <BasicInfoItem label="群组" value={detail.groupName} />
+            <BasicInfoItem label="群组" value={basicInfo.groupName} />
             <div className="grid grid-cols-[90px_1fr] items-center gap-4 text-sm">
               <span className="text-slate-500">知识库密级</span>
               <div className="flex min-w-0 items-center gap-2">
@@ -565,9 +601,12 @@ export default function KnowledgeBaseDetailPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-red-600"
-                            onSelect={() => deleteDocument(document.id)}
+                            disabled={deleteApprovalPendingIds.includes(document.id)}
+                            onSelect={() => requestDeleteDocument(document)}
                           >
-                            删除
+                            {deleteApprovalPendingIds.includes(document.id)
+                              ? "删除审批中"
+                              : "删除"}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -644,10 +683,21 @@ export default function KnowledgeBaseDetailPage() {
             </div>
             <div className="space-y-2">
               <Label>所属群组</Label>
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
-                {detail.groupName}
-              </div>
-              <p className="text-xs text-slate-400">所属群组与密级不在基本信息中修改。</p>
+              <Select
+                value={basicInfoDraft.groupName}
+                onValueChange={(value) =>
+                  setBasicInfoDraft((current) => ({
+                    ...current,
+                    groupName: value,
+                  }))
+                }
+                options={groupOptions}
+                className="h-10"
+              />
+              <p className="text-xs leading-5 text-slate-400">
+                仅可移动至密级上限不低于当前知识库「{securityLevel}」的群组；
+                不符合要求的群组不可选择。
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -663,9 +713,23 @@ export default function KnowledgeBaseDetailPage() {
                   toast.error("请输入知识库名称。");
                   return;
                 }
+                const targetGroupLevel = getGroupSecurityLevelByName(
+                  knowledgeBaseGroupsV2,
+                  basicInfoDraft.groupName
+                );
+                if (
+                  getSecurityLevelRank(targetGroupLevel) <
+                  getSecurityLevelRank(securityLevel)
+                ) {
+                  toast.error(
+                    `目标群组密级上限为「${targetGroupLevel}」，不能承载「${securityLevel}」知识库。`
+                  );
+                  return;
+                }
                 setBasicInfo({
                   name: nextName,
                   description: basicInfoDraft.description.trim(),
+                  groupName: basicInfoDraft.groupName,
                 });
                 setBasicInfoOpen(false);
                 toast.success("基本信息已更新。");
@@ -708,7 +772,7 @@ export default function KnowledgeBaseDetailPage() {
                   currentLevel: securityLevel,
                   maxLevel: getGroupSecurityLevelByName(
                     knowledgeBaseGroupsV2,
-                    detail.groupName
+                    basicInfo.groupName
                   ),
                 })}
                 className="h-10 max-w-xs"
@@ -764,6 +828,36 @@ export default function KnowledgeBaseDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ResourceDeleteApprovalDialog
+        open={Boolean(deleteApprovalTarget)}
+        resourceName={deleteApprovalTarget?.name ?? ""}
+        resourceType="知识库文件"
+        securityLevel={securityLevel}
+        reason={deleteApprovalReason}
+        impactDescription="审批通过后，该文件将从知识库中删除，相关解析结果与引用将不可再使用。知识库本身不受影响。"
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteApprovalTarget(null);
+            setDeleteApprovalReason("");
+          }
+        }}
+        onReasonChange={setDeleteApprovalReason}
+        onSubmit={() => {
+          if (!deleteApprovalTarget) return;
+          if (!deleteApprovalReason.trim()) {
+            toast.error("请填写申请原因。");
+            return;
+          }
+          setDeleteApprovalPendingIds((current) => [
+            ...current,
+            deleteApprovalTarget.id,
+          ]);
+          setDeleteApprovalTarget(null);
+          setDeleteApprovalReason("");
+          toast.success("已提交文件删除申请，审批通过前文件保持当前状态。");
+        }}
+      />
     </div>
   );
 }

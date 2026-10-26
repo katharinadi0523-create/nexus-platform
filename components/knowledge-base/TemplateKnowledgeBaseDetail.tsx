@@ -37,6 +37,7 @@ import {
   type StoredKbDocument,
 } from "@/lib/mock/knowledge-base-list";
 import {
+  flattenKnowledgeBaseGroups,
   getGroupSecurityLevelByName,
   knowledgeBaseGroupsV2,
   type KnowledgeDocumentRow,
@@ -55,8 +56,11 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SecurityLevelBadge } from "@/components/security/security-level-badge";
+import { ResourceDeleteApprovalDialog } from "@/components/security/resource-delete-approval-dialog";
 import {
   buildSecurityLevelSelectOptions,
+  getSecurityLevelRank,
+  requiresResourceDeleteApproval,
   type SecurityLevel,
 } from "@/lib/security-level";
 import { ImportDocumentDrawer } from "@/components/knowledge-base/ImportDocumentDrawer";
@@ -402,6 +406,9 @@ function KnowledgeBaseDocumentList({
   const [searchQuery, setSearchQuery] = useState("");
   const [timePreset, setTimePreset] = useState<TimePreset>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [deleteApprovalTarget, setDeleteApprovalTarget] = useState<KbDocument | null>(null);
+  const [deleteApprovalReason, setDeleteApprovalReason] = useState("");
+  const [deleteApprovalPendingIds, setDeleteApprovalPendingIds] = useState<string[]>([]);
 
   const filteredDocuments = documents.filter((doc) =>
     doc.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -579,9 +586,24 @@ function KnowledgeBaseDocumentList({
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-red-600"
-                        onSelect={() => onDelete(doc.id)}
+                        disabled={deleteApprovalPendingIds.includes(doc.id)}
+                        onSelect={() => {
+                          if (
+                            requiresResourceDeleteApproval(
+                              "knowledge-base-file",
+                              knowledgeBaseSecurityLevel
+                            )
+                          ) {
+                            setDeleteApprovalTarget(doc);
+                            setDeleteApprovalReason("");
+                            return;
+                          }
+                          onDelete(doc.id);
+                        }}
                       >
-                        删除
+                        {deleteApprovalPendingIds.includes(doc.id)
+                          ? "删除审批中"
+                          : "删除"}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -616,6 +638,36 @@ function KnowledgeBaseDocumentList({
         onOpenChange={setImportOpen}
         onImport={onImport}
         knowledgeBaseSecurityLevel={knowledgeBaseSecurityLevel}
+      />
+
+      <ResourceDeleteApprovalDialog
+        open={Boolean(deleteApprovalTarget)}
+        resourceName={deleteApprovalTarget?.name ?? ""}
+        resourceType="知识库文件"
+        securityLevel={knowledgeBaseSecurityLevel}
+        reason={deleteApprovalReason}
+        impactDescription="审批通过后，该文件将从知识库中删除，相关解析结果与引用将不可再使用。知识库本身不受影响。"
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteApprovalTarget(null);
+            setDeleteApprovalReason("");
+          }
+        }}
+        onReasonChange={setDeleteApprovalReason}
+        onSubmit={() => {
+          if (!deleteApprovalTarget) return;
+          if (!deleteApprovalReason.trim()) {
+            toast.error("请填写申请原因。");
+            return;
+          }
+          setDeleteApprovalPendingIds((current) => [
+            ...current,
+            deleteApprovalTarget.id,
+          ]);
+          setDeleteApprovalTarget(null);
+          setDeleteApprovalReason("");
+          toast.success("已提交文件删除申请，审批通过前文件保持当前状态。");
+        }}
       />
     </div>
   );
@@ -670,6 +722,23 @@ export function TemplateKnowledgeBaseDetail({
   });
   const [approvalStatus, setApprovalStatus] = useState(
     meta.approvalStatus ?? "none"
+  );
+  const groupOptions = useMemo(
+    () =>
+      flattenKnowledgeBaseGroups(knowledgeBaseGroupsV2).map((group) => {
+        const unavailable =
+          getSecurityLevelRank(group.securityLevel) <
+          getSecurityLevelRank(basicInfo.securityLevel);
+        const prefix = group.depth > 0 ? `${"—".repeat(group.depth)} ` : "";
+        return {
+          value: group.name,
+          label: `${prefix}${group.name} · ${group.securityLevel}${
+            unavailable ? "（密级上限不足）" : ""
+          }`,
+          disabled: unavailable,
+        };
+      }),
+    [basicInfo.securityLevel]
   );
 
   /* eslint-disable react-hooks/set-state-in-effect -- document data is restored from browser localStorage after hydration. */
@@ -1035,7 +1104,39 @@ export function TemplateKnowledgeBaseDetail({
             </div>
             <div>
               <div className="mb-1 text-sm text-slate-500">群组</div>
-              <div className="text-sm text-slate-900">{basicInfo.groupName}</div>
+              {editingBasic ? (
+                <div className="space-y-1.5">
+                  <Select
+                    value={basicInfo.groupName}
+                    onValueChange={(value) => {
+                      const targetLevel = getGroupSecurityLevelByName(
+                        knowledgeBaseGroupsV2,
+                        value
+                      );
+                      if (
+                        getSecurityLevelRank(targetLevel) <
+                        getSecurityLevelRank(basicInfo.securityLevel)
+                      ) {
+                        toast.error(
+                          `目标群组密级上限为「${targetLevel}」，不能承载「${basicInfo.securityLevel}」知识库。`
+                        );
+                        return;
+                      }
+                      setBasicInfo((current) => ({
+                        ...current,
+                        groupName: value,
+                      }));
+                    }}
+                    options={groupOptions}
+                    className="h-9"
+                  />
+                  <p className="text-xs leading-5 text-slate-400">
+                    密级上限低于「{basicInfo.securityLevel}」的群组不可选择。
+                  </p>
+                </div>
+              ) : (
+                <div className="text-sm text-slate-900">{basicInfo.groupName}</div>
+              )}
             </div>
             <div>
               <div className="mb-1 text-sm text-slate-500">知识库密级</div>
