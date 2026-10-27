@@ -35,6 +35,7 @@ export interface KnowledgeBaseRowV2 {
 }
 
 export interface KnowledgeDocumentRow {
+  chunkConfig?: import("@/lib/knowledge-base-format-chunking").DocumentChunkConfig;
   id: string;
   name: string;
   type: string;

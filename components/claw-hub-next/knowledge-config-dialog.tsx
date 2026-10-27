@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, FileStack, Plus, RefreshCw, Search } from "lucide-react";
+import { loadCreatedKnowledgeBases } from "@/lib/mock/knowledge-base-list";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -126,18 +127,26 @@ export function KnowledgeConfigDialog({ open, onOpenChange, onConfirm }: Knowled
   const [pageSize, setPageSize] = useState(10);
   const [jumpInput, setJumpInput] = useState("");
 
+  const [options, setOptions] = useState<KnowledgeConfigOption[]>(KNOWLEDGE_CONFIG_OPTIONS);
+  useEffect(() => {
+    if (!open) return;
+    const local = loadCreatedKnowledgeBases().map(item => ({ id: item.id, name: item.name, description: item.description ?? "", documentCount: item.documentCount, updatedAt: item.updateTime, badge: item.createMethod }));
+    // Restore the browser's knowledge-base catalog when the dialog opens.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOptions([...local, ...KNOWLEDGE_CONFIG_OPTIONS.filter(item => !local.some(kb => kb.id === item.id))]);
+  }, [open]);
   const filteredOptions = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     if (!normalizedQuery) {
-      return KNOWLEDGE_CONFIG_OPTIONS;
+      return options;
     }
-    return KNOWLEDGE_CONFIG_OPTIONS.filter((item) =>
+    return options.filter((item) =>
       [item.name, item.description, item.badge, item.updatedAt]
         .join(" ")
         .toLowerCase()
         .includes(normalizedQuery)
     );
-  }, [searchQuery]);
+  }, [searchQuery, options]);
 
   const total = filteredOptions.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -176,7 +185,7 @@ export function KnowledgeConfigDialog({ open, onOpenChange, onConfirm }: Knowled
   }
 
   function handleSubmit() {
-    const selections = KNOWLEDGE_CONFIG_OPTIONS.filter((item) => selectedIds.includes(item.id)).map(
+    const selections = options.filter((item) => selectedIds.includes(item.id)).map(
       ({ id, name, description, documentCount, updatedAt }) => ({
         id,
         name,

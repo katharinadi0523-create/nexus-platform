@@ -1,5 +1,9 @@
 "use client";
 
+import { FormatChunkCards } from "@/components/knowledge-base/FormatChunkCards";
+import { documentChunkConfig, type FormatChunkConfigs } from "@/lib/knowledge-base-format-chunking";
+import { toast } from "sonner";
+import { DOCUMENT_EXTENSIONS, TABLE_EXTENSIONS, validateKnowledgeFile } from "@/lib/knowledge-base-upload-validation";
 import { KNOWLEDGE_BASE_CHUNK_OPTIONS as SEMANTIC_LIKE_CHUNK_OPTIONS } from "@/lib/knowledge-base-chunk-options";
 
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
@@ -13,6 +17,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -87,6 +92,7 @@ function ToggleStrategyButton({
 }
 
 interface ImportDocumentDrawerProps {
+  retrievalEngines?: import("@/components/knowledge-base/RetrievalConfigStep").RetrievalEngineId[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImport: (documents: KnowledgeDocumentRow[]) => void;
@@ -99,9 +105,13 @@ export function ImportDocumentDrawer({
   onOpenChange,
   onImport,
   knowledgeBaseSecurityLevel = "公开",
+  retrievalEngines = [],
 }: ImportDocumentDrawerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [fileKind, setFileKind] = useState<ImportFileKind>("text");
+  const [validating, setValidating] = useState(false);
+  const validationRef = useRef(false);
+  const generationRef = useRef(0);
   const [queue, setQueue] = useState<ImportQueueItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const [securityConfirmed, setSecurityConfirmed] = useState(false);
@@ -112,6 +122,7 @@ export function ImportDocumentDrawer({
   const [contentClean, setContentClean] = useState(true);
   const [qualityAnalysis, setQualityAnalysis] = useState(false);
   const [autoChunk, setAutoChunk] = useState(true);
+  const [formatChunks, setFormatChunks] = useState<FormatChunkConfigs>({});
   /** 图文混排：仅在选中图片相关解析策略时展示，默认开启 */
   const [mixedImageText, setMixedImageText] = useState(true);
   const [semanticChunks, setSemanticChunks] = useState<string[]>(["智能切片"]);
@@ -131,18 +142,21 @@ export function ImportDocumentDrawer({
   const [documentTags, setDocumentTags] = useState<string[]>(["产品手册"]);
   const [contentTags, setContentTags] = useState<string[]>(["奶茶"]);
 
-  const accept =
-    fileKind === "text" ? ".doc,.docx,.pdf,.txt" : ".xls,.xlsx,.csv";
+  const extensions = fileKind === "text" ? DOCUMENT_EXTENSIONS : TABLE_EXTENSIONS;
+  const accept = extensions.map(extension => "." + extension).join(",");
 
   const showMixedImageText =
     parsingStrategies.includes("图片文字识别(OCR)") ||
     parsingStrategies.includes("图片解析");
 
   function resetDraft() {
+    setFileKind("text");
     setQueue([]);
     setDragging(false);
     setSecurityConfirmed(false);
-    setFileKind("text");
+    generationRef.current += 1;
+    validationRef.current = false;
+    setValidating(false);
     setParsingStrategies(["文字识别"]);
     setCleanHeaderFooter(true);
     setCleanLogo(false);
@@ -150,6 +164,7 @@ export function ImportDocumentDrawer({
     setContentClean(true);
     setQualityAnalysis(false);
     setAutoChunk(true);
+    setFormatChunks({});
     setMixedImageText(true);
     setSemanticChunks(["智能切片"]);
     setSemanticChunkFixedLength(800);
@@ -174,17 +189,33 @@ export function ImportDocumentDrawer({
     onOpenChange(next);
   }
 
-  function addFiles(fileList: FileList | File[]) {
-    const files = Array.from(fileList).slice(0, Math.max(0, 20 - queue.length));
-    if (files.length === 0) return;
-    setQueue((current) => [
-      ...current,
-      ...files.map((file) => ({
-        id: `${file.name}-${file.size}-${file.lastModified}`,
-        file,
-        kind: fileKind,
-      })),
-    ]);
+  async function addFiles(fileList: FileList | File[]) {
+    if (validationRef.current) return;
+    validationRef.current = true;
+    setValidating(true);
+    const generation = generationRef.current;
+    const accepted: ImportQueueItem[] = [];
+    const seen = new Set(queue.map(item => item.id));
+    try {
+      for (const file of Array.from(fileList)) {
+        if (generation !== generationRef.current) return;
+        const id = [file.name, file.size, file.lastModified].join("-");
+        if (seen.has(id)) continue;
+        if (queue.length + accepted.length >= 20) { toast.error("单次最多上传 20 个文件"); break; }
+        if (!extensions.includes(file.name.split(".").pop()?.toLowerCase() ?? "")) {
+          toast.error(file.name + "：请上传当前类型支持的文件，或切换数据类型");
+          continue;
+        }
+        const result = await validateKnowledgeFile(file);
+        if (generation !== generationRef.current) return;
+        if (result.error) { toast.error(file.name + "：" + result.error); continue; }
+        seen.add(id);
+        accepted.push({ id, file, kind: result.kind });
+      }
+      setQueue(current => [...current, ...accepted]);
+    } finally {
+      if (generation === generationRef.current) { validationRef.current = false; setValidating(false); }
+    }
   }
 
   function toggleParsingStrategy(strategy: string) {
@@ -261,7 +292,7 @@ export function ImportDocumentDrawer({
   }
 
   function confirmImport() {
-    if (queue.length === 0) return;
+    if (validationRef.current || queue.length === 0) return;
     if (!securityConfirmed) {
       return;
     }
@@ -287,6 +318,7 @@ export function ImportDocumentDrawer({
         })),
       documentTags,
       contentTags,
+      chunkConfig: item.kind === "text" ? documentChunkConfig(item.file.name, formatChunks, autoChunk, retrievalEngines) : undefined,
     }));
     onImport(importedDocuments);
     resetDraft();
@@ -307,24 +339,18 @@ export function ImportDocumentDrawer({
                 <span className="text-red-500">*</span>本地上传
               </div>
               <div className="space-y-3">
-                <div className="flex">
-                  <ToggleStrategyButton
-                    selected={fileKind === "text"}
-                    onClick={() => setFileKind("text")}
-                  >
-                    文本型数据
-                  </ToggleStrategyButton>
-                  <ToggleStrategyButton
-                    selected={fileKind === "table"}
-                    onClick={() => setFileKind("table")}
-                  >
-                    表格型数据
-                  </ToggleStrategyButton>
-                </div>
+
+                <Tabs value={fileKind} onValueChange={value => { if (!validationRef.current) setFileKind(value as ImportFileKind); }}>
+                  <TabsList aria-label="上传数据类型">
+                    <TabsTrigger value="text" disabled={validating}>文本型数据</TabsTrigger>
+                    <TabsTrigger value="table" disabled={validating}>表格型数据</TabsTrigger>
+                  </TabsList>
+                </Tabs>
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept={accept}
+                  disabled={validating}
                   multiple
                   className="hidden"
                   onChange={(event) => {
@@ -334,6 +360,7 @@ export function ImportDocumentDrawer({
                 />
                 <button
                   type="button"
+                  disabled={validating}
                   onClick={() => fileInputRef.current?.click()}
                   onDragOver={(event) => {
                     event.preventDefault();
@@ -357,11 +384,11 @@ export function ImportDocumentDrawer({
                     将单个或多个文件拖到此处，或
                     <span className="text-blue-600">点击上传</span>
                   </div>
-                  <p className="mt-5 text-xs text-slate-500">
-                    {fileKind === "text"
-                      ? "支持上传.doc .docx .pdf .txt文件;单次至多上传20个文件;每个文件不超过200MB"
-                      : "支持上传.xls .xlsx .csv文件;单次至多上传20个文件;每个文件不超过200MB"}
-                  </p>
+                  <div className="mt-4 space-y-1 px-4 text-xs leading-5 text-slate-500">
+                    {fileKind === "text" ? <p>支持 pdf、doc、docx、ppt、mhtml、pptx、wps、md、txt、html、xmind、json、xml、log、jsonl、zip，单个文件不超过 200MB。</p> :
+                    <p>支持 xlsx、xls、csv，单个文件不超过 50MB，单行数据不超过 10000 字符。</p>}
+                    <p>{validating ? "正在校验文件，请稍候…" : "单次最多上传 20 个文件，切换类型会保留已选文件。"}</p>
+                  </div>
                 </button>
                 {queue.length > 0 && (
                   <div className="border border-slate-200">
@@ -372,6 +399,7 @@ export function ImportDocumentDrawer({
                       <button
                         type="button"
                         className="text-blue-600"
+                        disabled={validating}
                         onClick={() => setQueue([])}
                       >
                         清空
@@ -396,6 +424,7 @@ export function ImportDocumentDrawer({
                           <button
                             type="button"
                             className="text-slate-400 hover:text-red-600"
+                            disabled={validating}
                             onClick={() => removeQueuedFile(item.id)}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -497,7 +526,10 @@ export function ImportDocumentDrawer({
                   </div>
                 </>
               ) : null}
-              {(
+              {fileKind === "text" ? (
+                <div className="col-span-2"><FormatChunkCards engines={retrievalEngines} files={queue.filter(item => item.kind === "text").map(item => item.file)} value={formatChunks} onChange={setFormatChunks} /></div>
+              ) : (
+
                 [
                   {
                     name: "语义检索",
@@ -740,7 +772,7 @@ export function ImportDocumentDrawer({
           </div>
           <div className="flex gap-3">
             <Button
-              disabled={queue.length === 0 || !securityConfirmed}
+              disabled={validating || queue.length === 0 || !securityConfirmed}
               className="rounded bg-blue-600 px-8 hover:bg-blue-700"
               onClick={confirmImport}
             >

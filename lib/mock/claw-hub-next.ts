@@ -132,6 +132,7 @@ export type DatabaseEngineType = "MySQL" | "Neo4j";
 export type KnowledgeBaseLevel = "基础" | "高级";
 
 export interface KnowledgeBaseRow {
+  retrievalConfig?: import("@/lib/claw-knowledge-retrieval").ClawKnowledgeRetrievalConfig;
   id: string;
   name: string;
   type: KnowledgeBaseLevel;

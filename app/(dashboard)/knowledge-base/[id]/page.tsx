@@ -582,6 +582,7 @@ export default function KnowledgeBaseDetailPage() {
         onOpenChange={setImportOpen}
         onImport={importDocuments}
         knowledgeBaseSecurityLevel={securityLevel}
+        retrievalEngines={getKnowledgeBaseMeta(id)?.retrievalSnapshot?.retrieval.engines}
       />
 
       <Dialog open={securityChangeOpen} onOpenChange={setSecurityChangeOpen}>

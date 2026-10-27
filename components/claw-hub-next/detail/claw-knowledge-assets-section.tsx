@@ -14,6 +14,8 @@ import {
   RefreshCw,
   Search,
 } from "lucide-react";
+import { KnowledgeRetrievalConfigDialog } from "@/components/claw-hub-next/detail/knowledge-retrieval-config-dialog";
+import type { ClawKnowledgeRetrievalConfig } from "@/lib/claw-knowledge-retrieval";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -285,6 +287,8 @@ function Pagination({
 }
 
 export interface ClawKnowledgeAssetsSectionProps {
+  clawId: string;
+  onSaveKnowledgeRetrieval: (id: string, config: ClawKnowledgeRetrievalConfig) => void;
   activePanel: KnowledgePanelKey;
   onActivePanelChange: (panel: KnowledgePanelKey) => void;
   assets: ClawKnowledgeAssets;
@@ -299,6 +303,8 @@ export interface ClawKnowledgeAssetsSectionProps {
 }
 
 export function ClawKnowledgeAssetsSection({
+  clawId,
+  onSaveKnowledgeRetrieval,
   activePanel,
   onActivePanelChange,
   assets,
@@ -311,6 +317,7 @@ export function ClawKnowledgeAssetsSection({
   onOpenOntologyConfig,
   onOpenTermBankConfig,
 }: ClawKnowledgeAssetsSectionProps) {
+  const [retrievalTarget, setRetrievalTarget] = useState<KnowledgeBaseRow | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -470,7 +477,7 @@ export function ClawKnowledgeAssetsSection({
           {total === 0 ? (
             <EmptyKnowledgeState label={searchQuery.trim() ? "没有匹配条件的资源。" : EMPTY_LABELS[activePanel]} />
           ) : activePanel === "knowledge-base" ? (
-            <KnowledgeBaseTable rows={pageRows as KnowledgeBaseRow[]} onDelete={onDeleteKnowledgeBase} />
+            <KnowledgeBaseTable rows={pageRows as KnowledgeBaseRow[]} onDelete={onDeleteKnowledgeBase} onRetrieval={setRetrievalTarget} />
           ) : activePanel === "database" ? (
             <DatabaseTable rows={pageRows as DatabaseRow[]} onDelete={onDeleteDatabase} />
           ) : activePanel === "ontology" ? (
@@ -494,6 +501,7 @@ export function ClawKnowledgeAssetsSection({
           />
         ) : null}
       </div>
+      {retrievalTarget && <KnowledgeRetrievalConfigDialog key={retrievalTarget.id} clawId={clawId} knowledgeBase={retrievalTarget} onClose={() => setRetrievalTarget(null)} onSave={config => onSaveKnowledgeRetrieval(retrievalTarget.id, config)} />}
     </section>
   );
 }
@@ -501,8 +509,10 @@ export function ClawKnowledgeAssetsSection({
 function KnowledgeBaseTable({
   rows,
   onDelete,
+  onRetrieval,
 }: {
   rows: KnowledgeBaseRow[];
+  onRetrieval: (row: KnowledgeBaseRow) => void;
   onDelete: (id: string) => void;
 }) {
   return (
@@ -520,7 +530,7 @@ function KnowledgeBaseTable({
           <TableHead className="w-[180px] px-4 text-sm font-semibold text-slate-900">
             <span className="inline-flex items-center">更新时间<HeaderIcon type="sort" /></span>
           </TableHead>
-          <TableHead className="w-[120px] px-4 text-sm font-semibold text-slate-900">操作</TableHead>
+          <TableHead className="w-[220px] px-4 text-sm font-semibold text-slate-900">操作</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -540,7 +550,7 @@ function KnowledgeBaseTable({
             </TableCell>
             <TableCell className="px-4 py-2 align-middle text-sm text-slate-700">{row.updatedAt}</TableCell>
             <TableCell className="px-4 py-2 align-middle">
-              <RowActions rowName={row.name} onRemove={() => onDelete(row.id)} />
+              <div className="flex items-center gap-4 whitespace-nowrap"><button type="button" className="text-sm font-medium text-blue-600 hover:text-blue-700" onClick={() => onRetrieval(row)}>检索配置</button><RowActions rowName={row.name} onRemove={() => onDelete(row.id)} /></div>
             </TableCell>
           </TableRow>
         ))}

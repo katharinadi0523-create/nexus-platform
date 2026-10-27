@@ -1205,6 +1205,7 @@ export function ClawDetailWorkbench({
           id: sel.id,
           name: sel.name,
           type: prev?.type ?? "高级",
+          retrievalConfig: prev?.retrievalConfig,
           description: sel.description,
           creator: prev?.creator ?? creatorFallback,
           updatedAt: sel.updatedAt,
@@ -2353,6 +2354,8 @@ export function ClawDetailWorkbench({
 
           <TabsContent value="knowledge" className="mt-0">
             <ClawKnowledgeAssetsSection
+              clawId={detail.overview.id}
+              onSaveKnowledgeRetrieval={(id, retrievalConfig) => setKnowledgeAssets(current => ({ ...current, knowledgeBases: current.knowledgeBases.map(row => row.id === id ? { ...row, retrievalConfig } : row) }))}
               activePanel={activeKnowledgePanel}
               onActivePanelChange={setActiveKnowledgePanel}
               assets={knowledgeAssets}
