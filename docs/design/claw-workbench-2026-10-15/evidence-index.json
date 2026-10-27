@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-15",
+  "local_surface": "/claw-client",
+  "evidence_type": "frontend prototype and Mock, not production acceptance",
+  "files": [
+    {
+      "path": "components/claw-client/claw-client-workbench.tsx",
+      "sha256": "e0f7ac97855819430299fb6c76838471bba6b56b25c75ac3c33cc66969db698e"
+    },
+    {
+      "path": "components/my-claw/plugins/plugins-hub.tsx",
+      "sha256": "bae71a157645375c1971b0c6e5972eb2d2ad0fd6e4ba23d224b17bc672e3e71d"
+    },
+    {
+      "path": "components/my-claw/plugins/plugins-mine-table.tsx",
+      "sha256": "3e2e36824f3dfc59db21709387b5e37ab81c1c0ba7b564a902e8da8574cc1b04"
+    },
+    {
+      "path": "lib/mock/my-claw/plugins.ts",
+      "sha256": "5d202db9f0263607989eb2a389eec5c9c9346ecebf0ec5fd247bc97d55831e00"
+    },
+    {
+      "path": "components/my-claw/skills/skills-hub.tsx",
+      "sha256": "37908b44e86e8f926ff1d04a227308c7e5714bc67d3d1a3c62e237214cad4a88"
+    },
+    {
+      "path": "components/my-claw/files/files-page.tsx",
+      "sha256": "c0615ca698ce3767d234a9a38cb407c85b5989b8a5bf66cd48d72538f5dde139"
+    },
+    {
+      "path": "components/my-claw/settings/settings-page.tsx",
+      "sha256": "6630a567a28a7838e5bdb705882c14fc7ad157caa882ce4723ffde571e220798"
+    },
+    {
+      "path": "components/claw-client/knowledge-page.tsx",
+      "sha256": "f9b49c91bbb0e57e4a747877efb944165687589af18684dc66758eca8c5a0267"
+    },
+    {
+      "path": "components/my-claw/shell/nav-items.ts",
+      "sha256": "b54747ffb42a8650d6b72353653ad70c32ec58ee48bdeb4f7c37dba05430cf69"
+    },
+    {
+      "path": "components/my-claw/automation/automation-workbench.tsx",
+      "sha256": "f99e7963c724799952b0e9b3a246b497a116c4001a2f1d819c47c2ffec9d4e1d"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-29-my-claw-project-task-files-issue-lineage-decisions.md",
+      "sha256": "9a08301d27d3a753c16503907f7d32fd208d2f26789dbb5049e980d8fd7c71c9"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-27-my-claw-option-b-my-work-and-projects-requirement-change.md",
+      "sha256": "14bb65681c27e24319f675620af4af4fc3c143e4fb253360ff19993a54239044"
+    }
+  ],
+  "official_sources": [
+    "https://academy.claude.com/tutorials/get-started-in-claude-cowork-in-three-steps",
+    "https://academy.claude.com/tutorials/how-to-customize-plugins-in-cowork",
+    "https://www.codebuddy.cn/docs/workbuddy/Plugins",
+    "https://learn.chatgpt.com/docs/app",
+    "https://developers.openai.com/plugins/concepts/plugins"
+  ]
+}

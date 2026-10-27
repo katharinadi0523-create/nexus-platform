@@ -98,27 +98,14 @@ export function projectClarifyAutoResolution(
   return { phase: "visible_countdown", fillRatio, secondsLeft };
 }
 
+/**
+ * 一次澄清的两种结束方式。每题都必须作答才能提交，没有「部分回答」，也没有「暂不回答」。
+ */
 export type ClarifyResolutionMode =
-  /** 用户回答了全部问题。 */
+  /** 用户回答了全部问题（选项或自定义回答）。 */
   | "answered"
-  /** 用户回答了部分问题，其余跳过。 */
-  | "partial"
-  /** 用户主动跳过全部问题。 */
-  | "skipped_all"
-  /** 五分钟内无有效操作，自动以空答案继续。 */
+  /** 5 分钟内无有效操作，自动以空答案继续。 */
   | "auto_continued";
-
-export function resolveClarifyMode(
-  questions: ClarifyQuestion[],
-  answers: ClarifyAnswers,
-  autoContinued: boolean,
-): ClarifyResolutionMode {
-  if (autoContinued) return "auto_continued";
-  const answered = questions.filter((question) => answers[question.questionKey] !== undefined);
-  if (answered.length === 0) return "skipped_all";
-  if (answered.length < questions.length) return "partial";
-  return "answered";
-}
 
 export function formatClarifyAnswer(
   question: ClarifyQuestion,
@@ -153,16 +140,5 @@ export function buildClarifyToolResult(
   if (mode === "answered") {
     return `用户已回答全部问题：${answeredLines.join("；")}。请基于这些回答继续执行。`;
   }
-  if (mode === "partial") {
-    const skipped = questions.length - answeredLines.length;
-    return (
-      `用户回答了 ${answeredLines.length} 个问题，跳过了 ${skipped} 个。` +
-      `已回答：${answeredLines.join("；")}。已回答的按回答执行；未回答的问题：${UNANSWERED_RULES}`
-    );
-  }
-  const prefix =
-    mode === "auto_continued"
-      ? "用户在 5 分钟内没有回答这些问题，已自动继续。"
-      : "用户跳过了全部问题，没有提供回答。";
-  return `${prefix}${UNANSWERED_RULES}`;
+  return `用户在 5 分钟内没有回答这些问题，已自动继续。${UNANSWERED_RULES}`;
 }

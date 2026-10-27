@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-15",
+  "artifact": "Claw个人工作台-产品改造方案.html",
+  "sections": 19,
+  "characters_markdown": 17168,
+  "self_contained": true,
+  "source": "方案.md",
+  "assets": [
+    {
+      "path": "assets/01-current-home.jpg",
+      "bytes": 37989,
+      "sha256": "ea3dac82b0509eb1369a68d325ef399972926ec60e0c41b0f8fab463b2083e10",
+      "kind": "现状截图"
+    },
+    {
+      "path": "assets/02-current-menu.jpg",
+      "bytes": 41479,
+      "sha256": "c1abc91b930d3256d2658a4cf3fee5c9a30aee1eea1b212685d795eb30575e03",
+      "kind": "现状截图"
+    },
+    {
+      "path": "assets/03-current-files.jpg",
+      "bytes": 56583,
+      "sha256": "34a4d5fe291ecbec6d23bcf3581544d434c455caeda1e63aced9ae27bca0e8db",
+      "kind": "现状截图"
+    },
+    {
+      "path": "assets/04-current-plugins.jpg",
+      "bytes": 78430,
+      "sha256": "7ee691fe3172a1954d686916bf95e50b878a6dbcafd24cc9aa69784700f87d4b",
+      "kind": "现状截图"
+    },
+    {
+      "path": "assets/05-concept-workbench.png",
+      "bytes": 1332945,
+      "sha256": "5308540053244db0917d25fd3d5901cb1628991d7fdb565d6593c579f18f19fd",
+      "kind": "概念图"
+    },
+    {
+      "path": "assets/06-concept-space.png",
+      "bytes": 1276565,
+      "sha256": "e6609642e9df15605017fc4c269ca2b6e828a837ded62c85d5aa96a0ac0497fc",
+      "kind": "概念图"
+    },
+    {
+      "path": "assets/07-concept-capabilities.png",
+      "bytes": 1317674,
+      "sha256": "f882336014239f67d3fd7c5d907a23db1a938ef956fdcd602e7d6306e67b7232",
+      "kind": "概念图"
+    }
+  ],
+  "generation": {
+    "tool": "image_gen built-in",
+    "prompts": "图像提示词.md"
+  },
+  "verification": "见 验证记录.md"
+}

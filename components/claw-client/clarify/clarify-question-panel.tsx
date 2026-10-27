@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * 基础使用端的澄清问答面板（交互对齐智谱 ZCode）：
- * - 一次 1–4 个问题，逐题切换；每题可单选一个选项或填写自定义回答；
- * - 每题都允许不回答：「跳过此题」或不选直接「继续」；
+ * - 一次 1–4 个问题，逐题切换；每题必须选择一个选项或填写自定义回答，才能「继续 / 提交」；
+ * - 答不了的问题可在自定义回答中直接写明（如「不确定」）；不作答时 5 分钟后自动继续，按未回答处理；
  * - 首次有效操作（选择选项、输入自定义回答、切换题目）即暂停自动继续；
  * - 最后一分钟在右上角显示秒数。
  */
@@ -39,6 +39,9 @@ export function ClarifyQuestionPanel({
   const answer = answers[current.questionKey];
   const selectedValue = typeof answer === "string" ? answer : null;
   const customDraft = customDrafts[current.questionKey] ?? "";
+  const currentAnswered = answer !== undefined;
+  const allAnswered = questions.every((question) => answers[question.questionKey] !== undefined);
+  const canAdvance = isLast ? allAnswered : currentAnswered;
 
   function report() {
     if (reported.current) return;
@@ -74,15 +77,6 @@ export function ClarifyQuestionPanel({
       else delete next[current.questionKey];
       return next;
     });
-  }
-
-  function skipCurrent() {
-    report();
-    const next = { ...answers };
-    delete next[current.questionKey];
-    setAnswers(next);
-    setCustomDrafts((drafts) => ({ ...drafts, [current.questionKey]: "" }));
-    advance(next);
   }
 
   return (
@@ -199,20 +193,15 @@ export function ClarifyQuestionPanel({
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-1 pt-2.5">
         <p className="flex min-w-0 items-center gap-1.5 text-[12px] text-slate-500">
           <Info className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          选中后点击「{isLast ? "提交" : "继续"}」；每题都可以不回答
+          {isLast && currentAnswered && !allAnswered
+            ? "还有问题没有回答，回答后才能提交"
+            : "选择一个选项，或在自定义回答中写下你的想法"}
         </p>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center">
           <Button
             type="button"
-            variant="outline"
-            className="h-8 rounded-lg px-3 text-[13px]"
-            onClick={skipCurrent}
-          >
-            跳过此题
-          </Button>
-          <Button
-            type="button"
-            className="h-8 rounded-lg bg-[#2773ff] px-4 text-[13px] hover:bg-[#1f63e0]"
+            disabled={!canAdvance}
+            className="h-8 rounded-lg bg-[#2773ff] px-4 text-[13px] hover:bg-[#1f63e0] disabled:bg-slate-200 disabled:text-slate-400 disabled:opacity-100"
             onClick={() => {
               report();
               advance(answers);
