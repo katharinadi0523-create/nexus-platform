@@ -26,6 +26,7 @@ import {
 import type { MyClawSessionListItem } from "@/lib/mock/my-claw/types";
 import { cn } from "@/lib/utils";
 import { ComposerWithAgents } from "./composer-with-agents";
+import { PersonalConversationSidePanel, type ConversationPanelTask, type PersonalPanelView } from "@/components/claw-client/personal-conversation-side-panel";
 
 function EnterpriseInspector({ view }: { view: EnterpriseConversationView }) {
   return (
@@ -340,9 +341,25 @@ function EnterpriseNodeView({
 export function EnterpriseSessionPanel({
   session,
   highlightedMessageId,
+  personalMode = false,
+  workspacePanelOpen = false,
+  workspaceView = "summary",
+  workspacePanelWidth = 280,
+  onWorkspaceViewChange,
+  onWorkspacePanelWidthChange,
+  onOpenWorkspace,
+  onCloseWorkspace,
 }: {
   session: MyClawSessionListItem;
   highlightedMessageId?: string | null;
+  personalMode?: boolean;
+  workspacePanelOpen?: boolean;
+  workspaceView?: PersonalPanelView;
+  workspacePanelWidth?: number;
+  onWorkspaceViewChange?: (view: PersonalPanelView) => void;
+  onWorkspacePanelWidthChange?: (width: number) => void;
+  onOpenWorkspace?: () => void;
+  onCloseWorkspace?: () => void;
 }) {
   const detail = useMemo(() => getPersonalClawDetail(), []);
   const [phase, setPhase] = useState(() =>
@@ -416,6 +433,9 @@ export function EnterpriseSessionPanel({
           <div className="mx-auto w-full max-w-4xl">
             <ComposerWithAgents
               detail={detail}
+              modelScopeKey={session.id}
+              personalMode={personalMode}
+              onOpenWorkspace={onOpenWorkspace}
               value={draft}
               onChange={setDraft}
               onSend={() => {
@@ -428,7 +448,27 @@ export function EnterpriseSessionPanel({
           </div>
         </div>
       </div>
-      <EnterpriseInspector view={view} />
+      {personalMode ? (
+        <PersonalConversationSidePanel
+          open={workspacePanelOpen}
+          personalMode
+          view={workspaceView}
+          panelWidth={workspacePanelWidth}
+          onPanelWidthChange={(width) => onWorkspacePanelWidthChange?.(width)}
+          onViewChange={(nextView) => onWorkspaceViewChange?.(nextView)}
+          onClose={() => onCloseWorkspace?.()}
+          outputs={view.inspector.files.map((file, index) => ({
+            id: `enterprise-output-${index}`,
+            name: file.name,
+            path: `对话产出 / ${session.title} / ${file.name}`,
+            size: file.size,
+            source: session.title,
+            status: "new" as const,
+          }))}
+          tasks={view.inspector.tasks.map((task): ConversationPanelTask => ({ id: task.id, title: task.title, status: task.status }))}
+          conversationTitle={session.title}
+        />
+      ) : <EnterpriseInspector view={view} />}
     </div>
   );
 }

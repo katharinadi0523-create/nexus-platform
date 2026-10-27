@@ -13,6 +13,7 @@ export type MyClawSessionKind =
   | "enterprise_session"
   | "research_multi_agent"
   | "clarify_demo"
+  | "queue_demo"
   | "blank";
 
 export interface MyClawSessionListItem {

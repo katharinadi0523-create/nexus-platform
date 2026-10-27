@@ -1,65 +1,34 @@
-# Design QA：Issue 唯一主会话入口
+# Design QA — 排队与引导演示
 
-## Evidence
+## 对比对象与证据
 
-- Source visual truth: `/var/folders/yf/92b27ch521zbdlg6rtbpnhx80000gn/T/codex-clipboard-49ea9094-e12f-4caf-b268-0a6d759d2fa0.png`
-- Implementation screenshot: `/Users/nanbunan/Dev-Projects/nexus-platform/.codex-issue-primary-conversation-qa.png`
-- Combined comparison: `/Users/nanbunan/Dev-Projects/nexus-platform/.codex-issue-primary-conversation-comparison.png`
-- Browser route: `http://localhost:3000/my-claw/projects/proj-claw-collab?view=issues&issue=issue-proto-mount`
-- Browser viewport: `1280 × 720` CSS px
-- State: Project 事项看板打开 `CLAW-22` 详情，Issue 已绑定且当前用户可访问唯一主会话
+- Source visual truth: `/var/folders/1d/hrv203t96_qcn3ql92lgwb480000gn/T/codex-clipboard-2ed648d1-210c-4910-85ad-830331eb3a50.png`（当前产品样式，1136 × 435 px）；另参考竞品图 `/var/folders/1d/hrv203t96_qcn3ql92lgwb480000gn/T/codex-clipboard-0abc5d56-9394-435d-875e-c6931067dd25.png`。
+- Implementation: `http://localhost:3000/claw-client?sessionId=queue-steer-demo`；Chrome 中捕获了当前运行状态的整页截图（1920 × 1080 截图像素），但 CUA 截图未写入项目文件，无法提供可复查的截图路径。
+- Viewport / density: 截图图像像素分别为 1136 × 435 和 1920 × 1080；CSS viewport 与 device-pixel-ratio 未读取，无法做密度归一化。
+- State: 演示初始状态；当前响应进行中，队列有“分点罗列”“做成 HTML 演示”两条消息。
+- Full-view comparison evidence: 已查看实现的完整浏览器截图；参考图为内容区域裁图，未与实现图合并为同一比较输入，因此不据此判断完整页面的像素级差异。
+- Focused-region evidence: 实现队列区与参考图的队列区均已查看；因缺少持久化实现截图和归一化的并排图，精确尺寸、间距和字体比较未完成。
 
-## Normalization
+## Fidelity surfaces
 
-- Source image: `467 × 794` px，1x。
-- Source normalized to: `460 × 782` px，保持原比例。
-- Implementation drawer crop: `460 × 720` px，1x。
-- 两图按相同的 460 px 抽屉宽度顶端对齐；高度差来自浏览器视口，目标比较区域是抽屉顶部至“主会话”后的连续内容。
-
-## Full-view Comparison
-
-合并对照图同时包含修改前和浏览器渲染后的抽屉。标题、状态、摘要、最新进展及后续验收字段在相同宽度下保持原有字体、颜色和对齐方式。唯一主会话区域由大块二级卡片收敛为单行入口，后续内容整体上移，没有引入横向溢出或遮挡。
-
-## Focused Region Comparison
-
-需要聚焦比较，因为本次目标仅为原截图红框中的主会话区域。
-
-- 信息层级：保留“主会话”字段标签，唯一会话名称成为主文本。
-- 跳转语义：辅助文案明确“定位到事项来源消息”，右侧使用轻量“打开”入口。
-- 布局：整行可点击，图标、名称、辅助文案与操作在一个 58 px 左右的紧凑容器中。
-- 视觉：沿用页面现有蓝色、灰色、圆角和 1 px 边框，不再出现抢占注意力的大蓝色按钮。
-
-## Required Fidelity Surfaces
-
-- Fonts and typography: 继续使用项目现有字体栈；字段标签、会话名称和辅助说明分别使用 11 px、12 px、11 px，权重层级清晰，无异常换行。
-- Spacing and layout rhythm: 主会话区域显著减高；上下字段间距与抽屉其他字段一致，无溢出。
-- Colors and visual tokens: 使用现有 `#2773ff` 品牌蓝、`#5a6779` / `#7a8798` 次级文字色和浅灰边框。
-- Image quality and asset fidelity: 本区域无位图资产；图标使用项目现有图标体系，显示清晰。
-- Copy and content: “主会话”“原型技术验证”“定位到事项来源消息”“打开”准确表达 1:1 关联与跳转行为。
+- Typography: 语义层级清楚；未完成字体、字号、行高和字重的归一化对比。
+- Layout and spacing: 主工作区保留现有产品框架，队列容器、任务行和输入框可见；完整页面与内容裁图视口不同，间距精度待复核。
+- Colors and tokens: 队列浅色底、描边与蓝色进行态沿用当前产品样式；未进行像素取样。
+- Images and icons: 使用现有界面图标组件，没有新增需要还原的插画或品牌资产。
+- Copy and content: 明确显示本地模拟提示、队列数、任务操作和响应状态；演示任务与参考图场景一致。
 
 ## Findings
 
-- 无 P0、P1、P2 问题。
-- 未发现需要阻塞交付的视觉或交互差异。
+- 当前交互验收未发现阻塞项。手动验证覆盖：队列引导、编辑、删除、上下移动与拖动排序；运行中追加消息的确认弹窗两种处理；中断及两处继续入口；刷新后状态恢复；重置演示。
+- 视觉验收证据不完整：实现截图没有保存到文件，且未用同一归一化比较输入检查全部视觉表面。需要持久化截图后再做严格的视觉对照。
 
-## Interaction and Console Checks
+## Implementation checklist
 
-- 点击唯一主会话行后，成功进入：
-  `http://localhost:3000/my-claw/projects/proj-claw-collab/conversations/conv-proto-verify?message=msg-proto-3`
-- 已确认路由同时携带 Conversation ID 与来源 Message ID。
-- 交互后浏览器 console 无 error 或 warning。
+- [x] 浏览器中打开演示页面并检查初始状态。
+- [x] 手动走查主要交互并重置演示。
+- [x] 运行 targeted ESLint、`git diff --check` 和 production build。
+- [ ] 保存浏览器截图并与参考图做同视口 / 同区域比较。
 
-## Comparison History
+final result: blocked
 
-- Pass 1: 浏览器实渲染与源截图合并比较；未发现可执行的 P0、P1、P2 问题，无需二次视觉修复。
-
-## Implementation Checklist
-
-- [x] 已绑定主会话使用紧凑单行入口。
-- [x] 整行可点击并定位来源消息。
-- [x] 未绑定态采用轻量虚线容器。
-- [x] 无权限时不展示整个主会话字段，不泄露受限会话的存在、名称或消息。
-- [x] 目标组件 ESLint 通过。
-- [x] 浏览器截图与点击链路验证完成。
-
-final result: passed
+Blocker: 当前工具会话没有把浏览器截图保存到项目文件的能力，无法满足可复查的截图路径及归一化对照要求。功能和构建验证已完成；精细视觉验收仍待补充。

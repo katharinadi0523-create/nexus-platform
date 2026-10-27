@@ -1,11 +1,28 @@
 import { CLAW_CLIENT_CLARIFY_SESSIONS } from "./clarify-demo";
 import type { MyClawSessionListItem } from "./types";
 
+export const CLAW_CLIENT_QUEUE_DEMO_SESSION: MyClawSessionListItem = {
+  id: "queue-steer-demo",
+  title: "排队与引导演示",
+  kind: "queue_demo",
+  pinned: true,
+  updatedAt: "2026-10-27T00:00:00.000Z",
+  preview: "体验排队、引导、暂停恢复和队列管理。",
+};
+
 /**
  * Session list seeds ported from 会话交互 `data.js` → `recentTasks`,
  * plus a research multi-agent session for the scientific flow.
  */
 export const MY_CLAW_SESSIONS: MyClawSessionListItem[] = [
+  {
+    id: "summary-stress-demo",
+    title: "长清单摘要样例（演示）",
+    kind: "expense",
+    pinned: false,
+    updatedAt: "2026-07-26T10:05:00.000Z",
+    preview: "用于查看进程、产物和资料较多时的摘要滚动效果。",
+  },
   {
     id: "task-001",
     title: "上海出差报销",
@@ -85,6 +102,7 @@ export function getMyClawSession(
 ): MyClawSessionListItem | undefined {
   return (
     MY_CLAW_SESSIONS.find((session) => session.id === id) ??
+    (CLAW_CLIENT_QUEUE_DEMO_SESSION.id === id ? CLAW_CLIENT_QUEUE_DEMO_SESSION : undefined) ??
     CLAW_CLIENT_CLARIFY_SESSIONS.find((session) => session.id === id)
   );
 }

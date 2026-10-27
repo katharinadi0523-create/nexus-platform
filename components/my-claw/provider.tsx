@@ -11,6 +11,7 @@ import {
 import { useRouter } from "next/navigation";
 import {
   INITIAL_AUTOMATION_TASKS,
+  CLAW_CLIENT_QUEUE_DEMO_SESSION,
   MY_CLAW_SESSIONS,
   RESEARCH_CLAW_ID,
   RESEARCH_SESSION_ID,
@@ -80,7 +81,9 @@ export function MyClawProvider({
   const [sessions, setSessions] = useState<MyClawSessionListItem[]>(() =>
     [
       // 澄清交互示例只在基础使用端展示。
-      ...(navigationBasePath === "/claw-client" ? CLAW_CLIENT_CLARIFY_SESSIONS : []),
+      ...(navigationBasePath === "/claw-client"
+        ? [CLAW_CLIENT_QUEUE_DEMO_SESSION, ...CLAW_CLIENT_CLARIFY_SESSIONS]
+        : []),
       ...MY_CLAW_SESSIONS,
     ].map((session) => ({ ...session }))
   );

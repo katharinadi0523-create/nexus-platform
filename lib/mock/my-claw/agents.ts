@@ -59,12 +59,12 @@ export interface EnterpriseAgent extends Required<
 export const ENTERPRISE_AGENT_SOURCE_SCOPE_TABS: EnterpriseAgentSourceScopeTab[] =
   [
     { id: "all", label: "全部" },
-    { id: "favorite", label: "我的收藏" },
     { id: "org", label: "我的组织" },
+    { id: "favorite", label: "我的收藏" },
   ];
 
 export const ENTERPRISE_AGENT_CATEGORY_TABS: EnterpriseAgentCategoryTab[] = [
-  { id: "all", label: "全部" },
+  { id: "all", label: "全部类型" },
   { id: "product_design", label: "产品设计" },
   { id: "software_dev", label: "软件开发" },
   { id: "project_management", label: "项目管理" },

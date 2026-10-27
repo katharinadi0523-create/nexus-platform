@@ -2,14 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
-  Bot,
   ChevronDown,
-  FileText,
   FolderOpen,
+  LogOut,
   MessageSquarePlus,
-  PlugZap,
   Search,
   Settings,
   Sparkles,
@@ -19,18 +18,18 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ChatWorkspace } from "@/components/my-claw/chat/chat-workspace";
-import { AgentsPlaza } from "@/components/my-claw/agents/agents-plaza";
+import { MyClawCapabilitiesPage } from "@/components/claw-client/capabilities-page";
 import { MyClawAutomationWorkbench } from "@/components/my-claw/automation/automation-workbench";
-import { MyClawPluginsHub } from "@/components/my-claw/plugins/plugins-hub";
-import { MyClawSkillsHub } from "@/components/my-claw/skills/skills-hub";
-import { MyClawFilesPage } from "@/components/my-claw/files/files-page";
-import { MyClawSettingsPage } from "@/components/my-claw/settings/settings-page";
+import { ClawClientSettingsPage } from "@/components/claw-client/settings-page";
+import { ClawClientSettingsDialog } from "@/components/claw-client/settings-dialog";
+import { ClawClientWorkspacePage } from "@/components/claw-client/workspace-page";
 import { useMyClaw } from "@/components/my-claw/provider";
 import { ClawClientKnowledgePage } from "@/components/claw-client/knowledge-page";
 import { ClarifyDemoSessionPanel } from "@/components/claw-client/clarify/clarify-demo-session-panel";
 import { useClarifyRuntime } from "@/components/claw-client/clarify/clarify-runtime";
 import { ClarifyStatusCapsule } from "@/components/claw-client/clarify/clarify-status-capsule";
 import { getMyClawSession } from "@/lib/mock/my-claw/sessions";
+import { QueueDemoSessionPanel } from "@/components/claw-client/queue-demo-session-panel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -45,6 +44,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -56,6 +56,8 @@ import { cn } from "@/lib/utils";
 
 type ClientTab =
   | "chat"
+  | "workspace"
+  | "capabilities"
   | "agents"
   | "skills"
   | "plugins"
@@ -72,25 +74,27 @@ const MAIN_NAV: Array<{
   icon: typeof MessageSquarePlus;
 }> = [
   { key: "chat", label: "新对话", icon: MessageSquarePlus },
-  { key: "agents", label: "智能体", icon: Bot },
-  { key: "skills", label: "技能", icon: Sparkles },
-  { key: "plugins", label: "插件", icon: PlugZap },
-  { key: "knowledge", label: "知识", icon: FileText },
+  { key: "workspace", label: "工作空间", icon: FolderOpen },
+  { key: "capabilities", label: "能力", icon: Sparkles },
   { key: "automation", label: "自动化", icon: Zap },
 ];
 
 const ACCOUNT_NAV: Array<{
-  key: Extract<ClientTab, "settings" | "files" | "channels" | "account">;
+  key: Extract<ClientTab, "settings" | "channels" | "account">;
   label: string;
   icon: typeof Settings;
 }> = [
   { key: "settings", label: "Claw 配置", icon: Settings },
-  { key: "files", label: "文件管理", icon: FolderOpen },
   { key: "channels", label: "接入渠道", icon: Workflow },
   { key: "account", label: "我的账号", icon: UserRound },
 ];
 
 function normalizeTab(tab: string | null): ClientTab {
+  if (tab === "agents" || tab === "skills" || tab === "plugins") {
+    return "capabilities";
+  }
+  if (tab === "files") return "workspace";
+  if (tab === "knowledge") return "knowledge";
   return MAIN_NAV.some((item) => item.key === tab) ||
     ACCOUNT_NAV.some((item) => item.key === tab)
     ? (tab as ClientTab)
@@ -285,7 +289,23 @@ function ChannelsPage() {
   );
 }
 
-function ClientSidebar({ tab, sessionId }: { tab: ClientTab; sessionId?: string | null }) {
+function ClientSidebar({ tab, sessionId, onOpenSettings, onLogout }: { tab: ClientTab; sessionId?: string | null; onOpenSettings: () => void; onLogout: () => void }) {
+  const [accountName, setAccountName] = useState(MY_CLAW_USER_DISPLAY_NAME);
+  const [accountId, setAccountId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/auth/me")
+      .then(async (response) => response.ok ? response.json() as Promise<{ user?: { displayName?: string; username?: string } | null }> : null)
+      .then((data) => {
+        if (cancelled || !data?.user) return;
+        if (data.user.displayName) setAccountName(data.user.displayName);
+        if (data.user.username) setAccountId(data.user.username);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <aside className="flex h-full w-[250px] shrink-0 flex-col border-r border-[#e6eaf0] bg-white">
       <div className="flex h-16 items-center gap-2 border-b border-[#eef1f5] px-4">
@@ -319,15 +339,24 @@ function ClientSidebar({ tab, sessionId }: { tab: ClientTab; sessionId?: string 
           <DropdownMenuTrigger asChild>
             <button type="button" className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-slate-50">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#dbe7f4] text-xs font-semibold text-[#2f5fbf]">邸</span>
-              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-700">{MY_CLAW_USER_DISPLAY_NAME}</span>
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-700">{accountName}</span>
               <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="top" className="w-48">
-            {ACCOUNT_NAV.map((item) => {
-              const Icon = item.icon;
-              return <DropdownMenuItem key={item.key} asChild><Link href={hrefFor(item.key)} className="cursor-pointer"><Icon className="h-4 w-4 text-slate-500" />{item.label}</Link></DropdownMenuItem>;
-            })}
+          <DropdownMenuContent align="start" side="top" className="w-[260px] p-1.5">
+            <div className="flex items-start gap-2.5 px-2.5 py-2">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e4edfb] text-sm font-semibold text-[#2773ff]">{accountName.slice(0, 1)}</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-slate-800">{accountName}</div>
+                <div className="mt-0.5 text-xs text-slate-500">个人 Claw 使用者</div>
+                {accountId ? <div className="mt-1 truncate text-[11px] text-slate-400">账号：{accountId}</div> : null}
+                <div className="mt-0.5 text-[11px] text-slate-400">所属组织：未配置</div>
+              </div>
+            </div>
+            <DropdownMenuSeparator className="my-1 bg-slate-200" />
+            <DropdownMenuItem onClick={onOpenSettings} className="h-9 cursor-pointer rounded-md"><Settings className="h-4 w-4 text-slate-500" />设置</DropdownMenuItem>
+            <DropdownMenuSeparator className="my-1 bg-slate-200" />
+            <DropdownMenuItem onClick={onLogout} className="h-9 cursor-pointer rounded-md text-red-600 focus:text-red-600"><LogOut className="h-4 w-4" />退出登录</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -336,25 +365,36 @@ function ClientSidebar({ tab, sessionId }: { tab: ClientTab; sessionId?: string 
 }
 
 export function ClawClientWorkbench({ tab: rawTab, sessionId, messageId }: { tab: string | null; sessionId?: string | null; messageId?: string | null }) {
+  const router = useRouter();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const tab = normalizeTab(rawTab);
   let content: React.ReactNode;
   const chatSession = tab === "chat" && sessionId ? getMyClawSession(sessionId) : undefined;
   if (chatSession?.kind === "clarify_demo") content = <ClarifyDemoSessionPanel key={chatSession.id} session={chatSession} />;
-  else if (tab === "chat") content = <ChatWorkspace sessionId={sessionId} messageId={messageId} />;
-  else if (tab === "agents") content = <AgentsPlaza />;
-  else if (tab === "skills") content = <MyClawSkillsHub />;
-  else if (tab === "plugins") content = <MyClawPluginsHub />;
+  else if (chatSession?.kind === "queue_demo") content = <QueueDemoSessionPanel key={chatSession.id} session={chatSession} />;
+  else if (tab === "chat") content = <ChatWorkspace sessionId={sessionId} messageId={messageId} personalMode />;
+  else if (tab === "workspace") content = <ClawClientWorkspacePage />;
+  else if (tab === "capabilities") {
+    const initialType =
+      rawTab === "skills" || rawTab === "plugins" ? rawTab : "agents";
+    content = <MyClawCapabilitiesPage initialType={initialType} />;
+  }
   else if (tab === "automation") content = <MyClawAutomationWorkbench chatBasePath="/claw-client" />;
   else if (tab === "knowledge") content = <ClawClientKnowledgePage />;
   else if (tab === "channels") content = <ChannelsPage />;
-  else if (tab === "settings") content = <MyClawSettingsPage />;
-  else if (tab === "files") content = <MyClawFilesPage />;
+  else if (tab === "settings") content = <ClawClientSettingsPage />;
   else content = <AccountPage />;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f7f8fa]">
-      <ClientSidebar tab={tab} sessionId={sessionId} />
+      <ClientSidebar tab={tab} sessionId={sessionId} onOpenSettings={() => setSettingsOpen(true)} onLogout={() => {
+        if (loggingOut) return;
+        setLoggingOut(true);
+        void fetch("/api/auth/logout", { method: "POST" }).finally(() => { router.replace("/login"); router.refresh(); setLoggingOut(false); });
+      }} />
       <main className="min-w-0 flex-1 overflow-hidden">{content}</main>
+      <ClawClientSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }

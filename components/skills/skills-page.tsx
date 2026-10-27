@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import {
   AlertTriangle,
@@ -1670,12 +1671,17 @@ export interface SkillsPageProps {
   moduleView?: SkillsModuleView;
   /** 嵌入 my-claw 等壳时隐藏外层页面标题/多余 padding */
   embedded?: boolean;
+  /** 个人工作台能力页的独立标题与紧凑筛选布局 */
+  capabilityWorkspace?: boolean;
+  viewSwitcher?: ReactNode;
 }
 
 /** Embeddable skills hub/management UI. Route entry is the default export below. */
 export function SkillsPage({
   moduleView = "hub",
   embedded = false,
+  capabilityWorkspace = false,
+  viewSwitcher,
 }: SkillsPageProps) {
   const [activeTab, setActiveTab] = useState<SkillsTab>(
     moduleView === "management" ? "mine" : "marketplace"
@@ -1694,7 +1700,9 @@ export function SkillsPage({
   const [draftMySkillStatusFilters, setDraftMySkillStatusFilters] = useState<SkillStatus[]>([]);
   const [mySkillStatusFilterOpen, setMySkillStatusFilterOpen] = useState(false);
   const [marketSourceFilter, setMarketSourceFilter] = useState<MarketplaceSourceFilter>("all");
-  const [marketSortMode, setMarketSortMode] = useState<MarketplaceSortMode>("downloads");
+  const [marketSortMode, setMarketSortMode] = useState<MarketplaceSortMode>(
+    capabilityWorkspace ? "updatedAt" : "downloads"
+  );
   const [audienceCategoryFilter, setAudienceCategoryFilter] =
     useState<AudienceCategoryFilter>("all");
   const [fileSearch, setFileSearch] = useState("");
@@ -2474,6 +2482,35 @@ export function SkillsPage({
     } catch {
       toast.error("导出失败，请稍后重试");
     }
+  };
+
+  const handleAddTemplateToMine = (template: SkillTemplate) => {
+    const isAlreadyAdded = (skill: MySkill) =>
+      skill.publishedTemplateId === template.id || skill.id === `market-${template.id}`;
+
+    if (mySkills.some(isAlreadyAdded)) {
+      return;
+    }
+
+    const addedSkill = createMySkill({
+      id: `market-${template.id}`,
+      name: template.name,
+      displayName: template.name,
+      description: template.description,
+      usageInstructions: template.usageInstructions,
+      category: template.category,
+      tags: template.tags,
+      declaredDependencies: template.declaredDependencies,
+      source: "template",
+      status: "draft",
+      version: template.version,
+      files: template.files,
+    });
+
+    setMySkills((current) =>
+      current.some(isAlreadyAdded) ? current : [addedSkill, ...current]
+    );
+    toast.success(`已添加「${template.name}」到我的技能`);
   };
 
   const handleToggleFavorite = (templateId: string) => {
@@ -3516,30 +3553,97 @@ source_url: "${parsedUrl.toString()}"
             <div
               className={cn(
                 "skills-plaza-filter-top flex flex-col gap-3 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between",
-                embedded && "lg:justify-end"
+                embedded && !capabilityWorkspace && "lg:justify-end"
               )}
             >
-              {!embedded ? (
+              {!embedded || capabilityWorkspace ? (
               <div className="min-w-0 flex-1">
-                <span className="skills-plaza-gradient-title skills-display inline-block text-[1.75rem] font-bold leading-tight tracking-tight">
-                  技能广场
+                <span
+                  className={cn(
+                    "skills-plaza-gradient-title skills-display inline-block text-[1.75rem] font-bold leading-tight tracking-tight",
+                    capabilityWorkspace && "text-[22px] font-semibold tracking-normal text-slate-900"
+                  )}
+                  style={capabilityWorkspace ? { backgroundImage: "none", WebkitTextFillColor: "currentColor", color: "#0f172a" } : undefined}
+                >
+                  {viewSwitcher ?? "技能广场"}
                 </span>
                 <p className="mt-1 max-w-xl text-[13px] leading-5 text-[#6e7b8d]">
-                  发现、筛选并复用组织内外的标准化技能资产，沉淀为可治理、可扩展的智能体能力。
+                  {capabilityWorkspace
+                    ? "浏览已发布技能，按类别筛选并下载。"
+                    : "发现、筛选并复用组织内外的标准化技能资产，沉淀为可治理、可扩展的智能体能力。"}
                 </p>
               </div>
               ) : null}
-              <div className="relative w-full shrink-0 lg:w-[min(320px,100%)]">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6e7b8d]" />
-                <Input
-                  value={marketSearch}
-                  onChange={(event) => setMarketSearch(event.target.value)}
-                  placeholder="搜索 技能名称、类目或标签"
-                  className="h-7 w-full rounded border border-[#e2e8f0] bg-white pl-8 pr-2.5 text-[13px] leading-7 text-[#1e293b] placeholder:text-[#6e7b8d] shadow-none focus-visible:border-[#2773ff]/40 focus-visible:ring-1 focus-visible:ring-[#2773ff]/20"
-                />
+              <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 lg:w-auto lg:flex-nowrap">
+                <div className="relative w-full min-w-0 shrink-0 lg:w-[min(320px,100%)]">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6e7b8d]" />
+                  <Input
+                    value={marketSearch}
+                    onChange={(event) => setMarketSearch(event.target.value)}
+                    placeholder="搜索 技能名称、类目或标签"
+                    className={cn(
+                      "h-7 w-full rounded border border-[#e2e8f0] bg-white pl-8 pr-2.5 text-[13px] leading-7 text-[#1e293b] placeholder:text-[#6e7b8d] shadow-none focus-visible:border-[#2773ff]/40 focus-visible:ring-1 focus-visible:ring-[#2773ff]/20",
+                      capabilityWorkspace && "h-9 rounded-md pl-9 shadow-none"
+                    )}
+                  />
+                </div>
+                {capabilityWorkspace ? (
+                  <Select
+                    ariaLabel="技能排序方式"
+                    value={marketSortMode}
+                    onValueChange={(value) => setMarketSortMode(value as MarketplaceSortMode)}
+                    options={[
+                      { value: "updatedAt", label: "最新发布" },
+                      { value: "downloads", label: "下载量" },
+                    ]}
+                    className="h-9 w-[132px] shrink-0 rounded-md border-slate-200 bg-white px-2.5 text-[13px] shadow-none"
+                  />
+                ) : null}
               </div>
             </div>
 
+            {capabilityWorkspace ? (
+              <div className="mt-4 space-y-2">
+                <nav className="flex flex-wrap items-center gap-0.5" aria-label="技能来源筛选">
+                  {SOURCE_FILTERS.filter((filter) => filter.value !== "platform").map((filter) => (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      aria-pressed={marketSourceFilter === filter.value}
+                      onClick={() => setMarketSourceFilter(filter.value)}
+                      className={cn(
+                        "shrink-0",
+                        getMarketplaceSourceFilterClass(
+                          filter.value,
+                          marketSourceFilter === filter.value
+                        )
+                      )}
+                    >
+                      {filter.value === "favorite" ? "我的收藏" : filter.label}
+                    </button>
+                  ))}
+                </nav>
+                <nav className="flex flex-wrap items-center gap-0.5" aria-label="技能类别筛选">
+                  {USER_CATEGORY_FILTERS.map((filter) => (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      aria-pressed={audienceCategoryFilter === filter.value}
+                      onClick={() => setAudienceCategoryFilter(filter.value)}
+                      className={cn(
+                        "shrink-0",
+                        getAudienceFilterClass(
+                          filter.value,
+                          audienceCategoryFilter === filter.value
+                        )
+                      )}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            ) : (
             <div className="mt-4 space-y-2">
               <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
                 <div className="w-11 shrink-0 text-[12px] leading-6 text-[#6e7b8d]">来源</div>
@@ -3607,12 +3711,18 @@ source_url: "${parsedUrl.toString()}"
                 </div>
               </div>
             </div>
+            )}
 
           {filteredMarketplaceSkills.length > 0 ? (
             <div className="mt-6 grid auto-rows-fr grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredMarketplaceSkills.map((skill, index) => {
                 const audienceMeta = AUDIENCE_VISUAL_META[skill.audienceCategory];
                 const SkillIcon = getMarketplaceSkillIcon(skill);
+                const inMine = mySkills.some(
+                  (mySkill) =>
+                    mySkill.publishedTemplateId === skill.id ||
+                    mySkill.id === `market-${skill.id}`
+                );
 
                 return (
                   <article
@@ -3748,6 +3858,25 @@ source_url: "${parsedUrl.toString()}"
                             </TooltipProvider>
                           ) : null}
                           <div className="ml-auto flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={inMine}
+                              className={cn(
+                                "inline-flex h-8 items-center gap-1 rounded-full px-3 text-sm font-medium transition",
+                                inMine
+                                  ? "cursor-default bg-transparent text-emerald-600"
+                                  : "bg-[#2773ff] text-white hover:bg-[#1f63e6]"
+                              )}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleAddTemplateToMine(skill);
+                              }}
+                              aria-label={inMine ? `已添加「${skill.name}」` : `添加「${skill.name}」`}
+                              title={inMine ? "已添加" : "添加到我的技能"}
+                            >
+                              {!inMine ? <Plus className="h-3.5 w-3.5" /> : null}
+                              {inMine ? "已添加" : "添加"}
+                            </button>
                             <Button
                               variant="outline"
                               size="icon"

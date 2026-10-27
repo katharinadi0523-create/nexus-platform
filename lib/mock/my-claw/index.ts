@@ -44,6 +44,7 @@ export type {
 } from "./agents";
 
 export {
+  CLAW_CLIENT_QUEUE_DEMO_SESSION,
   MY_CLAW_SESSIONS,
   getMyClawSession,
   getPinnedMyClawSessions,

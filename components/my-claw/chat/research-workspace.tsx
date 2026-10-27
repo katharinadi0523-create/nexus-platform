@@ -36,6 +36,7 @@ import {
 } from "@/lib/mock/my-claw/research-multi-agent";
 import { cn } from "@/lib/utils";
 import { ComposerWithAgents } from "./composer-with-agents";
+import { PersonalConversationSidePanel, type ConversationPanelTask, type PersonalPanelView } from "@/components/claw-client/personal-conversation-side-panel";
 
 function StatusIcon({ status }: { status: ResearchTaskStatus }) {
   if (status === "done") {
@@ -510,8 +511,28 @@ function SubAgentPanel({
 
 export function ResearchWorkspace({
   highlightedMessageId,
+  sessionId = "research-demo",
+  personalMode = false,
+  workspacePanelOpen = false,
+  workspaceView = "summary",
+  workspacePanelWidth = 280,
+  conversationTitle,
+  onWorkspaceViewChange,
+  onWorkspacePanelWidthChange,
+  onOpenWorkspace,
+  onCloseWorkspace,
 }: {
   highlightedMessageId?: string | null;
+  sessionId?: string;
+  personalMode?: boolean;
+  workspacePanelOpen?: boolean;
+  workspaceView?: PersonalPanelView;
+  workspacePanelWidth?: number;
+  conversationTitle?: string;
+  onWorkspaceViewChange?: (view: PersonalPanelView) => void;
+  onWorkspacePanelWidthChange?: (width: number) => void;
+  onOpenWorkspace?: () => void;
+  onCloseWorkspace?: () => void;
 }) {
   const detail = useMemo(() => getPersonalClawDetail(), []);
   const mainSender = RESEARCH_AGENTS.main.name;
@@ -524,6 +545,15 @@ export function ResearchWorkspace({
   const [draft, setDraft] = useState(RESEARCH_DEFAULT_QUERY);
 
   const snapshot = useMemo(() => buildResearchSnapshot(step), [step]);
+  const summaryTasks: ConversationPanelTask[] = snapshot.showPlan ? snapshot.tasks.map((task) => ({ id: task.id, title: task.name, status: task.status })) : [];
+  const summaryOutputs = snapshot.artifacts.map((artifact) => ({
+    id: artifact.id,
+    name: artifact.name,
+    path: `对话产出 / ${conversationTitle ?? detail.overview.name} / ${artifact.name}`,
+    size: artifact.size,
+    source: "本次对话",
+    status: artifact.replaces ? "modified" as const : "new" as const,
+  }));
 
   useEffect(() => {
     syncSummonedAgents([
@@ -595,7 +625,20 @@ export function ResearchWorkspace({
             onBack={() => setActiveTaskId(null)}
           />
         </div>
-        <ResearchInspector snapshot={snapshot} onOpenTask={openTask} />
+        {personalMode ? (
+          <PersonalConversationSidePanel
+            open={workspacePanelOpen}
+            personalMode
+            view={workspaceView}
+            panelWidth={workspacePanelWidth}
+            onPanelWidthChange={(width) => onWorkspacePanelWidthChange?.(width)}
+            onViewChange={(nextView) => onWorkspaceViewChange?.(nextView)}
+            onClose={() => onCloseWorkspace?.()}
+            outputs={summaryOutputs}
+            tasks={summaryTasks}
+            conversationTitle={conversationTitle ?? detail.overview.name}
+          />
+        ) : <ResearchInspector snapshot={snapshot} onOpenTask={openTask} />}
       </div>
     );
   }
@@ -649,6 +692,9 @@ export function ResearchWorkspace({
           <div className="mx-auto w-full max-w-4xl">
             <ComposerWithAgents
               detail={detail}
+              modelScopeKey={sessionId}
+              personalMode={personalMode}
+              onOpenWorkspace={onOpenWorkspace}
               value={draft}
               onChange={setDraft}
               onSend={() => {
@@ -659,7 +705,20 @@ export function ResearchWorkspace({
           </div>
         </div>
       </div>
-      <ResearchInspector snapshot={snapshot} onOpenTask={openTask} />
+      {personalMode ? (
+        <PersonalConversationSidePanel
+          open={workspacePanelOpen}
+          personalMode
+          view={workspaceView}
+          panelWidth={workspacePanelWidth}
+          onPanelWidthChange={(width) => onWorkspacePanelWidthChange?.(width)}
+          onViewChange={(nextView) => onWorkspaceViewChange?.(nextView)}
+          onClose={() => onCloseWorkspace?.()}
+          outputs={summaryOutputs}
+          tasks={summaryTasks}
+          conversationTitle={conversationTitle ?? detail.overview.name}
+        />
+      ) : <ResearchInspector snapshot={snapshot} onOpenTask={openTask} />}
     </div>
   );
 }
