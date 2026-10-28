@@ -40,6 +40,7 @@ interface MyClawContextValue {
   /** Automation tasks shared with sidebar tree. */
   automationTasks: AutomationTask[];
   setActiveSession: (sessionId: string | null) => void;
+  createSession: (title?: string) => string;
   pinSession: (sessionId: string, pinned?: boolean) => void;
   renameSession: (sessionId: string, title: string) => void;
   deleteSession: (sessionId: string) => void;
@@ -102,6 +103,24 @@ export function MyClawProvider({
 
   const setActiveSession = useCallback((sessionId: string | null) => {
     setActiveSessionId(sessionId);
+  }, []);
+
+  const createSession = useCallback((title?: string) => {
+    const id = `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const conversationTitle = title?.trim() || "新对话";
+    setSessions((prev) => [
+      {
+        id,
+        title: conversationTitle,
+        kind: "blank",
+        pinned: false,
+        updatedAt: new Date().toISOString(),
+        preview: "",
+      },
+      ...prev,
+    ]);
+    setActiveSessionId(id);
+    return id;
   }, []);
 
   const setAutomationTasks = useCallback((tasks: AutomationTask[]) => {
@@ -251,6 +270,7 @@ export function MyClawProvider({
       favoriteOverrides,
       automationTasks,
       setActiveSession,
+      createSession,
       pinSession,
       renameSession,
       deleteSession,
@@ -272,6 +292,7 @@ export function MyClawProvider({
       favoriteOverrides,
       automationTasks,
       setActiveSession,
+      createSession,
       pinSession,
       renameSession,
       deleteSession,

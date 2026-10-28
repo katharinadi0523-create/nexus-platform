@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
 import {
@@ -52,6 +53,11 @@ import { CLAW_CLIENT_WORKSPACE_ROOT } from "./personal-workspace-data";
 import { usePersonalChatContext } from "./personal-chat-context";
 import type { PersonalChatAttachment } from "./personal-chat-context";
 import { cn } from "@/lib/utils";
+import { useOptionalWorkspaceCatalog } from "@/components/workspace-1/workspaceCatalog";
+import { FileGlyph } from "@/components/skillhub-v2/shared";
+import { entryName } from "@/components/skillhub-v2/skill-file-ops";
+import { SkillFilesTab, type SkillFilesTabHandle } from "@/components/skillhub-v2/skill-files-tab";
+import { skillFileBaseName } from "@/components/workspace-1/workspaceFileQuote";
 
 export type PersonalPanelView = "summary" | "execution" | "files" | "workspace" | "file";
 
@@ -229,100 +235,12 @@ type PersonalConversationSidePanelProps = {
   historicalMaterials?: PersonalChatAttachment[];
 };
 
-function flattenFiles(folder: WorkspaceFolderItem, parentPath = ""): WorkspaceFile[] {
+function flattenLegacyFiles(folder: WorkspaceFolderItem, parentPath = ""): WorkspaceFile[] {
   return folder.children.flatMap((entry: WorkspaceEntryItem) => {
     const path = parentPath ? `${parentPath} / ${entry.name}` : entry.name;
-    if (entry.kind === "folder") return flattenFiles(entry, path);
+    if (entry.kind === "folder") return flattenLegacyFiles(entry, path);
     return [{ id: entry.id, name: entry.name, path, sizeLabel: entry.sizeLabel }];
   });
-}
-
-function WorkspaceTree({
-  folder,
-  depth = 0,
-  expanded,
-  onToggle,
-  onOpenFile,
-  onReferenceFile,
-  referencedIds,
-  parentPath = "",
-}: {
-  folder: WorkspaceFolderItem;
-  depth?: number;
-  expanded: Set<string>;
-  onToggle: (id: string) => void;
-  onOpenFile: (file: WorkspaceFile) => void;
-  onReferenceFile: (file: WorkspaceFile) => void;
-  referencedIds: Set<string>;
-  parentPath?: string;
-}) {
-  return (
-    <div>
-      {folder.children.map((entry) => {
-        const path = parentPath ? `${parentPath} / ${entry.name}` : entry.name;
-        if (entry.kind === "folder") {
-          const isExpanded = expanded.has(entry.id);
-          return (
-            <div key={entry.id}>
-              <button
-                type="button"
-                onClick={() => onToggle(entry.id)}
-                className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                style={{ paddingLeft: 8 + depth * 18 }}
-              >
-                {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
-                <Folder className="h-4 w-4 text-blue-500" />
-                <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-              </button>
-              {isExpanded ? (
-                <WorkspaceTree
-                  folder={entry}
-                  depth={depth + 1}
-                  expanded={expanded}
-                  onToggle={onToggle}
-                  onOpenFile={onOpenFile}
-                  onReferenceFile={onReferenceFile}
-                  referencedIds={referencedIds}
-                  parentPath={path}
-                />
-              ) : null}
-            </div>
-          );
-        }
-
-        const file: WorkspaceFile = {
-          id: entry.id,
-          name: entry.name,
-          path,
-          sizeLabel: entry.sizeLabel,
-        };
-        return (
-          <div key={entry.id} className="group flex min-h-9 w-full items-center rounded-md pr-2 hover:bg-blue-50" style={{ paddingLeft: 28 + depth * 18 }}>
-            <button
-              type="button"
-              draggable
-              onClick={() => onOpenFile(file)}
-              onDragStart={(event) => {
-                event.dataTransfer.setData("application/x-claw-workspace-file", JSON.stringify(file));
-                event.dataTransfer.setData("text/plain", file.name);
-                event.dataTransfer.effectAllowed = "copy";
-              }}
-              className="flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-[13px] text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-              title={`${file.path} · 拖到输入框可引用`}
-            >
-              <FileText className="h-4 w-4 shrink-0 text-slate-400 group-hover:text-blue-600" />
-              <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-            </button>
-            {referencedIds.has(entry.id) ? (
-              <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-blue-600"><Check className="h-3 w-3" />已引用</span>
-            ) : (
-              <button type="button" aria-label={`引用${file.name}`} title="引用" onClick={() => onReferenceFile(file)} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 hover:bg-white hover:text-blue-600 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 group-hover:opacity-100"><Paperclip className="h-3.5 w-3.5" /></button>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 function parseCsv(text: string) {
@@ -476,6 +394,12 @@ export function PersonalConversationSidePanel({
   historicalMaterials = [],
 }: PersonalConversationSidePanelProps) {
   const context = usePersonalChatContext();
+  const catalog = useOptionalWorkspaceCatalog();
+  const router = useRouter();
+  const pathname = usePathname();
+  const filesRef = useRef<SkillFilesTabHandle>(null);
+  const [workspaceFileTabs, setWorkspaceFileTabs] = useState<string[]>([]);
+  const [workspaceActiveFilePath, setWorkspaceActiveFilePath] = useState<string | null>(null);
   const materials = useMemo(() => {
     const byId = new Map<string, PersonalChatAttachment>();
     [...historicalMaterials, ...(context?.attachments ?? [])].forEach((item) => {
@@ -484,15 +408,11 @@ export function PersonalConversationSidePanel({
     });
     return [...byId.values()];
   }, [context?.attachments, historicalMaterials]);
-  const [query, setQuery] = useState("");
   const [sessionFileQuery, setSessionFileQuery] = useState("");
   const [sessionFileSearchOpen, setSessionFileSearchOpen] = useState(false);
   const [openMoreMenuKey, setOpenMoreMenuKey] = useState<string | null>(null);
   const [deletedOutputIds, setDeletedOutputIds] = useState<Set<string>>(() => new Set());
   const [pendingDeleteOutput, setPendingDeleteOutput] = useState<ConversationPanelFile | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(CLAW_CLIENT_WORKSPACE_ROOT.children.map((entry) => entry.id))
-  );
   const [openFiles, setOpenFiles] = useState<WorkspaceFile[]>([]);
   const [activeFileId, setActiveFileId] = useState("");
   const [fileReturnView, setFileReturnView] = useState<PersonalPanelView>("files");
@@ -513,11 +433,19 @@ export function PersonalConversationSidePanel({
   const taskListRef = useRef<HTMLDivElement | null>(null);
   const subagentListRef = useRef<HTMLDivElement | null>(null);
   const processListManuallyScrolled = useRef(false);
-  const workspaceFiles = useMemo(() => flattenFiles(CLAW_CLIENT_WORKSPACE_ROOT), []);
-  const searchableWorkspaceFiles = useMemo(() => {
-    const virtualOutputs = outputs.filter((output) => !deletedOutputIds.has(output.id)).map((output): WorkspaceFile => ({ id: `output:${output.id}`, name: output.name, path: output.path, sizeLabel: output.size }));
-    return [...workspaceFiles, ...virtualOutputs];
-  }, [deletedOutputIds, outputs, workspaceFiles]);
+  const workspaceFiles = useMemo(() => {
+    if (catalog?.activeSpace) {
+      return catalog.activeSpace.files
+        .filter((item) => !item.path.endsWith("/"))
+        .map((item) => ({
+          id: item.path,
+          name: skillFileBaseName(item.path),
+          path: item.path,
+          sizeLabel: item.sizeLabel ?? "",
+        }));
+    }
+    return flattenLegacyFiles(CLAW_CLIENT_WORKSPACE_ROOT);
+  }, [catalog?.activeSpace]);
   const sortedOutputs = useMemo(() => [...outputs].sort((a, b) => {
     const aTime = typeof a.updatedAt === "number" ? a.updatedAt : Date.parse(a.updatedAt ?? "");
     const bTime = typeof b.updatedAt === "number" ? b.updatedAt : Date.parse(b.updatedAt ?? "");
@@ -606,11 +534,6 @@ export function PersonalConversationSidePanel({
     const availableListHeight = Math.max(0, summarySectionHeight - 32 - sectionChromeHeight);
     return allocateSummaryRows(availableListHeight, summarySections, collapsedSummarySections);
   }, [collapsedSummarySections, subagentItems.length, summarySectionHeight, summarySections, tasks.length]);
-  const filteredFiles = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return [];
-    return searchableWorkspaceFiles.filter((file) => `${file.name} ${file.path}`.toLowerCase().includes(normalized));
-  }, [query, searchableWorkspaceFiles]);
   const activeFile = openFiles.find((file) => file.id === activeFileId) ?? openFiles[0];
   const activePrimaryView = view === "summary" ? "execution" : view === "file" ? fileReturnView : view;
   const showExecution = personalMode ? activePrimaryView === "execution" : view === "summary";
@@ -660,9 +583,20 @@ export function PersonalConversationSidePanel({
     if (sessionFileSearchOpen) sessionFileSearchRef.current?.focus();
   }, [sessionFileSearchOpen]);
 
+  const handleWorkspaceTabsChange = useCallback((tabs: string[], activePath: string | null) => {
+    setWorkspaceFileTabs(tabs);
+    setWorkspaceActiveFilePath(activePath);
+  }, []);
+
+  useEffect(() => {
+    if (catalog?.activeSpace) return;
+    setWorkspaceFileTabs([]);
+    setWorkspaceActiveFilePath(null);
+  }, [catalog?.activeSpace]);
+
   useEffect(() => {
     fileTabsRef.current?.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [activeFileId, openFiles.length, view]);
+  }, [activeFileId, openFiles.length, view, workspaceActiveFilePath, workspaceFileTabs.length]);
 
   useEffect(() => {
     if (!open || (personalMode ? activePrimaryView !== "execution" : view !== "summary") || (!personalMode && collapsedSummarySections.tasks)) return;
@@ -712,8 +646,9 @@ export function PersonalConversationSidePanel({
   }
 
   function locateFile(file: ConversationPanelFile | { id: string; name: string; path?: string }) {
-    setQuery(file.name);
     onViewChange("workspace");
+    const path = file.path ?? file.name;
+    window.requestAnimationFrame(() => filesRef.current?.revealPath(path));
   }
 
   function downloadAttachment(file: File) {
@@ -732,6 +667,14 @@ export function PersonalConversationSidePanel({
     if (openFiles.some((file) => file.id === outputId)) closeFile(outputId);
     setPendingDeleteOutput(null);
     toast.success("已从本次会话和工作空间移除该产物");
+  }
+
+  function selectPrimaryView(id: PersonalPanelView) {
+    if (id === "workspace") {
+      filesRef.current?.hidePreview();
+      if (view === "workspace") return;
+    }
+    onViewChange(id);
   }
 
   function closePanel() {
@@ -816,19 +759,57 @@ export function PersonalConversationSidePanel({
                 { id: "files", label: "会话文件", Icon: Files },
                 { id: "workspace", label: "工作空间", Icon: Folder },
               ] as const).map(({ id, label, Icon }) => (
-                <button key={id} type="button" role="tab" aria-label={label} aria-selected={activePrimaryView === id} title={label} onClick={() => onViewChange(id)} className={cn("flex h-8 w-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400", activePrimaryView === id ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800")}>
+                <button key={id} type="button" role="tab" aria-label={label} aria-selected={activePrimaryView === id} title={label} onClick={() => selectPrimaryView(id)} className={cn("flex h-8 w-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400", activePrimaryView === id ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800")}>
                   <Icon className="h-4 w-4" />
                 </button>
               ))}
             </div>
           ) : (
             <div className="flex shrink-0 items-center gap-1">
-              <button type="button" onClick={() => onViewChange("summary")} className={cn("shrink-0 rounded-md px-2.5 py-1.5 text-xs", view === "summary" ? "bg-blue-50 font-medium text-blue-700" : "text-slate-500 hover:bg-slate-50")}>摘要</button>
-              <button type="button" onClick={() => onViewChange("workspace")} className={cn("shrink-0 rounded-md px-2.5 py-1.5 text-xs", view === "workspace" ? "bg-blue-50 font-medium text-blue-700" : "text-slate-500 hover:bg-slate-50")}>工作空间</button>
+              <button type="button" onClick={() => selectPrimaryView("summary")} className={cn("shrink-0 rounded-md px-2.5 py-1.5 text-xs", view === "summary" ? "bg-blue-50 font-medium text-blue-700" : "text-slate-500 hover:bg-slate-50")}>摘要</button>
+              <button type="button" onClick={() => selectPrimaryView("workspace")} className={cn("shrink-0 rounded-md px-2.5 py-1.5 text-xs", view === "workspace" ? "bg-blue-50 font-medium text-blue-700" : "text-slate-500 hover:bg-slate-50")}>工作空间</button>
             </div>
           )}
-          {openFiles.length ? <span aria-hidden="true" className="mx-2 h-5 w-px shrink-0 bg-slate-300" /> : null}
-          <div ref={fileTabsRef} aria-label="已打开的文件" className="flex min-w-0 flex-1 touch-pan-x items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
+          {openFiles.length || workspaceFileTabs.length ? <span aria-hidden="true" className="mx-2 h-5 w-px shrink-0 bg-slate-300" /> : null}
+          <div ref={fileTabsRef} aria-label="已打开的文件" className="flex min-w-0 flex-1 touch-pan-x items-stretch gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
+            {workspaceFileTabs.length > 0 ? (
+              <div className="workspace-preview-tabs workspace-chat__tabs-files" role="tablist" aria-label="已打开的工作空间文件">
+                {workspaceFileTabs.map((path) => {
+                  const active = path === workspaceActiveFilePath && view === "workspace";
+                  const name = entryName(path);
+                  return (
+                    <div
+                      key={path}
+                      data-active={active}
+                      className={cn("workspace-preview-tab", active && "is-active")}
+                    >
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        title={path}
+                        onClick={() => {
+                          onViewChange("workspace");
+                          filesRef.current?.openTab(path);
+                        }}
+                      >
+                        <FileGlyph path={path} />
+                        <span>{name}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="workspace-preview-tab__close"
+                        aria-label={`关闭 ${name}`}
+                        title="关闭"
+                        onClick={() => filesRef.current?.closeFileTab(path)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
             {openFiles.map((file) => (
               <div key={file.id} data-active={view === "file" && activeFileId === file.id} className={cn("flex max-w-40 shrink-0 items-center gap-1 rounded-md px-2 py-1", view === "file" && activeFileId === file.id ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-50")}>
                 <button type="button" title={file.name} onClick={() => { setActiveFileId(file.id); onViewChange("file"); }} className="max-w-32 truncate text-xs">{file.name}</button>
@@ -846,7 +827,7 @@ export function PersonalConversationSidePanel({
           </div>
         </div>
 
-        {view === "summary" || view === "execution" || view === "files" ? (
+        {(view === "summary" || view === "execution" || view === "files") ? (
           <div
             ref={summaryContentRef}
             onScroll={personalMode && activePrimaryView === "execution" ? syncCurrentProgressVisibility : undefined}
@@ -1112,43 +1093,33 @@ export function PersonalConversationSidePanel({
           </div>
         ) : null}
 
-        {view === "workspace" ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="border-b border-slate-100 px-3 py-3">
-              {personalMode ? <h2 className="mb-3 px-1 text-sm font-semibold text-slate-800">工作空间</h2> : null}
-              <label className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-2.5 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
-                <Search className="h-4 w-4 shrink-0 text-slate-400" />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索工作空间文件" className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-slate-400" />
-                {query ? <button type="button" onClick={() => setQuery("")} aria-label="清除搜索" className="text-slate-400 hover:text-slate-700"><X className="h-3.5 w-3.5" /></button> : null}
-              </label>
-              <div className="mt-2 truncate text-[11px] text-slate-400">工作空间 / {query ? `搜索“${query}”` : "全部文件"}</div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {query ? (
-                filteredFiles.length ? filteredFiles.map((file) => (
-                  <div key={file.id} className="group flex items-center gap-2 rounded-md px-2 py-2 hover:bg-blue-50">
-                    <button type="button" draggable onClick={() => openFile(file)} onDragStart={(event) => { event.dataTransfer.setData("application/x-claw-workspace-file", JSON.stringify(file)); event.dataTransfer.effectAllowed = "copy"; }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                      <FileText className="h-4 w-4 shrink-0 text-slate-400" /><span className="min-w-0 flex-1"><span className="block truncate text-[13px] text-slate-700">{file.name}</span><span className="block truncate text-[11px] text-slate-400">{file.path} · {file.sizeLabel}</span></span>
-                    </button>
-                    {context?.attachments.some((item) => item.id === `workspace:${file.id}`) ? <span className="inline-flex items-center gap-1 text-[11px] text-blue-600"><Check className="h-3.5 w-3.5" />已引用</span> : <button type="button" aria-label={`引用${file.name}`} title="引用" onClick={() => referenceFile(file)} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 hover:bg-white hover:text-blue-600 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 group-hover:opacity-100"><Paperclip className="h-3.5 w-3.5" /></button>}
-                  </div>
-                )) : <p className="px-3 py-10 text-center text-xs text-slate-400">没有匹配的文件</p>
-              ) : (
-                <WorkspaceTree
-                  folder={CLAW_CLIENT_WORKSPACE_ROOT}
-                  expanded={expanded}
-                  onToggle={(id) => setExpanded((current) => {
-                    const next = new Set(current);
-                    if (next.has(id)) next.delete(id); else next.add(id);
-                    return next;
-                  })}
-                  onOpenFile={openFile}
-                  onReferenceFile={referenceFile}
-                  referencedIds={new Set((context?.attachments ?? []).filter((item) => item.source === "workspace").map((item) => item.id.replace("workspace:", "")))}
-                />
-              )}
-            </div>
-            <div className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-400">拖拽文件到对话输入框，或选择文件后点击“引用”。</div>
+        {catalog?.activeSpace ? (
+          <div className={cn("flex min-h-0 flex-1 flex-col", view !== "workspace" && "hidden")}>
+            <SkillFilesTab
+              key={`${catalog.activeSpace.id}-${catalog.rootEpoch}`}
+              ref={filesRef}
+              files={catalog.activeSpace.files}
+              canEdit
+              fill
+              workspaceLayout
+              workspaceRootLabel={catalog.activeSpace.name}
+              protectSkillMarkdown={false}
+              quoteOnly
+              embedTabs
+              onTabsChange={handleWorkspaceTabsChange}
+              onFilesChange={(files) => catalog.updateFiles(catalog.activeSpace!.id, files)}
+              onQuoteFile={(quote) => {
+                referenceFile({ id: quote.path, name: quote.name, path: quote.path, sizeLabel: "" });
+                return undefined;
+              }}
+              onLeaveWorkspace={() => {
+                router.push(pathname.startsWith("/claw-client") ? "/claw-client?tab=workspace" : "/my-claw/files");
+              }}
+            />
+          </div>
+        ) : view === "workspace" ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center text-sm text-slate-500">
+            工作空间尚未加载。
           </div>
         ) : null}
 

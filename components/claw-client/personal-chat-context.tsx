@@ -16,6 +16,8 @@ export type PersonalChatContextValue = {
   addAttachments: (items: PersonalChatAttachment[]) => void;
   removeAttachment: (id: string) => void;
   clearAttachments: () => void;
+  incomingDraft: string;
+  consumeIncomingDraft: () => string;
 };
 
 export const PersonalChatContext = createContext<PersonalChatContextValue | null>(null);

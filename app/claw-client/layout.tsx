@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { ClarifyRuntimeProvider } from "@/components/claw-client/clarify/clarify-runtime";
 import { MyClawProvider } from "@/components/my-claw/provider";
+import { WorkspaceCatalogProvider } from "@/components/workspace-1/workspaceCatalog";
 
 /**
  * 基础使用端独立于 Project 协作端：只复用个人 Claw 的会话和能力状态，
@@ -11,9 +12,11 @@ export default function ClawClientLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <MyClawProvider navigationBasePath="/claw-client">
-      <Suspense fallback={null}>
-        <ClarifyRuntimeProvider>{children}</ClarifyRuntimeProvider>
-      </Suspense>
+      <WorkspaceCatalogProvider>
+        <Suspense fallback={null}>
+          <ClarifyRuntimeProvider>{children}</ClarifyRuntimeProvider>
+        </Suspense>
+      </WorkspaceCatalogProvider>
     </MyClawProvider>
   );
 }

@@ -1,0 +1,255 @@
+.skill-file-preview {
+  --sdp-border: #e8ebf0;
+  --sdp-text: #1f2329;
+  --sdp-muted: #8f959e;
+  --sdp-blue: #1677ff;
+  min-height: 100%;
+  user-select: text;
+}
+
+.skill-file-preview__empty {
+  margin: 0;
+  padding: 24px 20px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.skill-file-preview--unsupported .skill-file-preview__empty {
+  padding-bottom: 0;
+}
+
+.skill-file-preview__hint {
+  margin: 8px 20px 24px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #94a3b8;
+}
+
+.skill-file-preview .sdp-preview-plain,
+.skill-file-preview .sdp-preview-code {
+  margin: 0;
+  padding: 16px 18px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.skill-file-preview .sdp-preview-code {
+  background: #f8fafc;
+}
+
+.skill-file-preview .sdp-preview-code code,
+.skill-file-preview .sdp-preview-code .hljs {
+  font-family: inherit;
+  font-size: inherit;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.skill-file-preview .sdp-md {
+  padding: 16px 20px 28px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #334155;
+}
+
+.skill-file-preview .sdp-md > :first-child {
+  margin-top: 0;
+}
+
+.skill-file-preview .sdp-md h1,
+.skill-file-preview .sdp-md h2,
+.skill-file-preview .sdp-md h3,
+.skill-file-preview .sdp-md h4 {
+  margin: 1.15em 0 0.5em;
+  color: #0f172a;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.skill-file-preview .sdp-md h1 {
+  font-size: 22px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.skill-file-preview .sdp-md h2 {
+  font-size: 17px;
+}
+
+.skill-file-preview .sdp-md h3,
+.skill-file-preview .sdp-md h4 {
+  font-size: 15px;
+}
+
+.skill-file-preview .sdp-md p,
+.skill-file-preview .sdp-md ul,
+.skill-file-preview .sdp-md ol,
+.skill-file-preview .sdp-md blockquote {
+  margin: 0 0 0.75em;
+}
+
+.skill-file-preview .sdp-md ul,
+.skill-file-preview .sdp-md ol {
+  padding-left: 1.35em;
+  list-style: revert;
+}
+
+.skill-file-preview .sdp-md li + li {
+  margin-top: 0.2em;
+}
+
+.skill-file-preview .sdp-md a {
+  color: #2773ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.skill-file-preview .sdp-md hr {
+  margin: 1.25em 0;
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.skill-file-preview .sdp-md blockquote {
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid #dbeafe;
+  color: #64748b;
+}
+
+.skill-file-preview .sdp-md code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.skill-file-preview .sdp-md pre {
+  margin: 0 0 1em;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e8ebf0;
+  overflow: auto;
+}
+
+.skill-file-preview .sdp-md pre code,
+.skill-file-preview .sdp-md pre .hljs {
+  padding: 0;
+  background: transparent;
+  display: block;
+  overflow: visible;
+}
+
+.skill-file-preview .sdp-md table {
+  width: 100%;
+  margin: 0 0 1em;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.skill-file-preview .sdp-md th,
+.skill-file-preview .sdp-md td {
+  border: 1px solid #e2e8f0;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.skill-file-preview .sdp-md th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.skill-file-preview .sdp-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e8ebf0;
+  background: #fafbfc;
+}
+
+.skill-file-preview .sdp-preview-toolbar__btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #fff;
+  color: #4e5969;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.skill-file-preview .sdp-preview-toolbar__btn.is-active {
+  border-color: #91caff;
+  background: #e8f3ff;
+  color: #1677ff;
+}
+
+.skill-file-preview .sdp-tree {
+  padding: 12px 14px 20px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.skill-file-preview .sdp-tree__row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 4px;
+}
+
+.skill-file-preview .sdp-tree__key {
+  color: #0369a1;
+  font-weight: 600;
+}
+
+.skill-file-preview .sdp-tree__val--string {
+  color: #15803d;
+}
+
+.skill-file-preview .sdp-tree__val--number {
+  color: #b45309;
+}
+
+.skill-file-preview .sdp-tree__val--bool {
+  color: #7c3aed;
+}
+
+.skill-file-preview .sdp-tree__val--null,
+.skill-file-preview .sdp-tree__meta,
+.skill-file-preview .sdp-tree__colon {
+  color: #94a3b8;
+}
+
+.skill-file-preview .sdp-tree__toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.skill-file-preview .sdp-tree__caret {
+  display: inline-block;
+  width: 10px;
+  color: #98a2b3;
+  font-size: 10px;
+}
+
+.skill-file-preview .sdp-tree__caret.is-open {
+  transform: rotate(90deg);
+}

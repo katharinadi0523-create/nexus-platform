@@ -130,14 +130,31 @@ export function DependencyTypeIcon({ type }: { type: "runtime" | "mcp" | "plugin
   return <Icon className="h-4 w-4" />;
 }
 
-export function FileGlyph({ path, open = false }: { path: string; open?: boolean }) {
-  if (path.endsWith("/")) {
+export function FileGlyph({
+  path,
+  open = false,
+  folder = false,
+}: {
+  path: string;
+  open?: boolean;
+  folder?: boolean;
+}) {
+  if (folder || path.endsWith("/")) {
     return <Folder className={cn("h-4 w-4", open ? "text-blue-600" : "text-slate-400")} />;
   }
   if (path.endsWith(".md")) {
     return <FileText className="h-4 w-4 text-slate-500" />;
   }
   return <FileCode2 className="h-4 w-4 text-blue-500" />;
+}
+
+export function isRootSkillMarkdown(path: string) {
+  return path.toLowerCase() === "skill.md";
+}
+
+export function getPreferredSkillFilePath(files: { path: string }[]) {
+  const real = files.filter((file) => !file.path.endsWith("/"));
+  return real.find((file) => isRootSkillMarkdown(file.path))?.path ?? real[0]?.path ?? "";
 }
 
 export function buildFileTree(files: SkillFile[]) {

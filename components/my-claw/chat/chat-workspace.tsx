@@ -6,6 +6,7 @@ import { PanelRightOpen } from "lucide-react";
 import { useMyClaw } from "@/components/my-claw/provider";
 import {
   PersonalChatContext,
+  usePersonalChatContext,
   type PersonalChatAttachment,
 } from "@/components/claw-client/personal-chat-context";
 import { PersonalConversationSidePanel, type PersonalPanelView } from "@/components/claw-client/personal-conversation-side-panel";
@@ -17,6 +18,7 @@ import {
 } from "@/lib/mock/my-claw/branding";
 import { getPersonalClawDetail } from "@/lib/mock/my-claw/personal-claw";
 import { getMyClawSession } from "@/lib/mock/my-claw/sessions";
+import { takeWorkspaceChatBootstrap } from "@/components/workspace-1/workspaceChatBridge";
 import { ComposerWithAgents } from "./composer-with-agents";
 import { EnterpriseSessionPanel } from "./enterprise-session-panel";
 import { ExpenseChatPanel } from "./expense-chat-panel";
@@ -59,8 +61,15 @@ function BlankChatPanel({
   onCloseWorkspace?: () => void;
 }) {
   const detail = useMemo(() => getPersonalClawDetail(), []);
+  const chat = usePersonalChatContext();
   const [draft, setDraft] = useState("");
   const greeting = getMyClawOpeningGreeting(MY_CLAW_USER_DISPLAY_NAME);
+
+  useEffect(() => {
+    if (!chat?.incomingDraft) return;
+    const text = chat.consumeIncomingDraft();
+    if (text) setDraft((current) => current || text);
+  }, [chat]);
 
   return (
     <div className="flex h-full min-h-0">
@@ -133,13 +142,16 @@ function PersonalChatContent({
   children,
   open,
   onOpenPanel,
+  seedDraft = "",
 }: {
   title: string;
   children: ReactNode;
   open: boolean;
   onOpenPanel: () => void;
+  seedDraft?: string;
 }) {
   const [attachments, setAttachments] = useState<PersonalChatAttachment[]>([]);
+  const [incomingDraft, setIncomingDraft] = useState(seedDraft);
   const addAttachments = useCallback((items: PersonalChatAttachment[]) => {
     setAttachments((current) => {
       const ids = new Set(current.map((item) => item.id));
@@ -150,7 +162,15 @@ function PersonalChatContent({
     setAttachments((current) => current.filter((item) => item.id !== id));
   }, []);
   const clearAttachments = useCallback(() => setAttachments([]), []);
-  const contextValue = useMemo(() => ({ attachments, addAttachments, removeAttachment, clearAttachments }), [attachments, addAttachments, removeAttachment, clearAttachments]);
+  const consumeIncomingDraft = useCallback(() => {
+    const text = incomingDraft;
+    if (text) setIncomingDraft("");
+    return text;
+  }, [incomingDraft]);
+  const contextValue = useMemo(
+    () => ({ attachments, addAttachments, removeAttachment, clearAttachments, incomingDraft, consumeIncomingDraft }),
+    [attachments, addAttachments, removeAttachment, clearAttachments, incomingDraft, consumeIncomingDraft],
+  );
 
   return (
     <PersonalChatContext.Provider value={contextValue}>
@@ -166,11 +186,12 @@ export function ChatWorkspace({ sessionId, messageId, personalMode = false }: Ch
   const { setActiveSession } = useMyClaw();
   const isWideScreen = useSyncExternalStore(subscribeWideScreen, getWideScreenSnapshot, () => false);
   const sessionKey = sessionId ?? null;
-  const [panelOpenState, setPanelOpenState] = useState<{ sessionKey: string | null; open: boolean | null }>({ sessionKey, open: null });
+  const [boot] = useState(() => takeWorkspaceChatBootstrap());
+  const [panelOpenState, setPanelOpenState] = useState<{ sessionKey: string | null; open: boolean | null }>({ sessionKey, open: boot ? true : null });
   const panelOpenOverride = panelOpenState.sessionKey === sessionKey ? panelOpenState.open : null;
   const setPanelOpenOverride = (open: boolean | null) => setPanelOpenState({ sessionKey, open });
   const workspacePanelOpen = panelOpenOverride ?? (isWideScreen && Boolean(sessionId));
-  const [workspaceViewState, setWorkspaceViewState] = useState<{ sessionKey: string | null; view: PersonalPanelView }>({ sessionKey, view: "summary" });
+  const [workspaceViewState, setWorkspaceViewState] = useState<{ sessionKey: string | null; view: PersonalPanelView }>({ sessionKey, view: boot ? "workspace" : "summary" });
   const workspaceView = workspaceViewState.sessionKey === sessionKey ? workspaceViewState.view : "summary";
   const [workspacePanelWidth, setWorkspacePanelWidth] = useState(400);
 
@@ -224,7 +245,7 @@ export function ChatWorkspace({ sessionId, messageId, personalMode = false }: Ch
   if (!personalMode) return content;
   const title = session?.title ?? "新对话";
   return (
-    <PersonalChatContent key={sessionKey ?? "new"} title={title} open={workspacePanelOpen} onOpenPanel={openSummaryPanel}>
+    <PersonalChatContent key={sessionKey ?? "new"} title={title} open={workspacePanelOpen} onOpenPanel={openSummaryPanel} seedDraft={boot?.text ?? ""}>
       {content}
     </PersonalChatContent>
   );
