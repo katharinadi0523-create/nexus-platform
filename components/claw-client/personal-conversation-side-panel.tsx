@@ -18,7 +18,6 @@ import {
   FileText,
   Files,
   Folder,
-  ListTodo,
   LocateFixed,
   LoaderCircle,
   MoreHorizontal,
@@ -28,6 +27,7 @@ import {
   Search,
   Sparkles,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import {
@@ -59,7 +59,7 @@ import { entryName } from "@/components/skillhub-v2/skill-file-ops";
 import { SkillFilesTab, type SkillFilesTabHandle } from "@/components/skillhub-v2/skill-files-tab";
 import { skillFileBaseName } from "@/components/workspace-1/workspaceFileQuote";
 
-export type PersonalPanelView = "summary" | "execution" | "files" | "workspace" | "file";
+export type PersonalPanelView = "summary" | "execution" | "collaboration" | "files" | "workspace" | "file";
 
 export type ConversationPanelFile = {
   id: string;
@@ -74,6 +74,8 @@ export type ConversationPanelFile = {
 export type ConversationPanelTask = {
   id: string;
   title: string;
+  agentName?: string;
+  agentRole?: string;
   status: "done" | "running" | "pending" | "failed";
   kind?: "task" | "subagent";
   recordContent?: string;
@@ -97,7 +99,7 @@ type SubagentTraceEvent = {
 const SUMMARY_ROW_HEIGHTS: Record<SummarySectionKey, number> = {
   tasks: 40,
   taskList: 40,
-  subagents: 40,
+  subagents: 48,
   outputs: 60,
   materials: 48,
 };
@@ -231,6 +233,10 @@ type PersonalConversationSidePanelProps = {
   onClose: () => void;
   outputs?: ConversationPanelFile[];
   tasks?: ConversationPanelTask[];
+  agents?: ConversationPanelTask[];
+  agentDetailRequest?: { taskId: string; requestId: number } | null;
+  leadAgentName?: string;
+  leadAgentStatus?: string;
   conversationTitle?: string;
   historicalMaterials?: PersonalChatAttachment[];
 };
@@ -249,7 +255,7 @@ function parseCsv(text: string) {
 
 function SubagentRecordPreview({ task }: { task: ConversationPanelTask }) {
   const [expandedEvents, setExpandedEvents] = useState<Record<string, boolean>>({});
-  const events = task.traceEvents?.length ? task.traceEvents : [{
+  const events = task.traceEvents?.length ? task.traceEvents : task.status === "pending" ? [] : [{
     id: `${task.id}-summary`,
     kind: "thought" as const,
     title: "执行摘要",
@@ -268,12 +274,13 @@ function SubagentRecordPreview({ task }: { task: ConversationPanelTask }) {
         </header>
         <div className="space-y-4 p-4">
           <div className="ml-auto max-w-[84%] rounded-lg bg-blue-50 px-3 py-2.5 text-[13px] leading-5 text-slate-700">{task.prompt ?? "查看该子智能体收到的任务内容与执行过程。"}</div>
+          {task.agentRole ? <p className="ml-auto max-w-[84%] text-right text-[11px] leading-4 text-slate-400">长期职责：{task.agentRole}</p> : null}
           <div className="ml-1 border-l border-slate-200 pl-4">
-            {events.map((event, index) => {
+            {events.length === 0 ? <p className="py-2 text-[13px] text-slate-400">本轮尚未调用该智能体。</p> : events.map((event, index) => {
               const isExpanded = expandedEvents[event.id] ?? Boolean(event.expandedByDefault);
               const EventIcon = event.kind === "thought" ? Brain : event.kind === "skill" ? Sparkles : PlugZap;
               const eventLabel = event.kind === "thought"
-                ? `思考完成${event.duration ? `，用时 ${event.duration}` : ""}`
+                ? `${event.title}${event.duration ? `，用时 ${event.duration}` : ""}`
                 : `${event.title} ${event.kind === "skill" ? "技能" : "插件"}调用${event.status === "running" ? "中..." : event.status === "failed" ? "失败" : "完成"}`;
               return (
                 <div key={event.id} className="relative pb-3 last:pb-0">
@@ -391,6 +398,10 @@ export function PersonalConversationSidePanel({
   onClose,
   outputs = [],
   tasks = [],
+  agents,
+  agentDetailRequest,
+  leadAgentName,
+  leadAgentStatus,
   historicalMaterials = [],
 }: PersonalConversationSidePanelProps) {
   const context = usePersonalChatContext();
@@ -433,6 +444,7 @@ export function PersonalConversationSidePanel({
   const taskListRef = useRef<HTMLDivElement | null>(null);
   const subagentListRef = useRef<HTMLDivElement | null>(null);
   const processListManuallyScrolled = useRef(false);
+  const lastAgentDetailRequestId = useRef<number | null>(null);
   const workspaceFiles = useMemo(() => {
     if (catalog?.activeSpace) {
       return catalog.activeSpace.files
@@ -465,8 +477,13 @@ export function PersonalConversationSidePanel({
     ...(outputs.length ? [{ key: "outputs" as const, count: outputs.length }] : []),
     ...(materials.length ? [{ key: "materials" as const, count: materials.length }] : []),
   ], [materials.length, outputs.length, tasks.length]);
-  const taskItems = useMemo(() => tasks.filter((item) => item.kind !== "subagent"), [tasks]);
+  const taskItems = useMemo(() => personalMode ? [] : tasks.filter((item) => item.kind !== "subagent"), [personalMode, tasks]);
   const subagentItems = useMemo(() => tasks.filter((item) => item.kind === "subagent"), [tasks]);
+  const collaborationAgents = useMemo(() => agents ?? subagentItems, [agents, subagentItems]);
+  const sortedCollaborationAgents = useMemo(() => [...collaborationAgents].sort((a, b) => {
+    const rank = (item: ConversationPanelTask) => item.status === "running" ? 0 : item.status === "failed" ? 1 : item.status === "pending" ? 2 : 3;
+    return rank(a) - rank(b);
+  }), [collaborationAgents]);
   const sortedSubagentItems = useMemo(() => [...subagentItems].sort((a, b) => {
     const aTime = typeof a.updatedAt === "number" ? a.updatedAt : Date.parse(a.updatedAt ?? "");
     const bTime = typeof b.updatedAt === "number" ? b.updatedAt : Date.parse(b.updatedAt ?? "");
@@ -535,21 +552,25 @@ export function PersonalConversationSidePanel({
     return allocateSummaryRows(availableListHeight, summarySections, collapsedSummarySections);
   }, [collapsedSummarySections, subagentItems.length, summarySectionHeight, summarySections, tasks.length]);
   const activeFile = openFiles.find((file) => file.id === activeFileId) ?? openFiles[0];
-  const activePrimaryView = view === "summary" ? "execution" : view === "file" ? fileReturnView : view;
-  const showExecution = personalMode ? activePrimaryView === "execution" : view === "summary";
+  const activePrimaryView = view === "summary"
+    ? (personalMode ? "collaboration" : "execution")
+    : view === "execution" && personalMode
+      ? "collaboration"
+      : view === "file" ? fileReturnView : view;
+  const showExecution = personalMode ? activePrimaryView === "collaboration" : view === "summary";
   const showSessionFiles = personalMode ? activePrimaryView === "files" : view === "summary";
   const executionLayout = useMemo(() => {
     const hasTaskList = taskItems.length > 0;
-    const hasSubagents = subagentItems.length > 0;
+    const hasSubagents = collaborationAgents.length > 0;
     const groupCount = Number(hasTaskList) + Number(hasSubagents);
     const chromeHeight = 32 + groupCount * 32 + Math.max(0, groupCount - 1) * 12;
     const availableHeight = Math.max(0, summarySectionHeight - 32 - chromeHeight);
     const sections = [
       ...(hasTaskList ? [{ key: "taskList" as const, count: taskItems.length }] : []),
-      ...(hasSubagents ? [{ key: "subagents" as const, count: subagentItems.length }] : []),
+      ...(hasSubagents ? [{ key: "subagents" as const, count: collaborationAgents.length }] : []),
     ];
     return allocateSummaryRows(availableHeight, sections, collapsedSummarySections);
-  }, [collapsedSummarySections, subagentItems.length, summarySectionHeight, taskItems.length]);
+  }, [collapsedSummarySections, collaborationAgents.length, summarySectionHeight, taskItems.length]);
   const filesLayout = useMemo(() => {
     const sections = [
       ...(filteredOutputs.length ? [{ key: "outputs" as const, count: filteredOutputs.length }] : []),
@@ -599,7 +620,7 @@ export function PersonalConversationSidePanel({
   }, [activeFileId, openFiles.length, view, workspaceActiveFilePath, workspaceFileTabs.length]);
 
   useEffect(() => {
-    if (!open || (personalMode ? activePrimaryView !== "execution" : view !== "summary") || (!personalMode && collapsedSummarySections.tasks)) return;
+    if (!open || (personalMode ? activePrimaryView !== "collaboration" : view !== "summary") || (!personalMode && collapsedSummarySections.tasks)) return;
     processListManuallyScrolled.current = false;
     if (activeLayout.fallbackToPanelScroll) return;
     requestAnimationFrame(() => {
@@ -612,7 +633,7 @@ export function PersonalConversationSidePanel({
   }, [activeLayout.fallbackToPanelScroll, activePrimaryView, collapsedSummarySections.subagents, collapsedSummarySections.taskList, collapsedSummarySections.tasks, currentProgressItem?.id, currentProgressItem?.kind, currentProgressSubagentIndex, currentProgressTaskIndex, open, personalMode, view]);
 
   useEffect(() => {
-    if (!open || (personalMode ? activePrimaryView !== "execution" : view !== "summary") || (!personalMode && collapsedSummarySections.tasks) || processListManuallyScrolled.current || activeLayout.fallbackToPanelScroll) return;
+    if (!open || (personalMode ? activePrimaryView !== "collaboration" : view !== "summary") || (!personalMode && collapsedSummarySections.tasks) || processListManuallyScrolled.current || activeLayout.fallbackToPanelScroll) return;
     if (currentProgressItem?.kind === "subagent" && currentProgressSubagentIndex >= 0 && !collapsedSummarySections.subagents) {
       subagentListRef.current?.children[currentProgressSubagentIndex]?.scrollIntoView({ block: "nearest" });
     } else if (currentProgressTaskIndex >= 0 && !collapsedSummarySections.taskList) {
@@ -622,11 +643,33 @@ export function PersonalConversationSidePanel({
 
 
   function openFile(file: WorkspaceFile) {
-    if (view !== "file") setFileReturnView(activePrimaryView === "execution" ? "execution" : activePrimaryView === "workspace" ? "workspace" : "files");
+    if (view !== "file") setFileReturnView(activePrimaryView === "collaboration" ? "collaboration" : activePrimaryView === "workspace" ? "workspace" : "files");
     setOpenFiles((current) => current.some((item) => item.id === file.id) ? current.map((item) => item.id === file.id ? { ...item, ...file } : item) : [...current, file]);
     setActiveFileId(file.id);
     onViewChange("file");
   }
+
+  useEffect(() => {
+    if (!agentDetailRequest || lastAgentDetailRequestId.current === agentDetailRequest.requestId) return;
+    const task = sortedCollaborationAgents.find((item) => item.id === agentDetailRequest.taskId);
+    if (!task) return;
+    const recordName = task.title.replace(/^子智能体：/, "");
+    const recordFile: WorkspaceFile = {
+      id: `subagent-record:${task.id}`,
+      name: recordName,
+      path: `协作 / ${task.agentName ?? recordName} / ${recordName}`,
+      sizeLabel: "智能体详情",
+      subagentTask: task,
+    };
+    lastAgentDetailRequestId.current = agentDetailRequest.requestId;
+    const frame = window.requestAnimationFrame(() => {
+      setFileReturnView("collaboration");
+      setOpenFiles((current) => current.some((item) => item.id === recordFile.id) ? current.map((item) => item.id === recordFile.id ? { ...item, ...recordFile } : item) : [...current, recordFile]);
+      setActiveFileId(recordFile.id);
+      onViewChange("file");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [agentDetailRequest, onViewChange, sortedCollaborationAgents]);
 
   function closeFile(fileId: string) {
     const next = openFiles.filter((file) => file.id !== fileId);
@@ -643,12 +686,6 @@ export function PersonalConversationSidePanel({
       path: file.path,
       sizeLabel: file.sizeLabel,
     }]);
-  }
-
-  function locateFile(file: ConversationPanelFile | { id: string; name: string; path?: string }) {
-    onViewChange("workspace");
-    const path = file.path ?? file.name;
-    window.requestAnimationFrame(() => filesRef.current?.revealPath(path));
   }
 
   function downloadAttachment(file: File) {
@@ -755,7 +792,7 @@ export function PersonalConversationSidePanel({
           {personalMode ? (
             <div role="tablist" aria-label="会话侧栏内容" className="flex shrink-0 items-center gap-1">
               {([
-                { id: "execution", label: "执行进度", Icon: ListTodo },
+                { id: "collaboration", label: "协作", Icon: Users },
                 { id: "files", label: "会话文件", Icon: Files },
                 { id: "workspace", label: "工作空间", Icon: Folder },
               ] as const).map(({ id, label, Icon }) => (
@@ -827,11 +864,11 @@ export function PersonalConversationSidePanel({
           </div>
         </div>
 
-        {(view === "summary" || view === "execution" || view === "files") ? (
+        {view === "summary" || view === "execution" || view === "collaboration" || view === "files" ? (
           <div
             ref={summaryContentRef}
-            onScroll={personalMode && activePrimaryView === "execution" ? syncCurrentProgressVisibility : undefined}
-            onWheel={personalMode && activePrimaryView === "execution" ? markProgressListManuallyScrolled : undefined}
+            onScroll={personalMode && activePrimaryView === "collaboration" ? syncCurrentProgressVisibility : undefined}
+            onWheel={personalMode && activePrimaryView === "collaboration" ? markProgressListManuallyScrolled : undefined}
             className={cn(
               "min-h-0 flex-1 p-4",
               activeLayout.fallbackToPanelScroll
@@ -839,9 +876,8 @@ export function PersonalConversationSidePanel({
                 : "overflow-hidden",
             )}
           >
-            {(showExecution && tasks.length > 0) || (showSessionFiles && (personalMode || outputs.length > 0 || materials.length > 0)) ? (
+            {(showExecution && (tasks.length > 0 || personalMode)) || (showSessionFiles && (personalMode || outputs.length > 0 || materials.length > 0)) ? (
               <div className="flex flex-col gap-3">
-                {personalMode && showExecution ? <h2 className="h-8 shrink-0 px-1 text-sm font-semibold leading-8 text-slate-800">进程</h2> : null}
                 {personalMode && showSessionFiles ? (
                   <div className="flex h-8 shrink-0 items-center gap-2 px-1">
                     <h2 className="min-w-0 flex-1 text-sm font-semibold leading-8 text-slate-800">会话文件</h2>
@@ -864,7 +900,7 @@ export function PersonalConversationSidePanel({
                     {sessionFileQuery ? <button type="button" aria-label="清除搜索词" onClick={() => setSessionFileQuery("")} className="text-slate-400 hover:text-slate-700"><X className="h-3.5 w-3.5" /></button> : null}
                   </label>
                 ) : null}
-                {showExecution && tasks.length ? (
+                {showExecution && (tasks.length > 0 || personalMode) ? (
                   <section className="shrink-0">
                     {!personalMode ? <SummarySectionHeader title="进程" count={tasks.length} expanded={!collapsedSummarySections.tasks} onToggle={() => setCollapsedSummarySections((current) => ({ ...current, tasks: !current.tasks }))} /> : null}
                     {personalMode || !collapsedSummarySections.tasks ? (
@@ -898,7 +934,7 @@ export function PersonalConversationSidePanel({
                           </div>
                           <div className="mt-1 truncate text-[13px] font-medium text-slate-700" title={currentProgressItem?.title ?? "暂无进程"}>{currentProgressItem?.title ?? "暂无进程"}</div>
                         </div> : null}
-                        {taskItems.length ? (
+                        {taskItems.length > 0 ? (
                           <section className="shrink-0">
                             {personalMode ? (
                               <div className="flex h-8 items-center gap-1">
@@ -923,27 +959,43 @@ export function PersonalConversationSidePanel({
                             ) : null}
                           </section>
                         ) : null}
-                        {subagentItems.length ? (
+                        {personalMode && sortedCollaborationAgents.length === 0 ? (
+                          <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center">
+                            <Users className="mx-auto h-5 w-5 text-slate-400" />
+                            <p className="mt-2 text-sm font-medium text-slate-700">当前大任务尚未配置子智能体</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">配置后的协作团队会保留在这里，供不同会话按需调用。</p>
+                          </div>
+                        ) : null}
+                        {leadAgentName ? (
+                          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                            <Bot className="h-4 w-4 shrink-0 text-slate-600" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[13px] font-medium text-slate-800">{leadAgentName}</p>
+                              <p className="text-[11px] text-slate-500">主智能体 · {leadAgentStatus ?? "负责协调"}</p>
+                            </div>
+                            <span className="text-[11px] text-slate-400">任务协调</span>
+                          </div>
+                        ) : null}
+                        {sortedCollaborationAgents.length ? (
                           <section className="shrink-0">
                             {personalMode ? (
                               <div className="flex h-8 items-center gap-1">
-                                <button type="button" aria-expanded={!collapsedSummarySections.subagents} onClick={() => toggleProgressList("subagents")} className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-1 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
-                                  {collapsedSummarySections.subagents ? <ChevronRight className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
+                                <div className="flex h-8 min-w-0 flex-1 items-center gap-2 px-1">
                                   <span className="flex-1 text-sm font-semibold text-slate-800">子智能体</span>
-                                  <span className="text-xs text-slate-400">{subagentItems.length}</span>
-                                </button>
+                                  <span className="text-xs text-slate-400">{sortedCollaborationAgents.length}</span>
+                                </div>
                                 {currentProgressItem?.kind === "subagent" && showCurrentProgressLocator ? (
                                   <button type="button" aria-label="定位当前子智能体" title="定位当前子智能体" onClick={locateCurrentProgress} className="inline-flex h-7 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] text-blue-600 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><LocateFixed className="h-3 w-3" />定位</button>
                                 ) : null}
                               </div>
                             ) : <SummarySectionHeader title="子智能体" count={subagentItems.length} expanded={!collapsedSummarySections.subagents} onToggle={() => setCollapsedSummarySections((current) => ({ ...current, subagents: !current.subagents }))} />}
-                            {!collapsedSummarySections.subagents ? (
-                              <div ref={subagentListRef} className={cn("overflow-x-hidden", activeLayout.fallbackToPanelScroll ? "overflow-y-visible" : "overflow-y-auto")} style={activeLayout.fallbackToPanelScroll ? undefined : { maxHeight: activeLayout.rows.subagents * SUMMARY_ROW_HEIGHTS.subagents }} aria-label="子智能体执行记录" onScroll={personalMode ? syncCurrentProgressVisibility : undefined} onWheel={() => { processListManuallyScrolled.current = true; }} onTouchMove={() => { processListManuallyScrolled.current = true; }} onPointerDown={() => { processListManuallyScrolled.current = true; }}>
-                                {sortedSubagentItems.map((task) => {
+                            {personalMode || !collapsedSummarySections.subagents ? (
+                              <div ref={subagentListRef} className={cn("overflow-x-hidden", activeLayout.fallbackToPanelScroll ? "overflow-y-visible" : "overflow-y-auto")} style={activeLayout.fallbackToPanelScroll ? undefined : { maxHeight: activeLayout.rows.subagents * SUMMARY_ROW_HEIGHTS.subagents }} aria-label="协作智能体" onScroll={personalMode ? syncCurrentProgressVisibility : undefined} onWheel={() => { processListManuallyScrolled.current = true; }} onTouchMove={() => { processListManuallyScrolled.current = true; }} onPointerDown={() => { processListManuallyScrolled.current = true; }}>
+                                {sortedCollaborationAgents.map((task) => {
                                   const recordName = task.title.replace(/^子智能体：/, "");
-                                  const recordFile: WorkspaceFile = { id: `subagent-record:${task.id}`, name: recordName, path: `执行进度 / 子智能体执行记录 / ${recordName}`, sizeLabel: "执行详情", subagentTask: task };
+                                  const recordFile: WorkspaceFile = { id: `subagent-record:${task.id}`, name: recordName, path: `协作 / ${task.agentName ?? recordName} / ${recordName}`, sizeLabel: "智能体详情", subagentTask: task };
                                   const statusClass = task.status === "running" ? "text-blue-600" : task.status === "failed" ? "text-rose-500" : "text-slate-400";
-                                  return <button key={task.id} type="button" title={`${recordName} · 点击查看执行记录`} onClick={() => openFile(recordFile)} className="flex h-10 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><Bot className="h-4 w-4 shrink-0 text-slate-600" /><span className="min-w-0 flex-1 truncate">{recordName}</span><span className={cn("shrink-0 text-[11px]", statusClass)}>{task.status === "running" ? "执行中..." : task.durationLabel ?? "查看记录"}</span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" /></button>;
+                                  return <button key={task.id} type="button" title={`${task.agentName ?? recordName} · ${recordName} · 点击查看本轮调用详情`} onClick={() => openFile(recordFile)} className="flex min-h-12 w-full items-center gap-2 rounded-md px-2 text-left text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><Bot className="h-4 w-4 shrink-0 text-slate-600" /><span className="min-w-0 flex-1"><span className="block truncate text-[13px]">{task.agentName ?? recordName}</span>{task.agentName ? <span className="block truncate text-[11px] text-slate-400">{recordName}</span> : null}</span><span className={cn("shrink-0 text-[11px]", statusClass)}>{task.status === "running" ? "本轮执行中" : task.status === "failed" ? "执行异常" : task.status === "pending" ? "待命" : task.durationLabel ?? "本轮已完成"}</span><ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-400" /></button>;
                                 })}
                               </div>
                             ) : null}
@@ -1000,7 +1052,6 @@ export function PersonalConversationSidePanel({
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" side="bottom" className="w-40">
                                   <DropdownMenuItem onSelect={() => toast.info("当前示例产物暂未提供可下载的源文件")}><Download />下载</DropdownMenuItem>
-                                  <DropdownMenuItem onSelect={() => locateFile({ id: `output:${file.id}`, name: file.name, path: file.path })}><LocateFixed />定位</DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem variant="destructive" onSelect={() => setPendingDeleteOutput(file)}><Trash2 />删除</DropdownMenuItem>
                                 </DropdownMenuContent>
@@ -1036,13 +1087,11 @@ export function PersonalConversationSidePanel({
                           const workspaceFile = workspaceFiles.find((item) => item.id === workspaceId);
                           const filePath = file.path ?? workspaceFile?.path ?? "工作空间";
                           const isWorkspaceReference = file.source === "workspace";
-                          const isInDraft = isWorkspaceReference && context?.attachments.some((item) => item.id === `workspace:${workspaceId}`);
-                          const canLocate = isWorkspaceReference || workspaceFiles.some((item) => item.name === file.name);
-                          const targetWorkspaceFile = workspaceFile ?? workspaceFiles.find((item) => item.name === file.name);
-                          const moreMenuKey = `material:${file.id}`;
-                          const moreMenuOpen = openMoreMenuKey === moreMenuKey;
+                          const isInDraft = isWorkspaceReference
+                            ? context?.attachments.some((item) => item.id === `workspace:${workspaceId}`)
+                            : context?.attachments.some((item) => item.id === file.id);
                           return (
-                            <div key={file.id} className={cn("group flex h-12 items-center gap-1 rounded-md px-2 hover:bg-slate-50", moreMenuOpen && "bg-slate-50")}>
+                            <div key={file.id} className="group flex h-12 items-center gap-1 rounded-md px-2 hover:bg-slate-50">
                               <FileText className="h-4 w-4 shrink-0 text-slate-500" />
                               <button type="button" title={file.name} onClick={() => {
                                 openFile({ ...workspaceFile, id: file.id, name: file.name, path: filePath, sizeLabel: file.sizeLabel ?? workspaceFile?.sizeLabel ?? "", file: file.file });
@@ -1051,28 +1100,20 @@ export function PersonalConversationSidePanel({
                                 <span className="block truncate text-[11px] text-slate-400">{file.source === "upload" ? "上传" : `引用 · ${filePath}`}</span>
                               </button>
                               {personalMode ? (
-                                <>
-                                  {isWorkspaceReference ? (isInDraft ? (
-                                    <span className="inline-flex shrink-0 items-center gap-1 px-1 text-[11px] text-blue-600" title="已加入当前待发送内容"><Check className="h-3.5 w-3.5" />已加入</span>
-                                  ) : (
-                                    <button type="button" aria-label={`引用${file.name}`} title="引用" onClick={() => referenceFile({ id: workspaceId || file.id, name: file.name, path: filePath, sizeLabel: file.sizeLabel ?? workspaceFile?.sizeLabel ?? "" })} className={cn("inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-blue-600 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400", moreMenuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100")}><Paperclip className="h-3.5 w-3.5" /></button>
-                                  )) : null}
-                                  <DropdownMenu open={moreMenuOpen} onOpenChange={(isOpen) => setOpenMoreMenuKey(isOpen ? moreMenuKey : null)}>
-                                    <DropdownMenuTrigger asChild>
-                                      <button type="button" aria-label={`${file.name}更多操作`} title="更多" className={cn("inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-slate-700 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400", moreMenuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100")}><MoreHorizontal className="h-4 w-4" /></button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" side="bottom" className="w-40">
-                                      <DropdownMenuItem onSelect={() => {
-                                        if (file.file) downloadAttachment(file.file);
-                                        else toast.info("当前示例文件暂未提供可下载的源文件");
-                                      }}><Download />下载</DropdownMenuItem>
-                                      {canLocate && targetWorkspaceFile ? <DropdownMenuItem onSelect={() => locateFile({ id: targetWorkspaceFile.id, name: file.name, path: targetWorkspaceFile.path })}><LocateFixed />定位</DropdownMenuItem> : null}
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </>
+                                isInDraft ? (
+                                  <span className="inline-flex shrink-0 items-center gap-1 px-1 text-[11px] text-blue-600" title="已加入当前待发送内容"><Check className="h-3.5 w-3.5" />已引用</span>
+                                ) : (
+                                  <button type="button" aria-label={`引用${file.name}`} title="引用" onClick={() => {
+                                    if (isWorkspaceReference) {
+                                      referenceFile({ id: workspaceId || file.id, name: file.name, path: filePath, sizeLabel: file.sizeLabel ?? workspaceFile?.sizeLabel ?? "" });
+                                    } else {
+                                      context?.addAttachments([{ id: file.id, name: file.name, source: "upload", path: filePath, sizeLabel: file.sizeLabel, file: file.file }]);
+                                    }
+                                  }} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-400 opacity-0 hover:bg-white hover:text-blue-600 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 group-hover:opacity-100"><Paperclip className="h-3.5 w-3.5" /></button>
+                                )
                               ) : (
                                 <>
-                                  {file.source === "upload" && file.file ? <button type="button" aria-label={`下载${file.name}`} title="下载" onClick={() => downloadAttachment(file.file!)} className="hidden shrink-0 text-slate-400 hover:text-blue-600 group-hover:block focus-visible:block"><Download className="h-3.5 w-3.5" /></button> : file.source === "workspace" ? <button type="button" aria-label={`在工作空间中定位${file.name}`} title="在工作空间中定位" onClick={() => locateFile(file)} className="hidden shrink-0 text-slate-400 hover:text-blue-600 group-hover:block focus-visible:block"><LocateFixed className="h-3.5 w-3.5" /></button> : null}
+                                  {file.source === "upload" && file.file ? <button type="button" aria-label={`下载${file.name}`} title="下载" onClick={() => downloadAttachment(file.file!)} className="hidden shrink-0 text-slate-400 hover:text-blue-600 group-hover:block focus-visible:block"><Download className="h-3.5 w-3.5" /></button> : null}
                                   {file.id.startsWith("history:") ? null : <button type="button" aria-label={`移除${file.name}`} title="从本次对话移除" onClick={() => context?.removeAttachment(file.id)} className="hidden shrink-0 text-slate-400 hover:text-slate-700 group-hover:block focus-visible:block"><X className="h-3.5 w-3.5" /></button>}
                                 </>
                               )}

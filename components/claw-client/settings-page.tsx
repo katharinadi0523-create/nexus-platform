@@ -16,7 +16,7 @@ type SettingsSection = "设定" | "接入渠道" | "存储" | "账号";
 type Channel = "飞书" | "企业微信" | "钉钉";
 const SECTIONS: SettingsSection[] = ["设定", "接入渠道", "账号"];
 const AGENT_MD_STORAGE_KEY = "claw-client-agent-md";
-const AGENT_MD_MAX_LENGTH = 20_000;
+const AGENT_MD_MAX_LENGTH = 5_000;
 const SECTION_ICONS = {
   设定: Settings,
   接入渠道: Workflow,
@@ -41,10 +41,9 @@ export function ClawClientSettingsPage({
   onClose?: () => void;
 }) {
   const detail = useMemo(() => getPersonalClawDetail(), []);
-  const initialAgentMd = detail.coreFiles.find((file) => file.key === "agent")?.content ?? "";
   const [section, setSection] = useState<SettingsSection>("设定");
-  const [agentMd, setAgentMd] = useState(initialAgentMd);
-  const [savedAgentMd, setSavedAgentMd] = useState(initialAgentMd);
+  const [agentMd, setAgentMd] = useState("");
+  const [savedAgentMd, setSavedAgentMd] = useState("");
   const [hydrated, setHydrated] = useState(false);
   const [channelTarget, setChannelTarget] = useState<Channel | null>(null);
   const [connectedChannels, setConnectedChannels] = useState<Set<Channel>>(() => new Set());
@@ -67,7 +66,7 @@ export function ClawClientSettingsPage({
   }, []);
   useEffect(() => {
     try {
-      const storedAgentMd = window.localStorage.getItem(AGENT_MD_STORAGE_KEY) ?? initialAgentMd;
+      const storedAgentMd = window.localStorage.getItem(AGENT_MD_STORAGE_KEY) ?? "";
       setAgentMd(storedAgentMd.replace(/\\n/g, "\n"));
       setSavedAgentMd(storedAgentMd.replace(/\\n/g, "\n"));
     } catch {
@@ -75,7 +74,7 @@ export function ClawClientSettingsPage({
     } finally {
       setHydrated(true);
     }
-  }, [initialAgentMd]);
+  }, []);
 
   useEffect(() => {
     onDirtyChange?.(hasUnsavedChanges);
@@ -89,14 +88,14 @@ export function ClawClientSettingsPage({
   useEffect(() => {
     function handleStorageChange(event: StorageEvent) {
       if (event.key === AGENT_MD_STORAGE_KEY) {
-        const nextValue = event.newValue ?? initialAgentMd;
+        const nextValue = event.newValue ?? "";
         if (hasAgentMdChanges) setConflictField(true);
         else updateSavedValue(nextValue);
       }
     }
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, [hasAgentMdChanges, initialAgentMd, updateSavedValue]);
+  }, [hasAgentMdChanges, updateSavedValue]);
   const storage = detail.workspaceStorageConfig;
   const hasWorkspaceQuota = storage.workspaceQuotaGb != null;
   const usageCapacity: number = storage.workspaceQuotaGb ?? storage.volumeTotalGb;
@@ -128,12 +127,8 @@ export function ClawClientSettingsPage({
     if (!hydrated) return false;
     const draft = agentMd;
     const baseline = savedAgentMd;
-    if (!draft.trim()) {
-      toast.error("自定义指令不能为空。");
-      return false;
-    }
     try {
-      const currentValue = window.localStorage.getItem(AGENT_MD_STORAGE_KEY) ?? initialAgentMd;
+      const currentValue = window.localStorage.getItem(AGENT_MD_STORAGE_KEY) ?? "";
       if (currentValue !== baseline) {
         setConflictField(true);
         return false;
@@ -182,7 +177,7 @@ export function ClawClientSettingsPage({
   function resolveConflict(choice: "reload" | "keep") {
     if (!conflictField) return;
     try {
-      const latest = window.localStorage.getItem(AGENT_MD_STORAGE_KEY) ?? initialAgentMd;
+      const latest = window.localStorage.getItem(AGENT_MD_STORAGE_KEY) ?? "";
       if (choice === "reload") updateSavedValue(latest);
       else setSavedAgentMd(latest);
       setConflictField(false);
@@ -228,11 +223,11 @@ export function ClawClientSettingsPage({
             <section>
               <div className="flex items-center gap-1.5">
                 <h2 className="text-sm font-semibold text-slate-900">自定义指令</h2>
-                <TooltipProvider delayDuration={150}><Tooltip><TooltipTrigger asChild><button type="button" aria-label="自定义指令说明" className="rounded-full text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><Info className="h-3.5 w-3.5" /></button></TooltipTrigger><TooltipContent side="bottom" align="start" className="z-[120] max-w-[280px] leading-5">设定 Claw 的回答方式和做事原则。建议写清任务偏好、输出格式和需要遵守的边界。</TooltipContent></Tooltip></TooltipProvider>
+                <TooltipProvider delayDuration={150}><Tooltip><TooltipTrigger asChild><button type="button" aria-label="自定义指令说明" className="rounded-full text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><Info className="h-3.5 w-3.5" /></button></TooltipTrigger><TooltipContent side="bottom" align="start" className="z-[120] max-w-[300px] leading-5">可按需补充身份、常做任务、服务对象、输出偏好或行为边界</TooltipContent></Tooltip></TooltipProvider>
                 {hasAgentMdChanges ? <span className="text-[11px] text-amber-600">尚未保存</span> : null}
               </div>
-              <Textarea value={agentMd} maxLength={AGENT_MD_MAX_LENGTH} onChange={(event) => setAgentMd(event.target.value)} placeholder="描述个人 Claw 的身份、目标与行为边界。" className="mt-2 min-h-[96px] resize-y rounded-md border-slate-200 bg-slate-50 font-mono text-xs leading-5" />
-              <div className="mt-1 flex items-center justify-between"><span className={`text-[11px] ${agentMd.trim() ? "text-slate-400" : "text-red-500"}`}>{agentMd.length.toLocaleString()} / {AGENT_MD_MAX_LENGTH.toLocaleString()}{agentMd.trim() ? "" : " · 自定义指令不能为空"}</span><div className="flex justify-end gap-2">{hasAgentMdChanges ? <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-slate-500 hover:text-slate-800" onClick={cancelAgentMdChanges}>取消</Button> : null}<Button type="button" size="sm" className="h-7 bg-[#2773ff] px-3 text-xs text-white hover:bg-[#1f63e0] disabled:bg-slate-100 disabled:text-slate-400" onClick={saveAgentMd} disabled={!hasAgentMdChanges}>保存</Button></div></div>
+              <Textarea value={agentMd} maxLength={AGENT_MD_MAX_LENGTH} onChange={(event) => setAgentMd(event.target.value)} placeholder={'# 我的 Claw\n- 身份与目标：我是……，希望 Claw 协助我……\n- 服务对象与常做任务：主要面向……，经常处理……\n- 工作方式与输出偏好：请优先……，结果采用……格式\n- 行为边界：遇到……情况时，请……；不确定时，请……'} className="mt-2 h-[240px] min-h-[240px] max-h-[240px] resize-none overflow-y-auto rounded-md border-slate-200 bg-slate-50 font-mono text-xs leading-5 placeholder:text-slate-400" />
+              <div className="mt-1 flex justify-end gap-2">{hasAgentMdChanges ? <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-slate-500 hover:text-slate-800" onClick={cancelAgentMdChanges}>取消</Button> : null}<Button type="button" size="sm" className="h-7 bg-[#2773ff] px-3 text-xs text-white hover:bg-[#1f63e0] disabled:bg-slate-100 disabled:text-slate-400" onClick={saveAgentMd} disabled={!hasAgentMdChanges}>保存</Button></div>
             </section>
           </div>
         ) : null}

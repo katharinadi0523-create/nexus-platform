@@ -81,11 +81,19 @@ export function MyClawProvider({
   );
   const [sessions, setSessions] = useState<MyClawSessionListItem[]>(() =>
     [
-      // 澄清交互示例只在基础使用端展示。
       ...(navigationBasePath === "/claw-client"
-        ? [CLAW_CLIENT_QUEUE_DEMO_SESSION, ...CLAW_CLIENT_CLARIFY_SESSIONS]
-        : []),
-      ...MY_CLAW_SESSIONS,
+        ? [
+            // 演示会话置顶展示：排队与引导第一，任务与多智能体第二。
+            CLAW_CLIENT_QUEUE_DEMO_SESSION,
+            ...MY_CLAW_SESSIONS.filter(
+              (session) => session.id === "task-research-001",
+            ),
+            ...CLAW_CLIENT_CLARIFY_SESSIONS,
+            ...MY_CLAW_SESSIONS.filter(
+              (session) => session.id !== "task-research-001",
+            ),
+          ]
+        : MY_CLAW_SESSIONS),
     ].map((session) => ({ ...session }))
   );
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);

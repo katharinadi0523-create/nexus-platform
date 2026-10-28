@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   Circle,
   CircleX,
   FileCheck2,
+  ListChecks,
   Loader2,
   Plug,
   Sparkles,
@@ -27,6 +29,8 @@ import {
   RESEARCH_DEFAULT_QUERY,
   RESEARCH_DEFAULT_STEP,
   RESEARCH_MAX_STEP,
+  RESEARCH_DEMO_STEPS,
+  RESEARCH_TASK_DEFS,
   buildResearchSnapshot,
   getResearchAgentSummonIds,
   researchStatusLabel,
@@ -35,8 +39,54 @@ import {
   type ResearchTaskStatus,
 } from "@/lib/mock/my-claw/research-multi-agent";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ComposerWithAgents } from "./composer-with-agents";
 import { PersonalConversationSidePanel, type ConversationPanelTask, type PersonalPanelView } from "@/components/claw-client/personal-conversation-side-panel";
+import type { PersonalChatAttachment } from "@/components/claw-client/personal-chat-context";
+
+const WORKSPACE_DEMO_OUTPUTS = [
+  ["差旅费用汇总.xlsx", "32 KB"],
+  ["报销明细核对表.xlsx", "48 KB"],
+  ["票据识别结果.csv", "12 KB"],
+  ["差旅政策匹配说明.docx", "96 KB"],
+  ["报销申请草稿-v2.pdf", "286 KB"],
+  ["异常费用复核记录.md", "8 KB"],
+  ["酒店住宿对账单.xlsx", "24 KB"],
+  ["交通费用分类结果.csv", "16 KB"],
+  ["审批附件目录.docx", "42 KB"],
+  ["报销材料完整性检查.pdf", "154 KB"],
+  ["成本中心匹配结果.xlsx", "28 KB"],
+  ["待补充材料清单.md", "6 KB"],
+  ["本次报销处理摘要.docx", "38 KB"],
+  ["归档文件索引.csv", "10 KB"],
+];
+
+const WORKSPACE_DEMO_UPLOADS = [
+  ["差旅申请单-补充页.pdf", "42 KB"],
+  ["住宿发票-第二晚.jpg", "326 KB"],
+  ["出租车电子发票-返程.pdf", "154 KB"],
+  ["会议日程截图.png", "680 KB"],
+  ["出差审批记录.docx", "18 KB"],
+  ["费用归属说明.md", "16 KB"],
+  ["银行卡支付凭证.jpg", "260 KB"],
+  ["酒店订单确认单.pdf", "96 KB"],
+  ["交通行程补充说明.txt", "9 KB"],
+  ["报销人信息确认表.xlsx", "134 KB"],
+  ["成本中心编码清单.csv", "88 KB"],
+  ["发票查验结果.pdf", "428 KB"],
+];
+
+const WORKSPACE_DEMO_INITIAL_UPLOADS = [
+  ["上海机票行程单.pdf", "32 KB"],
+  ["酒店发票.jpg", "48 KB"],
+  ["打车发票-03-18.png", "12 KB"],
+];
+
+const WORKSPACE_DEMO_REFERENCES: PersonalChatAttachment[] = [
+  { id: "history:workspace:personal-reference-travel-policy", name: "差旅报销标准-2026.pdf", source: "workspace", path: "常用资料 / 差旅报销标准-2026.pdf", sizeLabel: "480 KB" },
+  { id: "history:workspace:personal-reference-travel-expense-template", name: "上海差旅费用明细样表.xlsx", source: "workspace", path: "常用资料 / 上海差旅费用明细样表.xlsx", sizeLabel: "72 KB" },
+  { id: "history:workspace:personal-reference-hotel-checklist", name: "酒店发票核对清单.md", source: "workspace", path: "常用资料 / 酒店发票核对清单.md", sizeLabel: "9 KB" },
+];
 
 function StatusIcon({ status }: { status: ResearchTaskStatus }) {
   if (status === "done") {
@@ -49,6 +99,55 @@ function StatusIcon({ status }: { status: ResearchTaskStatus }) {
     return <CircleX className="h-4 w-4 text-red-500" />;
   }
   return <Circle className="h-4 w-4 text-slate-300" />;
+}
+
+function CurrentRunProgress({ snapshot }: { snapshot: ResearchSnapshot }) {
+  const literatureStatus = snapshot.tasks.find((task) => task.id === "task-literature")?.status ?? "pending";
+  const evidenceMatrixReady = snapshot.artifacts.some((artifact) => artifact.id === "art-lit");
+  const steps: { title: string; status: ResearchTaskStatus }[] = [
+    { title: "明确搜集范围与检索词", status: snapshot.showPlan ? "done" : "running" },
+    { title: "跨库检索相关研究与资料", status: literatureStatus },
+    { title: "筛选去重并提取关键证据", status: literatureStatus === "done" ? "done" : "pending" },
+    { title: "整理带来源的资料清单", status: evidenceMatrixReady ? "done" : "pending" },
+  ];
+  const completedCount = steps.filter((item) => item.status === "done").length;
+  const hasFailure = steps.some((item) => item.status === "failed");
+  const complete = completedCount === steps.length;
+  const statusLabel = hasFailure ? "部分步骤失败" : complete ? "本轮已完成" : "本轮任务进行中";
+
+  return (
+    <div className="flex min-h-8 items-center" onClick={(event) => event.stopPropagation()}>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button type="button" className="inline-flex min-h-8 items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+            {hasFailure ? <CircleX className="h-3.5 w-3.5 text-rose-500" /> : complete ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />}
+            <span>{statusLabel}</span>
+            <span className="text-slate-400">{completedCount}/{steps.length} 项完成</span>
+            <ChevronDown className="h-3 w-3 text-slate-400" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" side="top" sideOffset={8} className="w-[min(340px,calc(100vw-2rem))] rounded-xl border-slate-200 bg-white p-0 shadow-lg">
+          <div className="border-b border-slate-100 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <ListChecks className="h-4 w-4 text-slate-500" />
+              <h3 className="text-sm font-semibold text-slate-800">任务清单</h3>
+            </div>
+          </div>
+          <div className="p-2">
+            {steps.map((item) => (
+              <div key={item.title} className={cn("flex min-h-10 items-center gap-2 rounded-md px-2.5 py-2", item.status === "running" && "bg-blue-50/70")}>
+                <StatusIcon status={item.status} />
+                <span className={cn("min-w-0 flex-1 text-[13px]", item.status === "pending" ? "text-slate-400" : "text-slate-700")}>{item.title}</span>
+                <span className={cn("shrink-0 text-[11px]", item.status === "running" ? "text-blue-600" : item.status === "failed" ? "text-rose-600" : "text-slate-400")}>
+                  {{ done: "已完成", running: "进行中", pending: "待开始", failed: "失败" }[item.status]}
+                </span>
+              </div>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
 }
 
 function MainMessageView({
@@ -87,6 +186,7 @@ function MainMessageView({
       <ClawSubAgentSummonedEvent
         agentName={agent?.name ?? message.agentKey}
         running={message.status === "running"}
+        openLabel="在右侧工作区查看本轮调用详情"
         onOpen={() => onOpenTask(message.taskId!)}
       />
     );
@@ -538,22 +638,92 @@ export function ResearchWorkspace({
   const mainSender = RESEARCH_AGENTS.main.name;
   const { syncSummonedAgents, setSelectedAgentId } = useMyClaw();
 
-  const initialStep =
-    RESEARCH_DEFAULT_STEP >= 0 ? RESEARCH_DEFAULT_STEP : RESEARCH_MAX_STEP;
+  const infoGatheringStep = RESEARCH_DEMO_STEPS.findIndex((item) => item.id === "summon-wave-1");
+  const initialStep = personalMode && infoGatheringStep >= 0
+    ? infoGatheringStep
+    : RESEARCH_DEFAULT_STEP >= 0 ? RESEARCH_DEFAULT_STEP : RESEARCH_MAX_STEP;
   const [step, setStep] = useState(initialStep);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [agentDetailRequest, setAgentDetailRequest] = useState<{ taskId: string; requestId: number } | null>(null);
+  const agentDetailRequestId = useRef(0);
   const [draft, setDraft] = useState(RESEARCH_DEFAULT_QUERY);
 
   const snapshot = useMemo(() => buildResearchSnapshot(step), [step]);
-  const summaryTasks: ConversationPanelTask[] = snapshot.showPlan ? snapshot.tasks.map((task) => ({ id: task.id, title: task.name, status: task.status })) : [];
-  const summaryOutputs = snapshot.artifacts.map((artifact) => ({
-    id: artifact.id,
-    name: artifact.name,
-    path: `对话产出 / ${conversationTitle ?? detail.overview.name} / ${artifact.name}`,
-    size: artifact.size,
-    source: "本次对话",
-    status: artifact.replaces ? "modified" as const : "new" as const,
-  }));
+  const collaborationAgents: ConversationPanelTask[] = RESEARCH_TASK_DEFS.map((definition) => {
+    const agent = RESEARCH_AGENTS[definition.agentKey];
+    const currentTask = snapshot.tasks.find((task) => task.id === definition.id);
+    const subSession = snapshot.subSessions[definition.id] ?? [];
+    const assistantEvents = subSession.filter((message) => message.role === "assistant");
+    return {
+      id: definition.id,
+      title: definition.name,
+      agentName: agent.name,
+      agentRole: definition.name,
+      kind: "subagent",
+      status: currentTask?.status ?? "pending",
+      prompt: subSession.find((message) => message.role === "user")?.text ?? "本轮尚未调用该智能体。",
+      recordContent: `智能体：${agent.name}\n长期职责：${definition.name}\n本轮状态：${currentTask ? researchStatusLabel(currentTask.status) : "待命，尚未参与本轮"}`,
+      traceEvents: assistantEvents.map((message, index) => {
+        const isLast = index === assistantEvents.length - 1;
+        const kind: "thought" | "skill" | "plugin" = message.kind === "skill"
+          ? "skill"
+          : message.kind === "tool" || message.kind === "knowledge"
+            ? "plugin"
+            : "thought";
+        const title = message.kind === "skill"
+          ? message.skillName ?? "技能执行"
+          : message.kind === "tool"
+            ? message.toolName ?? "工具执行"
+            : message.kind === "knowledge"
+              ? message.knowledgeName ?? "知识检索"
+              : message.kind === "artifact"
+                ? "交付产物"
+                : message.kind === "thinking"
+                  ? "思考记录"
+                  : "执行记录";
+        const status: ResearchTaskStatus = currentTask?.status === "failed" && isLast
+          ? "failed"
+          : currentTask?.status === "running" && isLast
+            ? "running"
+            : "done";
+        return { id: message.id, kind, title, content: message.text, status, expandedByDefault: isLast };
+      }),
+    };
+  });
+  const summaryOutputs = [
+    ...snapshot.artifacts.map((artifact) => ({
+      id: artifact.id,
+      name: artifact.name,
+      path: `对话产出 / ${conversationTitle ?? detail.overview.name} / ${artifact.name}`,
+      size: artifact.size,
+      source: "本次对话",
+      status: artifact.replaces ? "modified" as const : "new" as const,
+    })),
+    ...WORKSPACE_DEMO_OUTPUTS.map(([name, size], index) => ({
+      id: `workspace-demo-output-${index + 1}`,
+      name,
+      path: `对话产出 / ${conversationTitle ?? "右侧工作区（演示）"} / ${name}`,
+      size,
+      source: "本次对话",
+      status: "new" as const,
+      updatedAt: Date.parse("2026-10-27T10:00:00.000Z") - index * 60_000,
+    })),
+  ];
+  const historicalMaterials: PersonalChatAttachment[] = [
+    ...WORKSPACE_DEMO_INITIAL_UPLOADS.map(([name, size], index) => ({
+      id: `workspace-demo-initial-upload-${index + 1}`,
+      name,
+      source: "upload" as const,
+      sizeLabel: size,
+    })),
+    ...WORKSPACE_DEMO_UPLOADS.map(([name, size], index) => ({
+      id: `workspace-demo-upload-${index + 1}`,
+      name,
+      source: "upload" as const,
+      sizeLabel: size,
+    })),
+    ...WORKSPACE_DEMO_REFERENCES,
+  ];
 
   useEffect(() => {
     syncSummonedAgents([
@@ -602,6 +772,13 @@ export function ResearchWorkspace({
       (item) => item.id === taskId && item.summoned
     );
     if (!task) return;
+    if (personalMode) {
+      agentDetailRequestId.current += 1;
+      setAgentDetailRequest({ taskId, requestId: agentDetailRequestId.current });
+      onWorkspaceViewChange?.("collaboration");
+      onOpenWorkspace?.();
+      return;
+    }
     setActiveTaskId(taskId);
   }
 
@@ -635,7 +812,12 @@ export function ResearchWorkspace({
             onViewChange={(nextView) => onWorkspaceViewChange?.(nextView)}
             onClose={() => onCloseWorkspace?.()}
             outputs={summaryOutputs}
-            tasks={summaryTasks}
+            tasks={[]}
+            historicalMaterials={historicalMaterials}
+            agents={collaborationAgents}
+            agentDetailRequest={agentDetailRequest}
+            leadAgentName={mainSender}
+            leadAgentStatus={snapshot.tasks.some((task) => task.status === "running") ? "正在协调本轮任务" : "等待下一轮任务"}
             conversationTitle={conversationTitle ?? detail.overview.name}
           />
         ) : <ResearchInspector snapshot={snapshot} onOpenTask={openTask} />}
@@ -690,6 +872,7 @@ export function ResearchWorkspace({
           onClick={(event) => event.stopPropagation()}
         >
           <div className="mx-auto w-full max-w-4xl">
+            {snapshot.showPlan ? <div className="mb-2"><CurrentRunProgress snapshot={snapshot} /></div> : null}
             <ComposerWithAgents
               detail={detail}
               modelScopeKey={sessionId}
@@ -715,7 +898,12 @@ export function ResearchWorkspace({
           onViewChange={(nextView) => onWorkspaceViewChange?.(nextView)}
           onClose={() => onCloseWorkspace?.()}
           outputs={summaryOutputs}
-          tasks={summaryTasks}
+          tasks={[]}
+          historicalMaterials={historicalMaterials}
+          agents={collaborationAgents}
+          agentDetailRequest={agentDetailRequest}
+          leadAgentName={mainSender}
+          leadAgentStatus={snapshot.tasks.some((task) => task.status === "running") ? "正在协调本轮任务" : "等待下一轮任务"}
           conversationTitle={conversationTitle ?? detail.overview.name}
         />
       ) : <ResearchInspector snapshot={snapshot} onOpenTask={openTask} />}

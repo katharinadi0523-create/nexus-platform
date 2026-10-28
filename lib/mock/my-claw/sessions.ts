@@ -3,7 +3,7 @@ import type { MyClawSessionListItem } from "./types";
 
 export const CLAW_CLIENT_QUEUE_DEMO_SESSION: MyClawSessionListItem = {
   id: "queue-steer-demo",
-  title: "排队与引导演示",
+  title: "排队与引导（演示）",
   kind: "queue_demo",
   pinned: true,
   updatedAt: "2026-10-27T00:00:00.000Z",
@@ -15,14 +15,6 @@ export const CLAW_CLIENT_QUEUE_DEMO_SESSION: MyClawSessionListItem = {
  * plus a research multi-agent session for the scientific flow.
  */
 export const MY_CLAW_SESSIONS: MyClawSessionListItem[] = [
-  {
-    id: "summary-stress-demo",
-    title: "长清单摘要样例（演示）",
-    kind: "expense",
-    pinned: false,
-    updatedAt: "2026-07-26T10:05:00.000Z",
-    preview: "用于查看进程、产物和资料较多时的摘要滚动效果。",
-  },
   {
     id: "task-001",
     title: "上海出差报销",
@@ -41,7 +33,7 @@ export const MY_CLAW_SESSIONS: MyClawSessionListItem[] = [
   },
   {
     id: "task-research-001",
-    title: "生成式 AI 科研协作效率研究",
+    title: "右侧工作区（演示）",
     kind: "research_multi_agent",
     pinned: true,
     updatedAt: "2026-07-25T16:30:00.000Z",

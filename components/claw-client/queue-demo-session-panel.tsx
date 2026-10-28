@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   Check,
   ChevronDown,
-  ChevronUp,
+  ChevronsUp,
   CornerUpRight,
-  GripVertical,
+  PanelRightOpen,
   Pencil,
   RotateCcw,
   Sparkles,
@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ComposerWithAgents } from "@/components/my-claw/chat/composer-with-agents";
+import { PersonalChatContext, type PersonalChatAttachment } from "@/components/claw-client/personal-chat-context";
+import { PersonalConversationSidePanel, type PersonalPanelView } from "@/components/claw-client/personal-conversation-side-panel";
 import { getPersonalClawDetail } from "@/lib/mock/my-claw/personal-claw";
 import type { MyClawSessionListItem } from "@/lib/mock/my-claw/types";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,16 @@ type QueueDemoState = {
 };
 
 const STORAGE_KEY = "claw-client:queue-steer-demo:v1";
+
+function subscribeWideScreen(callback: () => void) {
+  const query = window.matchMedia("(min-width: 1440px)");
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+}
+
+function getWideScreenSnapshot() {
+  return window.matchMedia("(min-width: 1440px)").matches;
+}
 
 function createInitialState(): QueueDemoState {
   return {
@@ -82,17 +94,32 @@ function newQueueItem(text: string): QueueItem {
 }
 
 export function QueueDemoSessionPanel({ session }: { session: MyClawSessionListItem }) {
+  const isWideScreen = useSyncExternalStore(subscribeWideScreen, getWideScreenSnapshot, () => false);
   const [demo, setDemo] = useState<QueueDemoState>(createInitialState);
   const [hydrated, setHydrated] = useState(false);
   const [draft, setDraft] = useState("");
   const [expanded, setExpanded] = useState(true);
-  const [dialog, setDialog] = useState<"send" | "edit" | null>(null);
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [pendingMessage, setPendingMessage] = useState("");
+  const [workspacePanelOverride, setWorkspacePanelOverride] = useState<boolean | null>(null);
+  const [workspaceView, setWorkspaceView] = useState<PersonalPanelView>("execution");
+  const [workspacePanelWidth, setWorkspacePanelWidth] = useState(400);
+  const [attachments, setAttachments] = useState<PersonalChatAttachment[]>([]);
+  const [dialog, setDialog] = useState<"edit" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const detail = getPersonalClawDetail();
   const isBusy = Boolean(demo.currentTask) && !demo.paused;
+  const workspacePanelOpen = workspacePanelOverride ?? isWideScreen;
+  const addAttachments = useCallback((items: PersonalChatAttachment[]) => {
+    setAttachments((current) => {
+      const ids = new Set(current.map((item) => item.id));
+      return [...current, ...items.filter((item) => !ids.has(item.id))];
+    });
+  }, []);
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((current) => current.filter((item) => item.id !== id));
+  }, []);
+  const clearAttachments = useCallback(() => setAttachments([]), []);
+  const personalChatContext = useMemo(() => ({ attachments, addAttachments, removeAttachment, clearAttachments }), [attachments, addAttachments, removeAttachment, clearAttachments]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -106,35 +133,35 @@ export function QueueDemoSessionPanel({ session }: { session: MyClawSessionListI
     if (hydrated) window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(demo));
   }, [demo, hydrated]);
 
-  function queueMessage(text: string, replaceExisting = false) {
+  function queueMessage(text: string) {
     const item = newQueueItem(text);
     setDemo((current) => ({
       ...current,
-      queue: [...(replaceExisting ? [] : current.queue), item],
+      queue: [...current.queue, item],
     }));
     setDraft("");
-    toast.success(replaceExisting ? "已清空原队列，新消息已加入" : "消息已加入队列");
+    toast.success("消息已加入队列");
   }
 
   function handleSend() {
-    const text = draft.trim();
+    const attachmentText = attachments.length > 0
+      ? `附件：${attachments.map((attachment) => attachment.name).join("、")}`
+      : "";
+    const text = [draft.trim(), attachmentText].filter(Boolean).join("\n");
     if (!text) return;
     if (isBusy) {
-      if (demo.queue.length > 0) {
-        setPendingMessage(text);
-        setDialog("send");
-      } else {
-        queueMessage(text);
-      }
-      return;
-    }
-    if (demo.paused) {
       queueMessage(text);
       return;
     }
-    setDemo((current) => ({ ...current, currentTask: text, interruptedTask: null, guidance: [] }));
+    setDemo((current) => ({
+      ...current,
+      currentTask: text,
+      paused: false,
+      interruptedTask: null,
+      guidance: [],
+    }));
     setDraft("");
-    toast.success("演示任务已开始");
+    toast.success(demo.paused ? "新消息已开始处理，原队列将在其后执行" : "演示任务已开始");
   }
 
   function completeCurrentTask() {
@@ -165,6 +192,15 @@ export function QueueDemoSessionPanel({ session }: { session: MyClawSessionListI
 
   function resumeQueue() {
     setDemo((current) => {
+      if (current.interruptedTask) {
+        return {
+          ...current,
+          currentTask: current.interruptedTask,
+          paused: false,
+          interruptedTask: null,
+          guidance: [],
+        };
+      }
       const [next, ...remaining] = current.queue;
       return {
         ...current,
@@ -178,37 +214,29 @@ export function QueueDemoSessionPanel({ session }: { session: MyClawSessionListI
   }
 
   function guideWith(item: QueueItem) {
-    if (!isBusy) return;
+    const canResumeInterruptedTask = demo.paused && Boolean(demo.interruptedTask);
+    if (!isBusy && !canResumeInterruptedTask) return;
     setDemo((current) => ({
       ...current,
+      currentTask: current.currentTask ?? (canResumeInterruptedTask ? current.interruptedTask : null),
+      paused: false,
+      interruptedTask: canResumeInterruptedTask ? null : current.interruptedTask,
       queue: current.queue.filter((queueItem) => queueItem.id !== item.id),
       guidance: [...current.guidance, item.text],
     }));
-    toast.success("已将这条消息作为引导发送给当前任务");
+    toast.success(canResumeInterruptedTask ? "已加入引导，正在继续当前会话" : "已将这条消息作为引导发送给当前任务");
   }
 
-  function moveItem(index: number, offset: -1 | 1) {
-    setDemo((current) => {
-      const nextIndex = index + offset;
-      if (nextIndex < 0 || nextIndex >= current.queue.length) return current;
-      const queue = [...current.queue];
-      [queue[index], queue[nextIndex]] = [queue[nextIndex]!, queue[index]!];
-      return { ...current, queue };
-    });
-  }
-
-  function dropItem(targetId: string) {
-    if (!draggedId || draggedId === targetId) return;
+  function pinToTop(itemId: string) {
     setDemo((current) => {
       const queue = [...current.queue];
-      const sourceIndex = queue.findIndex((item) => item.id === draggedId);
-      const targetIndex = queue.findIndex((item) => item.id === targetId);
-      if (sourceIndex < 0 || targetIndex < 0) return current;
-      const [item] = queue.splice(sourceIndex, 1);
-      queue.splice(targetIndex, 0, item!);
+      const index = queue.findIndex((item) => item.id === itemId);
+      if (index <= 0) return current;
+      const [item] = queue.splice(index, 1);
+      queue.unshift(item!);
       return { ...current, queue };
     });
-    setDraggedId(null);
+    if (demo.queue[0]?.id !== itemId) toast.success("消息已置顶到队首");
   }
 
   function openEdit(item: QueueItem) {
@@ -238,7 +266,18 @@ export function QueueDemoSessionPanel({ session }: { session: MyClawSessionListI
   }
 
   return (
+    <PersonalChatContext.Provider value={personalChatContext}>
     <div className="flex h-full min-h-0 flex-col bg-white">
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4">
+        <h1 className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{session.title}</h1>
+        {!workspacePanelOpen ? (
+          <button type="button" onClick={() => setWorkspacePanelOverride(true)} aria-label="打开会话侧栏" title="打开会话侧栏" className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+            <PanelRightOpen className="h-4 w-4" />
+          </button>
+        ) : null}
+      </header>
+      <div className="flex min-h-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 lg:px-10">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
           <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
@@ -295,53 +334,30 @@ export function QueueDemoSessionPanel({ session }: { session: MyClawSessionListI
 
       <div className="shrink-0 px-4 pb-5 pt-0 lg:px-10">
         <div className="mx-auto flex w-full max-w-5xl flex-col">
-          <section className="overflow-hidden rounded-t-2xl border border-b-0 border-[#cfd8eb] bg-[#f5f7fc]">
-            <div className="flex min-h-11 items-center justify-between gap-3 px-4">
-              <button type="button" onClick={() => setExpanded((value) => !value)} className="flex items-center gap-2 text-sm font-semibold text-slate-800" aria-expanded={expanded}>
-                <ChevronDown className={cn("h-4 w-4 transition-transform", !expanded && "-rotate-90")} />
-                {demo.paused ? "队列已暂停" : "队列中任务"}
-                <span className="font-medium text-slate-500">{demo.queue.length}</span>
-              </button>
-              {demo.paused ? (
-                <button type="button" onClick={resumeQueue} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[#315cf5] hover:bg-blue-50">继续</button>
-              ) : null}
-            </div>
+          {demo.queue.length > 0 ? (
+            <section className="overflow-hidden rounded-t-2xl border border-b-0 border-[#cfd8eb] bg-[#f5f7fc]">
+              <div className="flex min-h-11 items-center justify-between gap-3 px-4">
+                <button type="button" onClick={() => setExpanded((value) => !value)} className="flex items-center gap-2 text-sm font-semibold text-slate-800" aria-expanded={expanded}>
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", !expanded && "-rotate-90")} />
+                  {demo.paused ? "队列已暂停" : "队列中任务"}
+                  <span className="font-medium text-slate-500">{demo.queue.length}</span>
+                </button>
+                {demo.paused ? (
+                  <button type="button" onClick={resumeQueue} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[#315cf5] hover:bg-blue-50">继续</button>
+                ) : null}
+              </div>
 
-            {expanded ? (
-              demo.queue.length > 0 ? (
+              {expanded ? (
                 <ol className="divide-y divide-slate-200/70 px-2 pb-2">
                   {demo.queue.map((item, index) => (
-                    <li
-                      key={item.id}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={() => dropItem(item.id)}
-                      className={cn("group flex min-h-11 items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-white/70", draggedId === item.id && "opacity-50")}
-                    >
-                      <button
-                        type="button"
-                        draggable
-                        onDragStart={(event) => {
-                          event.dataTransfer.effectAllowed = "move";
-                          event.dataTransfer.setData("text/plain", item.id);
-                          setDraggedId(item.id);
-                        }}
-                        onDragEnd={() => setDraggedId(null)}
-                        aria-label={`拖动排序：${item.text}`}
-                        title="拖动排序"
-                        className="flex h-7 w-5 shrink-0 cursor-grab items-center justify-center text-slate-400 active:cursor-grabbing"
-                      >
-                        <GripVertical className="h-4 w-4" />
-                      </button>
+                    <li key={item.id} className="group flex min-h-11 items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-white/70">
                       <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{item.text}</span>
                       <div className="flex shrink-0 items-center gap-0.5">
-                        <button type="button" disabled={!isBusy} onClick={() => guideWith(item)} title={isBusy ? "引导当前响应" : "当前没有正在运行的响应"} aria-label={`引导当前响应：${item.text}`} className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs text-slate-500 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40">
+                        <button type="button" disabled={!isBusy && !(demo.paused && demo.interruptedTask)} onClick={() => guideWith(item)} title={demo.paused && demo.interruptedTask ? "引导并继续当前会话" : isBusy ? "引导当前响应" : "当前没有可继续的会话"} aria-label={`引导当前会话：${item.text}`} className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs text-slate-500 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40">
                           <CornerUpRight className="h-3.5 w-3.5" />引导
                         </button>
-                        <button type="button" disabled={index === 0} onClick={() => moveItem(index, -1)} title="上移" aria-label={`上移：${item.text}`} className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700 disabled:invisible">
-                          <ChevronUp className="h-4 w-4" />
-                        </button>
-                        <button type="button" disabled={index === demo.queue.length - 1} onClick={() => moveItem(index, 1)} title="下移" aria-label={`下移：${item.text}`} className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700 disabled:invisible">
-                          <ChevronDown className="h-4 w-4" />
+                        <button type="button" disabled={index === 0} onClick={() => pinToTop(item.id)} title={index === 0 ? "已在队首" : "置顶"} aria-label={`置顶：${item.text}`} className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-white hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
+                          <ChevronsUp className="h-3.5 w-3.5" />
                         </button>
                         <button type="button" onClick={() => openEdit(item)} title="编辑" aria-label={`编辑：${item.text}`} className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-white hover:text-slate-800">
                           <Pencil className="h-3.5 w-3.5" />
@@ -359,42 +375,36 @@ export function QueueDemoSessionPanel({ session }: { session: MyClawSessionListI
                     </li>
                   ))}
                 </ol>
-              ) : (
-                <p className="px-5 pb-4 text-xs text-slate-500">暂无排队任务。当前响应结束后，排队消息会按顺序执行。</p>
-              )
-            ) : null}
-          </section>
+              ) : null}
+            </section>
+          ) : null}
           <ComposerWithAgents
             detail={detail}
             value={draft}
             onChange={setDraft}
             onSend={handleSend}
             modelScopeKey="queue-demo"
+            personalMode
+            onOpenWorkspace={() => { setWorkspaceView("workspace"); setWorkspacePanelOverride(true); }}
             isBusy={isBusy}
             onInterrupt={interruptCurrentTask}
-            queueHint={isBusy ? "当前响应进行中 · 发送消息会加入队列" : demo.paused ? "队列已暂停 · 新消息会加入队列" : "发送后开始新的演示响应"}
           />
         </div>
       </div>
-
-      <Dialog open={dialog === "send"} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="gap-0 rounded-2xl border-slate-200 p-0 sm:max-w-[440px]">
-          <DialogHeader className="px-6 pb-2 pt-5">
-            <DialogTitle className="text-base">发送消息？</DialogTitle>
-            <DialogDescription className="leading-6">
-              队列中已有 {demo.queue.length} 条待处理消息。你可以清空原队列后加入这条消息，也可以保留原队列并将它排到末尾。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 px-6 py-4 sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => { queueMessage(pendingMessage, true); setPendingMessage(""); setDialog(null); }} className="rounded-full border-blue-200 text-blue-700 hover:bg-blue-50">
-              清空队列并加入
-            </Button>
-            <Button type="button" onClick={() => { queueMessage(pendingMessage); setPendingMessage(""); setDialog(null); }} className="rounded-full bg-slate-900 text-white hover:bg-slate-800">
-              保留队列并追加
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </div>
+      <PersonalConversationSidePanel
+        open={workspacePanelOpen}
+        personalMode
+        view={workspaceView}
+        panelWidth={workspacePanelWidth}
+        onPanelWidthChange={setWorkspacePanelWidth}
+        onViewChange={(view) => { setWorkspaceView(view); setWorkspacePanelOverride(true); }}
+        onClose={() => setWorkspacePanelOverride(false)}
+        tasks={[]}
+        outputs={[]}
+        conversationTitle={session.title}
+      />
+      </div>
 
       <Dialog open={dialog === "edit"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent className="gap-0 rounded-2xl border-slate-200 p-0 sm:max-w-[480px]">
@@ -414,5 +424,6 @@ export function QueueDemoSessionPanel({ session }: { session: MyClawSessionListI
         </DialogContent>
       </Dialog>
     </div>
+    </PersonalChatContext.Provider>
   );
 }
