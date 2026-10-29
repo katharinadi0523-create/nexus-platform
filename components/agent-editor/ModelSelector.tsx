@@ -44,6 +44,8 @@ export type ModelParams = ModelParamValues;
 export interface ModelSelectorProps {
   /** Override the preset catalog for specialized model types. */
   presetModelOptions?: readonly string[];
+  /** Models that remain in the catalog but are temporarily unavailable. */
+  unavailableModelIds?: readonly string[];
   selectedModel?: string;
   modelParams?: ModelParams;
   onModelChange?: (model: string) => void;
@@ -136,8 +138,13 @@ export function ModelSelector({
   separateParamsPopover = false,
   hiddenParamKeys,
   presetModelOptions,
+  unavailableModelIds = [],
 }: ModelSelectorProps) {
   const presetModels = presetModelOptions ?? PRESET_MODEL_IDS;
+  const unavailableModelIdSet = useMemo(
+    () => new Set(unavailableModelIds),
+    [unavailableModelIds]
+  );
   const hiddenParamKeySet = useMemo(
     () => new Set<ModelParamKey>(hiddenParamKeys ?? []),
     [hiddenParamKeys]
@@ -400,30 +407,54 @@ export function ModelSelector({
   };
 
   const renderModelOption = (model: string, withIcon = true) => {
+    const unavailable = unavailableModelIdSet.has(model);
     const row = (
-      <button
-        type="button"
-        onMouseEnter={() => {
-          clearModelConfigCloseTimer();
-        }}
-        onMouseLeave={scheduleModelConfigClose}
-        onClick={() => {
+      <div
+        role={unavailable ? undefined : "button"}
+        tabIndex={unavailable ? -1 : 0}
+        onMouseEnter={unavailable ? undefined : clearModelConfigCloseTimer}
+        onMouseLeave={unavailable ? undefined : scheduleModelConfigClose}
+        onClick={unavailable ? undefined : () => {
           handleModelSelect(model);
           setParamsModelOpen(model);
         }}
+        onKeyDown={unavailable ? undefined : (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleModelSelect(model);
+            setParamsModelOpen(model);
+          }
+        }}
         className={cn(
-          "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
+          "w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors text-left",
+          unavailable ? "cursor-not-allowed" : "hover:bg-slate-50 cursor-pointer",
           currentModel === model && "bg-blue-50"
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
-          {withIcon ? getModelIcon(model) : null}
-          <span className="truncate text-sm text-slate-900">{model}</span>
+          {withIcon ? <span className={unavailable ? "opacity-50" : undefined}>{getModelIcon(model)}</span> : null}
+          <span className={cn("truncate text-sm", unavailable ? "text-slate-500" : "text-slate-900")}>{model}</span>
         </div>
-        {currentModel === model ? <Check className="h-4 w-4 shrink-0 text-blue-600" /> : null}
-      </button>
+        <span className="flex shrink-0 items-center gap-2">
+          {unavailable ? (
+            <span className="group relative inline-flex cursor-help items-center text-amber-500">
+              <span role="img" aria-label="模型服务异常，请先选择可用模型" tabIndex={0}>
+                <AlertTriangle className="h-4 w-4" />
+              </span>
+              <span
+                role="tooltip"
+                className="invisible absolute bottom-full right-0 z-[60] mb-2 w-max max-w-[240px] rounded-md border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-700 opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+              >
+                模型服务异常，请先选择可用模型
+              </span>
+            </span>
+          ) : null}
+          {currentModel === model ? <Check className="h-4 w-4 text-blue-600" /> : null}
+        </span>
+      </div>
     );
 
+    if (unavailable) return <div key={model}>{row}</div>;
     if (!showParams || !separateParamsPopover) return <div key={model}>{row}</div>;
     return (
       <Popover key={model} open={paramsModelOpen === model} onOpenChange={(nextOpen) => {

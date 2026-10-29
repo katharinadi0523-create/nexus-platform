@@ -66,6 +66,9 @@ type FlatWorkspaceFile = {
   updatedAt?: string;
 };
 
+// Static demo state: this model remains in the catalog but its service is unavailable.
+const DEMO_UNAVAILABLE_MODEL_IDS = ["Qwen3-8B"] as const;
+
 function flattenWorkspaceFiles(folder: typeof CLAW_CLIENT_WORKSPACE_ROOT, parentPath = ""): FlatWorkspaceFile[] {
   return folder.children.flatMap((entry) => {
     const path = parentPath ? `${parentPath} / ${entry.name}` : entry.name;
@@ -457,6 +460,7 @@ export function DebugChatComposer({
                 modelParams={params}
                 onModelChange={selectModel}
                 onParamsChange={updateParams}
+                unavailableModelIds={DEMO_UNAVAILABLE_MODEL_IDS}
                 presetOnly
                 separateParamsPopover
                 hiddenParamKeys={["context_turns", "sp_anti_leak"]}
