@@ -15,6 +15,7 @@ interface ComposerWithAgentsProps {
   isBusy?: boolean;
   onInterrupt?: () => void;
   queueHint?: string;
+  modelFallbackDemo?: boolean;
 }
 
 /**
@@ -32,6 +33,7 @@ export function ComposerWithAgents({
   isBusy = false,
   onInterrupt,
   queueHint,
+  modelFallbackDemo = false,
 }: ComposerWithAgentsProps) {
   return (
     <DebugChatComposer
@@ -46,6 +48,7 @@ export function ComposerWithAgents({
       isBusy={isBusy}
       onInterrupt={onInterrupt}
       queueHint={queueHint}
+      modelFallbackDemo={modelFallbackDemo}
       footerLeadingExtra={<AgentSelector />}
     />
   );

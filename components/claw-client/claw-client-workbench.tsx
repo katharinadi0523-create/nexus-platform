@@ -373,7 +373,7 @@ export function ClawClientWorkbench({ tab: rawTab, sessionId, messageId }: { tab
   const chatSession = tab === "chat" && sessionId ? getMyClawSession(sessionId) : undefined;
   if (chatSession?.kind === "clarify_demo") content = <ClarifyDemoSessionPanel key={chatSession.id} session={chatSession} />;
   else if (chatSession?.kind === "queue_demo") content = <QueueDemoSessionPanel key={chatSession.id} session={chatSession} />;
-  else if (tab === "chat") content = <ChatWorkspace sessionId={sessionId} messageId={messageId} personalMode />;
+  else if (tab === "chat") content = <ChatWorkspace sessionId={sessionId} messageId={messageId} personalMode modelFallbackDemo={sessionId === "model-fallback-demo"} />;
   else if (tab === "workspace") content = <ClawClientWorkspacePage />;
   else if (tab === "capabilities") {
     const initialType =

@@ -47,6 +47,7 @@ type DebugChatComposerProps = {
   isBusy?: boolean;
   onInterrupt?: () => void;
   queueHint?: string;
+  modelFallbackDemo?: boolean;
 };
 
 type ComposerAttachment = {
@@ -94,6 +95,7 @@ export function DebugChatComposer({
   isBusy = false,
   onInterrupt,
   queueHint,
+  modelFallbackDemo = false,
 }: DebugChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -105,12 +107,18 @@ export function DebugChatComposer({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [slashPicker, setSlashPicker] = useState<{ query: string; startIndex: number } | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [showModelFallbackNotice, setShowModelFallbackNotice] = useState(modelFallbackDemo);
   const personalChat = usePersonalChatContext();
   const { model, params, ready, selectModel, updateParams } =
     useChatModelPreference(modelScopeKey);
+  const handleModelChange = (nextModel: string) => {
+    selectModel(nextModel);
+    setShowModelFallbackNotice(false);
+  };
   // This Demo has no runtime token-usage feed yet; use an illustrative value for existing sessions.
   const contextLimitTokens = 176_000;
-  const contextUsedTokens = modelScopeKey === "new" ? 0 : 116_000;
+  const contextUsedTokens = modelScopeKey === "new" || modelScopeKey === "model-fallback-demo" ? 0 : 116_000;
   const contextUsagePercent = Math.round((contextUsedTokens / contextLimitTokens) * 1000) / 10;
   const contextUsageLabel = `已使用上下文 ${contextUsagePercent}% · ${(contextUsedTokens / 1000).toFixed(1)}K / ${(contextLimitTokens / 1000).toFixed(1)}K`;
 
@@ -330,6 +338,26 @@ export function DebugChatComposer({
       ) : null}
 
       <div className="relative">
+        {personalMode && showModelFallbackNotice ? (
+          <div className="mb-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-slate-700">
+            <span className="min-w-0 flex-1">你选择的模型当前不可用，已切换至 {model}。</span>
+            <button
+              type="button"
+              onClick={() => setModelPickerOpen(true)}
+              className="shrink-0 font-medium text-blue-700 hover:text-blue-800"
+            >
+              更换模型
+            </button>
+            <button
+              type="button"
+              aria-label="关闭模型切换提示"
+              onClick={() => setShowModelFallbackNotice(false)}
+              className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-amber-100 hover:text-slate-700"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : null}
         {queueHint ? <p className="mb-1 text-[11px] leading-4 text-slate-400">{queueHint}</p> : null}
         {isDropTarget ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md border border-dashed border-blue-400 bg-blue-50/80 text-sm font-medium text-blue-700">
@@ -456,9 +484,11 @@ export function DebugChatComposer({
                 </Tooltip>
               </TooltipProvider>
               <ModelSelector
+                open={modelPickerOpen}
+                onOpenChange={setModelPickerOpen}
                 selectedModel={model}
                 modelParams={params}
-                onModelChange={selectModel}
+                onModelChange={handleModelChange}
                 onParamsChange={updateParams}
                 unavailableModelIds={DEMO_UNAVAILABLE_MODEL_IDS}
                 presetOnly

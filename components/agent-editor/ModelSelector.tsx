@@ -46,6 +46,9 @@ export interface ModelSelectorProps {
   presetModelOptions?: readonly string[];
   /** Models that remain in the catalog but are temporarily unavailable. */
   unavailableModelIds?: readonly string[];
+  /** Control the model list popover from nearby UI, such as a fallback notice. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   selectedModel?: string;
   modelParams?: ModelParams;
   onModelChange?: (model: string) => void;
@@ -139,6 +142,8 @@ export function ModelSelector({
   hiddenParamKeys,
   presetModelOptions,
   unavailableModelIds = [],
+  open: openProp,
+  onOpenChange,
 }: ModelSelectorProps) {
   const presetModels = presetModelOptions ?? PRESET_MODEL_IDS;
   const unavailableModelIdSet = useMemo(
@@ -152,7 +157,8 @@ export function ModelSelector({
   const initialModel = selectedModel ?? "Qwen3-32B";
   const isModelControlled = selectedModel !== undefined;
   const isParamsControlled = modelParams !== undefined;
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
   const [paramsModelOpen, setParamsModelOpen] = useState<string | null>(null);
   const modelConfigCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [chatModelUiConfig, setChatModelUiConfig] = useState<Record<string, ChatModelUiConfig>>({});
@@ -481,7 +487,8 @@ export function ModelSelector({
     <TooltipProvider delayDuration={0}>
     <div className={cn(separateParamsPopover ? "flex items-center gap-1" : "contents")}>
     <Popover open={open} onOpenChange={(nextOpen) => {
-      setOpen(nextOpen);
+      setInternalOpen(nextOpen);
+      onOpenChange?.(nextOpen);
       setParamsModelOpen(null);
       setChatConfigSubmenu(null);
       clearModelConfigCloseTimer();
