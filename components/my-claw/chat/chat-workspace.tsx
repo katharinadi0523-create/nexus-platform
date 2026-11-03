@@ -29,6 +29,8 @@ interface ChatWorkspaceProps {
   messageId?: string | null;
   /** Enables personal-only conversation layout and model/workspace controls. */
   personalMode?: boolean;
+  /** Shows the model fallback notice in the new-session prototype. */
+  modelFallbackDemo?: boolean;
 }
 
 function subscribeWideScreen(callback: () => void) {
@@ -50,6 +52,7 @@ function BlankChatPanel({
   onWorkspacePanelWidthChange,
   onOpenWorkspace,
   onCloseWorkspace,
+  modelFallbackDemo = false,
 }: {
   personalMode?: boolean;
   workspacePanelOpen?: boolean;
@@ -59,6 +62,7 @@ function BlankChatPanel({
   onWorkspacePanelWidthChange?: (width: number) => void;
   onOpenWorkspace?: () => void;
   onCloseWorkspace?: () => void;
+  modelFallbackDemo?: boolean;
 }) {
   const detail = useMemo(() => getPersonalClawDetail(), []);
   const chat = usePersonalChatContext();
@@ -93,7 +97,8 @@ function BlankChatPanel({
           <div className="mx-auto w-full max-w-4xl">
             <ComposerWithAgents
               detail={detail}
-              modelScopeKey="new"
+              modelScopeKey={modelFallbackDemo ? "model-fallback-demo" : "new"}
+              modelFallbackDemo={modelFallbackDemo}
               personalMode={personalMode}
               onOpenWorkspace={onOpenWorkspace}
               value={draft}
@@ -182,7 +187,7 @@ function PersonalChatContent({
   );
 }
 
-export function ChatWorkspace({ sessionId, messageId, personalMode = false }: ChatWorkspaceProps) {
+export function ChatWorkspace({ sessionId, messageId, personalMode = false, modelFallbackDemo = false }: ChatWorkspaceProps) {
   const { setActiveSession } = useMyClaw();
   const isWideScreen = useSyncExternalStore(subscribeWideScreen, getWideScreenSnapshot, () => false);
   const sessionKey = sessionId ?? null;
@@ -225,6 +230,7 @@ export function ChatWorkspace({ sessionId, messageId, personalMode = false }: Ch
     content = (
       <BlankChatPanel
         personalMode={personalMode}
+        modelFallbackDemo={modelFallbackDemo}
         workspacePanelOpen={workspacePanelOpen}
         workspaceView={workspaceView}
         workspacePanelWidth={workspacePanelWidth}
