@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  AppWindow,
   Bookmark,
   Brain,
   Check,
   ChevronDown,
   ChevronUp,
+  Clock,
   FilePen,
   FilePlus2,
   FileText,
@@ -25,6 +25,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { AutomationTaskDialog, cloneTask, type TaskFormState } from "@/components/my-claw/automation/automation-task-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
@@ -80,7 +81,7 @@ const CATEGORY_ICON: Record<EventCategory, LucideIcon | typeof SkillIcon> = {
   edit: FilePen,
   search: Search,
   web: Globe,
-  browser: AppWindow,
+  browser: Globe,
   memory: Bookmark,
   history: History,
   deliver: FileUp,
@@ -305,70 +306,6 @@ function ClarifyCard({
   );
 }
 
-function FullLogDialog({ items, open, onOpenChange }: { items: RawItem[]; open: boolean; onOpenChange: (open: boolean) => void }) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-[720px]">
-        <DialogHeader>
-          <DialogTitle className="text-base">完整记录</DialogTitle>
-        </DialogHeader>
-        <ol className="space-y-2 text-[12px] leading-5">
-          {items.map((item, index) => (
-            <li key={item.id} className="rounded-md border border-slate-200 px-3 py-2">
-              <div className="flex gap-2 text-slate-500">
-                <span className="w-6 shrink-0 text-right text-slate-300">{index + 1}</span>
-                <span className="font-mono text-slate-700">{logTitle(item)}</span>
-              </div>
-              {logBody(item)}
-            </li>
-          ))}
-        </ol>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function logTitle(item: RawItem) {
-  switch (item.kind) {
-    case "thinking":
-      return `thinking · ${item.seconds}s`;
-    case "narration":
-      return "assistant_message";
-    case "event":
-    case "merged":
-    case "hidden":
-    case "delivery":
-      return item.tool;
-    case "clarify":
-      return "AskForClarification";
-    case "card":
-      return item.tool ?? "card";
-    case "answer":
-      return "final_answer";
-    case "interrupt":
-      return "error";
-  }
-}
-
-function logBody(item: RawItem) {
-  const pre = (text: string) => (
-    <pre className="ml-8 mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-slate-500">{text}</pre>
-  );
-  if (item.kind === "thinking") return pre(item.text);
-  if (item.kind === "narration" || item.kind === "answer") return pre(item.text);
-  if (item.kind === "interrupt") return pre(item.message);
-  if (item.kind === "clarify") return pre(`${item.question}\n${item.options.map((o) => `- ${o.label}`).join("\n")}`);
-  if (item.kind === "event" || item.kind === "merged" || item.kind === "hidden" || item.kind === "delivery") {
-    const detail = item.detail;
-    if (!detail) return null;
-    if (detail.type === "command") return pre(`Request: ${detail.command}\nResponse: ${detail.output}${detail.exitCode !== undefined ? `\nexit_code: ${detail.exitCode}` : ""}`);
-    if (detail.type === "file") return pre(`Request: ${detail.path}\nResponse: ${detail.content}`);
-    if (detail.type === "search") return pre(`Request: ${detail.query}\nResponse: ${detail.results.join("\n")}`);
-    return pre(`${detail.input ? `Request: ${detail.input}\n` : ""}Response: ${detail.output}`);
-  }
-  return null;
-}
-
 export interface ExecutionTurnProps {
   items: RawItem[];
   runningId: string | null;
@@ -390,8 +327,8 @@ export function ExecutionTurn({ items, runningId, state, elapsed, ticking = fals
   const openByDefault = state !== "done";
   const [expandState, setExpandState] = useState<{ when: boolean; open: boolean }>({ when: openByDefault, open: openByDefault });
   const expanded = expandState.when === openByDefault ? expandState.open : openByDefault;
-  const [logOpen, setLogOpen] = useState(false);
   const [preview, setPreview] = useState<{ file: string; content: string } | null>(null);
+  const [taskForm, setTaskForm] = useState<TaskFormState | null>(null);
 
 
   let statusText: string;
@@ -451,12 +388,6 @@ export function ExecutionTurn({ items, runningId, state, elapsed, ticking = fals
               }
               return <div key={block.key}>{block.item.render()}</div>;
             })}
-            {!live ? (
-              <button type="button" onClick={() => setLogOpen(true)} className="flex items-center gap-2 pt-1 text-[12px] text-slate-400 hover:text-[#2773ff]">
-                <span className="w-4" />
-                查看完整记录
-              </button>
-            ) : null}
           </div>
         ) : null}
       </div>
@@ -476,7 +407,26 @@ export function ExecutionTurn({ items, runningId, state, elapsed, ticking = fals
       {projected.deliveries.length ? (
         <div className="flex flex-wrap gap-2">
           {projected.deliveries.map((card) =>
-            card.type === "file" ? (
+            card.type === "automation" ? (
+              <div key={card.title} className="flex w-full max-w-md items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                  <Clock className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium text-slate-800">{card.title}</span>
+                  {card.meta ? <span className="block truncate text-xs text-slate-500">{card.meta}</span> : null}
+                </span>
+                {card.task ? (
+                  <button
+                    type="button"
+                    onClick={() => card.task && setTaskForm({ kind: "cron", mode: "edit", draft: cloneTask(card.task) })}
+                    className="shrink-0 rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    查看
+                  </button>
+                ) : null}
+              </div>
+            ) : card.type === "file" ? (
               <span key={card.title} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                 <Paperclip className="h-3.5 w-3.5" />
                 <span>{card.title}</span>
@@ -493,7 +443,7 @@ export function ExecutionTurn({ items, runningId, state, elapsed, ticking = fals
         </div>
       ) : null}
 
-      <FullLogDialog items={items} open={logOpen} onOpenChange={setLogOpen} />
+      {taskForm ? <AutomationTaskDialog form={taskForm} onFormChange={setTaskForm} /> : null}
       <Dialog open={Boolean(preview)} onOpenChange={(open) => !open && setPreview(null)}>
         <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-[680px]">
           <DialogHeader>

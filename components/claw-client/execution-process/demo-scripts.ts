@@ -1,3 +1,4 @@
+import { createScheduledTaskDraft, type AutomationTask } from "@/lib/mock/my-claw/automation";
 import type { DeliveryCard, EventCategory, EventDetail, RawItem, TurnState } from "./model";
 
 /**
@@ -59,12 +60,28 @@ export const ev = (
 });
 export const cmd = (command: string, output: string, exitCode = 0): EventDetail => ({ type: "command", command, output, exitCode });
 export const file = (path: string, content: string): EventDetail => ({ type: "file", path, content });
-export const browser = (tool: string, input: string, output: string, at: number, options: { silent?: boolean; note?: string } = {}) =>
-  ev(tool, "browser", "操作浏览器", "正在操作浏览器", at, { type: "raw", input, output }, options);
+/** 网页操作：每一步一个 Event，名字写这一步做了什么。 */
+export const browser = (tool: string, name: string, runningName: string, input: string, output: string, at: number, options: { note?: string } = {}) =>
+  ev(tool, "browser", name, runningName, at, { type: "raw", input, output }, options);
 export const deliver = (tool: string, card: DeliveryCard, at: number, options: { ok?: boolean; failName?: string; runningName?: string; detail?: EventDetail; note?: string } = {}): DemoEntry => ({
   item: { kind: "delivery", id: id("deliver"), tool, ok: options.ok ?? true, card, failName: options.failName, runningName: options.runningName, detail: options.detail, at },
   note: options.note,
 });
+
+/** 定时任务演示：创建出来的任务，点“查看”时在弹窗里打开。 */
+const WEEKLY_SALES_TASK: AutomationTask = (() => {
+  const draft = createScheduledTaskDraft();
+  return {
+    ...draft,
+    id: "auto-demo-weekly-sales",
+    name: "销售周报汇总",
+    description: "每周一汇总上周销售数据并生成周报",
+    instruction: "汇总上周各区域的销售数据，生成销售周报，发到这个对话。",
+    trigger_summary: "每周一 09:00",
+    delivery_channel: "AF平台",
+    schedule_config: draft.schedule_config && { ...draft.schedule_config, frequency: "weekly", time: "09:00" },
+  };
+})();
 
 const DASHBOARD_DATA = `export const dashboardData = {
   updatedAt: "2026-10-31",
@@ -100,7 +117,7 @@ export const DASHBOARD_DEMO: ProcessDemo = {
         think(21, "数据是“指标 + 时间序列 + 区域”的画像，tpl_kpi_grid 最合适。读一下模板的结构。", 40),
         ev("read_file", "read", "读取「index.html」", "正在读取「index.html」", 61, file("templates/tpl_kpi_grid/index.html", "<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n  <meta charset=\"utf-8\" />\n  <title>{{title}}</title>\n  <link rel=\"stylesheet\" href=\"style.css\" />\n</head>\n<body>\n  <section id=\"kpis\"></section>\n  <section id=\"charts\"></section>\n  <script src=\"app.js\"></script>\n</body>\n</html>"), { id: "dash-read-index" }),
         { item: { kind: "merged", id: id("merged"), tool: "RestoreToolResult", target: "dash-read-index", detail: { type: "raw", input: "tool_call_id: call_0412 · start: 44000", output: "（index.html 余下部分）" } }, silent: true },
-        ev("read_file", "read", "读取「app.js」", "正在读取「app.js」", 63, file("templates/tpl_kpi_grid/app.js", "import { dashboardData } from \"./dashboard_data.js\";\nrenderKpis(dashboardData.kpis);\nrenderCharts(dashboardData.charts);"), { note: "上一步结果过长被分段取回（RestoreToolResult），并入“读取「index.html」”，过程区里看不到；只在完整记录里出现" }),
+        ev("read_file", "read", "读取「app.js」", "正在读取「app.js」", 63, file("templates/tpl_kpi_grid/app.js", "import { dashboardData } from \"./dashboard_data.js\";\nrenderKpis(dashboardData.kpis);\nrenderCharts(dashboardData.charts);"), { note: "上一步结果过长被分段取回（RestoreToolResult），并入“读取「index.html」”，不单独成行；点开那一行时输出按顺序拼在一起" }),
         ev("read_file", "read", "读取「style.css」", "正在读取「style.css」", 64, file("templates/tpl_kpi_grid/style.css", ":root { --accent: #2773ff; }\n.kpi { border: 1px solid #e5e7eb; border-radius: 8px; }")),
         think(16, "模板读清楚了：6 个指标卡 + 3 张图表。生成数据配置，再跑构建脚本。", 65),
         say("模板结构已清楚：6 个指标卡和 3 张图表。现在写入数据配置并生成看板。", 81, "上一个 Segment 收起成一行：按类别计数，取前 3 类；思考不计入"),
@@ -109,9 +126,9 @@ export const DASHBOARD_DEMO: ProcessDemo = {
           note: "写入类：模型一开始写就出现“正在写入「文件名」”，不显示行数；写入完成前“预览”不可点",
         }),
         ev("execute", "run", "运行脚本，生成看板网页", "正在运行脚本，生成看板网页", 101, cmd("python3 build_dashboard.py --data output/dashboard_data.js --out output/台账看板.html", "已生成 output/台账看板.html（38 KB）"), { note: "这一步的名字来自模型调用时填写的意图；没有意图时按模板写“运行 build_dashboard.py”" }),
-        browser("browser_navigate", "url: file:///workspace/output/台账看板.html", "页面已打开：台账看板", 108, { note: "所有浏览器操作都显示为“操作浏览器”，连续的合成一个 Event" }),
-        browser("browser_snapshot", "", "6 个指标卡、3 张图表均已渲染", 110, { silent: true }),
-        browser("browser_click", "ref: tab-region", "已切换到“区域销售占比”", 111, { silent: true }),
+        browser("navigate", "打开「台账看板.html」", "正在打开「台账看板.html」", "url: file:///workspace/output/台账看板.html", "页面已打开：台账看板", 108, { note: "网页操作每一步一个 Event，名字写这一步做了什么；Segment 默认收起，不会刷屏" }),
+        browser("snapshot", "读取页面内容", "正在读取页面内容", "", "6 个指标卡、3 张图表均已渲染", 110),
+        browser("click", "点击「区域销售占比」", "正在点击「区域销售占比」", "selector: ref=e12（区域销售占比）", "已切换到“区域销售占比”", 111),
         deliver("CreateArtifact", { type: "file", title: "台账看板.html", meta: "38 KB" }, 112, {
           ok: false,
           failName: "准备文件「台账看板.html」",
@@ -121,7 +138,7 @@ export const DASHBOARD_DEMO: ProcessDemo = {
         deliver("CreateArtifact", { type: "file", title: "台账看板.html", meta: "38 KB" }, 114, { note: "模型重新调用后成功，文件卡片放进 Delivery，不在过程区出现" }),
         { item: { kind: "answer", id: id("answer"), text: "看板已生成，包含 6 个指标卡和 3 张图表，数据截至 10 月 31 日。", at: 116 } },
       ],
-      end: { state: "done", at: 116, note: "完成后整体收成状态行“已完成 · 用时”；点开看过程，底部可查看完整记录" },
+      end: { state: "done", at: 116, note: "完成后整体收成状态行“已完成 · 用时”；点开看过程" },
     },
   ],
 };
@@ -171,7 +188,7 @@ export const AUTOMATION_INTERRUPT_DEMO: ProcessDemo = {
       user: "以后每周一早上 9 点，帮我汇总上周的销售周报",
       entries: [
         think(3, "用户要建一个每周执行的定时任务。", 0, "思考不到 5 秒，不显示"),
-        deliver("CreateAutomationTask", { type: "result", title: "已创建定时任务「销售周报汇总」", meta: "每周一 9:00" }, 3, { runningName: "正在创建定时任务「销售周报汇总」", detail: { type: "raw", input: "name: 销售周报汇总 · scheduleType: weekly · schedule: [1] 09:00", output: "task_id: at_20261103_01" }, note: "定时任务属于交付类：运行中在 Segment 里显示“正在创建定时任务「…」”，完成后移进 Delivery 出结果卡，过程区不留" }),
+        deliver("CreateAutomationTask", { type: "automation", title: "销售周报汇总", meta: "每周一 9:00", task: WEEKLY_SALES_TASK }, 3, { runningName: "正在创建定时任务「销售周报汇总」", detail: { type: "raw", input: "name: 销售周报汇总 · scheduleType: weekly · schedule: [1] 09:00", output: "task_id: at_20261103_01" }, note: "定时任务属于交付类：运行中在 Segment 里显示“正在创建定时任务「…」”，完成后移进 Delivery 出定时任务卡片（任务名 + 执行时间），点“查看”打开定时任务弹窗；过程区不留" }),
         { item: { kind: "answer", id: id("answer"), text: "已设置好：每周一 9:00 自动汇总上周销售周报，结果会发到这个对话。", at: 5 } },
       ],
       end: { state: "done", at: 5, note: "这一轮没有工具段，只有交付结果卡" },
@@ -182,7 +199,7 @@ export const AUTOMATION_INTERRUPT_DEMO: ProcessDemo = {
         think(7, "先读第 44 周的周报，按区域汇总，再到 BI 看板核对一下数字。", 0),
         ev("read_file", "read", "读取「销售周报-第44周.xlsx」", "正在读取「销售周报-第44周.xlsx」", 7, file("销售周报-第44周.xlsx", "门店 214 家；字段：区域 / 门店 / 销售额 / 毛利")),
         ev("execute", "run", "运行脚本，按区域汇总", "正在运行脚本，按区域汇总", 10, cmd("python3 weekly.py 销售周报-第44周.xlsx", "6 个区域汇总完成")),
-        browser("browser_navigate", "url: https://bi.example.com/sales/weekly", "页面已打开：销售周报看板", 15, { note: "浏览器操作统一显示“操作浏览器”" }),
+        browser("navigate", "打开 bi.example.com", "正在打开 bi.example.com", "url: https://bi.example.com/sales/weekly", "页面已打开：销售周报看板", 15, { note: "打开网页：名字写域名" }),
         { item: { kind: "interrupt", id: id("interrupt"), message: "当前响应已中断：模型服务响应超时。", at: 41 }, note: "系统中断（模型服务出错、超时）：状态行“已中断”，下方沿用现有的中断提示和重试" },
       ],
       end: { state: "interrupted", at: 41, note: "已中断：过程区不自动收起，停在中断时的位置" },

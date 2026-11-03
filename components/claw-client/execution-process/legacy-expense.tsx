@@ -25,7 +25,7 @@ function nameTool(tool: NonNullable<Extract<ExpenseRenderNode, { type: "action" 
     case "code.execute":
       return { category: "run", name: "运行脚本，核对报销金额", runningName: "正在运行脚本，核对报销金额" };
     case "browser.inspect":
-      return { category: "browser", name: "操作浏览器", runningName: "正在操作浏览器" };
+      return { category: "browser", name: `打开「${target}」`, runningName: `正在打开「${target}」` };
     default: {
       const intent = `${tool.action ?? ""}${target}`.replace(/\s+/g, "") || tool.name;
       return { category: "other", name: intent, runningName: `正在${intent}` };

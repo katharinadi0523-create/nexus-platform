@@ -12,7 +12,6 @@ import { useRouter } from "next/navigation";
 import {
   INITIAL_AUTOMATION_TASKS,
   CLAW_CLIENT_PROCESS_DEMO_SESSIONS,
-  CLAW_CLIENT_QUEUE_DEMO_SESSION,
   MY_CLAW_SESSIONS,
   RESEARCH_CLAW_ID,
   RESEARCH_SESSION_ID,
@@ -84,9 +83,8 @@ export function MyClawProvider({
     [
       ...(navigationBasePath === "/claw-client"
         ? [
-            // 演示会话置顶展示：执行过程演示最前，其后排队与引导、任务与多智能体。
+            // 演示会话置顶展示：执行过程演示最前，其后任务与多智能体。
             ...CLAW_CLIENT_PROCESS_DEMO_SESSIONS,
-            CLAW_CLIENT_QUEUE_DEMO_SESSION,
             ...MY_CLAW_SESSIONS.filter(
               (session) => session.id === "task-research-001",
             ),

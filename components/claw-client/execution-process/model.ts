@@ -6,6 +6,8 @@
  * 实时运行和历史回放共用同一个投影函数。
  */
 
+import type { AutomationTask } from "@/lib/mock/my-claw/automation";
+
 export type EventCategory =
   | "skill"
   | "read"
@@ -31,7 +33,7 @@ const CATEGORY_UNIT: Record<EventCategory, (count: number) => string> = {
   edit: (n) => `修改 ${n} 个文件`,
   search: (n) => `搜索 ${n} 次`,
   web: (n) => `查看 ${n} 个网页`,
-  browser: () => "操作浏览器",
+  browser: (n) => `网页操作 ${n} 次`,
   memory: (n) => `记住 ${n} 条偏好`,
   history: (n) => `回顾之前的对话 ${n} 次`,
   deliver: (n) => `交付 ${n} 次`,
@@ -46,9 +48,11 @@ export type EventDetail =
   | { type: "raw"; input?: string; output: string };
 
 export interface DeliveryCard {
-  type: "file" | "result";
+  type: "file" | "result" | "automation";
   title: string;
   meta?: string;
+  /** 定时任务卡片：点“查看”时打开的任务。 */
+  task?: AutomationTask;
 }
 
 export type RawItem =
@@ -70,7 +74,7 @@ export type RawItem =
     }
   /** 并入：内部机制，合进它服务的那一个 Event。 */
   | { kind: "merged"; id: string; tool: string; target: string; detail?: EventDetail }
-  /** 不显示：只在完整记录里。 */
+  /** 不显示：前端不展示。 */
   | { kind: "hidden"; id: string; tool: string; detail?: EventDetail }
   | {
       kind: "clarify";
@@ -242,27 +246,18 @@ export function projectTurn(items: RawItem[], runningId: string | null): Project
         break;
       case "event": {
         const target = openSegment(item.id);
-        const last = target.events[target.events.length - 1];
-        if (item.category === "browser" && last?.category === "browser") {
-          // 浏览器操作：连续的合成一个 Event。
-          last.details.push({ tool: item.tool, detail: item.detail });
-          last.ok = item.ok;
-          last.running = last.running || running;
-          eventById.set(item.id, last);
-        } else {
-          const projected: ProjectedEvent = {
-            key: item.id,
-            name: item.name,
-            runningName: item.runningName,
-            ok: item.ok,
-            running,
-            category: item.category,
-            details: [{ tool: item.tool, detail: item.detail }],
-            preview: item.preview,
-          };
-          pushEvent(target, projected);
-          eventById.set(item.id, projected);
-        }
+        const projected: ProjectedEvent = {
+          key: item.id,
+          name: item.name,
+          runningName: item.runningName,
+          ok: item.ok,
+          running,
+          category: item.category,
+          details: [{ tool: item.tool, detail: item.detail }],
+          preview: item.preview,
+        };
+        pushEvent(target, projected);
+        eventById.set(item.id, projected);
         target.tailOk = item.ok;
         if (running) {
           target.running = true;
