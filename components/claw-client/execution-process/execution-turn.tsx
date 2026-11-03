@@ -148,34 +148,50 @@ function EventRow({
 }) {
   const [open, setOpen] = useState(false);
   const Icon = CATEGORY_ICON[event.category];
+  // 写入中文件名不可点；写入完成后名字里的「文件名」可点击预览。
+  const fileLink = (() => {
+    if (event.running || !event.ok || !event.preview) return null;
+    const marked = `「${event.preview.file}」`;
+    const at = event.name.indexOf(marked);
+    if (at < 0) return null;
+    return { before: event.name.slice(0, at), file: marked, after: event.name.slice(at + marked.length) };
+  })();
   return (
     <div>
       <div className="flex items-center gap-2 py-[3px]">
         <span className="flex w-4 justify-center">
           {event.running ? <StatusIcon ok running /> : <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
         </span>
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          className="min-w-0 truncate text-left text-[13px] text-slate-500 hover:text-slate-800"
-        >
-          {event.running ? <span className="text-slate-700">{event.runningName}</span> : event.name}
-        </button>
-        {!event.running && !event.ok ? <X className="h-3.5 w-3.5 shrink-0 text-red-500" aria-label="失败" /> : null}
-        {event.preview ? (
+        {fileLink ? (
+          // 写入完成后：文件名可直接点击打开预览；其余文字照常展开输入输出。
+          <span className="flex min-w-0 items-center text-[13px] text-slate-500">
+            <button type="button" onClick={() => setOpen((value) => !value)} className="shrink-0 text-left hover:text-slate-800">
+              {fileLink.before}
+            </button>
+            <button
+              type="button"
+              onClick={() => event.preview && onPreview(event.preview)}
+              className="min-w-0 truncate text-[#2773ff] hover:underline"
+              title="点击预览"
+            >
+              {fileLink.file}
+            </button>
+            {fileLink.after ? (
+              <button type="button" onClick={() => setOpen((value) => !value)} className="shrink-0 text-left hover:text-slate-800">
+                {fileLink.after}
+              </button>
+            ) : null}
+          </span>
+        ) : (
           <button
             type="button"
-            disabled={event.running}
-            title={event.running ? "写入完成后可预览" : undefined}
-            onClick={() => event.preview && onPreview(event.preview)}
-            className={cn(
-              "shrink-0 rounded px-1.5 text-[12px]",
-              event.running ? "cursor-not-allowed text-slate-300" : "text-[#2773ff] hover:bg-[#eef4ff]",
-            )}
+            onClick={() => setOpen((value) => !value)}
+            className="min-w-0 truncate text-left text-[13px] text-slate-500 hover:text-slate-800"
           >
-            预览
+            {event.running ? <span className="text-slate-700">{event.runningName}</span> : event.name}
           </button>
-        ) : null}
+        )}
+        {!event.running && !event.ok ? <X className="h-3.5 w-3.5 shrink-0 text-red-500" aria-label="失败" /> : null}
       </div>
       {open ? (
         <div className="mb-2 ml-6 mt-1 space-y-2">

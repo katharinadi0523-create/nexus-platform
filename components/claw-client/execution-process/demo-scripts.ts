@@ -123,7 +123,7 @@ export const DASHBOARD_DEMO: ProcessDemo = {
         say("模板结构已清楚：6 个指标卡和 3 张图表。现在写入数据配置并生成看板。", 81, "上一个 Segment 收起成一行：按类别计数，取前 3 类；思考不计入"),
         ev("write_file", "write", "写入「dashboard_data.js」", "正在写入「dashboard_data.js」", 84, file("output/dashboard_data.js", DASHBOARD_DATA), {
           preview: { file: "dashboard_data.js", content: DASHBOARD_DATA },
-          note: "写入类：模型一开始写就出现“正在写入「文件名」”，不显示行数；写入完成前“预览”不可点",
+          note: "写入类：模型一开始写就出现“正在写入「文件名」”，不显示行数；写入完成前文件名不可点，写完后点文件名直接打开预览",
         }),
         ev("execute", "run", "运行脚本，生成看板网页", "正在运行脚本，生成看板网页", 101, cmd("python3 build_dashboard.py --data output/dashboard_data.js --out output/台账看板.html", "已生成 output/台账看板.html（38 KB）"), { note: "这一步的名字来自模型调用时填写的意图；没有意图时按模板写“运行 build_dashboard.py”" }),
         browser("navigate", "打开「台账看板.html」", "正在打开「台账看板.html」", "url: file:///workspace/output/台账看板.html", "页面已打开：台账看板", 108, { note: "网页操作每一步一个 Event，名字写这一步做了什么；Segment 默认收起，不会刷屏" }),
