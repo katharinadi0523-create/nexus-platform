@@ -27,6 +27,46 @@ import type { MyClawSessionListItem } from "@/lib/mock/my-claw/types";
 import { cn } from "@/lib/utils";
 import { ComposerWithAgents } from "./composer-with-agents";
 import { PersonalConversationSidePanel, type ConversationPanelTask, type PersonalPanelView } from "@/components/claw-client/personal-conversation-side-panel";
+import { ExecutionTurn } from "@/components/claw-client/execution-process/execution-turn";
+import { getHistoryTranscript, type HistoryTranscript } from "@/components/claw-client/execution-process/history-transcripts";
+
+/** 基础形态：历史会话按新的执行过程展示（状态行 / Narration / Segment / Delivery）。 */
+function PersonalHistoryTurn({ sessionId, transcript }: { sessionId: string; transcript: HistoryTranscript }) {
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  const items = transcript.items.map((item) =>
+    item.kind === "clarify" && answer ? { ...item, answer } : item
+  );
+  const state = answer && transcript.state === "waiting" ? "running" : transcript.state;
+  return (
+    <div className="space-y-4">
+      <ClawUserMessage
+        item={{
+          key: `${sessionId}-user`,
+          type: "user",
+          message: {
+            id: `${sessionId}-user`,
+            role: "user",
+            sender: "我",
+            time: "",
+            content: transcript.user,
+            attachments: transcript.attachments,
+            auditRecords: [],
+          },
+        }}
+      />
+      <ExecutionTurn
+        items={items}
+        runningId={transcript.runningId ?? null}
+        state={state}
+        elapsed={transcript.elapsed}
+        ticking={state === "running" || (state === "waiting" && !paused)}
+        onClarifyInteract={() => setPaused(true)}
+        onClarifyAnswer={(value) => setAnswer(value)}
+      />
+    </div>
+  );
+}
 
 function EnterpriseInspector({ view }: { view: EnterpriseConversationView }) {
   return (
@@ -377,6 +417,7 @@ export function EnterpriseSessionPanel({
     () => buildEnterpriseConversationView({ session, phase }),
     [session, phase]
   );
+  const transcript = personalMode ? getHistoryTranscript(session.id) : undefined;
 
   useEffect(() => {
     const actionKeys = view.nodes
@@ -392,6 +433,10 @@ export function EnterpriseSessionPanel({
       <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-4xl space-y-4">
+            {transcript ? (
+              <PersonalHistoryTurn key={session.id} sessionId={session.id} transcript={transcript} />
+            ) : (
+              <>
             <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
               <Circle className="h-3 w-3" />
               <span>
@@ -427,6 +472,8 @@ export function EnterpriseSessionPanel({
                 </div>
               );
             })}
+              </>
+            )}
           </div>
         </div>
         <div className="shrink-0 px-4 py-4 lg:px-8 lg:py-5">
@@ -457,7 +504,11 @@ export function EnterpriseSessionPanel({
           onPanelWidthChange={(width) => onWorkspacePanelWidthChange?.(width)}
           onViewChange={(nextView) => onWorkspaceViewChange?.(nextView)}
           onClose={() => onCloseWorkspace?.()}
-          outputs={view.inspector.files.map((file, index) => ({
+          outputs={transcript ? transcript.items.flatMap((item, index) =>
+            item.kind === "delivery" && item.ok && item.card.type === "file"
+              ? [{ id: `history-output-${index}`, name: item.card.title, path: `对话产出 / ${session.title} / ${item.card.title}`, size: item.card.meta ?? "", source: session.title, status: "new" as const }]
+              : []
+          ) : view.inspector.files.map((file, index) => ({
             id: `enterprise-output-${index}`,
             name: file.name,
             path: `对话产出 / ${session.title} / ${file.name}`,

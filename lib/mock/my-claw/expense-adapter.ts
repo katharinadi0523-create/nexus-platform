@@ -62,6 +62,8 @@ export type ExpenseRenderNode =
       key: string;
       type: "action";
       timeline: Extract<ConversationTimelineItem, { type: "action" }>;
+      /** 原始工具信息：基础形态按执行过程展示规则重新命名时使用。 */
+      tool?: { name: string; action?: string; target?: string; status: string };
     }
   | {
       key: string;
@@ -110,6 +112,7 @@ export type ExpenseRenderNode =
       key: string;
       type: "destructive";
       timeline: Extract<ConversationTimelineItem, { type: "action" }>;
+      tool?: { name: string; action?: string; target?: string; status: string };
       summary?: string;
       impact: string[];
       paths: string[];
@@ -328,6 +331,7 @@ function mapItem(step: ExpenseDemoStep, item: ExpenseDemoItem, index: number): E
         return {
           key,
           type: "destructive",
+          tool: { name: item.toolName, action: item.action, target: item.target, status: item.status },
           timeline: {
             ...timeline,
             // Completed demo playback: HITL gates are already resolved.
@@ -346,6 +350,7 @@ function mapItem(step: ExpenseDemoStep, item: ExpenseDemoItem, index: number): E
       return {
         key,
         type: "action",
+        tool: { name: item.toolName, action: item.action, target: item.target, status: item.status },
         timeline: {
           ...timeline,
           // Static completed session: collapse transient running states.

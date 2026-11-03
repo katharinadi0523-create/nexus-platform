@@ -16,6 +16,10 @@ import { getPersonalClawDetail } from "@/lib/mock/my-claw/personal-claw";
 import { cn } from "@/lib/utils";
 import { ComposerWithAgents } from "./composer-with-agents";
 import { ExpenseNodeView } from "./expense-node-view";
+import { ClawUserMessage } from "@/components/claw-hub-next/conversation-timeline";
+import { ExecutionTurn } from "@/components/claw-client/execution-process/execution-turn";
+import { expenseNodesToItems } from "@/components/claw-client/execution-process/legacy-expense";
+import type { TurnState } from "@/components/claw-client/execution-process/model";
 import { PersonalConversationSidePanel, type ConversationPanelFile, type ConversationPanelTask, type PersonalPanelView } from "@/components/claw-client/personal-conversation-side-panel";
 
 function ExpenseInspector({ view }: { view: Pick<ExpenseConversationView, "inspector"> }) {
@@ -357,7 +361,13 @@ export function ExpenseChatPanel({
       >
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-4xl space-y-4">
-            {visibleNodes.map((node) => {
+            {personalMode ? (
+              <PersonalExpenseTurns
+                nodes={visibleNodes}
+                state={phase === "clarify" ? "waiting" : runCursor < runNodes.length ? "running" : "done"}
+                highlightedMessageId={highlightedMessageId}
+              />
+            ) : visibleNodes.map((node) => {
               const messageId =
                 node.type === "user" || node.type === "output"
                   ? node.timeline.message.id
@@ -431,6 +441,56 @@ export function ExpenseChatPanel({
           historicalMaterials={summaryMaterials}
         />
       ) : <ExpenseInspector view={{ inspector: flow.inspector }} />}
+    </div>
+  );
+}
+
+/** 基础形态：按用户消息分轮，每轮用新的执行过程展示。 */
+function PersonalExpenseTurns({
+  nodes,
+  state,
+  highlightedMessageId,
+}: {
+  nodes: ExpenseRenderNode[];
+  state: TurnState;
+  highlightedMessageId?: string | null;
+}) {
+  const turns: Array<{ user: Extract<ExpenseRenderNode, { type: "user" }> | null; rest: ExpenseRenderNode[] }> = [];
+  for (const node of nodes) {
+    if (node.type === "user") turns.push({ user: node, rest: [] });
+    else if (turns.length === 0) turns.push({ user: null, rest: [node] });
+    else turns[turns.length - 1].rest.push(node);
+  }
+  return (
+    <div className="space-y-6" onClick={(event) => event.stopPropagation()}>
+      {turns.map((turn, index) => {
+        const isLast = index === turns.length - 1;
+        const turnState: TurnState = isLast ? state : "done";
+        const items = expenseNodesToItems(
+          turn.rest,
+          (node) => <ExpenseNodeView node={node} expanded onToggle={() => undefined} />,
+          turnState === "done",
+        );
+        const last = [...items].reverse().find((item) => item.kind === "event" || item.kind === "thinking");
+        const runningId = turnState === "running" && last && items[items.length - 1]?.id === last.id ? last.id : null;
+        const elapsed = items.reduce((sum, item) => sum + (item.kind === "thinking" ? item.seconds : item.kind === "event" ? 3 : 0), 0);
+        const messageId = turn.user?.timeline.message.id;
+        return (
+          <div key={turn.user?.key ?? `turn-${index}`} className="space-y-4">
+            {turn.user ? (
+              <div
+                id={messageId ? `personal-message-${messageId}` : undefined}
+                className={cn("rounded-xl", messageId === highlightedMessageId && "ring-2 ring-[#8fb5f6] ring-offset-4 ring-offset-[#f8f9fb]")}
+              >
+                <ClawUserMessage item={turn.user.timeline} />
+              </div>
+            ) : null}
+            {items.length > 0 || turnState !== "done" ? (
+              <ExecutionTurn items={items} runningId={runningId} state={turnState} elapsed={elapsed} ticking={turnState === "running"} />
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }

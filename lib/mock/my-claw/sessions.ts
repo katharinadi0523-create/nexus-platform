@@ -1,6 +1,13 @@
 import { CLAW_CLIENT_CLARIFY_SESSIONS } from "./clarify-demo";
 import type { MyClawSessionListItem } from "./types";
 
+/** 执行过程（事件链）展示优化的演示会话，按点击推进。 */
+export const CLAW_CLIENT_PROCESS_DEMO_SESSIONS: MyClawSessionListItem[] = [
+  { id: "process-demo-dashboard", title: "执行过程展示（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "表格转网页看板：从开头的思考到交付。" },
+  { id: "process-demo-clarify-stop", title: "确认卡片与停止（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "澄清卡片切段、计时暂停，用户中途停止。" },
+  { id: "process-demo-automation-interrupt", title: "定时任务与中断（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "设置类交付的结果卡；运行中被系统中断。" },
+];
+
 export const CLAW_CLIENT_QUEUE_DEMO_SESSION: MyClawSessionListItem = {
   id: "queue-steer-demo",
   title: "排队与引导（演示）",
@@ -95,6 +102,7 @@ export function getMyClawSession(
   return (
     MY_CLAW_SESSIONS.find((session) => session.id === id) ??
     (CLAW_CLIENT_QUEUE_DEMO_SESSION.id === id ? CLAW_CLIENT_QUEUE_DEMO_SESSION : undefined) ??
+    CLAW_CLIENT_PROCESS_DEMO_SESSIONS.find((session) => session.id === id) ??
     CLAW_CLIENT_CLARIFY_SESSIONS.find((session) => session.id === id)
   );
 }

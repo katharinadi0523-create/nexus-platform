@@ -30,6 +30,7 @@ import { useClarifyRuntime } from "@/components/claw-client/clarify/clarify-runt
 import { ClarifyStatusCapsule } from "@/components/claw-client/clarify/clarify-status-capsule";
 import { getMyClawSession } from "@/lib/mock/my-claw/sessions";
 import { QueueDemoSessionPanel } from "@/components/claw-client/queue-demo-session-panel";
+import { ProcessDemoSessionPanel } from "@/components/claw-client/execution-process/process-demo-session-panel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -121,13 +122,13 @@ function VersionSwitch({ compact = false }: { compact?: boolean }) {
           )}
           aria-label="切换 Claw 使用形态"
         >
-          {compact ? "基础版" : "基础形态"}
+          基础形态
           <ChevronDown className="h-3 w-3" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-52">
         <DropdownMenuItem asChild>
-          <Link href="/claw-client" className="cursor-pointer">
+          <Link href="/claw-client" className="cursor-pointer bg-[#f3f6fb]">
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="font-medium">基础形态</span>
               <span className="text-[11px] font-normal text-slate-500">个人会话与能力管理</span>
@@ -135,7 +136,7 @@ function VersionSwitch({ compact = false }: { compact?: boolean }) {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/my-claw" className="cursor-pointer">
+          <Link href="/my-claw/chat" className="cursor-pointer">
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="font-medium">项目协作形态</span>
               <span className="text-[11px] font-normal text-slate-500">Project、事项与多人协作</span>
@@ -373,6 +374,7 @@ export function ClawClientWorkbench({ tab: rawTab, sessionId, messageId }: { tab
   const chatSession = tab === "chat" && sessionId ? getMyClawSession(sessionId) : undefined;
   if (chatSession?.kind === "clarify_demo") content = <ClarifyDemoSessionPanel key={chatSession.id} session={chatSession} />;
   else if (chatSession?.kind === "queue_demo") content = <QueueDemoSessionPanel key={chatSession.id} session={chatSession} />;
+  else if (chatSession?.kind === "process_demo") content = <ProcessDemoSessionPanel key={chatSession.id} session={chatSession} />;
   else if (tab === "chat") content = <ChatWorkspace sessionId={sessionId} messageId={messageId} personalMode />;
   else if (tab === "workspace") content = <ClawClientWorkspacePage />;
   else if (tab === "capabilities") {
