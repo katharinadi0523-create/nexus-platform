@@ -78,8 +78,6 @@ export type RawItem =
       at?: number;
       note?: string;
     }
-  /** 并入：内部机制，合进它服务的那一个 Event。 */
-  | { kind: "merged"; id: string; tool: string; target: string; detail?: EventDetail }
   /** 不显示：前端不展示。 */
   | { kind: "hidden"; id: string; tool: string; detail?: EventDetail }
   | {
@@ -178,7 +176,7 @@ function segmentHeader(events: ProjectedEvent[], running: boolean): string {
 }
 
 /**
- * 投影：①查表（Event 自带名字与类别）②藏机制（merged/hidden）③切段（Narration、卡片）④出显示。
+ * 投影：①查表（Event 自带名字与类别）②藏机制（hidden）③切段（Narration、卡片）④出显示。
  * `runningId` 是正在进行的那一项；为 null 时整轮视为没有进行中的项。
  */
 export function projectTurn(items: RawItem[], runningId: string | null): ProjectedTurn {
@@ -191,7 +189,6 @@ export function projectTurn(items: RawItem[], runningId: string | null): Project
   type SegmentBlock = Extract<ProcessBlock, { type: "segment" }>;
   let segment = null as SegmentBlock | null;
   let pendingThinking: Array<Extract<RawItem, { kind: "thinking" }>> = [];
-  const eventById = new Map<string, ProjectedEvent>();
 
   const flushOrphanThinking = () => {
     // 没有 Segment 归属的思考（开头、两次 Narration 之间没有工具）单独放一行。
@@ -266,16 +263,11 @@ export function projectTurn(items: RawItem[], runningId: string | null): Project
           preview: item.preview,
         };
         pushEvent(target, projected);
-        eventById.set(item.id, projected);
         target.tailOk = item.ok;
         if (running) {
           target.running = true;
           current = item.runningName;
         }
-        break;
-      }
-      case "merged": {
-        eventById.get(item.target)?.details.push({ tool: item.tool, detail: item.detail });
         break;
       }
       case "hidden":
