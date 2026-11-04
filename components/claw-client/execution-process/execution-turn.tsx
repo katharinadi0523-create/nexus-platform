@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   Bookmark,
   Brain,
   Check,
   ChevronDown,
   ChevronUp,
+  CircleStop,
   Clock,
   FilePen,
   FilePlus2,
@@ -19,6 +21,7 @@ import {
   Paperclip,
   Pickaxe,
   Search,
+  Server,
   Sparkle,
   SquareTerminal,
   Wrench,
@@ -77,6 +80,9 @@ const CATEGORY_ICON: Record<EventCategory, LucideIcon | typeof SkillIcon> = {
   read: FileText,
   list: Folder,
   run: SquareTerminal,
+  progress: Activity,
+  env: Server,
+  stop: CircleStop,
   write: FilePlus2,
   edit: FilePen,
   search: Search,

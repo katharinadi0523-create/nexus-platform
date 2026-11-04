@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Paperclip, RotateCcw } from "lucide-react";
 import { ComposerWithAgents } from "@/components/my-claw/chat/composer-with-agents";
+import { ConversationNav } from "@/components/claw-client/conversation-nav";
 import { PersonalChatContext, type PersonalChatContextValue } from "@/components/claw-client/personal-chat-context";
 import { getPersonalClawDetail } from "@/lib/mock/my-claw/personal-claw";
 import type { MyClawSessionListItem } from "@/lib/mock/my-claw/types";
 import { cn } from "@/lib/utils";
 import { ExecutionTurn } from "./execution-turn";
 import { PROCESS_DEMOS, type DemoTurn, type ProcessDemo } from "./demo-scripts";
+import { NAV_HISTORY_DEMO, type HistoryProcessDemo } from "./nav-demo-script";
 import type { RawItem, TurnState } from "./model";
 
 interface Frame {
@@ -20,6 +22,8 @@ interface Frame {
   at: number;
   note: string;
 }
+
+const DEMOS: HistoryProcessDemo[] = [...PROCESS_DEMOS, NAV_HISTORY_DEMO];
 
 const RUNNABLE = new Set<RawItem["kind"]>(["thinking", "event", "delivery"]);
 
@@ -94,15 +98,19 @@ function UserBubble({ turn }: { turn: DemoTurn }) {
 }
 
 export function ProcessDemoSessionPanel({ session }: { session: MyClawSessionListItem }) {
-  const demo = useMemo(() => PROCESS_DEMOS.find((item) => item.id === session.id) ?? PROCESS_DEMOS[0], [session.id]);
+  const demo = useMemo(() => DEMOS.find((item) => item.id === session.id) ?? DEMOS[0], [session.id]);
   const frames = useMemo(() => buildFrames(demo), [demo]);
-  const [cursor, setCursor] = useState(0);
+  const [cursor, setCursor] = useState(() => (demo.startAtEnd ? frames.length - 1 : 0));
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [pausedAt, setPausedAt] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const detail = useMemo(() => getPersonalClawDetail(), []);
   const scrollRef = useRef<HTMLDivElement>(null);
   const frame = frames[cursor];
+  const navTurns = useMemo(
+    () => demo.turns.slice(0, frame.turn + 1).map((turn, index) => ({ id: `turn-${index}`, text: turn.user || (turn.attachments ?? []).join("、") })),
+    [demo.turns, frame.turn],
+  );
 
   const chatContext = useMemo<PersonalChatContextValue>(
     () => ({
@@ -167,34 +175,37 @@ export function ProcessDemoSessionPanel({ session }: { session: MyClawSessionLis
           <h1 className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{session.title}</h1>
         </header>
         <div className="flex min-h-0 flex-1 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
-          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-6 lg:px-10">
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
-              {demo.turns.slice(0, frame.turn + 1).map((turn, turnIndex) => {
-                const isCurrent = turnIndex === frame.turn;
-                const last = turn.entries[turn.entries.length - 1]?.item;
-                return (
-                  <div key={turnIndex} className="flex flex-col gap-4">
-                    <UserBubble turn={turn} />
-                    <ExecutionTurn
-                      key={`${turnIndex}-${isCurrent ? "live" : "done"}`}
-                      items={itemsFor(turn, isCurrent ? frame.count : turn.entries.length, answers)}
-                      runningId={isCurrent ? frame.runningId : null}
-                      state={isCurrent ? frame.state : turn.end.state}
-                      elapsed={isCurrent ? (pausedAt ?? frame.at) : turn.end.at}
-                      ticking={isCurrent && pausedAt === null}
-                      onClarifyInteract={() => setPausedAt(frame.at)}
-                      onClarifyAnswer={(value) => {
-                        const clarify = turn.entries.map((entry) => entry.item).find((item) => item.kind === "clarify" && !answers[item.id]);
-                        if (clarify) setAnswers((current) => ({ ...current, [clarify.id]: value }));
-                        setPausedAt(null);
-                        setCursor((current) => Math.min(frames.length - 1, current + 1));
-                      }}
-                      onRetry={last?.kind === "interrupt" ? () => go(0) : undefined}
-                    />
-                  </div>
-                );
-              })}
+          <div className="relative min-h-0 flex-1">
+            <div ref={scrollRef} className="h-full overflow-y-auto px-5 py-6 lg:px-10">
+              <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+                {demo.turns.slice(0, frame.turn + 1).map((turn, turnIndex) => {
+                  const isCurrent = turnIndex === frame.turn;
+                  const last = turn.entries[turn.entries.length - 1]?.item;
+                  return (
+                    <div key={turnIndex} data-turn-id={`turn-${turnIndex}`} className="flex flex-col gap-4">
+                      <UserBubble turn={turn} />
+                      <ExecutionTurn
+                        key={`${turnIndex}-${isCurrent ? "live" : "done"}`}
+                        items={itemsFor(turn, isCurrent ? frame.count : turn.entries.length, answers)}
+                        runningId={isCurrent ? frame.runningId : null}
+                        state={isCurrent ? frame.state : turn.end.state}
+                        elapsed={isCurrent ? (pausedAt ?? frame.at) : turn.end.at}
+                        ticking={isCurrent && pausedAt === null}
+                        onClarifyInteract={() => setPausedAt(frame.at)}
+                        onClarifyAnswer={(value) => {
+                          const clarify = turn.entries.map((entry) => entry.item).find((item) => item.kind === "clarify" && !answers[item.id]);
+                          if (clarify) setAnswers((current) => ({ ...current, [clarify.id]: value }));
+                          setPausedAt(null);
+                          setCursor((current) => Math.min(frames.length - 1, current + 1));
+                        }}
+                        onRetry={last?.kind === "interrupt" ? () => go(0) : undefined}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+            <ConversationNav scrollRef={scrollRef} turns={navTurns} sessionKey={session.id} />
           </div>
 
           <div className="shrink-0 px-5 pb-4 lg:px-10">

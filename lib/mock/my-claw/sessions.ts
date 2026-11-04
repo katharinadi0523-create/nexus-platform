@@ -6,6 +6,7 @@ export const CLAW_CLIENT_PROCESS_DEMO_SESSIONS: MyClawSessionListItem[] = [
   { id: "process-demo-dashboard", title: "执行过程展示（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "表格转网页看板：从开头的思考到交付。" },
   { id: "process-demo-clarify-stop", title: "确认卡片与停止（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "澄清卡片切段、计时暂停，用户中途停止。" },
   { id: "process-demo-automation-interrupt", title: "定时任务与中断（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "设置类交付的结果卡；运行中被系统中断。" },
+  { id: "process-demo-long-history", title: "华东经营周报（conversation map）", kind: "process_demo", pinned: true, updatedAt: "2026-11-04T00:00:00.000Z", preview: "二十多轮来回修改的周报会话。" },
 ];
 
 export const CLAW_CLIENT_QUEUE_DEMO_SESSION: MyClawSessionListItem = {

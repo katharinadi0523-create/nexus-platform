@@ -13,6 +13,9 @@ export type EventCategory =
   | "read"
   | "list"
   | "run"
+  | "progress"
+  | "env"
+  | "stop"
   | "write"
   | "edit"
   | "search"
@@ -29,6 +32,9 @@ const CATEGORY_UNIT: Record<EventCategory, (count: number) => string> = {
   read: (n) => `读取 ${n} 个文件`,
   list: (n) => `查看 ${n} 个文件夹`,
   run: (n) => `执行 ${n} 次命令`,
+  progress: (n) => `查看进度 ${n} 次`,
+  env: () => "",
+  stop: (n) => `停止 ${n} 个命令`,
   write: (n) => `写入 ${n} 个文件`,
   edit: (n) => `修改 ${n} 个文件`,
   search: (n) => `搜索 ${n} 次`,
@@ -157,10 +163,13 @@ function segmentHeader(events: ProjectedEvent[], running: boolean): string {
     if (!last || !last.running) return "正在思考";
     return last.runningName;
   }
-  if (events.length === 1) return events[0].name;
+  // 准备运行环境是平台动作，不计入；段里只有它时直接写它的名字。
+  const counted = events.filter((event) => event.category !== "env");
+  if (counted.length === 0) return events[events.length - 1]?.name ?? "";
+  if (counted.length === 1) return counted[0].name;
   const order: EventCategory[] = [];
   const counts = new Map<EventCategory, number>();
-  for (const event of events) {
+  for (const event of counted) {
     if (!counts.has(event.category)) order.push(event.category);
     counts.set(event.category, (counts.get(event.category) ?? 0) + 1);
   }
