@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   Bookmark,
+  CalendarClock,
   Brain,
   Check,
   ChevronDown,
@@ -82,6 +83,7 @@ const CATEGORY_ICON: Record<EventCategory, LucideIcon | typeof SkillIcon> = {
   run: SquareTerminal,
   progress: Activity,
   env: Server,
+  automation: CalendarClock,
   stop: CircleStop,
   write: FilePlus2,
   edit: FilePen,

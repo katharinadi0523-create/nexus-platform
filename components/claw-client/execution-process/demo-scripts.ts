@@ -63,8 +63,13 @@ export const file = (path: string, content: string): EventDetail => ({ type: "fi
 /** 网页操作：每一步一个 Event，名字写这一步做了什么。 */
 export const browser = (tool: string, name: string, runningName: string, input: string, output: string, at: number, options: { note?: string } = {}) =>
   ev(tool, "browser", name, runningName, at, { type: "raw", input, output }, options);
-export const deliver = (tool: string, card: DeliveryCard, at: number, options: { ok?: boolean; failName?: string; runningName?: string; detail?: EventDetail; note?: string } = {}): DemoEntry => ({
-  item: { kind: "delivery", id: id("deliver"), tool, ok: options.ok ?? true, card, failName: options.failName, runningName: options.runningName, detail: options.detail, at },
+export const deliver = (
+  tool: string,
+  card: DeliveryCard,
+  at: number,
+  options: { ok?: boolean; failName?: string; runningName?: string; eventName?: string; category?: EventCategory; detail?: EventDetail; note?: string } = {},
+): DemoEntry => ({
+  item: { kind: "delivery", id: id("deliver"), tool, ok: options.ok ?? true, card, failName: options.failName, runningName: options.runningName, eventName: options.eventName, category: options.category, detail: options.detail, at },
   note: options.note,
 });
 
@@ -191,10 +196,10 @@ export const AUTOMATION_INTERRUPT_DEMO: ProcessDemo = {
       user: "以后每周一早上 9 点，帮我汇总上周的销售周报",
       entries: [
         think(3, "用户要建一个每周执行的定时任务。", 0, "思考不到 5 秒，不显示"),
-        deliver("CreateAutomationTask", { type: "automation", title: "销售周报汇总", meta: "每周一 9:00", task: WEEKLY_SALES_TASK }, 3, { runningName: "正在创建定时任务「销售周报汇总」", detail: { type: "raw", input: "name: 销售周报汇总 · scheduleType: weekly · schedule: [1] 09:00", output: "task_id: at_20261103_01" }, note: "定时任务属于交付类：运行中在 Segment 里显示“正在创建定时任务「…」”，完成后移进 Delivery 出定时任务卡片（任务名 + 执行时间），点“查看”打开定时任务弹窗；过程区不留" }),
+        deliver("CreateAutomationTask", { type: "automation", title: "销售周报汇总", meta: "每周一 9:00", task: WEEKLY_SALES_TASK }, 3, { runningName: "正在创建定时任务「销售周报汇总」", eventName: "创建定时任务「销售周报汇总」", category: "automation", detail: { type: "raw", input: "name: 销售周报汇总 · scheduleType: weekly · schedule: [1] 09:00", output: "task_id: at_20261103_01" }, note: "定时任务单独一类：过程区留一行“创建定时任务「…」”，同时在 Delivery 出定时任务卡片，可点“查看”" }),
         { item: { kind: "answer", id: id("answer"), text: "已设置好：每周一 9:00 自动汇总上周销售周报，结果会发到这个对话。", at: 5 } },
       ],
-      end: { state: "done", at: 5, note: "这一轮没有工具段，只有交付结果卡" },
+      end: { state: "done", at: 5, note: "定时任务在过程区是一行 Event，结果在 Delivery 是定时任务卡片" },
     },
     {
       user: "先按这个口径把上周的跑一遍",

@@ -15,6 +15,7 @@ export type EventCategory =
   | "run"
   | "progress"
   | "env"
+  | "automation"
   | "stop"
   | "write"
   | "edit"
@@ -34,6 +35,7 @@ const CATEGORY_UNIT: Record<EventCategory, (count: number) => string> = {
   run: (n) => `执行 ${n} 次命令`,
   progress: (n) => `查看进度 ${n} 次`,
   env: () => "",
+  automation: (n) => `定时任务操作 ${n} 次`,
   stop: (n) => `停止 ${n} 个命令`,
   write: (n) => `写入 ${n} 个文件`,
   edit: (n) => `修改 ${n} 个文件`,
@@ -101,6 +103,9 @@ export type RawItem =
       runningName?: string;
       /** 交付失败时在过程区作为一个 Event 打 ✕。 */
       failName?: string;
+      /** 有值时，成功后除了 Delivery 卡片，过程区也留一行 Event（如定时任务）。 */
+      eventName?: string;
+      category?: EventCategory;
       detail?: EventDetail;
       at?: number;
       note?: string;
@@ -284,6 +289,17 @@ export function projectTurn(items: RawItem[], runningId: string | null): Project
         if (running) current = item.runningName ?? "正在准备文件";
         if (item.ok && !running) {
           deliveries.push(item.card);
+          if (item.eventName) {
+            pushEvent(openSegment(item.id), {
+              key: item.id,
+              name: item.eventName,
+              runningName: item.runningName ?? item.eventName,
+              ok: true,
+              running: false,
+              category: item.category ?? "deliver",
+              details: [{ tool: item.tool, detail: item.detail }],
+            });
+          }
           if (segment) segment.tailOk = true;
         } else {
           // 交付运行中：作为一个运行中的 Event 出现在 Segment 里，成功后移进 Delivery；失败时留下打 ✕。
@@ -294,7 +310,7 @@ export function projectTurn(items: RawItem[], runningId: string | null): Project
             runningName: item.runningName ?? "正在准备文件",
             ok: item.ok,
             running,
-            category: "deliver",
+            category: item.category ?? "deliver",
             details: [{ tool: item.tool, detail: item.detail }],
           };
           pushEvent(target, projected);
