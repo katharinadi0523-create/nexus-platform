@@ -8,6 +8,7 @@ import {
   ClawAgentThinking,
   ClawUserMessage,
 } from "@/components/claw-hub-next/conversation-timeline";
+import type { ClarifyAnswers } from "@/components/claw-hub-next/clarify-pager";
 import type { ConversationMessageWithAudit } from "@/components/claw-hub-next/detail/utils";
 import { ComposerWithAgents } from "@/components/my-claw/chat/composer-with-agents";
 import { formatClarifyAnswer } from "@/lib/claw-clarify";
@@ -96,9 +97,21 @@ const MODE_TITLE = {
   auto_continued: "未回答",
 } as const;
 
+function resolutionTitle(
+  mode: keyof typeof MODE_TITLE,
+  questions: { questionKey: string }[],
+  answers: ClarifyAnswers,
+) {
+  if (mode === "auto_continued") return MODE_TITLE.auto_continued;
+  const answeredCount = questions.filter((question) => answers[question.questionKey] !== undefined).length;
+  if (answeredCount === questions.length) return MODE_TITLE.answered;
+  if (answeredCount === 0) return "全部跳过";
+  return "部分跳过";
+}
+
 /**
- * 澄清交互示例会话：用户请求 → Claw 发起澄清 → 回答 / 超时自动继续 → 最终回复
- * （说明所作假设，或说明受阻原因）。
+ * 澄清交互示例会话：用户请求 → Claw 发起澄清 → 回答 / 逐题跳过 / 超时自动继续 → 最终回复
+ * （说明所作假设，或说明受阻原因）。跳过的题按未回答展示。
  */
 export function ClarifyDemoSessionPanel({ session }: { session: MyClawSessionListItem }) {
   const runtime = useClarifyRuntime();
@@ -175,7 +188,7 @@ export function ClarifyDemoSessionPanel({ session }: { session: MyClawSessionLis
               key: "clarify",
               type: "action",
               title: result
-                ? `向你确认了 ${scenario.questions.length} 个问题 · ${MODE_TITLE[result.mode]}`
+                ? `向你确认了 ${scenario.questions.length} 个问题 · ${resolutionTitle(result.mode, scenario.questions, result.answers)}`
                 : `向你确认 ${scenario.questions.length} 个问题 · 等待回答`,
               kind: "user",
               status: result ? "done" : "running",
@@ -196,11 +209,7 @@ export function ClarifyDemoSessionPanel({ session }: { session: MyClawSessionLis
                       {question.question}
                     </p>
                     <p className={answerText ? "text-slate-800" : "text-slate-400"}>
-                      {result
-                        ? answerText
-                          ? `→ ${answerText}`
-                          : `→ ${MODE_TITLE[result.mode]}`
-                        : "→ 等待回答"}
+                      {result ? (answerText ? `→ ${answerText}` : "→ 未回答") : "→ 等待回答"}
                     </p>
                   </div>
                 );
