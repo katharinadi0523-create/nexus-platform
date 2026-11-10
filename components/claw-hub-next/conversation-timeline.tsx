@@ -169,10 +169,12 @@ export function ClawAgentOutput({
 export function ClawSubAgentSummonedEvent({
   agentName,
   running = false,
+  openLabel,
   onOpen,
 }: {
   agentName: string;
   running?: boolean;
+  openLabel?: string;
   onOpen?: () => void;
 }) {
   return (
@@ -184,7 +186,7 @@ export function ClawSubAgentSummonedEvent({
           onOpen?.();
         }}
         disabled={!onOpen}
-        aria-label={onOpen ? `进入${agentName}子会话` : undefined}
+        aria-label={onOpen ? openLabel ?? `进入${agentName}子会话` : undefined}
         className={cn(
           "flex w-full items-center gap-3 rounded-[7px] bg-white px-4 py-2.5 text-left",
           onOpen && "cursor-pointer transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"

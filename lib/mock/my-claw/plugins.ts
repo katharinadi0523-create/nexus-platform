@@ -436,11 +436,13 @@ export function filterPluginMarketplaceItems(
     query?: string;
     source?: PluginMarketSourceFilter;
     category?: PluginMarketCategory;
+    includeKindInSearch?: boolean;
   } = {}
 ): PluginMarketplaceItem[] {
   const query = options.query?.trim().toLowerCase() ?? "";
   const source = options.source ?? "all";
   const category = options.category ?? "all";
+  const includeKindInSearch = options.includeKindInSearch ?? true;
 
   return items.filter((item) => {
     if (source !== "all" && item.source !== source) return false;
@@ -450,7 +452,7 @@ export function filterPluginMarketplaceItems(
       item.name,
       item.author,
       item.description,
-      getPluginMarketplaceKindLabel(item.kind),
+      ...(includeKindInSearch ? [getPluginMarketplaceKindLabel(item.kind)] : []),
       getPluginMarketplaceCategoryLabel(item.category),
     ]
       .join(" ")

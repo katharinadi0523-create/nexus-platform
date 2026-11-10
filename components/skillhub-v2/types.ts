@@ -15,6 +15,10 @@ export interface SkillFile {
   path: string;
   content: string;
   change?: SkillFileChange;
+  sizeLabel?: string;
+  updatedAt?: string;
+  trashDaysRemaining?: number;
+  trashedFrom?: string;
 }
 
 export interface SkillVersion {

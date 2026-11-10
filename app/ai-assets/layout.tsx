@@ -52,7 +52,7 @@ export default function AIAssetsLayout({ children }: { children: ReactNode }) {
         {/* Main Content */}
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
-      <Toaster position="top-right" />
+      <Toaster position="top-center" />
     </>
   );
 }

@@ -25,21 +25,19 @@ export function AgentCard({
   onToggleFavorite,
   onSummon,
 }: AgentCardProps) {
-  const actionLabel = selected ? "当前智能体" : summoned ? "切换" : "召唤";
+  const actionLabel = selected ? "当前智能体" : summoned ? "切换" : "调用";
 
   return (
     <article
       className={cn(
-        "relative flex min-h-[290px] flex-col items-center overflow-hidden rounded-[18px] border border-[#dbeafe] bg-white px-5 pb-5 shadow-[0_2px_8px_rgba(15,23,42,0.04)] transition-shadow duration-200",
-        "hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)]"
+        "relative flex min-h-[212px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-shadow duration-200",
+        "hover:shadow-[0_8px_22px_rgba(15,23,42,0.07)]"
       )}
     >
-      <div className="mb-5 h-1 w-full bg-[#2773ff]" aria-hidden="true" />
-
       <button
         type="button"
         className={cn(
-          "absolute right-3.5 top-3.5 z-[2] grid h-[34px] w-[34px] place-items-center rounded-full border bg-white transition",
+          "absolute right-3 top-3 z-[2] grid h-8 w-8 place-items-center rounded-md border bg-white transition",
           favorite
             ? "border-[#fde68a] bg-[#fffbeb] text-[#f59e0b]"
             : "border-slate-200 text-slate-400 hover:border-[#fcd34d] hover:text-[#f59e0b]"
@@ -55,60 +53,48 @@ export function AgentCard({
         />
       </button>
 
-      <div className="grid h-[72px] w-[72px] place-items-center rounded-full border border-[#dbeafe] bg-[#eff6ff] text-lg font-semibold text-[#2773ff]">
-        {getAgentAvatarInitial(agent.name)}
+      <div className="flex min-w-0 items-start gap-3 pr-9">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[#eef4ff] text-sm font-semibold text-[#2773ff]">
+          {getAgentAvatarInitial(agent.name)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <strong className="block truncate pt-0.5 text-[15px] font-semibold leading-5 text-slate-900">
+            {agent.name}
+          </strong>
+          <p className="mt-1.5 line-clamp-2 min-h-[40px] text-[13px] leading-5 text-slate-600">
+            {agent.description}
+          </p>
+        </div>
       </div>
 
-      <strong className="mt-4 block text-center text-base font-semibold text-slate-900">
-        {agent.name}
-      </strong>
-
-      <p className="mt-2.5 line-clamp-2 min-h-[44px] text-center text-sm leading-[1.7] text-[#5a6779]">
-        {agent.description}
-      </p>
-
       {agent.tags.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+        <div className="mt-3 flex min-h-6 flex-wrap items-center gap-1.5">
           {agent.tags.map((tag) => (
             <span
               key={tag}
-              className="rounded-md bg-[#f0f5ff] px-2 py-0.5 text-[11px] font-medium text-[#2f5fbf]"
+              className="rounded bg-[#f1f5f9] px-2 py-1 text-[11px] font-medium text-slate-600"
             >
               {tag}
             </span>
           ))}
         </div>
-      ) : null}
+      ) : <div className="mt-3 min-h-6" />}
 
-      <div className="mt-3.5 grid w-full grid-cols-2 gap-2">
-        <div
-          className="rounded-lg bg-[#f8fafc] px-2.5 py-2 text-center"
-          title="使用量"
-        >
-          <div className="text-[11px] text-[#5a6779]">使用量</div>
-          <div className="mt-0.5 text-sm font-semibold text-slate-900">
-            {formatEnterpriseMetric(agent.usageCount)}
-          </div>
+      <div className="mt-auto flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-slate-500">
+          <span>
+            使用量 <strong className="ml-1 font-semibold text-slate-800">{formatEnterpriseMetric(agent.usageCount)}</strong>
+          </span>
+          <span>
+            收藏量 <strong className="ml-1 font-semibold text-slate-800">{formatEnterpriseMetric(agent.favoriteCount)}</strong>
+          </span>
         </div>
-        <div
-          className="rounded-lg bg-[#f8fafc] px-2.5 py-2 text-center"
-          title="收藏量"
-        >
-          <div className="text-[11px] text-[#5a6779]">收藏量</div>
-          <div className="mt-0.5 text-sm font-semibold text-slate-900">
-            {formatEnterpriseMetric(agent.favoriteCount)}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-auto w-full pt-4">
-        <div className="mb-3 h-px w-full bg-[#e8eef7]" />
         <button
           type="button"
           aria-pressed={selected}
           onClick={() => onSummon(agent.id)}
           className={cn(
-            "inline-flex h-8 w-full items-center justify-center rounded-full text-sm font-medium transition",
+            "inline-flex h-8 min-w-[88px] shrink-0 items-center justify-center rounded-md px-3 text-[13px] font-medium transition",
             selected
               ? "bg-[#e8f0fb] text-[#2773ff] shadow-[0_0_0_1px_rgba(39,115,255,0.24)]"
               : "bg-[#2773ff] text-white hover:bg-[#1f63e6]"

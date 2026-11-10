@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import {
+  AUTH_ENABLED,
   PUBLIC_PATH_PREFIXES,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth/constants";
@@ -30,6 +31,18 @@ export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   if (isStaticAsset(pathname)) {
+    return NextResponse.next();
+  }
+
+  // Login gate off: no redirects, and /login sends people straight in.
+  if (!AUTH_ENABLED) {
+    if (pathname === "/login") {
+      const target = getSafeRedirectPath(
+        request.nextUrl.searchParams.get("redirect"),
+        DEFAULT_POST_LOGIN_PATH
+      );
+      return NextResponse.redirect(new URL(target, request.url));
+    }
     return NextResponse.next();
   }
 

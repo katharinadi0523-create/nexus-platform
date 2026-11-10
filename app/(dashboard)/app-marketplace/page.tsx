@@ -108,7 +108,7 @@ const featuredApps: FeaturedApp[] = [
     },
     badge: "NEW",
     cardStyle: "tech",
-    externalLink: "/my-claw",
+    externalLink: "/claw-client",
     specialTags: [{ label: "MVP版，升级迭代ing", style: "mvp" }],
   },
   {

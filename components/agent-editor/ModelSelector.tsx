@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   ChevronDown,
+  ChevronRight,
   Check,
   HelpCircle,
   AlertTriangle,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import {
   Popover,
+  PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
@@ -42,6 +44,11 @@ export type ModelParams = ModelParamValues;
 export interface ModelSelectorProps {
   /** Override the preset catalog for specialized model types. */
   presetModelOptions?: readonly string[];
+  /** Models that remain in the catalog but are temporarily unavailable. */
+  unavailableModelIds?: readonly string[];
+  /** Control the model list popover from nearby UI, such as a fallback notice. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   selectedModel?: string;
   modelParams?: ModelParams;
   onModelChange?: (model: string) => void;
@@ -52,6 +59,8 @@ export interface ModelSelectorProps {
    * When true, hides the「预置模型服务 / 我的模型服务」tabs and only shows the preset model list.
    */
   presetOnly?: boolean;
+  /** Render model parameters in a separate popover beside the model selector. */
+  separateParamsPopover?: boolean;
   /**
    * Hide specific schema params (e.g. context_turns) and/or global switches (current_time, sp_anti_leak).
    */
@@ -59,6 +68,21 @@ export interface ModelSelectorProps {
 }
 
 const exclusiveModels = EXCLUSIVE_MODEL_IDS;
+
+type ChatThinkingStrength = "low" | "medium" | "high";
+type ChatModelUiConfig = {
+  thinkingStrength: ChatThinkingStrength;
+};
+
+const CHAT_THINKING_STRENGTHS: Array<{ value: ChatThinkingStrength; label: string }> = [
+  { value: "low", label: "低" },
+  { value: "medium", label: "中" },
+  { value: "high", label: "高" },
+];
+
+const DEFAULT_CHAT_MODEL_UI_CONFIG: ChatModelUiConfig = {
+  thinkingStrength: "medium",
+};
 
 // Tooltip 文案
 const TOOLTIP_CONTENT: Partial<Record<ModelParamKey, string>> = {
@@ -114,10 +138,18 @@ export function ModelSelector({
   showParams = true,
   triggerClassName,
   presetOnly = false,
+  separateParamsPopover = false,
   hiddenParamKeys,
   presetModelOptions,
+  unavailableModelIds = [],
+  open: openProp,
+  onOpenChange,
 }: ModelSelectorProps) {
   const presetModels = presetModelOptions ?? PRESET_MODEL_IDS;
+  const unavailableModelIdSet = useMemo(
+    () => new Set(unavailableModelIds),
+    [unavailableModelIds]
+  );
   const hiddenParamKeySet = useMemo(
     () => new Set<ModelParamKey>(hiddenParamKeys ?? []),
     [hiddenParamKeys]
@@ -125,7 +157,12 @@ export function ModelSelector({
   const initialModel = selectedModel ?? "Qwen3-32B";
   const isModelControlled = selectedModel !== undefined;
   const isParamsControlled = modelParams !== undefined;
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const [paramsModelOpen, setParamsModelOpen] = useState<string | null>(null);
+  const modelConfigCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [chatModelUiConfig, setChatModelUiConfig] = useState<Record<string, ChatModelUiConfig>>({});
+  const [chatConfigSubmenu, setChatConfigSubmenu] = useState<"thinking" | null>(null);
   const [activeTab, setActiveTab] = useState<"preset" | "exclusive">(
     exclusiveModels.includes(initialModel) ? "exclusive" : "preset"
   );
@@ -158,23 +195,47 @@ export function ModelSelector({
         : uncontrolledParams,
     [defaultParams, isParamsControlled, modelParams, uncontrolledParams]
   );
+  const clearModelConfigCloseTimer = () => {
+    if (modelConfigCloseTimer.current) {
+      clearTimeout(modelConfigCloseTimer.current);
+      modelConfigCloseTimer.current = null;
+    }
+  };
+
+  const scheduleModelConfigClose = () => {
+    clearModelConfigCloseTimer();
+    modelConfigCloseTimer.current = setTimeout(() => {
+      setParamsModelOpen(null);
+      setChatConfigSubmenu(null);
+      modelConfigCloseTimer.current = null;
+    }, 180);
+  };
+
+  const updateChatModelUiConfig = (model: string, patch: Partial<ChatModelUiConfig>) => {
+    setChatModelUiConfig((current) => ({
+      ...current,
+      [model]: {
+        ...(current[model] ?? DEFAULT_CHAT_MODEL_UI_CONFIG),
+        ...patch,
+      },
+    }));
+  };
 
   // 当模型改变时，重置参数为默认值
   const handleModelSelect = (model: string) => {
-    const newDefaultParams = getDefaultModelParams(model);
-    const nextParams = {
-      ...newDefaultParams,
-      current_time: params.current_time ?? false,
-      sp_anti_leak: params.sp_anti_leak ?? false,
-    };
-    if (!isModelControlled) {
-      setUncontrolledModel(model);
+    setChatConfigSubmenu(null);
+    if (currentModel !== model || !separateParamsPopover) {
+      const newDefaultParams = getDefaultModelParams(model);
+      const nextParams = {
+        ...newDefaultParams,
+        current_time: params.current_time ?? false,
+        sp_anti_leak: params.sp_anti_leak ?? false,
+      };
+      if (!isModelControlled) setUncontrolledModel(model);
+      if (!isParamsControlled) setUncontrolledParams(nextParams);
+      onModelChange?.(model);
+      onParamsChange?.(nextParams);
     }
-    if (!isParamsControlled) {
-      setUncontrolledParams(nextParams);
-    }
-    onModelChange?.(model);
-    onParamsChange?.(nextParams);
 
     // 根据选择的模型切换 tab（presetOnly 下仅展示预置列表，无需切换）
     if (!presetOnly) {
@@ -305,9 +366,133 @@ export function ModelSelector({
     );
   };
 
+  const renderChatModelConfigPanel = (model: string) => {
+    const modelConfig = chatModelUiConfig[model] ?? DEFAULT_CHAT_MODEL_UI_CONFIG;
+    return (
+    <div className="w-full p-4">
+      <h3 className="mb-3 text-[13px] font-semibold text-slate-900">模型配置</h3>
+      <div className="border-t border-slate-100 py-2">
+        <Popover
+          open={chatConfigSubmenu === "thinking"}
+          onOpenChange={(nextOpen) => setChatConfigSubmenu(nextOpen ? "thinking" : null)}
+        >
+          <PopoverTrigger asChild>
+            <button type="button" className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm text-slate-800 transition hover:bg-slate-50">
+              <span>思考强度</span>
+              <span className="flex items-center gap-1.5 text-slate-500">
+                {CHAT_THINKING_STRENGTHS.find((item) => item.value === modelConfig.thinkingStrength)?.label}
+                <ChevronRight className="h-4 w-4" />
+              </span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="right" align="start" sideOffset={8} collisionPadding={16} className="w-48 p-2" onMouseEnter={clearModelConfigCloseTimer} onMouseLeave={scheduleModelConfigClose}>
+            <div className="px-2 py-1.5 text-xs font-medium text-slate-500">思考强度</div>
+            {CHAT_THINKING_STRENGTHS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => {
+                  updateChatModelUiConfig(model, { thinkingStrength: item.value });
+                  setChatConfigSubmenu(null);
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition hover:bg-slate-50",
+                  modelConfig.thinkingStrength === item.value && "bg-slate-100 font-medium text-slate-900"
+                )}
+              >
+                {item.label}
+                {modelConfig.thinkingStrength === item.value ? <Check className="h-4 w-4 text-emerald-500" /> : null}
+              </button>
+            ))}
+          </PopoverContent>
+        </Popover>
+
+      </div>
+    </div>
+    );
+  };
+
+  const renderModelOption = (model: string, withIcon = true) => {
+    const unavailable = unavailableModelIdSet.has(model);
+    const row = (
+      <div
+        role={unavailable ? undefined : "button"}
+        tabIndex={unavailable ? -1 : 0}
+        onMouseEnter={unavailable ? undefined : clearModelConfigCloseTimer}
+        onMouseLeave={unavailable ? undefined : scheduleModelConfigClose}
+        onClick={unavailable ? undefined : () => {
+          handleModelSelect(model);
+          setParamsModelOpen(model);
+        }}
+        onKeyDown={unavailable ? undefined : (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleModelSelect(model);
+            setParamsModelOpen(model);
+          }
+        }}
+        className={cn(
+          "w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors text-left",
+          unavailable ? "cursor-not-allowed" : "hover:bg-slate-50 cursor-pointer",
+          currentModel === model && "bg-blue-50"
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          {withIcon ? <span className={unavailable ? "opacity-50" : undefined}>{getModelIcon(model)}</span> : null}
+          <span className={cn("truncate text-sm", unavailable ? "text-slate-500" : "text-slate-900")}>{model}</span>
+        </div>
+        <span className="flex shrink-0 items-center gap-2">
+          {unavailable ? (
+            <span className="group relative inline-flex cursor-help items-center text-amber-500">
+              <span role="img" aria-label="模型服务异常，请先选择可用模型" tabIndex={0}>
+                <AlertTriangle className="h-4 w-4" />
+              </span>
+              <span
+                role="tooltip"
+                className="invisible absolute bottom-full right-0 z-[60] mb-2 w-max max-w-[240px] rounded-md border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-700 opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+              >
+                模型服务异常，请先选择可用模型
+              </span>
+            </span>
+          ) : null}
+          {currentModel === model ? <Check className="h-4 w-4 text-blue-600" /> : null}
+        </span>
+      </div>
+    );
+
+    if (unavailable) return <div key={model}>{row}</div>;
+    if (!showParams || !separateParamsPopover) return <div key={model}>{row}</div>;
+    return (
+      <Popover key={model} open={paramsModelOpen === model} onOpenChange={(nextOpen) => {
+        setParamsModelOpen(nextOpen ? model : null);
+        if (!nextOpen) setChatConfigSubmenu(null);
+      }}>
+        <PopoverAnchor asChild>{row}</PopoverAnchor>
+        <PopoverContent
+          side="right"
+          align="start"
+          sideOffset={8}
+          className="w-[min(320px,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto p-0"
+          collisionPadding={24}
+          onMouseEnter={clearModelConfigCloseTimer}
+          onMouseLeave={scheduleModelConfigClose}
+        >
+          {renderChatModelConfigPanel(model)}
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
   return (
     <TooltipProvider delayDuration={0}>
-    <Popover open={open} onOpenChange={setOpen}>
+    <div className={cn(separateParamsPopover ? "flex items-center gap-1" : "contents")}>
+    <Popover open={open} onOpenChange={(nextOpen) => {
+      setInternalOpen(nextOpen);
+      onOpenChange?.(nextOpen);
+      setParamsModelOpen(null);
+      setChatConfigSubmenu(null);
+      clearModelConfigCloseTimer();
+    }}>
       <PopoverTrigger asChild>
         <button
           className={cn(
@@ -333,30 +518,12 @@ export function ModelSelector({
         <div className="p-4">
           {/* Section 1: 模型服务选择 */}
           <div className="mb-4">
-            <h3 className="text-sm font-medium text-slate-900 mb-2">
+            <h3 className="mb-2 text-[13px] font-medium text-slate-900">
               模型服务选择
             </h3>
             {presetOnly ? (
               <div className="space-y-1">
-                {presetModels.map((model) => (
-                  <button
-                    key={model}
-                    type="button"
-                    onClick={() => handleModelSelect(model)}
-                    className={cn(
-                      "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
-                      currentModel === model && "bg-blue-50"
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      {getModelIcon(model)}
-                      <span className="text-sm text-slate-900">{model}</span>
-                    </div>
-                    {currentModel === model && (
-                      <Check className="w-4 h-4 text-blue-600" />
-                    )}
-                  </button>
-                ))}
+                {presetModels.map((model) => renderModelOption(model))}
               </div>
             ) : (
               <Tabs
@@ -400,51 +567,18 @@ export function ModelSelector({
 
                 {/* Preset Models */}
                 <TabsContent value="preset" className="mt-4 space-y-1">
-                  {presetModels.map((model) => (
-                    <button
-                      key={model}
-                      type="button"
-                      onClick={() => handleModelSelect(model)}
-                      className={cn(
-                        "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
-                        currentModel === model && "bg-blue-50"
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        {getModelIcon(model)}
-                        <span className="text-sm text-slate-900">{model}</span>
-                      </div>
-                      {currentModel === model && (
-                        <Check className="w-4 h-4 text-blue-600" />
-                      )}
-                    </button>
-                  ))}
+                  {presetModels.map((model) => renderModelOption(model))}
                 </TabsContent>
 
                 {/* Exclusive Models */}
                 <TabsContent value="exclusive" className="mt-4 space-y-1">
-                  {exclusiveModels.map((model) => (
-                    <button
-                      key={model}
-                      type="button"
-                      onClick={() => handleModelSelect(model)}
-                      className={cn(
-                        "w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors text-left",
-                        currentModel === model && "bg-blue-50"
-                      )}
-                    >
-                      <span className="text-sm text-slate-900">{model}</span>
-                      {currentModel === model && (
-                        <Check className="w-4 h-4 text-blue-600" />
-                      )}
-                    </button>
-                  ))}
+                  {exclusiveModels.map((model) => renderModelOption(model, false))}
                 </TabsContent>
               </Tabs>
             )}
           </div>
 
-          {showParams && (
+          {showParams && !separateParamsPopover && (
             <div className="mt-4">
               <h3 className="text-sm font-medium text-slate-900 mb-2">
                 参数配置
@@ -474,7 +608,7 @@ export function ModelSelector({
                         </Tooltip>
                       </div>
                       <Switch
-                        checked={params.current_time ?? false}
+                        checked={Boolean(params.current_time ?? false)}
                         onCheckedChange={(checked) => handleParamChange("current_time", checked)}
                       />
                     </div>
@@ -497,7 +631,7 @@ export function ModelSelector({
                         </Tooltip>
                       </div>
                       <Switch
-                        checked={params.sp_anti_leak ?? false}
+                        checked={Boolean(params.sp_anti_leak ?? false)}
                         onCheckedChange={(checked) => handleParamChange("sp_anti_leak", checked)}
                       />
                     </div>
@@ -509,6 +643,7 @@ export function ModelSelector({
         </div>
       </PopoverContent>
     </Popover>
+    </div>
     </TooltipProvider>
   );
 }

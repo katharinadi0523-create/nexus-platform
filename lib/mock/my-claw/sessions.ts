@@ -1,6 +1,23 @@
 import { CLAW_CLIENT_CLARIFY_SESSIONS } from "./clarify-demo";
 import type { MyClawSessionListItem } from "./types";
 
+/** 执行过程（事件链）展示优化的演示会话，按点击推进。 */
+export const CLAW_CLIENT_PROCESS_DEMO_SESSIONS: MyClawSessionListItem[] = [
+  { id: "process-demo-dashboard", title: "执行过程展示（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "表格转网页看板：从开头的思考到交付。" },
+  { id: "process-demo-clarify-stop", title: "确认卡片与停止（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "澄清卡片切段、计时暂停，用户中途停止。" },
+  { id: "process-demo-automation-interrupt", title: "定时任务与中断（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "设置类交付的结果卡；运行中被系统中断。" },
+  { id: "process-demo-long-history", title: "华东经营周报（conversation map）", kind: "process_demo", pinned: true, updatedAt: "2026-11-04T00:00:00.000Z", preview: "二十多轮来回修改的周报会话。" },
+];
+
+export const CLAW_CLIENT_QUEUE_DEMO_SESSION: MyClawSessionListItem = {
+  id: "queue-steer-demo",
+  title: "排队与引导（演示）",
+  kind: "queue_demo",
+  pinned: true,
+  updatedAt: "2026-10-27T00:00:00.000Z",
+  preview: "体验排队、引导、暂停恢复和队列管理。",
+};
+
 /**
  * Session list seeds ported from 会话交互 `data.js` → `recentTasks`,
  * plus a research multi-agent session for the scientific flow.
@@ -24,7 +41,7 @@ export const MY_CLAW_SESSIONS: MyClawSessionListItem[] = [
   },
   {
     id: "task-research-001",
-    title: "生成式 AI 科研协作效率研究",
+    title: "右侧工作区（演示）",
     kind: "research_multi_agent",
     pinned: true,
     updatedAt: "2026-07-25T16:30:00.000Z",
@@ -85,6 +102,8 @@ export function getMyClawSession(
 ): MyClawSessionListItem | undefined {
   return (
     MY_CLAW_SESSIONS.find((session) => session.id === id) ??
+    (CLAW_CLIENT_QUEUE_DEMO_SESSION.id === id ? CLAW_CLIENT_QUEUE_DEMO_SESSION : undefined) ??
+    CLAW_CLIENT_PROCESS_DEMO_SESSIONS.find((session) => session.id === id) ??
     CLAW_CLIENT_CLARIFY_SESSIONS.find((session) => session.id === id)
   );
 }

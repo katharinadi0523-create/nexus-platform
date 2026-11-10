@@ -9,11 +9,16 @@ import type {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+function isResolved(answers: ClarifyAnswers, skipped: Record<string, boolean>, questionKey: string) {
+  return answers[questionKey] !== undefined || Boolean(skipped[questionKey]);
+}
+
 /**
- * 基础使用端的澄清问答面板（交互对齐智谱 ZCode）：
- * - 一次 1–4 个问题，逐题切换；每题必须选择一个选项或填写自定义回答，才能「继续 / 提交」；
- * - 答不了的问题可在自定义回答中直接写明（如「不确定」）；不作答时 5 分钟后自动继续，按未回答处理；
- * - 首次有效操作（选择选项、输入自定义回答、切换题目）即暂停自动继续；
+ * 基础使用端的澄清问答面板：
+ * - 一次 1–4 个问题，逐题切换；每题可以作答，也可以单独跳过；
+ * - 跳过不等于拒绝、选择推荐项或授权，提交时该题按「未回答」返回；
+ * - 全部作答、部分跳过、全部跳过都可以提交；未作答且未跳过的题会拦住提交；
+ * - 首次有效操作（选择选项、输入自定义回答、跳过、切换题目）即暂停自动继续；
  * - 最后一分钟在右上角显示秒数。
  */
 export function ClarifyQuestionPanel({
@@ -29,8 +34,10 @@ export function ClarifyQuestionPanel({
 }) {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<ClarifyAnswers>({});
+  const [skipped, setSkipped] = useState<Record<string, boolean>>({});
   const [customDrafts, setCustomDrafts] = useState<Record<string, string>>({});
   const reported = useRef(false);
+  const submitted = useRef(false);
 
   const current = questions[index];
   if (!current) return null;
@@ -39,9 +46,10 @@ export function ClarifyQuestionPanel({
   const answer = answers[current.questionKey];
   const selectedValue = typeof answer === "string" ? answer : null;
   const customDraft = customDrafts[current.questionKey] ?? "";
-  const currentAnswered = answer !== undefined;
-  const allAnswered = questions.every((question) => answers[question.questionKey] !== undefined);
-  const canAdvance = isLast ? allAnswered : currentAnswered;
+  const currentSkipped = Boolean(skipped[current.questionKey]);
+  const currentResolved = isResolved(answers, skipped, current.questionKey);
+  const allResolved = questions.every((question) => isResolved(answers, skipped, question.questionKey));
+  const canAdvance = isLast ? allResolved : currentResolved;
 
   function report() {
     if (reported.current) return;
@@ -54,22 +62,39 @@ export function ClarifyQuestionPanel({
     setIndex(Math.max(0, Math.min(total - 1, nextIndex)));
   }
 
+  function submit(nextAnswers: ClarifyAnswers) {
+    if (submitted.current) return;
+    submitted.current = true;
+    onSubmit(nextAnswers);
+  }
+
   function advance(nextAnswers: ClarifyAnswers) {
     if (isLast) {
-      onSubmit(nextAnswers);
+      submit(nextAnswers);
       return;
     }
     setIndex((value) => value + 1);
   }
 
+  function clearSkip(questionKey: string) {
+    setSkipped((currentSkippedMap) => {
+      if (!currentSkippedMap[questionKey]) return currentSkippedMap;
+      const next = { ...currentSkippedMap };
+      delete next[questionKey];
+      return next;
+    });
+  }
+
   function selectOption(value: string) {
     report();
+    clearSkip(current.questionKey);
     setAnswers((currentAnswers) => ({ ...currentAnswers, [current.questionKey]: value }));
     setCustomDrafts((drafts) => ({ ...drafts, [current.questionKey]: "" }));
   }
 
   function changeCustom(text: string) {
     report();
+    clearSkip(current.questionKey);
     setCustomDrafts((drafts) => ({ ...drafts, [current.questionKey]: text }));
     setAnswers((currentAnswers) => {
       const next = { ...currentAnswers };
@@ -78,6 +103,41 @@ export function ClarifyQuestionPanel({
       return next;
     });
   }
+
+  function skipCurrent() {
+    report();
+    const questionKey = current.questionKey;
+    const nextSkipped = { ...skipped, [questionKey]: true };
+    const nextAnswers = { ...answers };
+    delete nextAnswers[questionKey];
+    setSkipped(nextSkipped);
+    setAnswers(nextAnswers);
+    setCustomDrafts((drafts) => ({ ...drafts, [questionKey]: "" }));
+
+    const stillOpen = questions.some(
+      (question) => !isResolved(nextAnswers, nextSkipped, question.questionKey),
+    );
+    if (!isLast) {
+      setIndex((value) => value + 1);
+      return;
+    }
+    if (stillOpen) {
+      const nextOpen = questions.findIndex(
+        (question) => !isResolved(nextAnswers, nextSkipped, question.questionKey),
+      );
+      if (nextOpen >= 0) setIndex(nextOpen);
+      return;
+    }
+    submit(nextAnswers);
+  }
+
+  const hint = !allResolved && isLast && currentResolved
+    ? "还有问题没有回答或跳过"
+    : currentSkipped
+      ? isLast
+        ? "本题已跳过，可以改选或提交"
+        : "本题已跳过，可以改选或继续"
+      : "选择一个选项、写下回答，或跳过本题";
 
   return (
     <section
@@ -90,6 +150,11 @@ export function ClarifyQuestionPanel({
             需要确认
           </span>
           {current.question}
+          {currentSkipped ? (
+            <span className="ml-2 inline-flex h-5 items-center rounded bg-slate-100 px-1.5 align-[1px] text-[11px] font-medium text-slate-500">
+              已跳过
+            </span>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-slate-400">
           {secondsLeft !== null ? (
@@ -193,11 +258,18 @@ export function ClarifyQuestionPanel({
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-1 pt-2.5">
         <p className="flex min-w-0 items-center gap-1.5 text-[12px] text-slate-500">
           <Info className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          {isLast && currentAnswered && !allAnswered
-            ? "还有问题没有回答，回答后才能提交"
-            : "选择一个选项，或在自定义回答中写下你的想法"}
+          {hint}
         </p>
-        <div className="flex shrink-0 items-center">
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            aria-label="跳过本题"
+            className="h-8 rounded-lg border-[#d5e1f4] bg-white px-3 text-[13px] text-slate-600 shadow-none hover:bg-slate-50"
+            onClick={skipCurrent}
+          >
+            跳过
+          </Button>
           <Button
             type="button"
             disabled={!canAdvance}

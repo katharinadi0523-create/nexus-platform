@@ -296,7 +296,7 @@ export default function DashboardLayout({
     return (
       <>
         <main className="h-screen min-h-0 overflow-hidden bg-slate-50">{children}</main>
-        <Toaster position="top-right" />
+        <Toaster position="top-center" />
       </>
     );
   }
@@ -359,7 +359,7 @@ export default function DashboardLayout({
           </div>
         </main>
       </div>
-      <Toaster position="top-right" />
+      <Toaster position="top-center" />
     </>
   );
 }

@@ -93,7 +93,7 @@ function resolveAgent(id: string): MyClawAgentOption {
 
 /**
  * Composer-footer agent dropdown — matches 会话交互 `#composerAgentButton` pattern
- * (skill-adjacent pill + listbox menu +「召唤其他智能体」).
+ * (skill-adjacent pill + listbox menu +「更多智能体」).
  */
 export function AgentSelector({ className }: { className?: string }) {
   const {
@@ -183,11 +183,11 @@ export function AgentSelector({ className }: { className?: string }) {
         <DropdownMenuSeparator className="my-1.5" />
         <DropdownMenuItem asChild className="rounded-lg px-2 py-2">
           <Link
-            href="/my-claw/agents"
+            href="/claw-client?tab=agents"
             className="flex cursor-pointer items-center gap-2 text-sm font-medium text-[#2773ff]"
           >
             <Plus className="h-4 w-4" />
-            召唤其他智能体
+            更多智能体
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>

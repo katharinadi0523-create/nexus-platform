@@ -225,7 +225,7 @@ export default function ModelDevLayout({
         </div>
         </main>
       </div>
-      <Toaster position="top-right" />
+      <Toaster position="top-center" />
     </>
   );
 }

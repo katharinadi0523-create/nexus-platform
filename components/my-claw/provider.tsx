@@ -11,6 +11,7 @@ import {
 import { useRouter } from "next/navigation";
 import {
   INITIAL_AUTOMATION_TASKS,
+  CLAW_CLIENT_PROCESS_DEMO_SESSIONS,
   MY_CLAW_SESSIONS,
   RESEARCH_CLAW_ID,
   RESEARCH_SESSION_ID,
@@ -39,6 +40,7 @@ interface MyClawContextValue {
   /** Automation tasks shared with sidebar tree. */
   automationTasks: AutomationTask[];
   setActiveSession: (sessionId: string | null) => void;
+  createSession: (title?: string) => string;
   pinSession: (sessionId: string, pinned?: boolean) => void;
   renameSession: (sessionId: string, title: string) => void;
   deleteSession: (sessionId: string) => void;
@@ -79,9 +81,19 @@ export function MyClawProvider({
   );
   const [sessions, setSessions] = useState<MyClawSessionListItem[]>(() =>
     [
-      // 澄清交互示例只在基础使用端展示。
-      ...(navigationBasePath === "/claw-client" ? CLAW_CLIENT_CLARIFY_SESSIONS : []),
-      ...MY_CLAW_SESSIONS,
+      ...(navigationBasePath === "/claw-client"
+        ? [
+            // 演示会话置顶展示：执行过程演示最前，其后任务与多智能体。
+            ...CLAW_CLIENT_PROCESS_DEMO_SESSIONS,
+            ...MY_CLAW_SESSIONS.filter(
+              (session) => session.id === "task-research-001",
+            ),
+            ...CLAW_CLIENT_CLARIFY_SESSIONS,
+            ...MY_CLAW_SESSIONS.filter(
+              (session) => session.id !== "task-research-001",
+            ),
+          ]
+        : MY_CLAW_SESSIONS),
     ].map((session) => ({ ...session }))
   );
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -99,6 +111,24 @@ export function MyClawProvider({
 
   const setActiveSession = useCallback((sessionId: string | null) => {
     setActiveSessionId(sessionId);
+  }, []);
+
+  const createSession = useCallback((title?: string) => {
+    const id = `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const conversationTitle = title?.trim() || "新对话";
+    setSessions((prev) => [
+      {
+        id,
+        title: conversationTitle,
+        kind: "blank",
+        pinned: false,
+        updatedAt: new Date().toISOString(),
+        preview: "",
+      },
+      ...prev,
+    ]);
+    setActiveSessionId(id);
+    return id;
   }, []);
 
   const setAutomationTasks = useCallback((tasks: AutomationTask[]) => {
@@ -248,6 +278,7 @@ export function MyClawProvider({
       favoriteOverrides,
       automationTasks,
       setActiveSession,
+      createSession,
       pinSession,
       renameSession,
       deleteSession,
@@ -269,6 +300,7 @@ export function MyClawProvider({
       favoriteOverrides,
       automationTasks,
       setActiveSession,
+      createSession,
       pinSession,
       renameSession,
       deleteSession,

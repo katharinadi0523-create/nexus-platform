@@ -125,7 +125,7 @@ export function MyClawSidebar() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/my-claw" className="cursor-pointer">
+              <Link href="/my-claw/chat" className="cursor-pointer bg-[#f3f6fb]">
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="font-medium">项目协作形态</span>
                   <span className="text-[11px] font-normal text-slate-500">Project、事项与多人协作</span>

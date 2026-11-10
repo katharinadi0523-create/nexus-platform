@@ -80,6 +80,7 @@ type DocType = "PDF" | "DOC" | "DOCX" | "TXT" | string;
 type TimePreset = "1h" | "1d" | "1w" | null;
 
 interface KbDocument {
+  chunkConfig?: import("@/lib/knowledge-base-format-chunking").DocumentChunkConfig;
   id: string;
   name: string;
   type: DocType;
@@ -394,6 +395,7 @@ function KnowledgeBaseDocumentList({
   onImport,
   onUpdateDocument,
   knowledgeBaseSecurityLevel = "公开",
+  retrievalEngines,
 }: {
   knowledgeBaseId: string;
   documents: KbDocument[];
@@ -402,6 +404,7 @@ function KnowledgeBaseDocumentList({
   onImport: (documents: KnowledgeDocumentRow[]) => void;
   onUpdateDocument: (id: string, patch: Partial<KbDocument>) => void;
   knowledgeBaseSecurityLevel?: SecurityLevel;
+  retrievalEngines?: import("@/components/knowledge-base/RetrievalConfigStep").RetrievalEngineId[];
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [timePreset, setTimePreset] = useState<TimePreset>(null);
@@ -638,6 +641,7 @@ function KnowledgeBaseDocumentList({
         onOpenChange={setImportOpen}
         onImport={onImport}
         knowledgeBaseSecurityLevel={knowledgeBaseSecurityLevel}
+        retrievalEngines={retrievalEngines}
       />
 
       <ResourceDeleteApprovalDialog
@@ -827,6 +831,7 @@ export function TemplateKnowledgeBaseDetail({
       documentTags: row.documentTags,
       contentTags: row.contentTags,
       metadataFields: row.metadataFields,
+      chunkConfig: row.chunkConfig,
     }));
 
     setDocuments((prev) => [...newDocs, ...prev]);
@@ -1190,6 +1195,7 @@ export function TemplateKnowledgeBaseDetail({
           onImport={handleImportDocs}
           onUpdateDocument={handleUpdateDoc}
           knowledgeBaseSecurityLevel={basicInfo.securityLevel}
+          retrievalEngines={meta.retrievalSnapshot?.retrieval.engines}
         />
       </div>
 

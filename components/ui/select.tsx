@@ -18,6 +18,7 @@ interface SelectProps {
   options: SelectOption[];
   className?: string;
   disabled?: boolean;
+  ariaLabel?: string;
 }
 
 export function Select({
@@ -27,6 +28,7 @@ export function Select({
   options,
   className,
   disabled = false,
+  ariaLabel,
 }: SelectProps) {
   const [open, setOpen] = React.useState(false);
   const selectedOption = options.find((opt) => opt.value === value);
@@ -37,6 +39,7 @@ export function Select({
         <button
           type="button"
           disabled={disabled}
+          aria-label={ariaLabel}
           className={cn(
             "flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
             className

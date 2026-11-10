@@ -91,6 +91,7 @@ export function ClawWorkspaceSection({
   mode = "full",
   title = "工作空间",
   hideRootTrail = false,
+  hideStorageAction = false,
   hideEntryDescription = false,
   fileMenuMode = "download",
   onFileAction,
@@ -105,6 +106,8 @@ export function ClawWorkspaceSection({
   title?: string;
   /** Hide breadcrumb strip when still at workspace root */
   hideRootTrail?: boolean;
+  /** Hide the storage configuration action for personal workspace surfaces. */
+  hideStorageAction?: boolean;
   /** Hide gray subtitle under entry name */
   hideEntryDescription?: boolean;
   /** download = single download link; menu = ⋯ 预览/下载/详情 */
@@ -174,7 +177,7 @@ export function ClawWorkspaceSection({
                 {storageConfig.workspaceUsedGb}GB。
               </div>
             </div>
-            <Button
+            {!hideStorageAction ? <Button
               type="button"
               variant="outline"
               size="sm"
@@ -182,7 +185,7 @@ export function ClawWorkspaceSection({
               onClick={onOpenStorageConfig}
             >
               存储配置
-            </Button>
+            </Button> : null}
           </div>
         </div>
       ) : null}
