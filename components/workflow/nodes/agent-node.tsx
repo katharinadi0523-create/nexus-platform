@@ -25,6 +25,8 @@ interface AgentNodeData {
   runtimeError?: string;
   securityLevel?: SecurityLevel;
   callerSecurityLevel?: SecurityLevel;
+  agentSource?: "platform" | "third-party";
+  agentProtocol?: string;
 }
 
 export function AgentNode(props: NodeProps<AgentNodeData>) {
@@ -85,6 +87,12 @@ export function AgentNode(props: NodeProps<AgentNodeData>) {
                   <div className={`h-2 w-2 rounded-sm ${unavailable ? "bg-rose-500" : "bg-blue-600"}`} />
                 </div>
                 <span className={`min-w-0 truncate text-xs ${unavailable ? "text-rose-700" : "text-slate-700"}`}>{data.agentName}</span>
+                {data.agentSource === "third-party" ? (
+                  <span className="shrink-0 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">第三方</span>
+                ) : null}
+                {data.agentProtocol ? (
+                  <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700">{data.agentProtocol}</span>
+                ) : null}
                 {data.securityLevel ? (
                   <SecurityLevelBadge level={data.securityLevel} className="shrink-0 px-1.5 py-0.5 text-[10px]" />
                 ) : null}

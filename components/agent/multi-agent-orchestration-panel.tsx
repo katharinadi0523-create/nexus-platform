@@ -166,6 +166,9 @@ export function MultiAgentOrchestrationPanel({
                         <span className={cn("min-w-0 truncate", !isEnabled && "line-through decoration-slate-300")}>
                           {agent.name}
                         </span>
+                        {agent.sourceType === "referenced" ? (
+                          <span className="shrink-0 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">第三方</span>
+                        ) : null}
                       </button>
                       <button
                         type="button"

@@ -17,7 +17,9 @@ import { ToolConfigDialog, type ToolConfigSelection } from "@/components/claw-hu
 import { KnowledgeConfigDialog, type KnowledgeConfigSelection } from "@/components/claw-hub-next/knowledge-config-dialog";
 import { SingleAgentDebugDialog } from "@/components/claw-hub-next/single-agent-debug-dialog";
 import type { CapabilityAgentItem, CapabilityKnowledgeItem, CapabilitySkillItem, CapabilityToolItem, ClawDetailData } from "@/lib/mock/claw-hub-next";
+import { THIRD_PARTY_AGENTS } from "@/lib/mock/third-party-agents";
 import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
+import { getSecurityLevelRank } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
 import { SectionCard } from "./section-card";
 import { useWorkbenchEntity } from "@/components/claw-hub-next/workbench-entity-context";
@@ -31,7 +33,7 @@ type Props = {
 
 const EMPTY_RESOURCES = { skills: [], tools: [], knowledge: [] };
 const MODEL_OPTIONS = PRESET_MODEL_IDS.map((id) => ({ value: id, label: id }));
-const REFERENCE_CANDIDATES: CapabilityAgentItem[] = [
+const NATIVE_REFERENCE_CANDIDATES: CapabilityAgentItem[] = [
   { id: "ref-data-analysis", name: "数据分析智能体", description: "对结构化科研数据进行统计分析并解释结果。", enabled: true, target: "智能体广场", primaryModel: "Qwen3-32B", fallbackModel: "Qwen3-8B", prompt: "依据输入数据完成统计分析，明确方法、假设与结果边界。", sourceType: "referenced" },
   { id: "ref-experiment-design", name: "实验设计智能体", description: "辅助设计实验变量、对照组与验证流程。", enabled: true, target: "智能体广场", primaryModel: "Qwen3-32B", fallbackModel: "Qwen3-8B", prompt: "根据研究目标设计可执行、可复现的实验方案。", sourceType: "referenced" },
   { id: "ref-academic-translation", name: "学术翻译智能体", description: "完成中英文学术内容翻译与术语一致性检查。", enabled: true, target: "组织智能体库", primaryModel: "Qwen3-32B", fallbackModel: "Qwen3-8B", prompt: "保持原文事实、术语与论证关系，输出规范学术译文。", sourceType: "referenced" },
@@ -48,7 +50,26 @@ export function ClawAgentResourceSection({ agents, clawDetail, compact = false, 
   const [knowledgeDialogOpen, setKnowledgeDialogOpen] = useState(false);
   const [referenceOpen, setReferenceOpen] = useState(false);
   const [debugAgent, setDebugAgent] = useState<CapabilityAgentItem | null>(null);
-  const [selectedReferenceId, setSelectedReferenceId] = useState(REFERENCE_CANDIDATES[0].id);
+  const [selectedReferenceId, setSelectedReferenceId] = useState(NATIVE_REFERENCE_CANDIDATES[0].id);
+  const thirdPartyReferenceCandidates = useMemo(() => THIRD_PARTY_AGENTS
+    .filter((item) => item.usePermission
+      && item.status === "已启用"
+      && getSecurityLevelRank(item.securityLevel) <= getSecurityLevelRank(clawDetail.overview.securityLevel))
+    .map<CapabilityAgentItem>((item) => ({
+      id: `third-party:${item.id}`,
+      name: item.name,
+      description: item.description,
+      enabled: true,
+      target: `第三方 Agent · ${item.protocol === "A2A" ? "A2A" : "API"}`,
+      primaryModel: item.protocol === "A2A" ? "A2A" : item.interfaceSpec,
+      fallbackModel: "平台协议适配",
+      prompt: "由外部服务维护，平台按照已登记协议发起调用。",
+      sourceType: "referenced",
+    })), [clawDetail.overview.securityLevel]);
+  const referenceCandidates = useMemo(
+    () => [...NATIVE_REFERENCE_CANDIDATES, ...thirdPartyReferenceCandidates],
+    [thirdPartyReferenceCandidates]
+  );
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
     return value ? agents.filter((item) => `${item.name}${item.description}`.toLowerCase().includes(value)) : agents;
@@ -66,7 +87,7 @@ export function ClawAgentResourceSection({ agents, clawDetail, compact = false, 
   }
 
   function addReference() {
-    const candidate = REFERENCE_CANDIDATES.find((item) => item.id === selectedReferenceId);
+    const candidate = referenceCandidates.find((item) => item.id === selectedReferenceId);
     if (!candidate) return;
     if (agents.some((item) => item.id === candidate.id)) {
       setReferenceOpen(false);
@@ -136,7 +157,7 @@ export function ClawAgentResourceSection({ agents, clawDetail, compact = false, 
               <Button type="button" size="icon" className="h-9 w-9 bg-blue-600 text-white hover:bg-blue-700" aria-label="新增智能体"><Plus className="h-4 w-4" /></Button>
               <div className="invisible absolute right-0 top-full z-30 w-40 translate-y-1 rounded-md border border-slate-200 bg-white p-1 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
                 <button type="button" className="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={createAgent}>新建子智能体</button>
-                <button type="button" className="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={() => setReferenceOpen(true)}>引用子智能体</button>
+                <button type="button" className="w-full rounded px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={() => setReferenceOpen(true)}>引用智能体</button>
               </div>
             </div>
           </div>
@@ -149,7 +170,7 @@ export function ClawAgentResourceSection({ agents, clawDetail, compact = false, 
             <TableBody>
               {filtered.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell className="px-4 font-medium text-slate-900">{item.name}</TableCell>
+                  <TableCell className="px-4"><div className="flex items-center gap-2"><span className="font-medium text-slate-900">{item.name}</span>{item.target.startsWith("第三方 Agent") ? <span className="rounded bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">第三方</span> : null}</div></TableCell>
                   <TableCell className="px-4"><div className="flex items-center gap-2"><Switch className="data-[state=checked]:bg-blue-600" checked={item.enabled} onCheckedChange={(enabled) => onChange(agents.map((row) => row.id === item.id ? { ...row, enabled } : row))} /><span className="text-sm text-slate-600">{item.enabled ? "已启用" : "未启用"}</span></div></TableCell>
                   <TableCell className="max-w-[520px] px-4 text-sm text-slate-500">{item.description}</TableCell>
                   <TableCell className="px-4"><AgentResourceSummary resources={item.resources} /></TableCell>
@@ -199,13 +220,48 @@ export function ClawAgentResourceSection({ agents, clawDetail, compact = false, 
       />
 
       <Dialog open={referenceOpen} onOpenChange={setReferenceOpen}>
-        <DialogContent className="sm:max-w-[620px]">
-          <DialogHeader><DialogTitle>引用子智能体</DialogTitle><p className="text-sm text-slate-500">引用后可查看配置，但不能修改来源智能体的配置。</p></DialogHeader>
-          <div className="space-y-2">{REFERENCE_CANDIDATES.map((item) => <button key={item.id} type="button" onClick={() => setSelectedReferenceId(item.id)} className={`w-full rounded-md border p-4 text-left transition ${selectedReferenceId === item.id ? "border-blue-400 bg-blue-50/60" : "border-slate-200 hover:bg-slate-50"}`}><div className="flex items-center justify-between gap-3"><span className="font-medium text-slate-900">{item.name}</span><span className="text-xs text-slate-400">{item.target}</span></div><p className="mt-1 text-sm text-slate-500">{item.description}</p></button>)}</div>
+        <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-[680px]">
+          <DialogHeader><DialogTitle>引用智能体</DialogTitle><p className="text-sm text-slate-500">平台原生智能体与有权限的第三方 Agent 在同一入口选择；引用后只能查看来源配置。</p></DialogHeader>
+          <div className="space-y-5">
+            <ReferenceCandidateGroup title="平台智能体" items={NATIVE_REFERENCE_CANDIDATES} selectedId={selectedReferenceId} onSelect={setSelectedReferenceId} />
+            <ReferenceCandidateGroup title="第三方 Agent" items={thirdPartyReferenceCandidates} selectedId={selectedReferenceId} onSelect={setSelectedReferenceId} thirdParty />
+          </div>
           <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setReferenceOpen(false)}>取消</Button><Button className="bg-blue-600 hover:bg-blue-700" onClick={addReference}>确认引用</Button></div>
         </DialogContent>
       </Dialog>
     </SectionCard>
+  );
+}
+
+function ReferenceCandidateGroup({
+  title,
+  items,
+  selectedId,
+  onSelect,
+  thirdParty = false,
+}: {
+  title: string;
+  items: CapabilityAgentItem[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  thirdParty?: boolean;
+}) {
+  return (
+    <section>
+      <div className="mb-2 flex items-center gap-2"><h3 className="text-sm font-medium text-slate-900">{title}</h3><span className="text-xs text-slate-400">{items.length}</span></div>
+      <div className="space-y-2">
+        {items.map((item) => (
+          <button key={item.id} type="button" onClick={() => onSelect(item.id)} className={`w-full rounded-md border p-4 text-left transition ${selectedId === item.id ? "border-blue-400 bg-blue-50/60" : "border-slate-200 hover:bg-slate-50"}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2"><span className="font-medium text-slate-900">{item.name}</span>{thirdParty ? <span className="rounded bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">第三方</span> : null}</div>
+              <span className="text-xs text-slate-400">{item.target}</span>
+            </div>
+            <p className="mt-1 text-sm text-slate-500">{item.description}</p>
+          </button>
+        ))}
+        {items.length === 0 ? <div className="rounded-md border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">暂无符合权限与密级要求的第三方 Agent</div> : null}
+      </div>
+    </section>
   );
 }
 

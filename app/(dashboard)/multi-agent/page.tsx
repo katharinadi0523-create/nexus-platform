@@ -23,6 +23,12 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   SecurityLevelBadge,
 } from "@/components/security/security-level-badge";
 import { ResourceDeleteApprovalDialog } from "@/components/security/resource-delete-approval-dialog";

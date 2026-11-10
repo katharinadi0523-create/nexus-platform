@@ -20,6 +20,7 @@ import {
   getSecurityLevelRank,
   type SecurityLevel,
 } from "@/lib/security-level";
+import { THIRD_PARTY_AGENTS } from "@/lib/mock/third-party-agents";
 
 interface Agent {
   id: string;
@@ -31,6 +32,8 @@ interface Agent {
   version?: string;
   recommended?: boolean;
   securityLevel: SecurityLevel;
+  source?: "platform" | "third-party";
+  protocolLabel?: string;
 }
 
 interface AgentNodeData {
@@ -51,6 +54,8 @@ interface AgentNodeData {
   runtimeError?: string;
   showReferenceAlerts?: boolean;
   securityLevel?: SecurityLevel;
+  agentSource?: "platform" | "third-party";
+  agentProtocol?: string;
 }
 
 interface AgentNodeConfigProps {
@@ -85,6 +90,7 @@ const PUBLISHED_AGENTS: Agent[] = [
     desc: "基于传感器数据和历史维修记录，预测设备故障概率。",
     updatedAt: "2025-12-20 21:03:15",
     securityLevel: "秘密",
+    source: "platform",
   },
   {
     id: "anti-fl-07",
@@ -94,8 +100,23 @@ const PUBLISHED_AGENTS: Agent[] = [
     desc: "智能体应用描述",
     updatedAt: "2026-01-02 13:30:00",
     securityLevel: "机密",
+    source: "platform",
   },
 ];
+
+const THIRD_PARTY_AGENT_OPTIONS: Agent[] = THIRD_PARTY_AGENTS
+  .filter((agent) => agent.status === "已启用" && agent.usePermission)
+  .map((agent) => ({
+    id: `third-party:${agent.id}`,
+    name: agent.name,
+    type: "第三方 Agent",
+    status: "已启用",
+    desc: agent.description,
+    updatedAt: agent.updatedAt,
+    securityLevel: agent.securityLevel,
+    source: "third-party",
+    protocolLabel: agent.protocol === "A2A" ? "A2A" : agent.interfaceSpec,
+  }));
 
 export function AgentNodeConfig({
   nodeData,
@@ -118,6 +139,8 @@ export function AgentNodeConfig({
           desc: "",
           updatedAt: "",
           securityLevel: nodeData.securityLevel ?? "公开",
+          source: nodeData.agentSource ?? "platform",
+          protocolLabel: nodeData.agentProtocol,
         }
       : null
   );
@@ -137,27 +160,39 @@ export function AgentNodeConfig({
     setSelectedAgent(agent);
     setReconfigureCandidate(null);
     setAgentDialogOpen(false);
+    const isThirdParty = agent.source === "third-party";
+    const nextInputVariables = isThirdParty
+      ? [
+          { name: "*query", type: "string", value: "" },
+          { name: "files", type: "array[object]", value: "" },
+        ]
+      : inputVariables.length > 0
+        ? inputVariables
+        : [
+            { name: "query", type: "string", value: "" },
+            { name: "files", type: "array[object]", value: "" },
+            { name: "*device_id", type: "string", value: "" },
+          ];
+    setInputVariables(nextInputVariables);
     // 更新节点数据
     const updated: AgentNodeData = {
       ...nodeData,
       agentId: agent.id,
       agentName: agent.name,
       securityLevel: agent.securityLevel,
-      currentVersion: agent.version || "V1",
-      latestVersion: agent.version || "V2",
-      latestPublishedAt: "2026-07-27 10:20:15",
-      latestVersionDescription: "优化数据校验及异常处理",
-      hasVersionUpdate: true,
+      agentSource: agent.source ?? "platform",
+      agentProtocol: agent.protocolLabel,
+      currentVersion: isThirdParty ? undefined : agent.version || "V1",
+      latestVersion: isThirdParty ? undefined : agent.version || "V2",
+      latestPublishedAt: isThirdParty ? undefined : "2026-07-27 10:20:15",
+      latestVersionDescription: isThirdParty ? undefined : "优化数据校验及异常处理",
+      hasVersionUpdate: !isThirdParty,
       versionUpdateDismissed: false,
       availabilityStatus: "available",
       agentUnavailableMessage: undefined,
       runtimeError: undefined,
       // 根据选择的智能体，可以预设输入输出变量
-      inputVariables: inputVariables.length > 0 ? inputVariables : [
-        { name: "query", type: "string", value: "" },
-        { name: "files", type: "array[object]", value: "" },
-        { name: "*device_id", type: "string", value: "" },
-      ],
+      inputVariables: nextInputVariables,
       outputVariables: outputVariables.length > 0 ? outputVariables : [
         { name: "answer", type: "String" },
         { name: "ruleIntervention", type: "String" },
@@ -362,6 +397,8 @@ export function AgentNodeConfig({
                   智能体名称: {selectedAgent.name}
                 </div>
                 <div className="mb-1 flex items-center gap-2">
+                  {selectedAgent.source === "third-party" ? <span className="rounded bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">第三方 Agent</span> : null}
+                  {selectedAgent.protocolLabel ? <span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{selectedAgent.protocolLabel}</span> : null}
                   <SecurityLevelBadge level={selectedAgent.securityLevel} className="px-1.5 py-0.5" />
                   {securityUnavailable ? (
                     <span className="rounded bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
@@ -397,12 +434,13 @@ export function AgentNodeConfig({
                 <DialogTitle>选择智能体</DialogTitle>
               </DialogHeader>
               <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                当前工作流智能体密级为「{callerSecurityLevel}」，仅展示密级不高于当前资源的最新发布可用版本。
+                平台智能体与已纳管的第三方 Agent 在同一入口选择。当前工作流智能体密级为「{callerSecurityLevel}」，仅展示密级不高于当前资源的可用对象。
               </div>
               <div className="mt-4 space-y-2 max-h-[400px] overflow-y-auto">
                 {[
                   ...(reconfigureCandidate ? [reconfigureCandidate] : []),
                   ...PUBLISHED_AGENTS.filter((agent) => agent.id !== reconfigureCandidate?.id),
+                  ...THIRD_PARTY_AGENT_OPTIONS.filter((agent) => agent.id !== reconfigureCandidate?.id),
                 ]
                   .filter(
                     (agent) =>
@@ -422,6 +460,8 @@ export function AgentNodeConfig({
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-slate-900 mb-1">
                           {agent.name}
+                          {agent.source === "third-party" ? <span className="ml-2 rounded bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">第三方</span> : null}
+                          {agent.protocolLabel ? <span className="ml-2 rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{agent.protocolLabel}</span> : null}
                           {agent.recommended ? (
                             <span className="ml-2 rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">最新可用版本</span>
                           ) : null}

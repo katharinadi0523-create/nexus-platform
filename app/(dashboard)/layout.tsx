@@ -23,6 +23,7 @@ import {
   Building2,
   FileCode,
   Activity,
+  PlugZap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlobalHeader } from "@/components/layout/global-header";
@@ -81,6 +82,12 @@ const menuGroups: MenuGroup[] = [
         label: "智能体",
         icon: Bot,
         href: "/agent",
+      },
+      {
+        key: "ThirdPartyAgent",
+        label: "第三方 Agent",
+        icon: PlugZap,
+        href: "/third-party-agent",
       },
       {
         key: "MultiAgent",
