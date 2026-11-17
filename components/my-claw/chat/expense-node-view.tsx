@@ -15,10 +15,12 @@ export function ExpenseNodeView({
   node,
   expanded,
   onToggle,
+  onViewAllArtifacts,
 }: {
   node: ExpenseRenderNode;
   expanded: boolean;
   onToggle: () => void;
+  onViewAllArtifacts?: () => void;
 }) {
   if (node.type === "user") {
     return <ClawUserMessage item={node.timeline} />;
@@ -164,6 +166,7 @@ export function ExpenseNodeView({
   if (node.type === "artifacts") {
     return (
       <ClawAgentOutput
+        onViewAllArtifacts={onViewAllArtifacts}
         item={{
           key: node.key,
           type: "output",

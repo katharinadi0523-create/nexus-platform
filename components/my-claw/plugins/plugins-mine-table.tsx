@@ -150,8 +150,8 @@ export function PluginsMineTable({
   };
 
   const handleDelete = (plugin: MinePluginItem) => {
-    if (plugin.origin !== "claw" && !capabilityWorkspace) {
-      toast.info("内置插件暂不支持删除。");
+    if (plugin.origin !== "claw") {
+      toast.info("内置插件不支持移除。");
       return;
     }
     onPluginsChange(plugins.filter((item) => item.id !== plugin.id));
@@ -186,6 +186,7 @@ export function PluginsMineTable({
         ...selection,
         kind: "mcp",
         origin: "claw",
+        publisherScope: "personal",
         enabled: false,
         badge: "Claw配置",
         meta: "MCP",
@@ -324,7 +325,7 @@ export function PluginsMineTable({
         {pageRows.map((plugin) => <article key={plugin.id} className="rounded-md border border-slate-200 bg-white p-4">
           <div className="flex items-start justify-between gap-3"><div><h3 className="flex items-center gap-2 font-medium text-slate-900">{plugin.name}{plugin.origin === "builtin" ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">系统</span> : null}</h3><p className="mt-1 text-xs text-slate-400">{plugin.creator}</p></div><Switch checked={plugin.enabled} onCheckedChange={(checked) => handleToggle(plugin.id, checked)} aria-label={`${plugin.name} 启用开关`} /></div>
           <p className="mt-3 line-clamp-3 min-h-[60px] text-sm leading-5 text-slate-600">{plugin.description}</p>
-          <div className="mt-4 flex gap-3 border-t border-slate-100 pt-3"><button type="button" onClick={() => toast.info(plugin.description)} className="text-sm font-medium text-blue-600">查看</button><button type="button" onClick={() => handleDelete(plugin)} className="text-sm font-medium text-blue-600">移除</button></div>
+          <div className="mt-4 flex gap-3 border-t border-slate-100 pt-3"><button type="button" onClick={() => toast.info(plugin.description)} className="text-sm font-medium text-blue-600">查看</button>{plugin.origin === "claw" ? <button type="button" onClick={() => handleDelete(plugin)} className="text-sm font-medium text-blue-600">移除</button> : null}</div>
         </article>)}
       </div> : <section className="overflow-hidden rounded-[6px] border border-slate-200 bg-white">
         <div className="overflow-x-auto">
@@ -417,7 +418,7 @@ export function PluginsMineTable({
                     <TableCell className="px-4 py-3 align-middle">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         {capabilityWorkspace ? <button type="button" onClick={() => toast.info(plugin.description)} className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700">查看</button> : null}
-                        {capabilityWorkspace ? <button type="button" onClick={() => handleDelete(plugin)} className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700">移除</button> : null}
+                        {capabilityWorkspace && plugin.origin === "claw" ? <button type="button" onClick={() => handleDelete(plugin)} className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700">移除</button> : null}
                         {!capabilityWorkspace ? <>
                         <button
                           type="button"

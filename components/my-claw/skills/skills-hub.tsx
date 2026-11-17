@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Grid2X2, List, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import JSZip from "jszip";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Boxes, BriefcaseBusiness, ChartNoAxesCombined, ChevronLeft, ChevronRight, ClipboardList, Download, Ellipsis, FileText, Grid2X2, List, MessageSquareText, RefreshCw, Search, Settings2, Sparkles, Trash2, Upload, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { SkillsPage } from "@/components/skills/skills-page";
-import { ResourceViewSwitch } from "@/components/my-claw/resource-view-switch";
+import { SkillDetailDialogShell } from "@/components/skills/skill-detail-dialog-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { ConfirmDiscardDialog, DISCARD_CONFIRMATION_DESCRIPTION } from "@/components/ui/confirm-discard-dialog";
 import {
   Table,
   TableBody,
@@ -26,6 +31,121 @@ import {
   type MineSkillOriginFilter,
 } from "@/lib/mock/my-claw/skills-mine";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useMyClaw } from "@/components/my-claw/provider";
+import { queueWorkspaceChatBootstrap } from "@/components/workspace-1/workspaceChatBridge";
+
+type ImportedPersonalSkill = MineSkillItem & { version: string; files: string[]; skillMdContent: string };
+
+function getSkillCardVisual(skill: MineSkillItem): { Icon: LucideIcon; tileClass: string; iconClass: string } {
+  const text = `${skill.name} ${skill.description} ${skill.scene ?? ""}`;
+  const name = skill.name;
+  if (/写作|公文|文档|邮件/.test(name)) {
+    return { Icon: FileText, tileClass: "bg-blue-50", iconClass: "text-blue-600" };
+  }
+  if (/差旅|报销|费用|票据/.test(name)) {
+    return { Icon: BriefcaseBusiness, tileClass: "bg-amber-50", iconClass: "text-amber-600" };
+  }
+  if (/经营|运营|数据|指标|生产|分析|报表|复盘/.test(name)) {
+    return { Icon: ChartNoAxesCombined, tileClass: "bg-emerald-50", iconClass: "text-emerald-600" };
+  }
+  if (/制度|流程|核对|检查|清单/.test(name)) {
+    return { Icon: ClipboardList, tileClass: "bg-cyan-50", iconClass: "text-cyan-600" };
+  }
+  if (/会议|沟通|通知|纪要/.test(name)) {
+    return { Icon: MessageSquareText, tileClass: "bg-violet-50", iconClass: "text-violet-600" };
+  }
+  if (/差旅|报销|费用|票据/.test(text)) {
+    return { Icon: BriefcaseBusiness, tileClass: "bg-amber-50", iconClass: "text-amber-600" };
+  }
+  if (/经营|运营|数据|指标|生产|分析|报表|复盘/.test(text)) {
+    return { Icon: ChartNoAxesCombined, tileClass: "bg-emerald-50", iconClass: "text-emerald-600" };
+  }
+  if (/制度|流程|核对|检查|清单/.test(text)) {
+    return { Icon: ClipboardList, tileClass: "bg-cyan-50", iconClass: "text-cyan-600" };
+  }
+  if (/会议|沟通|通知|纪要/.test(text)) {
+    return { Icon: MessageSquareText, tileClass: "bg-violet-50", iconClass: "text-violet-600" };
+  }
+  return { Icon: Sparkles, tileClass: "bg-indigo-50", iconClass: "text-indigo-600" };
+}
+
+function getSkillMarkdownBody(content: string) {
+  return content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, "").trim();
+}
+
+function downloadBlobFile(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function downloadSkillArchive(skill: MineSkillItem) {
+  const safeName = skill.name.replace(/[\\/:*?"<>|]/g, "-").trim() || "skill";
+  if (skill.archiveFile) {
+    downloadBlobFile(`${safeName}.zip`, skill.archiveFile);
+    return;
+  }
+
+  const zip = new JSZip();
+  const files = skill.packageFiles?.length
+    ? skill.packageFiles
+    : skill.skillMdContent
+      ? [{ path: "SKILL.md", content: skill.skillMdContent }]
+      : [];
+  if (!files.length) throw new Error("没有可下载的技能文件");
+  files.forEach((file) => zip.file(file.path, file.content));
+  zip.file(".skillhub.json", JSON.stringify({ schemaVersion: 1, name: skill.name, description: skill.description }, null, 2));
+  downloadBlobFile(`${safeName}.zip`, await zip.generateAsync({ type: "blob" }));
+}
+
+function ManagementSkillSection({ title, skills, showCreator, onOpen, onToggle, onRemove }: {
+  title: string;
+  skills: MineSkillItem[];
+  showCreator: boolean;
+  onOpen: (skill: MineSkillItem) => void;
+  onToggle: (id: string, enabled: boolean) => void;
+  onRemove: (skill: MineSkillItem) => void;
+}) {
+  return <section>
+    <h3 className="mb-2 text-sm font-semibold text-slate-700">{title}</h3>
+    <div className="overflow-hidden rounded-[6px] border border-slate-200 bg-white">
+      <div className="overflow-x-auto">
+        <Table className="min-w-[860px]">
+          <TableHeader className="bg-slate-50">
+            <TableRow className="border-slate-200 hover:bg-slate-50">
+              <TableHead className="h-10 px-4 text-left text-sm font-medium text-slate-700">名称</TableHead>
+              <TableHead className="h-10 w-[120px] px-4 text-left text-sm font-medium text-slate-700">启用状态</TableHead>
+              <TableHead className="h-10 px-4 text-left text-sm font-medium text-slate-700">描述</TableHead>
+              {showCreator ? <TableHead className="h-10 w-[180px] px-4 text-left text-sm font-medium text-slate-700">创建人/组织</TableHead> : null}
+              <TableHead className="h-10 w-[100px] px-4 text-left text-sm font-medium text-slate-700">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {skills.map((skill) => <TableRow key={skill.id} className="border-slate-200 transition-colors hover:bg-slate-50">
+              <TableCell className="px-4 py-3 align-middle text-sm font-medium text-slate-900">
+                <button type="button" onClick={() => onOpen(skill)} aria-label={`查看技能「${skill.name}」`} className="inline-flex items-center gap-2 text-left hover:text-blue-700">
+                  {skill.name}
+                  {skill.publisherScope === "system" ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">系统</span> : null}
+                </button>
+              </TableCell>
+              <TableCell className="px-4 py-3 align-middle"><Switch checked={skill.enabled} onCheckedChange={(enabled) => onToggle(skill.id, enabled)} aria-label={`${skill.name} 启用开关`} className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-200" /></TableCell>
+              <TableCell className="max-w-[520px] px-4 py-3 align-middle text-sm leading-6 text-slate-600"><p className="line-clamp-2">{skill.description}</p></TableCell>
+              {showCreator ? <TableCell className="px-4 py-3 align-middle text-sm text-slate-700">{skill.creator}</TableCell> : null}
+              <TableCell className="px-4 py-3 align-middle text-sm">
+                {skill.origin === "mine" ? <button type="button" onClick={() => onRemove(skill)} className="font-medium text-blue-600 transition-colors hover:text-red-600">删除</button> : skill.publisherScope === "system" ? <span className="text-slate-400">—</span> : <button type="button" onClick={() => onRemove(skill)} className="font-medium text-blue-600 transition-colors hover:text-red-600">移除</button>}
+              </TableCell>
+            </TableRow>)}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  </section>;
+}
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
@@ -51,37 +171,53 @@ function MineSkillsWorkbench({
   capabilityWorkspace = false,
   viewSwitcher,
   onAddSkill,
+  importedSkills = [],
+  onImportSkill,
+  onRemoveSkill,
+  onOpenPlaza,
 }: {
   personalWorkspace?: boolean;
   capabilityWorkspace?: boolean;
   viewSwitcher?: ReactNode;
   onAddSkill?: () => void;
+  importedSkills?: ImportedPersonalSkill[];
+  onImportSkill?: () => void;
+  onRemoveSkill?: (skill: MineSkillItem) => void;
+  onOpenPlaza?: () => void;
 }) {
-  const [skills, setSkills] = useState<MineSkillItem[]>(INITIAL_MINE_SKILLS);
+  const router = useRouter();
+  const { createSession } = useMyClaw();
+  const [skills, setSkills] = useState<MineSkillItem[]>(() => [...INITIAL_MINE_SKILLS, ...importedSkills]);
   const [originFilter, setOriginFilter] = useState<MineSkillOriginFilter>("all");
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [jumpInput, setJumpInput] = useState("1");
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
+  const [viewMode, setViewMode] = useState<"list" | "grid">("grid");
+  const [detailSkill, setDetailSkill] = useState<MineSkillItem | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<MineSkillItem | null>(null);
 
   const filteredSkills = useMemo(
     () =>
       filterMineSkills(skills, {
         query,
         origin: personalWorkspace ? "all" : originFilter,
+        nameOnly: capabilityWorkspace && personalWorkspace,
       }).sort((left, right) =>
         personalWorkspace
-          ? Number(right.origin === "builtin") - Number(left.origin === "builtin")
+          ? Number(left.origin === "builtin") - Number(right.origin === "builtin") ||
+            (right.addedAt ?? "").localeCompare(left.addedAt ?? "")
           : 0,
       ),
-    [skills, query, originFilter, personalWorkspace]
+    [skills, query, originFilter, personalWorkspace, capabilityWorkspace]
   );
 
   const total = filteredSkills.length;
+  const groupedManagement = capabilityWorkspace && personalWorkspace;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const pageRows = filteredSkills.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pageRows = groupedManagement ? filteredSkills : filteredSkills.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const tableColumnCount = 4 + Number(capabilityWorkspace) + Number(!personalWorkspace);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -95,23 +231,56 @@ function MineSkillsWorkbench({
     }
   }, [currentPage, safePage]);
 
-  const handleToggle = (id: string, enabled: boolean) => {
+  const handleToggle = (id: string, enabled: boolean, notify = true) => {
     setSkills((current) =>
       current.map((skill) => (skill.id === id ? { ...skill, enabled } : skill))
     );
+    setDetailSkill((current) => current?.id === id ? { ...current, enabled } : current);
     const target = skills.find((skill) => skill.id === id);
-    if (target) {
+    if (target && notify) {
       toast.success(enabled ? `已启用「${target.name}」` : `已停用「${target.name}」`);
     }
   };
 
+  const handleUseSkill = (skill: MineSkillItem) => {
+    if (!skill.enabled) handleToggle(skill.id, true, false);
+    const sessionId = createSession(`使用：${skill.name}`);
+    queueWorkspaceChatBootstrap(
+      sessionId,
+      `请使用「${skill.name}」技能协助我完成以下任务：\n`,
+    );
+    setDetailSkill(null);
+    toast.success("已打开新对话，请补充任务后发送");
+    router.push(
+      capabilityWorkspace
+        ? `/claw-client?sessionId=${encodeURIComponent(sessionId)}`
+        : `/my-claw/chat?sessionId=${encodeURIComponent(sessionId)}`,
+    );
+  };
+
   const handleDelete = (skill: MineSkillItem) => {
-    if (skill.origin === "builtin" && !capabilityWorkspace) {
-      toast.info("内置技能暂不支持删除。");
+    if (skill.publisherScope === "system") {
+      toast.info("系统技能不支持移除。");
       return;
     }
-    setSkills((current) => current.filter((item) => item.id !== skill.id));
-    toast.success(capabilityWorkspace ? `已从我的技能移除「${skill.name}」` : `已删除「${skill.name}」`);
+    setRemoveTarget(skill);
+  };
+
+  const handleDownload = async (skill: MineSkillItem) => {
+    try {
+      await downloadSkillArchive(skill);
+      toast.success(`已下载 Skill：${skill.name}`);
+    } catch {
+      toast.error(`「${skill.name}」下载失败，请稍后重试`);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (!removeTarget || removeTarget.publisherScope === "system") return;
+    setSkills((current) => current.filter((item) => item.id !== removeTarget.id));
+    if (removeTarget.origin === "mine") onRemoveSkill?.(removeTarget);
+    toast.success(removeTarget.origin === "mine" ? `已删除「${removeTarget.name}」` : `已从当前账号移除「${removeTarget.name}」`);
+    setRemoveTarget(null);
   };
 
   const handleConfig = (skill: MineSkillItem) => {
@@ -129,24 +298,26 @@ function MineSkillsWorkbench({
 
   const visiblePages = getVisiblePageIndices(safePage, totalPages);
   const enableAll = () => {
-    const ids = new Set(filteredSkills.map((skill) => skill.id));
-    const count = filteredSkills.filter((skill) => !skill.enabled).length;
-    setSkills((current) => current.map((skill) => ids.has(skill.id) ? { ...skill, enabled: true } : skill));
+    const count = skills.filter((skill) => !skill.enabled).length;
+    setSkills((current) => current.map((skill) => skill.enabled ? skill : { ...skill, enabled: true }));
     toast.success(count ? `已启用 ${count} 个技能` : "当前技能均已启用");
   };
 
   return (
     <div className="mx-auto w-full max-w-[1440px] px-4 py-5 md:px-6">
-      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-[20px] font-medium leading-8 tracking-normal text-[#0f172a]">
-            {viewSwitcher ?? "我的技能"}
-          </h2>
-          <p className="mt-1 text-sm text-[#5a6779]">
-            {personalWorkspace
-              ? "管理已添加技能，可启用、停用或移除。"
-              : "管理已启用技能，按来源筛选并配置个人能力包。"}
-          </p>
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          {capabilityWorkspace && onOpenPlaza ? <Button type="button" variant="outline" size="icon" aria-label="返回技能广场" className="h-9 w-9 shrink-0 rounded-md border-slate-200 bg-white" onClick={onOpenPlaza}><ChevronLeft className="size-4" /></Button> : null}
+          <div>
+            <h2 className="text-[20px] font-medium leading-8 tracking-normal text-[#0f172a]">
+              {capabilityWorkspace && personalWorkspace ? "技能管理" : viewSwitcher ?? "我的技能"}
+            </h2>
+            {capabilityWorkspace && personalWorkspace ? <p className="mt-1 text-xs text-[#5a6779]">平台与组织技能可启停；自定义 Skill 仅个人可用，可启停或删除。</p> : !capabilityWorkspace ? <p className="mt-1 text-sm text-[#5a6779]">
+              {personalWorkspace
+                ? "管理已添加技能，可启用、停用或移除。"
+                : "管理已启用技能，按来源筛选并配置个人能力包。"}
+            </p> : null}
+          </div>
         </div>
       </div>
 
@@ -184,7 +355,7 @@ function MineSkillsWorkbench({
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索技能名称或描述"
+            placeholder={personalWorkspace ? "搜索技能名称" : "搜索技能名称或描述"}
             className="h-8 rounded border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-none focus-visible:border-[#2773ff]/40 focus-visible:ring-[#dbe7f4]"
           />
         </div> : null}
@@ -194,16 +365,29 @@ function MineSkillsWorkbench({
             <Button type="button" variant="ghost" size="icon" aria-label="卡片展示" title="卡片展示" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")} className={cn("h-7 w-7 rounded-sm", viewMode === "grid" && "bg-blue-50 text-blue-600")}><Grid2X2 className="h-4 w-4" /></Button>
           </div>
           <Button type="button" variant="outline" className="h-8 rounded border-slate-200 px-3 text-sm" onClick={enableAll}>一键启用</Button>
-          <Button type="button" className="h-8 rounded bg-[#2773ff] px-3 text-sm text-white hover:bg-blue-700" onClick={onAddSkill}><Plus className="mr-1 h-4 w-4" />添加技能</Button>
+          <Button type="button" className="h-8 rounded bg-[#2773ff] px-3 text-sm text-white hover:bg-blue-700" onClick={personalWorkspace ? onImportSkill : onAddSkill}><Upload className="mr-1 h-4 w-4" />{personalWorkspace ? "导入 Skill" : "添加技能"}</Button>
         </div> : null}
       </div>
 
       {capabilityWorkspace && viewMode === "grid" ? <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {pageRows.map((skill) => <article key={skill.id} className="rounded-md border border-slate-200 bg-white p-4">
-          <div className="flex items-start justify-between gap-3"><div><h3 className="flex items-center gap-2 font-medium text-slate-900">{skill.name}{skill.origin === "builtin" ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">系统</span> : null}</h3><p className="mt-1 text-xs text-slate-400">{skill.creator}</p></div><Switch checked={skill.enabled} onCheckedChange={(checked) => handleToggle(skill.id, checked)} aria-label={`${skill.name} 启用开关`} /></div>
-          <p className="mt-3 line-clamp-3 min-h-[60px] text-sm leading-5 text-slate-600">{skill.description}</p>
-          <div className="mt-4 flex gap-3 border-t border-slate-100 pt-3"><button type="button" onClick={() => toast.info(skill.description)} className="text-sm font-medium text-blue-600">查看</button><button type="button" onClick={() => handleDelete(skill)} className="text-sm font-medium text-blue-600">移除</button></div>
-        </article>)}
+        {pageRows.length === 0 ? <div className="col-span-full rounded-md border border-slate-200 bg-white px-6 py-14 text-center text-sm text-slate-500">没有匹配的技能，试试调整名称关键词。</div> : pageRows.map((skill, index) => <Fragment key={skill.id}>
+          {groupedManagement && (index === 0 || pageRows[index - 1]?.origin !== skill.origin) ? <h3 className="col-span-full mt-2 text-sm font-semibold text-slate-700">{skill.origin === "builtin" ? "平台与组织" : "自定义"}</h3> : null}
+          <article role="button" tabIndex={0} onClick={() => setDetailSkill(skill)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setDetailSkill(skill); } }} className="cursor-pointer rounded-md border border-slate-200 bg-white p-4 transition-colors hover:border-blue-200 hover:bg-slate-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                {(() => { const { Icon, tileClass, iconClass } = getSkillCardVisual(skill); return <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", tileClass)}><Icon className={cn("h-5 w-5", iconClass)} /></span>; })()}
+                <div className="min-w-0"><h3 className="flex flex-wrap items-center gap-2 font-medium text-slate-900">{skill.name}{skill.publisherScope === "system" ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">系统</span> : null}</h3>{skill.origin !== "mine" ? <p className="mt-1 text-xs text-slate-400">{skill.creator}</p> : null}</div>
+              </div>
+              <Switch checked={skill.enabled} onCheckedChange={(checked) => handleToggle(skill.id, checked)} aria-label={`${skill.name} 启用开关`} className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-200" />
+            </div>
+            <p className="mt-3 line-clamp-3 min-h-[60px] text-sm leading-5 text-slate-600">{skill.description}</p>
+          </article>
+        </Fragment>)}
+      </div> : groupedManagement ? <div className="space-y-5">
+        {pageRows.length === 0 ? <section className="rounded-md border border-slate-200 bg-white px-6 py-14 text-center text-sm text-slate-500">没有匹配的技能，试试调整名称关键词。</section> : <>
+          {pageRows.some((skill) => skill.origin === "mine") ? <ManagementSkillSection title="自定义" skills={pageRows.filter((skill) => skill.origin === "mine")} showCreator={false} onOpen={setDetailSkill} onToggle={handleToggle} onRemove={handleDelete} /> : null}
+          {pageRows.some((skill) => skill.origin === "builtin") ? <ManagementSkillSection title="平台与组织" skills={pageRows.filter((skill) => skill.origin === "builtin")} showCreator onOpen={setDetailSkill} onToggle={handleToggle} onRemove={handleDelete} /> : null}
+        </>}
       </div> : <section className="overflow-hidden rounded-[6px] border border-slate-200 bg-white">
         <div className="overflow-x-auto">
           <Table className="min-w-[880px]">
@@ -223,7 +407,7 @@ function MineSkillsWorkbench({
                 <TableHead className="h-10 px-4 text-left text-sm font-medium text-slate-700">
                   描述
                 </TableHead>
-                {capabilityWorkspace ? <TableHead className="h-10 px-4 text-left text-sm font-medium text-slate-700">创建人</TableHead> : null}
+                {capabilityWorkspace ? <TableHead className="h-10 px-4 text-left text-sm font-medium text-slate-700">创建人/组织</TableHead> : null}
                 <TableHead className="h-10 px-4 text-left text-sm font-medium text-slate-700">
                   操作
                 </TableHead>
@@ -232,7 +416,7 @@ function MineSkillsWorkbench({
             <TableBody>
               {pageRows.length === 0 ? (
                 <TableRow className="border-0 hover:bg-transparent">
-                  <TableCell colSpan={personalWorkspace ? (capabilityWorkspace ? 5 : 4) : 5} className="px-6 py-16 text-center">
+                  <TableCell colSpan={tableColumnCount} className="px-6 py-16 text-center">
                     <div className="mx-auto max-w-md space-y-3">
                       <div className="mx-auto flex h-10 w-10 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-400">
                         <Search className="h-5 w-5" />
@@ -248,8 +432,9 @@ function MineSkillsWorkbench({
                 </TableRow>
               ) : (
                 pageRows.map((skill, rowIndex) => (
+                  <Fragment key={skill.id}>
+                  {groupedManagement && (rowIndex === 0 || pageRows[rowIndex - 1]?.origin !== skill.origin) ? <TableRow className="border-slate-200 bg-slate-50 hover:bg-slate-50"><TableCell colSpan={tableColumnCount} className="px-4 py-2 text-sm font-semibold text-slate-700">{skill.origin === "builtin" ? "平台与组织" : "自定义"}</TableCell></TableRow> : null}
                   <TableRow
-                    key={skill.id}
                     className={cn(
                       "border-slate-200 transition-colors duration-100 hover:bg-slate-50",
                       rowIndex % 2 === 1 && "bg-slate-50/60"
@@ -257,12 +442,8 @@ function MineSkillsWorkbench({
                   >
                     <TableCell className="px-4 py-3 align-middle text-sm font-medium text-slate-900">
                       <span className="inline-flex items-center gap-2">
-                        {skill.name}
-                        {personalWorkspace && skill.origin === "builtin" ? (
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
-                            系统
-                          </span>
-                        ) : null}
+                        {capabilityWorkspace ? <button type="button" onClick={() => setDetailSkill(skill)} aria-label={`查看技能「${skill.name}」`} className="inline-flex items-center gap-2 text-left hover:text-blue-700">{skill.name}{skill.publisherScope === "system" ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">系统</span> : null}</button> : skill.name}
+                        {!capabilityWorkspace && personalWorkspace && skill.publisherScope === "system" ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">系统</span> : null}
                       </span>
                     </TableCell>
                     {!personalWorkspace ? (
@@ -281,11 +462,10 @@ function MineSkillsWorkbench({
                     <TableCell className="max-w-[420px] px-4 py-3 align-middle text-sm leading-6 text-slate-600">
                       <p className="line-clamp-2">{skill.description}</p>
                     </TableCell>
-                    {capabilityWorkspace ? <TableCell className="px-4 py-3 align-middle text-sm text-slate-700">{skill.creator}</TableCell> : null}
+                    {capabilityWorkspace ? <TableCell className="px-4 py-3 align-middle text-sm text-slate-700">{groupedManagement && skill.origin === "mine" ? <span className="text-slate-400">—</span> : skill.creator}</TableCell> : null}
                     <TableCell className="px-4 py-3 align-middle">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        {capabilityWorkspace ? <button type="button" onClick={() => toast.info(skill.description)} className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700">查看</button> : null}
-                        {capabilityWorkspace ? <button type="button" onClick={() => handleDelete(skill)} className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700">移除</button> : null}
+                        {capabilityWorkspace && personalWorkspace ? skill.origin === "mine" ? <button type="button" onClick={() => handleDelete(skill)} className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700">删除</button> : skill.publisherScope === "system" ? <span className="text-sm text-slate-400">—</span> : <button type="button" onClick={() => handleDelete(skill)} className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700">移除</button> : null}
                         {!capabilityWorkspace ? <>
                         <button
                           type="button"
@@ -308,6 +488,7 @@ function MineSkillsWorkbench({
                       </div>
                     </TableCell>
                   </TableRow>
+                  </Fragment>
                 ))
               )}
             </TableBody>
@@ -402,12 +583,63 @@ function MineSkillsWorkbench({
           </div>
         ) : null}
       </section>}
-      {capabilityWorkspace && viewMode === "grid" && total > pageSize ? <div className="mt-3 flex items-center justify-end gap-2 text-sm text-slate-600">
+      {capabilityWorkspace && !groupedManagement && viewMode === "grid" && total > pageSize ? <div className="mt-3 flex items-center justify-end gap-2 text-sm text-slate-600">
         <span className="mr-2">共{total}条</span>
         <Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="上一页" disabled={safePage <= 1} onClick={() => setCurrentPage(Math.max(1, safePage - 1))}><ChevronLeft className="h-4 w-4" /></Button>
         <span>{safePage}/{totalPages}</span>
         <Button type="button" variant="outline" size="icon" className="h-8 w-8" aria-label="下一页" disabled={safePage >= totalPages} onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}><ChevronRight className="h-4 w-4" /></Button>
       </div> : null}
+      <SkillDetailDialogShell
+        open={!!detailSkill}
+        onOpenChange={(open) => { if (!open) setDetailSkill(null); }}
+        name={detailSkill?.name ?? ""}
+        description={detailSkill?.description}
+        icon={<Boxes className="size-6" />}
+        badge={detailSkill?.publisherScope === "system" ? <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">系统</span> : null}
+        titleActions={detailSkill ? <>
+          <Button type="button" className="h-9 bg-slate-900 px-4 text-white hover:bg-slate-800" onClick={() => handleUseSkill(detailSkill)}>立即使用</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button type="button" variant="outline" size="icon" className="size-9 shrink-0" aria-label="更多操作" title="更多操作"><Ellipsis className="size-4" /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="z-[110] w-40">
+              <DropdownMenuItem onSelect={() => { void handleDownload(detailSkill); }}><Download className="size-4" />下载</DropdownMenuItem>
+              {detailSkill.origin === "mine" ? <DropdownMenuItem variant="destructive" onSelect={() => { setDetailSkill(null); handleDelete(detailSkill); }}><Trash2 className="size-4" />删除</DropdownMenuItem> : detailSkill.publisherScope !== "system" ? <DropdownMenuItem variant="destructive" onSelect={() => { setDetailSkill(null); handleDelete(detailSkill); }}><Trash2 className="size-4" />移除</DropdownMenuItem> : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </> : undefined}
+        headerActions={detailSkill ? <>
+          <Switch checked={detailSkill.enabled} onCheckedChange={(checked) => handleToggle(detailSkill.id, checked)} aria-label={`${detailSkill.name} 启用开关`} className="data-[state=checked]:bg-blue-600" />
+          <span className="text-xs text-slate-500">{detailSkill.enabled ? "已启用" : "已停用"}</span>
+        </> : undefined}
+        metadata={detailSkill ? detailSkill.origin === "builtin" ? [
+          { label: "创建人/组织", value: detailSkill.creator },
+          { label: "更新时间", value: detailSkill.updatedAt },
+          { label: "版本", value: detailSkill.version ?? "1.0" },
+        ] : [
+          { label: "导入时间", value: detailSkill.addedAt ?? detailSkill.updatedAt },
+          { label: "文件数", value: `${detailSkill.files?.length ?? 1} 个` },
+        ] : []}
+      >
+        <div className="text-sm leading-6 text-slate-700">
+          {detailSkill?.skillMdContent && getSkillMarkdownBody(detailSkill.skillMdContent) ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+            h1: ({ children }) => <h2 className="mb-3 mt-1 text-lg font-semibold text-slate-900">{children}</h2>,
+            h2: ({ children }) => <h3 className="mb-2 mt-4 text-base font-semibold text-slate-900">{children}</h3>,
+            h3: ({ children }) => <h4 className="mb-2 mt-3 font-semibold text-slate-900">{children}</h4>,
+            p: ({ children }) => <p className="my-2 whitespace-pre-wrap">{children}</p>,
+            ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+            ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+            li: ({ children }) => <li className="pl-1">{children}</li>,
+            code: ({ children }) => <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[12px]">{children}</code>,
+            blockquote: ({ children }) => <blockquote className="my-2 border-l-2 border-blue-300 pl-3 text-slate-600">{children}</blockquote>,
+            hr: () => <hr className="my-3 border-slate-200" />,
+          }}>{getSkillMarkdownBody(detailSkill.skillMdContent)}</ReactMarkdown> : <p className="py-4 text-slate-400">该 Skill 暂未提供 SKILL.md 正文内容。</p>}
+        </div>
+      </SkillDetailDialogShell>
+      <Dialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader><DialogTitle>删除个人 Skill？</DialogTitle><DialogDescription>删除后「{removeTarget?.name}」将从个人技能列表和个人存储空间移除，不影响历史会话记录和已生成产物。</DialogDescription></DialogHeader>
+          <DialogFooter><Button variant="outline" onClick={() => setRemoveTarget(null)}>取消</Button><Button variant="destructive" onClick={confirmDelete}>确认删除</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -437,21 +669,100 @@ export function MyClawSkillsHub({
   const [localActiveView, setLocalActiveView] = useState<"mine" | "plaza">(
     personalWorkspace ? "plaza" : "mine",
   );
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [skillImportOpen, setSkillImportOpen] = useState(false);
+  const [skillImportError, setSkillImportError] = useState("");
+  const [skillImportFileName, setSkillImportFileName] = useState("");
+  const [skillImportPreview, setSkillImportPreview] = useState<{ name: string; description: string; scene: string; files: string[]; skillMdContent: string; archiveFile: File } | null>(null);
+  const [importedSkills, setImportedSkills] = useState<ImportedPersonalSkill[]>([]);
+  const [discardImportOpen, setDiscardImportOpen] = useState(false);
   const activeView = controlledActiveView ?? localActiveView;
   const handleActiveViewChange = (value: string) => {
     const nextView = value === "plaza" ? "plaza" : "mine";
     setLocalActiveView(nextView);
     onActiveViewChange?.(nextView);
   };
-  const viewSwitcher = capabilityWorkspace && !hideViewTabs ? (
-    <ResourceViewSwitch
-      activeView={activeView}
-      onChange={handleActiveViewChange}
-      plazaLabel="技能广场"
-      mineLabel="我的技能"
-    />
-  ) : undefined;
-
+  const openSkillImport = () => {
+    setSkillImportError("");
+    setSkillImportFileName("");
+    setSkillImportPreview(null);
+    setSkillImportOpen(true);
+  };
+  const resetSkillImportDraft = () => {
+    setSkillImportPreview(null);
+    setSkillImportFileName("");
+    setSkillImportError("");
+  };
+  const requestCloseSkillImport = () => {
+    if (skillImportFileName || skillImportPreview || skillImportError) setDiscardImportOpen(true);
+    else {
+      setSkillImportOpen(false);
+      resetSkillImportDraft();
+    }
+  };
+  const parseSkillArchive = async (file?: File) => {
+    if (!file) return;
+    setSkillImportFileName(file.name);
+    setSkillImportError("");
+    setSkillImportPreview(null);
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const manifests = Object.values(zip.files).filter((entry) => {
+        if (entry.dir) return false;
+        const normalizedPath = entry.name.replace(/^\.\//, "");
+        const pathParts = normalizedPath.split("/").filter(Boolean);
+        return normalizedPath === "SKILL.md" || (pathParts.length === 2 && pathParts[1] === "SKILL.md");
+      });
+      if (!manifests.length) throw new Error("ZIP 根目录或唯一顶层文件夹中缺少 SKILL.md");
+      if (manifests.length > 1) throw new Error("ZIP 中检测到多个 SKILL.md，请保留一个技能入口文件后重试");
+      const manifest = manifests[0];
+      const content = await manifest.async("text");
+      const frontmatter = content.match(/^---\s*\n([\s\S]*?)\n---/);
+      const metadata = frontmatter?.[1] ?? "";
+      const name = metadata.match(/^name:\s*["']?(.+?)["']?\s*$/m)?.[1]?.trim();
+      const description = metadata.match(/^description:\s*["']?(.+?)["']?\s*$/m)?.[1]?.trim();
+      const scene = metadata.match(/^scene:\s*["']?(.+?)["']?\s*$/m)?.[1]?.trim() ?? "";
+      if (!name || !description) throw new Error("SKILL.md 需在 YAML 元信息中填写 name 和 description");
+      const files = Object.values(zip.files).filter((entry) => !entry.dir).map((entry) => entry.name);
+      setSkillImportPreview({ name, description, scene, files, skillMdContent: content, archiveFile: file });
+    } catch (error) {
+      setSkillImportError(error instanceof Error ? error.message : "无法解析 ZIP 包");
+    }
+  };
+  const confirmSkillImport = () => {
+    if (!skillImportPreview) return;
+    const normalizedName = skillImportPreview.name.trim().normalize("NFKC").toLocaleLowerCase();
+    const duplicateSkill = [...INITIAL_MINE_SKILLS, ...importedSkills].find(
+      (skill) => skill.name.trim().normalize("NFKC").toLocaleLowerCase() === normalizedName,
+    );
+    if (duplicateSkill) {
+      setSkillImportError(`技能名称「${skillImportPreview.name}」已存在（${duplicateSkill.origin === "builtin" ? "平台与组织" : "自定义"}），请在 ZIP 中修改名称后重新导入。`);
+      return;
+    }
+    const addedAt = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
+    const imported: ImportedPersonalSkill = {
+      id: `personal-skill-${Date.now()}`,
+      name: skillImportPreview.name,
+      description: skillImportPreview.description,
+      creator: "我",
+      origin: "mine",
+      publisherScope: "personal",
+      enabled: true,
+      addedAt,
+      updatedAt: addedAt,
+      version: "v1.0",
+      files: skillImportPreview.files,
+      skillMdContent: skillImportPreview.skillMdContent,
+      archiveFile: skillImportPreview.archiveFile,
+      scene: skillImportPreview.scene,
+    };
+    setImportedSkills((current) => [imported, ...current]);
+    setSkillImportOpen(false);
+    setSkillImportPreview(null);
+    setSkillImportFileName("");
+    handleActiveViewChange("mine");
+    toast.success(`已导入并启用「${imported.name}」`);
+  };
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#f8f9fb]">
       <Tabs
@@ -491,10 +802,14 @@ export function MyClawSkillsHub({
 
         <TabsContent value="mine" className="mt-0 min-h-0 flex-1 overflow-y-auto">
           <MineSkillsWorkbench
+            key={importedSkills.map((skill) => `${skill.id}:${skill.version}:${skill.updatedAt}`).join("|")}
             personalWorkspace={personalWorkspace}
             capabilityWorkspace={capabilityWorkspace}
             onAddSkill={() => handleActiveViewChange("plaza")}
-            viewSwitcher={viewSwitcher}
+            onOpenPlaza={() => handleActiveViewChange("plaza")}
+            importedSkills={importedSkills}
+            onImportSkill={openSkillImport}
+            onRemoveSkill={(skill) => setImportedSkills((current) => current.filter((item) => item.id !== skill.id))}
           />
         </TabsContent>
 
@@ -509,10 +824,43 @@ export function MyClawSkillsHub({
             moduleView="hub"
             embedded
             capabilityWorkspace={capabilityWorkspace}
-            viewSwitcher={viewSwitcher}
+            onPersonalImportSkill={openSkillImport}
+            onOpenManagement={() => handleActiveViewChange("mine")}
           />
         </TabsContent>
       </Tabs>
+      <input ref={importInputRef} type="file" accept=".zip,application/zip" className="hidden" onChange={(event) => { void parseSkillArchive(event.target.files?.[0]); event.target.value = ""; setSkillImportOpen(true); }} />
+      <Dialog open={skillImportOpen} onOpenChange={(nextOpen) => { if (nextOpen) setSkillImportOpen(true); else requestCloseSkillImport(); }}>
+        <DialogContent className="sm:max-w-[620px]">
+          <DialogHeader><DialogTitle>{skillImportPreview ? "确认 Skill 信息" : "导入 Skill 包"}</DialogTitle><DialogDescription>本地 ZIP 会在浏览器中解析；保存后仅加入你的个人 Claw 并自动启用。</DialogDescription></DialogHeader>
+          {!skillImportPreview ? <div className="space-y-4">
+            <button type="button" onClick={() => importInputRef.current?.click()} className="flex w-full flex-col items-center justify-center rounded-md border border-dashed border-blue-300 bg-blue-50/50 px-5 py-8 text-center hover:bg-blue-50">
+              <Upload className="mb-2 h-5 w-5 text-blue-600" /><span className="font-medium text-slate-800">{skillImportFileName || "选择本地 ZIP 文件"}</span><span className="mt-1 text-xs text-slate-500">ZIP 根目录需包含 SKILL.md，且需填写 name 和 description</span>
+            </button>
+            {skillImportError ? <p className="rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">校验未通过：{skillImportError}</p> : null}
+          </div> : <div className="space-y-3">
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">校验通过 · {skillImportFileName}</div>
+            {skillImportError ? <p role="alert" className="rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">{skillImportError}</p> : null}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md border border-slate-200 p-3"><div className="text-xs text-slate-500">Skill 名称</div><div className="mt-1 text-sm font-medium text-slate-900">{skillImportPreview.name}</div></div>
+              <div className="rounded-md border border-slate-200 p-3"><div className="text-xs text-slate-500">适用场景</div><div className="mt-1 text-sm text-slate-700">{skillImportPreview.scene || "未提供"}</div></div>
+            </div>
+            <div className="rounded-md border border-slate-200 p-3"><div className="mb-1 text-xs text-slate-500">技能简介</div><p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{skillImportPreview.description}</p></div>
+            <div className="rounded-md border border-slate-200 p-3"><div className="mb-2 text-sm font-medium text-slate-700">文件清单（{skillImportPreview.files.length}）</div><div className="max-h-28 space-y-1 overflow-auto text-xs text-slate-500">{skillImportPreview.files.map((file) => <div key={file}>{file}</div>)}</div></div>
+            <div className="flex items-center justify-between gap-3"><p className="text-xs text-slate-500">导入后自动启用；个人 Skill 暂不支持在线编辑。</p><Button type="button" variant="outline" size="sm" onClick={() => importInputRef.current?.click()}><Upload className="mr-1 h-3.5 w-3.5" />更换 ZIP</Button></div>
+          </div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={requestCloseSkillImport}>取消</Button>
+            {skillImportPreview ? <Button type="button" onClick={confirmSkillImport}>保存并启用</Button> : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <ConfirmDiscardDialog
+        open={discardImportOpen}
+        onOpenChange={setDiscardImportOpen}
+        onConfirm={() => { setDiscardImportOpen(false); setSkillImportOpen(false); resetSkillImportDraft(); }}
+        description={DISCARD_CONFIRMATION_DESCRIPTION}
+      />
     </div>
   );
 }

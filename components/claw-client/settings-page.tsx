@@ -2,24 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { ArrowLeft, ChevronDown, Database, Info, Pencil, Settings, UserRound, Workflow } from "lucide-react";
+import { ArrowLeft, ChevronDown, Database, Info, Pencil, Settings, Settings2, UserRound, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ConfirmDiscardDialog, DISCARD_CONFIRMATION_DESCRIPTION } from "@/components/ui/confirm-discard-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getPersonalClawDetail } from "@/lib/mock/my-claw";
+import { ModelManagementPage } from "@/components/claw-client/model-management-page";
+import type { PersonalModelType } from "@/components/claw-client/personal-model-demo-store";
 
-type SettingsSection = "设定" | "接入渠道" | "存储" | "账号";
+export type SettingsSection = "设定" | "接入渠道" | "模型" | "存储" | "账号";
 type Channel = "飞书" | "企业微信" | "钉钉";
-const SECTIONS: SettingsSection[] = ["设定", "接入渠道", "账号"];
+const SECTIONS: SettingsSection[] = ["设定", "接入渠道", "模型", "账号"];
 const AGENT_MD_STORAGE_KEY = "claw-client-agent-md";
 const AGENT_MD_MAX_LENGTH = 5_000;
 const SECTION_ICONS = {
   设定: Settings,
   接入渠道: Workflow,
+  模型: Settings2,
   存储: Database,
   账号: UserRound,
 } satisfies Record<SettingsSection, typeof Settings>;
@@ -29,19 +33,25 @@ const CHANNELS: Array<{ name: Channel; code: string; icon: string }> = [
   { name: "钉钉", code: "dingtalk", icon: "/icons/钉钉.png" },
 ];
 
-type PendingExit = { type: "close" } | { type: "section"; section: SettingsSection };
+type PendingExit = { type: "close" } | { type: "section"; section: SettingsSection } | { type: "custom"; description: string; confirmLabel: string; onConfirm: () => void };
 
 export function ClawClientSettingsPage({
   closeRequest = 0,
   onDirtyChange,
   onClose,
+  initialSection = "设定",
+  initialModelView = "list",
+  initialModelType = "chat",
 }: {
   closeRequest?: number;
   onDirtyChange?: (dirty: boolean) => void;
   onClose?: () => void;
+  initialSection?: SettingsSection;
+  initialModelView?: "list" | "add";
+  initialModelType?: PersonalModelType;
 }) {
   const detail = useMemo(() => getPersonalClawDetail(), []);
-  const [section, setSection] = useState<SettingsSection>("设定");
+  const [section, setSection] = useState<SettingsSection>(initialSection);
   const [agentMd, setAgentMd] = useState("");
   const [savedAgentMd, setSavedAgentMd] = useState("");
   const [hydrated, setHydrated] = useState(false);
@@ -52,10 +62,11 @@ export function ClawClientSettingsPage({
   const [account, setAccount] = useState<{ username: string; displayName: string; role?: string } | null>(null);
   const [pendingExit, setPendingExit] = useState<PendingExit | null>(null);
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
+  const [modelDraftDirty, setModelDraftDirty] = useState(false);
   const [conflictField, setConflictField] = useState(false);
   const handledCloseRequest = useRef(closeRequest);
   const hasAgentMdChanges = hydrated && agentMd !== savedAgentMd;
-  const hasUnsavedChanges = hasAgentMdChanges;
+  const hasUnsavedChanges = hasAgentMdChanges || modelDraftDirty;
 
   useEffect(() => {
     let cancelled = false;
@@ -106,13 +117,31 @@ export function ClawClientSettingsPage({
   const roleName = account?.role === "admin" ? "管理员" : account?.role === "user" ? "普通用户" : account?.role ?? "未提供";
 
   function requestExit(target: PendingExit) {
+    if (modelDraftDirty && target.type !== "custom") {
+      requestDiscardConfirmation(
+        DISCARD_CONFIRMATION_DESCRIPTION,
+        "放弃更改",
+        () => {
+          setModelDraftDirty(false);
+          if (target.type === "close") onClose?.();
+          else setSection(target.section);
+        },
+      );
+      return;
+    }
     if (hasUnsavedChanges) {
       setPendingExit(target);
       setUnsavedDialogOpen(true);
       return;
     }
     if (target.type === "close") onClose?.();
-    else setSection(target.section);
+    else if (target.type === "section") setSection(target.section);
+    else target.onConfirm();
+  }
+
+  function requestDiscardConfirmation(description: string, confirmLabel: string, onConfirm: () => void) {
+    setPendingExit({ type: "custom", description, confirmLabel, onConfirm });
+    setUnsavedDialogOpen(true);
   }
 
   useEffect(() => {
@@ -156,8 +185,13 @@ export function ClawClientSettingsPage({
     const target = pendingExit;
     setPendingExit(null);
     setUnsavedDialogOpen(false);
-    if (target?.type === "close") onClose?.();
-    else if (target?.type === "section") setSection(target.section);
+    if (target?.type === "close") {
+      setModelDraftDirty(false);
+      onClose?.();
+    } else if (target?.type === "section") {
+      setModelDraftDirty(false);
+      setSection(target.section);
+    } else if (target?.type === "custom") target.onConfirm();
   }
 
   function discardAndContinue() {
@@ -262,6 +296,8 @@ export function ClawClientSettingsPage({
           </section>
         ) : null}
 
+        {section === "模型" ? <ModelManagementPage initialView={initialModelView} initialModelType={initialModelType} onDirtyChange={setModelDraftDirty} onRequestDiscard={requestDiscardConfirmation} /> : null}
+
         {section === "存储" ? (
           <section className="mx-auto max-w-[720px] pr-7 pb-4">
             <header className="border-b border-slate-200 pb-4">
@@ -354,21 +390,32 @@ export function ClawClientSettingsPage({
         ) : null}
       </main>
 
-      <Dialog open={unsavedDialogOpen} onOpenChange={(open) => {
-        setUnsavedDialogOpen(open);
-        if (!open) setPendingExit(null);
-      }}>
-        <DialogContent className="gap-0 rounded-md border-slate-200 p-0 sm:max-w-[420px]" showCloseButton={false}>
-          <DialogHeader className="px-5 pt-5">
-            <DialogTitle className="text-base">存在未保存的更改</DialogTitle>
-            <DialogDescription className="pt-1 text-sm leading-6">离开前要保存当前设定吗？</DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="px-5 py-4 sm:flex-row sm:justify-between">
-            <Button type="button" variant="ghost" className="rounded-[4px] text-slate-600" onClick={discardAndContinue}>放弃更改</Button>
-            <div className="flex gap-2"><Button type="button" variant="outline" className="rounded-[4px]" onClick={() => { setUnsavedDialogOpen(false); setPendingExit(null); }}>继续编辑</Button><Button type="button" className="rounded-[4px] bg-[#2773ff] hover:bg-[#1f63e0]" onClick={saveAndContinue}>保存并继续</Button></div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {pendingExit?.type === "custom" ? (
+        <ConfirmDiscardDialog
+          open={unsavedDialogOpen}
+          onOpenChange={(open) => { setUnsavedDialogOpen(open); if (!open) setPendingExit(null); }}
+          onConfirm={discardAndContinue}
+          title="确认放弃未保存内容？"
+          description={pendingExit.description}
+          confirmLabel={pendingExit.confirmLabel}
+        />
+      ) : (
+        <Dialog open={unsavedDialogOpen} onOpenChange={(open) => {
+          setUnsavedDialogOpen(open);
+          if (!open) setPendingExit(null);
+        }}>
+          <DialogContent className="gap-0 rounded-md border-slate-200 p-0 sm:max-w-[420px]" showCloseButton={false}>
+            <DialogHeader className="px-5 pt-5">
+              <DialogTitle className="text-base">存在未保存的更改</DialogTitle>
+              <DialogDescription className="pt-1 text-sm leading-6">离开前要保存当前设定吗？</DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="px-5 py-4 sm:flex-row sm:justify-between">
+              <Button type="button" variant="ghost" className="rounded-[4px] text-slate-600" onClick={discardAndContinue}>放弃更改</Button>
+              <div className="flex gap-2"><Button type="button" variant="outline" className="rounded-[4px]" onClick={() => { setUnsavedDialogOpen(false); setPendingExit(null); }}>继续编辑</Button><Button type="button" className="rounded-[4px] bg-[#2773ff] hover:bg-[#1f63e0]" onClick={saveAndContinue}>保存并继续</Button></div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <Dialog open={conflictField} onOpenChange={(open) => !open && setConflictField(false)}>
         <DialogContent className="gap-0 rounded-md border-slate-200 p-0 sm:max-w-[440px]" showCloseButton={false}>

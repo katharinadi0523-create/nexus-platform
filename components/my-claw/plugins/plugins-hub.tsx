@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
+import { PersonalMcpDialog, PersonalOpenApiDialog, type PersonalPluginDraft } from "@/components/my-claw/plugins/personal-plugin-editor";
+import { PersonalPluginManager } from "@/components/my-claw/plugins/personal-plugin-manager";
 import { PluginsMineTable } from "@/components/my-claw/plugins/plugins-mine-table";
 import { PluginsPlaza } from "@/components/my-claw/plugins/plugins-plaza";
 import { ResourceViewSwitch } from "@/components/my-claw/resource-view-switch";
@@ -12,6 +15,7 @@ import {
   type PluginMarketplaceItem,
   type PluginToolKind,
 } from "@/lib/mock/my-claw/plugins";
+import { checkPluginConnection, currentLocalTime } from "@/lib/mock/my-claw/plugin-connection-check";
 import { cn } from "@/lib/utils";
 
 export function MyClawPluginsHub({
@@ -44,6 +48,9 @@ export function MyClawPluginsHub({
     ),
   );
   const [marketAddSequence, setMarketAddSequence] = useState(0);
+  const [mcpDialogOpen, setMcpDialogOpen] = useState(false);
+  const [openApiDialogOpen, setOpenApiDialogOpen] = useState(false);
+  const [editingPlugin, setEditingPlugin] = useState<MinePluginItem | null>(null);
   const [localActiveTab, setLocalActiveTab] = useState<"mine" | "plaza">(() =>
     personalWorkspace ? "plaza" : "mine",
   );
@@ -69,7 +76,70 @@ export function MyClawPluginsHub({
     changeActiveTab("mine");
     return { kind: result.added.kind };
   };
-  const viewSwitcher = personalWorkspace && !hideViewTabs ? (
+  const openCustom = (kind: "mcp" | "plugin") => {
+    setEditingPlugin(null);
+    if (kind === "mcp") setMcpDialogOpen(true);
+    else setOpenApiDialogOpen(true);
+  };
+  const editCustom = (plugin: MinePluginItem) => {
+    setEditingPlugin(plugin);
+    if (plugin.kind === "mcp") setMcpDialogOpen(true);
+    else setOpenApiDialogOpen(true);
+  };
+  const saveCustom = (draft: PersonalPluginDraft, editingId?: string) => {
+    const now = currentLocalTime();
+    const existing = editingId ? plugins.find((plugin) => plugin.id === editingId) : undefined;
+    const target: MinePluginItem = existing ? {
+      ...existing,
+      name: draft.name,
+      description: draft.description,
+      personalConfig: draft.config,
+      enabled: true,
+      connectionStatus: "checking",
+      lastConnectionCheckTimedOut: false,
+      updatedAt: now,
+    } : {
+      id: `personal-plugin-${crypto.randomUUID()}`,
+      name: draft.name,
+      description: draft.description,
+      kind: draft.kind,
+      origin: "claw",
+      publisherScope: "personal",
+      enabled: true,
+      connectionStatus: "checking",
+      badge: "个人创建",
+      meta: draft.kind === "mcp" ? "MCP" : "OpenAPI",
+      creator: "我",
+      updatedAt: now,
+      addedAt: now,
+      personalCreated: true,
+      activeToolCalls: 0,
+      personalConfig: draft.config,
+    };
+    setPlugins((current) => existing ? current.map((plugin) => plugin.id === target.id ? target : plugin) : [target, ...current]);
+    toast.success(existing ? `已更新「${draft.name}」，正在检测连接` : `已添加「${draft.name}」，正在检测连接`);
+    void checkPluginConnection(target).then((outcome) => {
+      if (outcome === "timeout") toast.error("状态检测超时，请稍后重试");
+      else if (outcome === "failed") toast.error(`「${draft.name}」连接失败`);
+      else toast.success(`「${draft.name}」连接正常`);
+      setPlugins((current) => current.map((plugin) => plugin.id !== target.id ? plugin : outcome === "timeout" ? {
+        ...plugin,
+        connectionStatus: plugin.lastValidConnectionStatus,
+        lastConnectionCheckTimedOut: true,
+      } : {
+        ...plugin,
+        enabled: true,
+        connectionStatus: outcome,
+        lastValidConnectionStatus: outcome,
+        lastConnectionCheckAt: currentLocalTime(),
+        lastConnectionCheckTimedOut: false,
+      }));
+    });
+    setEditingPlugin(null);
+    setOpenApiDialogOpen(false);
+    changeActiveTab("mine");
+  };
+  const viewSwitcher = personalWorkspace && !hideViewTabs && !capabilityWorkspace ? (
     <ResourceViewSwitch
       activeView={activeTab}
       onChange={changeActiveTab}
@@ -116,7 +186,12 @@ export function MyClawPluginsHub({
         ) : null}
 
         <TabsContent value="mine" className="mt-0 min-h-0 flex-1 overflow-y-auto">
-          <PluginsMineTable
+          {personalWorkspace && capabilityWorkspace ? <PersonalPluginManager
+            plugins={plugins}
+            onPluginsChange={setPlugins}
+            onBack={() => changeActiveTab("plaza")}
+            onEdit={editCustom}
+          /> : <PluginsMineTable
             plugins={plugins}
             onPluginsChange={setPlugins}
             focusRequest={focusRequest}
@@ -124,7 +199,7 @@ export function MyClawPluginsHub({
             personalWorkspace={personalWorkspace}
             capabilityWorkspace={capabilityWorkspace}
             viewSwitcher={viewSwitcher}
-          />
+          />}
         </TabsContent>
 
         <TabsContent
@@ -138,10 +213,29 @@ export function MyClawPluginsHub({
             plugins={plugins}
             onAddToMine={handleAddToMine}
             personalWorkspace={personalWorkspace}
+            capabilityWorkspace={capabilityWorkspace}
             viewSwitcher={viewSwitcher}
+            onOpenManagement={() => changeActiveTab("mine")}
+            onCreateCustom={openCustom}
           />
         </TabsContent>
       </Tabs>
+      {personalWorkspace && capabilityWorkspace && mcpDialogOpen ? <PersonalMcpDialog
+        key={editingPlugin?.id ?? "new-mcp"}
+        open={mcpDialogOpen}
+        onOpenChange={(open) => { setMcpDialogOpen(open); if (!open) setEditingPlugin(null); }}
+        onSave={saveCustom}
+        editing={editingPlugin}
+        existingPlugins={plugins}
+      /> : null}
+      {personalWorkspace && capabilityWorkspace && openApiDialogOpen ? <PersonalOpenApiDialog
+        key={editingPlugin?.id ?? "new-openapi"}
+        open={openApiDialogOpen}
+        onOpenChange={(open) => { setOpenApiDialogOpen(open); if (!open) setEditingPlugin(null); }}
+        onSave={saveCustom}
+        editing={editingPlugin}
+        existingPlugins={plugins}
+      /> : null}
     </div>
   );
 }

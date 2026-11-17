@@ -1208,6 +1208,109 @@ export const RESEARCH_DEMO_STEPS: ResearchDemoStep[] = [
         "id": "m-reject-1",
         "role": "assistant",
         "text": "图表包可用。论文初稿论证偏弱：缺少反例、研究局限与替代解释，已在原论文生成会话中追加修订要求。"
+      },
+      {
+        "id": "m-revision-1",
+        "role": "assistant",
+        "text": "已把证据矩阵中的研究按沟通、共写、评审三个环节重新分组，正在核对各组的指标定义与样本来源。"
+      },
+      {
+        "id": "m-revision-2",
+        "role": "assistant",
+        "text": "不同研究对“效率”的口径不一致：完成耗时、返工次数与主观负担会分别呈现，不合成未经定义的总分。"
+      },
+      {
+        "id": "m-tool-source-check",
+        "role": "assistant",
+        "kind": "tool",
+        "toolName": "证据矩阵校验",
+        "text": "逐条检查研究对象、指标、结论与原始来源的对应关系。"
+      },
+      {
+        "id": "m-revision-8",
+        "role": "assistant",
+        "text": "校验发现两条材料只能说明团队成员对工具的主观评价，已移出“客观效率变化”的证据组。"
+      },
+      {
+        "id": "m-revision-3",
+        "role": "assistant",
+        "text": "论文的机制段正在整理信息查找、内容起草和反馈整理三条可能路径；相关性证据暂不写成因果结论。"
+      },
+      {
+        "id": "m-revision-9",
+        "role": "assistant",
+        "text": "第一轮修订已把“沟通更快”拆成问题定位、信息同步和反馈确认三个环节，逐项对应可观测指标。"
+      },
+      {
+        "id": "m-revision-10",
+        "role": "assistant",
+        "text": "共写部分补充了版本冲突和内容返工的讨论；评审部分区分了反馈速度与反馈质量。"
+      },
+      {
+        "id": "m-revision-4",
+        "role": "assistant",
+        "text": "图表与文中引用的位置已核对，接下来统一图号、标题和来源说明。"
+      },
+      {
+        "id": "m-tool-chart-check",
+        "role": "assistant",
+        "kind": "tool",
+        "toolName": "图表标注检查",
+        "text": "核对图号、轴标签、单位、注释与正文中的引用位置。"
+      },
+      {
+        "id": "m-revision-11",
+        "role": "assistant",
+        "text": "图 2 的纵轴原先混用了比例和次数，现已在修订清单中标出，等待绘图智能体统一口径。"
+      },
+      {
+        "id": "m-revision-12",
+        "role": "assistant",
+        "text": "图 3 的颜色含义与正文描述一致；仍需在图注中写清样本范围，避免读者把示意关系当成统计结果。"
+      },
+      {
+        "id": "m-revision-5",
+        "role": "assistant",
+        "text": "部分文献只报告自评体验，不能直接支持客观效率提升；已将这类证据单独标注在讨论段。"
+      },
+      {
+        "id": "m-tool-structure-review",
+        "role": "assistant",
+        "kind": "tool",
+        "toolName": "论文结构审阅",
+        "text": "检查研究问题、方法、发现、讨论与局限之间的论证链。"
+      },
+      {
+        "id": "m-revision-13",
+        "role": "assistant",
+        "text": "结构审阅提示：方法段需要说明纳入文献的筛选边界，讨论段需要回应未被证据充分支持的假设。"
+      },
+      {
+        "id": "m-revision-6",
+        "role": "assistant",
+        "text": "正在补充反例与替代解释：任务熟悉度、团队经验和工具使用频率也可能影响观察结果。"
+      },
+      {
+        "id": "m-revision-14",
+        "role": "assistant",
+        "text": "已把“效率提升”改写为更具体的观察：部分资料显示查找和起草用时可能缩短，但评审质量的变化尚不一致。"
+      },
+      {
+        "id": "m-tool-reference-check",
+        "role": "assistant",
+        "kind": "tool",
+        "toolName": "引用一致性检查",
+        "text": "对照证据矩阵检查正文引用与参考文献列表。"
+      },
+      {
+        "id": "m-revision-15",
+        "role": "assistant",
+        "text": "引用检查已完成第一轮：正文中的来源编号与参考文献列表对应，正在处理两处缺少页码的转述。"
+      },
+      {
+        "id": "m-revision-7",
+        "role": "assistant",
+        "text": "论文生成智能体继续修订讨论与局限章节。完成后会在产物区提供修订稿，当前任务仍在执行。"
       }
     ],
     "toolsByAgent": {
@@ -1954,7 +2057,7 @@ function emptySnapshot(stepIndex = 0): ResearchSnapshot {
 /** Cumulative snapshot applied through `stepIndex` (source module semantics). */
 export function buildResearchSnapshot(stepIndex: number): ResearchSnapshot {
   const safeStep = Math.max(0, Math.min(RESEARCH_MAX_STEP, stepIndex));
-  let snap = emptySnapshot(safeStep);
+  const snap = emptySnapshot(safeStep);
 
   for (let i = 0; i <= safeStep; i += 1) {
     const step = RESEARCH_DEMO_STEPS[i];

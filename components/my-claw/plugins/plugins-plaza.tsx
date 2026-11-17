@@ -10,22 +10,28 @@ import {
   Globe2,
   Plus,
   Search,
+  ChevronDown,
+  SlidersHorizontal,
   Sparkles,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   filterPluginMarketplaceItems,
   getPluginMarketplaceCategoryLabel,
   getPluginMarketplaceKindLabel,
   PLUGIN_MARKETPLACE_CATEGORY_FILTERS,
+  PLUGIN_MARKETPLACE_ORGANIZATION_FILTERS,
   PLUGIN_MARKETPLACE_ITEMS,
   PLUGIN_MARKETPLACE_SOURCE_FILTERS,
   type MinePluginItem,
   type PluginMarketCategory,
+  type PluginMarketOrganizationScope,
   type PluginMarketplaceItem,
   type PluginMarketSourceFilter,
   type PluginMarketTone,
@@ -90,17 +96,25 @@ export interface PluginsPlazaProps {
   plugins: MinePluginItem[];
   onAddToMine: (item: PluginMarketplaceItem) => { kind: PluginToolKind };
   personalWorkspace?: boolean;
+  capabilityWorkspace?: boolean;
   viewSwitcher?: ReactNode;
+  onOpenManagement?: () => void;
+  onCreateCustom?: (kind: "mcp" | "plugin") => void;
 }
 
 export function PluginsPlaza({
   plugins,
   onAddToMine,
   personalWorkspace = false,
+  capabilityWorkspace = false,
   viewSwitcher,
+  onOpenManagement,
+  onCreateCustom,
 }: PluginsPlazaProps) {
   const [query, setQuery] = useState("");
   const [source, setSource] = useState<PluginMarketSourceFilter>("all");
+  const [organizationScope, setOrganizationScope] =
+    useState<PluginMarketOrganizationScope>("all");
   const [category, setCategory] = useState<PluginMarketCategory>("all");
 
   const items = useMemo(
@@ -108,10 +122,11 @@ export function PluginsPlaza({
       filterPluginMarketplaceItems(PLUGIN_MARKETPLACE_ITEMS, {
         query,
         source,
+        organizationScope,
         category,
         includeKindInSearch: !personalWorkspace,
       }),
-    [query, source, category, personalWorkspace]
+    [query, source, organizationScope, category, personalWorkspace, capabilityWorkspace]
   );
 
   const handleAdd = (item: PluginMarketplaceItem) => {
@@ -154,31 +169,116 @@ export function PluginsPlaza({
             </h1>
             <p className={cn("mt-2 text-sm leading-6 text-[#5a6779]", personalWorkspace && "mt-1 text-[13px] leading-5 text-slate-500")}>
               {personalWorkspace
-                ? "按类别浏览可用插件，添加后在“我的插件”中管理。"
+                ? capabilityWorkspace
+                  ? "按类别浏览可用插件；已添加的插件可在插件管理中启停，内置插件不支持移除。"
+                  : "按类别浏览可用插件，添加后在“我的插件”中管理。"
                 : "按来源与类型浏览可复用组件，一键添加到我的插件。"}
             </p>
           </div>
 
-          <label className="relative flex w-full min-w-[220px] max-w-[320px] items-center">
-            <Search className="pointer-events-none absolute left-3 h-4 w-4 text-[#2773ff]" />
-            <Input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="搜索插件名称、作者或描述"
-              autoComplete="off"
-              className={cn(
-                "h-10 rounded-xl border-[#dbeafe] bg-white pl-9 shadow-sm",
-                personalWorkspace && "h-9 rounded-md border-slate-200 text-[13px] shadow-none"
-              )}
-            />
-          </label>
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 lg:w-auto">
+            <label className="relative flex w-full min-w-[220px] max-w-[320px] items-center lg:w-[280px]">
+              <Search className="pointer-events-none absolute left-3 h-4 w-4 text-[#2773ff]" />
+              <Input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索插件名称、作者或描述"
+                autoComplete="off"
+                className={cn(
+                  "h-10 rounded-xl border-[#dbeafe] bg-white pl-9 shadow-sm",
+                  personalWorkspace && "h-9 rounded-md border-slate-200 text-[13px] shadow-none"
+                )}
+              />
+            </label>
+          {personalWorkspace && capabilityWorkspace ? (
+            <>
+              <Button variant="outline" className="h-9 shrink-0 rounded-md border-slate-200 bg-white px-3 text-[13px]" onClick={onOpenManagement}>
+                <SlidersHorizontal className="mr-1.5 size-4" />插件管理
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="h-9 shrink-0 rounded-md bg-[#2773ff] px-3 text-[13px] text-white hover:bg-blue-700"><Plus className="mr-1 size-4" />自定义插件<ChevronDown className="ml-1 size-3.5" /></Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onSelect={() => onCreateCustom?.("mcp")}>MCP 服务</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onCreateCustom?.("plugin")}>OpenAPI 插件</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          ) : null}
+          </div>
         </header>
 
-        {personalWorkspace ? (
+        {personalWorkspace && capabilityWorkspace ? (
+          <div className="mt-4 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <nav className="flex flex-wrap items-center gap-1" aria-label="插件来源">
+                {PLUGIN_MARKETPLACE_SOURCE_FILTERS.map((tab) => (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    aria-pressed={source === tab.value}
+                    onClick={() => {
+                      setSource(tab.value);
+                      if (tab.value === "organization") setOrganizationScope("all");
+                    }}
+                    className={cn(
+                      "shrink-0 rounded-full px-3 py-1 text-[13px] leading-6 transition-colors",
+                      source === tab.value
+                        ? "bg-[#eaf2ff] font-medium text-[#2773ff]"
+                        : "text-[#334155] hover:text-[#2773ff]"
+                    )}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+              {source === "organization" ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-8 rounded-md border-slate-200 bg-white px-3 text-[13px] font-normal text-slate-600">
+                      {PLUGIN_MARKETPLACE_ORGANIZATION_FILTERS.find((item) => item.value === organizationScope)?.label}
+                      <ChevronDown className="ml-2 size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-32">
+                    {PLUGIN_MARKETPLACE_ORGANIZATION_FILTERS.map((item) => (
+                      <DropdownMenuItem
+                        key={item.value}
+                        onSelect={() => setOrganizationScope(item.value)}
+                      >
+                        {item.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </div>
+            <nav className="flex flex-wrap items-center gap-0.5" aria-label="业务领域筛选">
+              <span className="mr-2 shrink-0 text-[12px] text-slate-500">业务领域</span>
+              {PLUGIN_MARKETPLACE_CATEGORY_FILTERS.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  aria-pressed={category === tab.value}
+                  onClick={() => setCategory(tab.value)}
+                  className={cn(
+                    "shrink-0 rounded-full px-3 py-1 text-[13px] leading-6 transition-colors",
+                    category === tab.value
+                      ? "bg-[#eaf2ff] font-medium text-[#2773ff]"
+                      : "text-[#334155] hover:text-[#2773ff]"
+                  )}
+                >
+                  {tab.value === "all" ? "全部" : tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+        ) : personalWorkspace ? (
           <div className="mt-4 space-y-2">
             <nav className="flex flex-wrap items-center gap-0.5" aria-label="插件来源筛选">
-              {PLUGIN_MARKETPLACE_SOURCE_FILTERS.map((tab) => (
+              {PLUGIN_MARKETPLACE_SOURCE_FILTERS.filter((tab) => tab.value !== "third_party").map((tab) => (
                 <button
                   key={tab.value}
                   type="button"
@@ -191,7 +291,7 @@ export function PluginsPlaza({
                       : "text-[#334155] hover:text-[#2773ff]"
                   )}
                 >
-                  {tab.value === "all" ? "全部组织" : tab.label}
+                  {tab.value === "all" ? "全部组织" : "我的组织"}
                 </button>
               ))}
             </nav>
@@ -261,7 +361,9 @@ export function PluginsPlaza({
             </div>
             <p className="mt-1 text-sm text-[#5a6779]">
               {personalWorkspace
-                ? "试试调整来源、类别或搜索关键词。"
+                ? capabilityWorkspace
+                  ? "试试调整插件类型、组织范围、类别或搜索关键词。"
+                  : "试试调整来源、类别或搜索关键词。"
                 : "试试调整来源、类型或搜索关键词。"}
             </p>
           </div>

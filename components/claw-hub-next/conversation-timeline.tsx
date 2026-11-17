@@ -143,8 +143,10 @@ export function ClawAgentAction({
 
 export function ClawAgentOutput({
   item,
+  onViewAllArtifacts,
 }: {
   item: Extract<ConversationTimelineItem, { type: "output" }>;
+  onViewAllArtifacts?: () => void;
 }) {
   return (
     <div className="px-1">
@@ -161,6 +163,18 @@ export function ClawAgentOutput({
             </span>
           ))}
         </div>
+      ) : null}
+      {onViewAllArtifacts ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onViewAllArtifacts();
+          }}
+          className="mt-3 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+        >
+          查看全部产物
+        </button>
       ) : null}
     </div>
   );

@@ -1,7 +1,11 @@
 export type PluginToolKind = "mcp" | "plugin" | "workflow" | "ontology_action";
 export type PluginMineOrigin = "builtin" | "claw";
+export type PluginPublisherScope = "system" | "platform" | "organization" | "personal";
+export type PluginConnectionStatus = "connected" | "failed" | "checking";
+export type PluginRuntimeStatus = "normal" | "abnormal";
 export type PluginMineOriginFilter = "all" | PluginMineOrigin;
-export type PluginMarketSourceFilter = "all" | "organization";
+export type PluginMarketSourceFilter = "all" | "organization" | "third_party";
+export type PluginMarketOrganizationScope = "all" | "mine";
 export type PluginMarketCategory =
   | "all"
   | "office"
@@ -24,13 +28,41 @@ export interface MinePluginItem {
   description: string;
   kind: PluginToolKind;
   origin: PluginMineOrigin;
+  publisherScope?: PluginPublisherScope;
   enabled: boolean;
+  connectionStatus?: PluginConnectionStatus;
+  lastValidConnectionStatus?: Exclude<PluginConnectionStatus, "checking">;
+  lastConnectionCheckAt?: string;
+  lastConnectionCheckTimedOut?: boolean;
+  runtimeStatus?: PluginRuntimeStatus;
+  runtimeCheckedAt?: string;
   badge: string;
   meta: string;
   creator: string;
   updatedAt: string;
+  addedAt?: string;
+  activeToolCalls?: number;
   marketplaceId?: string;
   addedOrder?: number;
+  personalCreated?: boolean;
+  detail?: {
+    businessCategories?: string[];
+    publishedAt?: string;
+    overview?: string;
+    usageSteps?: string[];
+    features?: string[];
+    scenarios?: string[];
+    tools?: Array<{ name: string; description: string }>;
+  };
+  personalConfig?: {
+    mcpJson?: string;
+    pluginUrl?: string;
+    headers?: Array<{ name: string; value: string }>;
+    auth?: "none" | "token";
+    authLocation?: "header" | "query";
+    authParamName?: string;
+    authParamValue?: string;
+  };
 }
 
 export interface PluginMarketplaceItem {
@@ -42,7 +74,8 @@ export interface PluginMarketplaceItem {
   kind: "mcp" | "plugin";
   icon: string;
   tone: PluginMarketTone;
-  source?: "organization";
+  source?: "organization" | "third_party";
+  organizationId?: string;
 }
 
 export interface PluginKindMeta {
@@ -82,8 +115,17 @@ export const PLUGIN_MARKETPLACE_SOURCE_FILTERS: Array<{
   value: PluginMarketSourceFilter;
   label: string;
 }> = [
-  { value: "all", label: "全部组件" },
-  { value: "organization", label: "我的组织" },
+  { value: "all", label: "全部" },
+  { value: "third_party", label: "第三方" },
+  { value: "organization", label: "组织" },
+];
+
+export const PLUGIN_MARKETPLACE_ORGANIZATION_FILTERS: Array<{
+  value: PluginMarketOrganizationScope;
+  label: string;
+}> = [
+  { value: "all", label: "全部组织" },
+  { value: "mine", label: "我的组织" },
 ];
 
 export const PLUGIN_MARKETPLACE_CATEGORY_FILTERS: Array<{
@@ -111,8 +153,18 @@ const INITIAL_BUILTIN_PLUGINS: MinePluginItem[] = [
     meta: "沙箱",
     kind: "mcp",
     origin: "builtin",
-    creator: "平台内置",
+    publisherScope: "system",
+    creator: "官方",
     updatedAt: "2026-04-01 20:00:00",
+    detail: {
+      businessCategories: ["效率工具"],
+      publishedAt: "2026-04-01 20:00:00",
+      overview: "在沙箱中运行 Python，支持数据计算、图表绘制与文档处理。",
+      usageSteps: ["在对话中描述需要计算或处理的任务。", "Claw 根据任务需要调用 Python 执行能力并返回结果。"],
+      features: ["运行 Python 代码", "使用预装的数据、绘图和办公文档依赖"],
+      scenarios: ["数据整理与计算", "图表与文档生成"],
+      tools: [{ name: "execute_python", description: "在沙箱中执行 Python 代码。" }],
+    },
   },
   {
     id: "platform-web-search",
@@ -123,8 +175,18 @@ const INITIAL_BUILTIN_PLUGINS: MinePluginItem[] = [
     meta: "网络",
     kind: "mcp",
     origin: "builtin",
-    creator: "平台内置",
+    publisherScope: "system",
+    creator: "官方",
     updatedAt: "2026-04-02 20:00:00",
+    detail: {
+      businessCategories: ["效率工具"],
+      publishedAt: "2026-04-02 20:00:00",
+      overview: "检索公开网页，并返回与问题相关的摘要和来源链接。",
+      usageSteps: ["在对话中说明需要查找的信息。", "Claw 在适用时调用搜索工具并整理结果。"],
+      features: ["公开网页检索", "返回摘要与来源链接"],
+      scenarios: ["查找公开资料", "核对近期信息"],
+      tools: [{ name: "web_search", description: "搜索公开网页并返回摘要与链接。" }],
+    },
   },
   {
     id: "platform-create-docx",
@@ -136,8 +198,18 @@ const INITIAL_BUILTIN_PLUGINS: MinePluginItem[] = [
     meta: "文档",
     kind: "plugin",
     origin: "builtin",
-    creator: "平台内置",
+    publisherScope: "system",
+    creator: "官方",
     updatedAt: "2026-04-03 20:00:00",
+    detail: {
+      businessCategories: ["办公人事"],
+      publishedAt: "2026-04-03 20:00:00",
+      overview: "生成 Word 文档，支持模板、表格、图表、分节及常见文档样式。",
+      usageSteps: ["在对话中说明文档主题、内容和格式要求。", "Claw 在适用时调用文档生成能力。"],
+      features: ["生成 Word 文档", "使用模板、表格、图表与文档样式"],
+      scenarios: ["报告和纪要生成", "按模板制作办公文档"],
+      tools: [{ name: "create_docx", description: "根据内容与格式要求生成 Word 文档。" }],
+    },
   },
   {
     id: "tenant-erp-mcp",
@@ -147,8 +219,9 @@ const INITIAL_BUILTIN_PLUGINS: MinePluginItem[] = [
     badge: "租户配置",
     meta: "MCP",
     kind: "mcp",
-    origin: "builtin",
-    creator: "公共配置",
+    origin: "claw",
+    publisherScope: "platform",
+    creator: "平台办公中心",
     updatedAt: "2026-04-04 20:00:00",
   },
   {
@@ -159,8 +232,9 @@ const INITIAL_BUILTIN_PLUGINS: MinePluginItem[] = [
     badge: "租户配置",
     meta: "OpenAPI",
     kind: "plugin",
-    origin: "builtin",
-    creator: "公共配置",
+    origin: "claw",
+    publisherScope: "organization",
+    creator: "共享服务中心",
     updatedAt: "2026-04-05 20:00:00",
   },
   {
@@ -171,25 +245,87 @@ const INITIAL_BUILTIN_PLUGINS: MinePluginItem[] = [
     badge: "租户配置",
     meta: "接口",
     kind: "plugin",
-    origin: "builtin",
-    creator: "公共配置",
+    origin: "claw",
+    publisherScope: "organization",
+    creator: "财务共享中心",
     updatedAt: "2026-04-06 20:00:00",
   },
   {
     id: "tenant-policy-ontology",
     name: "制度条款本体动作",
     description: "根据企业制度本体做条款定位、实体关联和约束校验。",
-    enabled: false,
+    enabled: true,
     badge: "租户配置",
     meta: "本体",
     kind: "ontology_action",
-    origin: "builtin",
-    creator: "公共配置",
+    origin: "claw",
+    publisherScope: "platform",
+    creator: "平台本体中心",
     updatedAt: "2026-04-07 20:00:00",
   },
 ];
 
 const INITIAL_CLAW_PLUGINS: MinePluginItem[] = [
+  {
+    id: "personal-calendar-mcp-demo",
+    name: "个人日程 MCP",
+    description: "连接个人日程服务，在对话中查询空闲时间并整理日程安排。",
+    enabled: true,
+    badge: "个人创建",
+    meta: "MCP",
+    kind: "mcp",
+    origin: "claw",
+    publisherScope: "personal",
+    creator: "我",
+    updatedAt: "2026-11-08 16:30:00",
+    personalCreated: true,
+    personalConfig: {
+      mcpJson: `{
+  "mcpServers": {
+    "personal-calendar": {
+      "type": "streamableHttp",
+      "url": "https://calendar.example.com/mcp",
+      "headers": { "Authorization": "Bearer DEMO_TOKEN" }
+    }
+  }
+}`,
+    },
+    detail: {
+      businessCategories: ["效率工具"],
+      overview: "连接个人日程服务，帮助查询日程和安排时间。",
+      tools: [
+        { name: "list_events", description: "按日期范围查询日程。" },
+        { name: "find_free_time", description: "查找指定时间范围内的空闲时段。" },
+      ],
+    },
+  },
+  {
+    id: "personal-search-openapi-demo",
+    name: "个人搜索 API",
+    description: "使用个人 API Key 接入搜索服务，获取网页摘要与来源链接。",
+    enabled: true,
+    badge: "个人创建",
+    meta: "OpenAPI",
+    kind: "plugin",
+    origin: "claw",
+    publisherScope: "personal",
+    creator: "我",
+    updatedAt: "2026-11-07 10:15:00",
+    personalCreated: true,
+    personalConfig: {
+      pluginUrl: "https://search.example.com/v1",
+      headers: [{ name: "X-API-Key", value: "demo-api-key" }],
+      auth: "token",
+      authLocation: "header",
+      authParamName: "X-API-Key",
+      authParamValue: "demo-api-key",
+    },
+    detail: {
+      businessCategories: ["效率工具"],
+      overview: "通过个人 API Key 调用搜索服务，返回网页摘要和来源链接。",
+      tools: [{ name: "search_web", description: "根据关键词搜索网页并返回摘要。" }],
+    },
+  },
   {
     id: "claw-ops-watch-mcp",
     name: "运维值守Claw",
@@ -200,6 +336,7 @@ const INITIAL_CLAW_PLUGINS: MinePluginItem[] = [
     meta: "MCP",
     kind: "mcp",
     origin: "claw",
+    publisherScope: "organization",
     creator: "赵六六",
     updatedAt: "2026-04-01 20:00:00",
   },
@@ -212,6 +349,7 @@ const INITIAL_CLAW_PLUGINS: MinePluginItem[] = [
     meta: "MCP",
     kind: "mcp",
     origin: "claw",
+    publisherScope: "organization",
     creator: "赵六六",
     updatedAt: "2026-04-02 20:00:00",
   },
@@ -224,6 +362,7 @@ const INITIAL_CLAW_PLUGINS: MinePluginItem[] = [
     meta: "MCP",
     kind: "mcp",
     origin: "claw",
+    publisherScope: "organization",
     creator: "赵六六",
     updatedAt: "2026-04-03 20:00:00",
   },
@@ -236,6 +375,7 @@ const INITIAL_CLAW_PLUGINS: MinePluginItem[] = [
     meta: "工作流",
     kind: "workflow",
     origin: "claw",
+    publisherScope: "organization",
     creator: "赵六六",
     updatedAt: "2026-04-04 20:00:00",
   },
@@ -248,6 +388,7 @@ const INITIAL_CLAW_PLUGINS: MinePluginItem[] = [
     meta: "工作流",
     kind: "workflow",
     origin: "claw",
+    publisherScope: "organization",
     creator: "赵六六",
     updatedAt: "2026-04-05 20:00:00",
   },
@@ -260,6 +401,7 @@ const INITIAL_CLAW_PLUGINS: MinePluginItem[] = [
     meta: "文档",
     kind: "plugin",
     origin: "claw",
+    publisherScope: "platform",
     creator: "赵六六",
     updatedAt: "2026-04-06 20:00:00",
   },
@@ -268,28 +410,41 @@ const INITIAL_CLAW_PLUGINS: MinePluginItem[] = [
 export const INITIAL_MINE_PLUGINS: MinePluginItem[] = [
   ...INITIAL_BUILTIN_PLUGINS,
   ...INITIAL_CLAW_PLUGINS,
-];
+].map((plugin) => ({
+  ...plugin,
+  addedAt: plugin.updatedAt,
+  // Existing demo connections have a known health state; new ones get the
+  // same explicit result after the connect-and-enable action.
+  connectionStatus: plugin.origin === "builtin" ? undefined : plugin.id === "claw-mail-gateway-mcp" ? "failed" : "connected",
+  lastValidConnectionStatus: plugin.origin === "builtin" ? undefined : plugin.id === "claw-mail-gateway-mcp" ? "failed" : "connected",
+  lastConnectionCheckAt: plugin.origin === "builtin" ? undefined : plugin.updatedAt,
+  runtimeStatus: plugin.origin === "builtin" ? "normal" : undefined,
+  runtimeCheckedAt: plugin.origin === "builtin" ? plugin.updatedAt : undefined,
+  activeToolCalls: plugin.id === "claw-ops-watch-mcp" ? 1 : 0,
+}));
 
 export const PLUGIN_MARKETPLACE_ITEMS: PluginMarketplaceItem[] = [
   {
     id: "market-baidu-baike",
     name: "百度百科",
-    author: "@个人发布",
+    author: "@平台认证",
     description: "查询水务相关词条名或者词条ID去百度百科查询跟该词条相关的内容",
     category: "other",
     kind: "mcp",
     icon: "tool",
     tone: "orange",
+    source: "third_party",
   },
   {
     id: "market-pathogen-mcp",
     name: "病原实时鉴定MCPServer1",
-    author: "@个人发布",
+    author: "@平台认证",
     description: "",
     category: "other",
     kind: "mcp",
     icon: "boxes",
     tone: "orange",
+    source: "third_party",
   },
   {
     id: "market-mcp-admin",
@@ -322,6 +477,7 @@ export const PLUGIN_MARKETPLACE_ITEMS: PluginMarketplaceItem[] = [
     icon: "book",
     tone: "indigo",
     source: "organization",
+    organizationId: "current-org",
   },
   {
     id: "market-jwt-encode",
@@ -367,6 +523,7 @@ export const PLUGIN_MARKETPLACE_ITEMS: PluginMarketplaceItem[] = [
     icon: "clock",
     tone: "indigo",
     source: "organization",
+    organizationId: "other-org",
   },
 ];
 
@@ -435,17 +592,24 @@ export function filterPluginMarketplaceItems(
   options: {
     query?: string;
     source?: PluginMarketSourceFilter;
+    organizationScope?: PluginMarketOrganizationScope;
     category?: PluginMarketCategory;
     includeKindInSearch?: boolean;
   } = {}
 ): PluginMarketplaceItem[] {
   const query = options.query?.trim().toLowerCase() ?? "";
   const source = options.source ?? "all";
+  const organizationScope = options.organizationScope ?? "all";
   const category = options.category ?? "all";
   const includeKindInSearch = options.includeKindInSearch ?? true;
 
   return items.filter((item) => {
     if (source !== "all" && item.source !== source) return false;
+    if (
+      source === "organization" &&
+      organizationScope === "mine" &&
+      item.organizationId !== "current-org"
+    ) return false;
     if (category !== "all" && item.category !== category) return false;
     if (!query) return true;
     return [
@@ -479,11 +643,16 @@ export function buildMinePluginFromMarketplace(
     description:
       marketItem.description || `${marketItem.name}组件，来自插件广场。`,
     enabled: true,
+    connectionStatus: "connected",
+    lastValidConnectionStatus: "connected",
+    lastConnectionCheckAt: addedAt,
+    addedAt,
     badge: "插件广场",
     meta: getPluginMarketplaceKindLabel(kind),
     kind,
     creator: marketItem.author.replace(/^@/, ""),
     origin: "claw",
+    publisherScope: marketItem.source === "organization" ? "organization" : "platform",
     updatedAt: addedAt,
     addedOrder,
   };

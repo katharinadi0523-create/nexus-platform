@@ -9,6 +9,8 @@ import {
   HelpCircle,
   AlertTriangle,
   Box,
+  Plus,
+  Settings2,
 } from "lucide-react";
 import {
   Popover,
@@ -30,6 +32,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   EXCLUSIVE_MODEL_IDS,
+  MULTIMODAL_MODEL_IDS,
   PRESET_MODEL_IDS,
   getDefaultModelParams,
   getModelSchema,
@@ -37,6 +40,7 @@ import {
   type ModelParamSchema,
   type ModelParamValues,
 } from "@/lib/model-schemas";
+import type { PersonalModelType } from "@/components/claw-client/personal-model-demo-store";
 
 // 模型参数值接口
 export type ModelParams = ModelParamValues;
@@ -59,6 +63,13 @@ export interface ModelSelectorProps {
    * When true, hides the「预置模型服务 / 我的模型服务」tabs and only shows the preset model list.
    */
   presetOnly?: boolean;
+  /** Personal model entries shown in the personal conversation picker. */
+  personalModelOptions?: readonly { id: string; name: string; providerName: string; enabled: boolean; type?: PersonalModelType }[];
+  imageGenerationModelOptions?: readonly { id: string; name: string; providerName: string; enabled: boolean; type?: PersonalModelType }[];
+  onAddPersonalModel?: () => void;
+  onManagePersonalModels?: () => void;
+  onAddImageGenerationModel?: () => void;
+  onManageImageGenerationModels?: () => void;
   /** Render model parameters in a separate popover beside the model selector. */
   separateParamsPopover?: boolean;
   /**
@@ -138,6 +149,12 @@ export function ModelSelector({
   showParams = true,
   triggerClassName,
   presetOnly = false,
+  personalModelOptions = [],
+  onAddPersonalModel,
+  onManagePersonalModels,
+  imageGenerationModelOptions = [],
+  onAddImageGenerationModel,
+  onManageImageGenerationModels,
   separateParamsPopover = false,
   hiddenParamKeys,
   presetModelOptions,
@@ -146,6 +163,8 @@ export function ModelSelector({
   onOpenChange,
 }: ModelSelectorProps) {
   const presetModels = presetModelOptions ?? PRESET_MODEL_IDS;
+  const multimodalModels: readonly string[] = presetOnly ? MULTIMODAL_MODEL_IDS : [];
+  const languageModels = presetModels.filter((model) => !multimodalModels.includes(model));
   const unavailableModelIdSet = useMemo(
     () => new Set(unavailableModelIds),
     [unavailableModelIds]
@@ -166,8 +185,16 @@ export function ModelSelector({
   const [activeTab, setActiveTab] = useState<"preset" | "exclusive">(
     exclusiveModels.includes(initialModel) ? "exclusive" : "preset"
   );
+  const [presetModelType, setPresetModelType] = useState<"language" | "multimodal">(
+    MULTIMODAL_MODEL_IDS.includes(initialModel as (typeof MULTIMODAL_MODEL_IDS)[number]) ? "multimodal" : "language"
+  );
   const [uncontrolledModel, setUncontrolledModel] = useState(initialModel);
   const currentModel = isModelControlled ? selectedModel : uncontrolledModel;
+  const currentPersonalModel = [...personalModelOptions, ...imageGenerationModelOptions].find((item) => item.id === currentModel);
+  const currentModelUnavailable = unavailableModelIdSet.has(currentModel);
+  const currentModelRetired = presetOnly && !presetModels.includes(currentModel) && !multimodalModels.includes(currentModel) && (!currentPersonalModel || !currentPersonalModel.enabled);
+  const currentModelBlocked = currentModelUnavailable || currentModelRetired;
+  const currentModelStatusLabel = currentPersonalModel && !currentPersonalModel.enabled ? "已停用" : currentModelRetired ? "已下架" : "不可用";
 
   const currentSchema = useMemo(() => getModelSchema(currentModel), [currentModel]);
 
@@ -244,6 +271,9 @@ export function ModelSelector({
       } else {
         setActiveTab("preset");
       }
+    } else {
+      const personalOption = [...personalModelOptions, ...imageGenerationModelOptions].find((item) => item.id === model);
+      setPresetModelType(multimodalModels.includes(model) || personalOption?.type === "image-generation" ? "multimodal" : "language");
     }
   };
 
@@ -495,16 +525,23 @@ export function ModelSelector({
     }}>
       <PopoverTrigger asChild>
         <button
+          aria-label={currentModelBlocked ? `当前模型 ${currentModel} ${currentModelStatusLabel}，点击更换模型` : undefined}
           className={cn(
             "flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 rounded-lg transition-colors",
-            triggerClassName
+            triggerClassName,
+            currentModelBlocked && "bg-white text-slate-400 hover:bg-slate-50"
           )}
         >
           <span className="flex min-w-0 items-center gap-2">
-            {getModelIcon(currentModel)}
-            <span className="truncate font-medium">{currentModel}</span>
+            <span className={currentModelBlocked ? "opacity-45 grayscale" : undefined}>
+              {getModelIcon(currentModel)}
+            </span>
+            <span className="truncate font-medium">{currentPersonalModel?.name ?? currentModel}</span>
           </span>
-          <ChevronDown className="w-4 h-4 text-slate-500" />
+          <span className="flex shrink-0 items-center gap-1.5">
+            {currentModelBlocked ? <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> : null}
+            <ChevronDown className={cn("h-4 w-4", currentModelBlocked ? "text-slate-400" : "text-slate-500")} />
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -515,15 +552,36 @@ export function ModelSelector({
         collisionPadding={32}
         avoidCollisions={true}
       >
-        <div className="p-4">
+        <div className="p-4 pb-3">
           {/* Section 1: 模型服务选择 */}
-          <div className="mb-4">
+          <div className={showParams ? "mb-4" : "mb-0"}>
             <h3 className="mb-2 text-[13px] font-medium text-slate-900">
               模型服务选择
             </h3>
             {presetOnly ? (
-              <div className="space-y-1">
-                {presetModels.map((model) => renderModelOption(model))}
+              <div>
+                {multimodalModels.length ? <div className="mb-2 grid grid-cols-2 rounded-lg bg-slate-100 p-1"><button type="button" onClick={() => setPresetModelType("language")} className={cn("rounded-md px-2 py-1.5 text-xs", presetModelType === "language" ? "bg-white font-medium text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>语言模型</button><button type="button" onClick={() => setPresetModelType("multimodal")} className={cn("rounded-md px-2 py-1.5 text-xs", presetModelType === "multimodal" ? "bg-white font-medium text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>图片生成模型</button></div> : null}
+                <div className="space-y-1">{(presetModelType === "multimodal" ? multimodalModels : languageModels).map((model) => renderModelOption(model))}</div>
+                {presetModelType === "multimodal" && (imageGenerationModelOptions.length || onAddImageGenerationModel || onManageImageGenerationModels) ? (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <div className="mb-1.5 px-2 text-xs font-medium text-slate-700">自定义</div>
+                    {imageGenerationModelOptions.length ? <div className="space-y-0.5">{imageGenerationModelOptions.map((item) => <button key={item.id} type="button" disabled={!item.enabled} onClick={() => { handleModelSelect(item.id); setInternalOpen(false); onOpenChange?.(false); }} className={cn("flex w-full items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-left text-sm", item.enabled ? "text-slate-900 hover:bg-slate-50" : "cursor-not-allowed text-slate-400", currentModel === item.id && "bg-blue-50")}><span className="flex min-w-0 items-baseline gap-1.5"><span className="truncate">{item.name}</span><span className="shrink-0 truncate text-[11px] text-slate-400">{item.providerName}{item.enabled ? "" : " · 已停用"}</span></span>{currentModel === item.id ? <Check className="h-4 w-4 shrink-0 text-blue-600" /> : null}</button>)}</div> : <p className="px-3 py-2 text-xs text-slate-400">暂无自定义图片生成模型</p>}
+                    <div className="mt-1 flex items-center gap-1 border-t border-slate-100 pt-2">
+                      {onAddImageGenerationModel ? <button type="button" onClick={() => { setInternalOpen(false); onOpenChange?.(false); onAddImageGenerationModel(); }} className="flex min-h-9 flex-1 items-center gap-1.5 rounded-md px-3 py-2 text-left text-xs text-blue-600 hover:bg-blue-50"><Plus className="h-3.5 w-3.5" />自定义模型</button> : null}
+                      {onManageImageGenerationModels ? <button type="button" aria-label="管理图片生成模型" title="管理图片生成模型" onClick={() => { setInternalOpen(false); onOpenChange?.(false); onManageImageGenerationModels(); }} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"><Settings2 className="h-4 w-4" /></button> : null}
+                    </div>
+                  </div>
+                ) : null}
+                {presetModelType === "language" && (onAddPersonalModel || onManagePersonalModels) ? (
+                  <div className="mt-3 border-t border-slate-100 pt-3">
+                    <div className="mb-1.5 px-2 text-xs font-medium text-slate-700">自定义</div>
+                    {personalModelOptions.length ? <div className="space-y-0.5">{personalModelOptions.map((item) => <button key={item.id} type="button" disabled={!item.enabled} onClick={() => { handleModelSelect(item.id); setInternalOpen(false); onOpenChange?.(false); }} className={cn("flex w-full items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-left text-sm", item.enabled ? "text-slate-900 hover:bg-slate-50" : "cursor-not-allowed text-slate-400", currentModel === item.id && "bg-blue-50")}><span className="flex min-w-0 items-baseline gap-1.5"><span className="truncate">{item.name}</span><span className="shrink-0 truncate text-[11px] text-slate-400">{item.providerName}{item.enabled ? "" : " · 已停用"}</span></span>{currentModel === item.id ? <Check className="h-4 w-4 shrink-0 text-blue-600" /> : null}</button>)}</div> : <p className="px-3 py-2 text-xs text-slate-400">暂无自定义模型</p>}
+                    <div className="mt-1 flex items-center gap-1 border-t border-slate-100 pt-2">
+                      {onAddPersonalModel ? <button type="button" onClick={() => { setInternalOpen(false); onOpenChange?.(false); onAddPersonalModel(); }} className="flex flex-1 items-center gap-1.5 rounded-md px-3 py-2 text-left text-xs text-blue-600 hover:bg-blue-50"><Plus className="h-3.5 w-3.5" />自定义模型</button> : null}
+                      {onManagePersonalModels ? <button type="button" aria-label="管理模型" title="管理模型" onClick={() => { setInternalOpen(false); onOpenChange?.(false); onManagePersonalModels(); }} className="rounded-md p-2 text-slate-500 hover:bg-slate-100"><Settings2 className="h-4 w-4" /></button> : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <Tabs

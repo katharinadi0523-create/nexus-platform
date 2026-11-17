@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 interface SelectOption {
   value: string;
   label: string;
+  icon?: React.ReactNode;
   disabled?: boolean;
 }
 
@@ -45,8 +46,9 @@ export function Select({
             className
           )}
         >
-          <span className={cn(!selectedOption && "text-muted-foreground")}>
-            {selectedOption ? selectedOption.label : placeholder}
+          <span className={cn("flex min-w-0 items-center gap-2", !selectedOption && "text-muted-foreground")}>
+            {selectedOption?.icon}
+            <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
           </span>
           <ChevronDown className="h-4 w-4 opacity-50" />
         </button>
@@ -71,7 +73,10 @@ export function Select({
                 !option.disabled && value === option.value && "bg-accent"
               )}
             >
-              <span className="flex-1 text-left">{option.label}</span>
+              <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                {option.icon}
+                <span className="truncate">{option.label}</span>
+              </span>
               {value === option.value && !option.disabled ? (
                 <Check className="h-4 w-4 text-primary" />
               ) : null}

@@ -6,6 +6,7 @@ import {
   getDefaultModelParams,
   PRESET_MODEL_IDS,
 } from "@/lib/model-schemas";
+import { getPersonalModel } from "@/components/claw-client/personal-model-demo-store";
 
 const STORAGE_KEY = "claw-client.model-preferences.v1";
 const DEFAULT_MODEL = PRESET_MODEL_IDS.includes("Qwen3-32B")
@@ -28,6 +29,7 @@ const EMPTY_STORE: ModelPreferenceStore = {
 };
 
 const STORE_CHANGE_EVENT = "claw-client:model-preferences-changed";
+const isSelectableModel = (model: string) => PRESET_MODEL_IDS.includes(model) || Boolean(getPersonalModel(model)?.model.enabled);
 
 function subscribe(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -68,7 +70,7 @@ function writeStore(next: ModelPreferenceStore) {
 function normalizeStore(value: unknown): ModelPreferenceStore {
   if (!value || typeof value !== "object") return EMPTY_STORE;
   const candidate = value as Partial<ModelPreferenceStore>;
-  const fallbackModel = PRESET_MODEL_IDS.includes(candidate.lastSelectedModel ?? "")
+  const fallbackModel = isSelectableModel(candidate.lastSelectedModel ?? "")
     ? candidate.lastSelectedModel!
     : DEFAULT_MODEL;
   const bySession: Record<string, SessionModelPreference> = {};
@@ -76,7 +78,7 @@ function normalizeStore(value: unknown): ModelPreferenceStore {
   if (candidate.bySession && typeof candidate.bySession === "object") {
     for (const [sessionId, saved] of Object.entries(candidate.bySession)) {
       if (!saved) continue;
-      const model = PRESET_MODEL_IDS.includes(saved.model)
+      const model = isSelectableModel(saved.model)
         ? saved.model
         : DEFAULT_MODEL;
       bySession[sessionId] = {
@@ -110,7 +112,7 @@ export function useChatModelPreference(sessionKey: string) {
     }
     const sessionPreference = store.bySession[sessionKey];
     if (sessionPreference) return sessionPreference;
-    const model = PRESET_MODEL_IDS.includes(store.lastSelectedModel)
+    const model = isSelectableModel(store.lastSelectedModel)
       ? store.lastSelectedModel
       : DEFAULT_MODEL;
     return { model, params: getDefaultModelParams(model) };
@@ -118,7 +120,7 @@ export function useChatModelPreference(sessionKey: string) {
 
   const selectModel = useCallback(
     (model: string) => {
-      if (!PRESET_MODEL_IDS.includes(model)) return;
+      if (!isSelectableModel(model)) return;
       const current = readStore();
       writeStore({
         ...current,

@@ -209,7 +209,7 @@ export function ExpenseChatPanel({
     ].map((agent, index): ConversationPanelTask => ({ ...agent, kind: "subagent", status: index === 1 ? "running" : "done" }));
     return [...tasks, ...subagents];
   }, [flow.inspector.tasks, summaryStressMode]);
-  const summaryOutputs = useMemo(() => {
+  const allSummaryOutputs = useMemo(() => {
     const baseOutputs: ConversationPanelFile[] = flow.inspector.files.map((file, index) => ({
       id: `expense-output-${index}`,
       name: file.name,
@@ -299,6 +299,12 @@ export function ExpenseChatPanel({
     if (phase === "clarify") return flow.prefix;
     return [...flow.prefix, ...runNodes.slice(0, Math.max(runCursor, 0))];
   }, [flow.prefix, phase, runNodes, runCursor]);
+  const summaryOutputs = useMemo(() => {
+    const visibleArtifactNames = new Set(visibleNodes.flatMap((node) =>
+      node.type === "artifacts" ? node.artifacts.map((artifact) => artifact.name) : []
+    ));
+    return allSummaryOutputs.filter((file) => visibleArtifactNames.has(file.name));
+  }, [allSummaryOutputs, visibleNodes]);
 
   useEffect(() => {
     if (phase !== "running") return;
@@ -385,6 +391,7 @@ export function ExpenseChatPanel({
                   <ExpenseNodeView
                     node={node}
                     expanded={Boolean(expanded[node.key])}
+                    onViewAllArtifacts={personalMode ? () => onWorkspaceViewChange?.("files") : undefined}
                     onToggle={() =>
                       setExpanded((current) => ({
                         ...current,

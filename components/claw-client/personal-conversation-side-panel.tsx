@@ -574,11 +574,10 @@ export function PersonalConversationSidePanel({
   const filesLayout = useMemo(() => {
     const sections = [
       ...(filteredOutputs.length ? [{ key: "outputs" as const, count: filteredOutputs.length }] : []),
-      ...(filteredMaterials.length ? [{ key: "materials" as const, count: filteredMaterials.length }] : []),
     ];
-    const chromeHeight = (sections.length ? 32 : 0) + (sessionFileSearchOpen ? 36 : 0) + sections.length * 32 + Math.max(0, sections.length - 1) * 12;
+    const chromeHeight = 32 + (sessionFileSearchOpen ? 36 : 0);
     return allocateSummaryRows(Math.max(0, summarySectionHeight - 32 - chromeHeight), sections, collapsedSummarySections);
-  }, [collapsedSummarySections, filteredMaterials.length, filteredOutputs.length, sessionFileSearchOpen, summarySectionHeight]);
+  }, [collapsedSummarySections, filteredOutputs.length, sessionFileSearchOpen, summarySectionHeight]);
   const activeLayout = personalMode ? (showExecution ? executionLayout : filesLayout) : summaryLayout;
 
   useEffect(() => {
@@ -793,7 +792,7 @@ export function PersonalConversationSidePanel({
             <div role="tablist" aria-label="会话侧栏内容" className="flex shrink-0 items-center gap-1">
               {([
                 { id: "collaboration", label: "协作", Icon: Users },
-                { id: "files", label: "会话文件", Icon: Files },
+                { id: "files", label: "产物", Icon: Files },
                 { id: "workspace", label: "工作空间", Icon: Folder },
               ] as const).map(({ id, label, Icon }) => (
                 <button key={id} type="button" role="tab" aria-label={label} aria-selected={activePrimaryView === id} title={label} onClick={() => selectPrimaryView(id)} className={cn("flex h-8 w-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400", activePrimaryView === id ? "bg-blue-50 text-blue-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800")}>
@@ -880,8 +879,8 @@ export function PersonalConversationSidePanel({
               <div className="flex flex-col gap-3">
                 {personalMode && showSessionFiles ? (
                   <div className="flex h-8 shrink-0 items-center gap-2 px-1">
-                    <h2 className="min-w-0 flex-1 text-sm font-semibold leading-8 text-slate-800">会话文件</h2>
-                    <button type="button" aria-label={sessionFileSearchOpen ? "关闭会话文件搜索" : "搜索会话文件"} title={sessionFileSearchOpen ? "关闭搜索" : "搜索文件"} onClick={() => {
+                    <h2 className="min-w-0 flex-1 text-sm font-semibold leading-8 text-slate-800">产物 <span className="ml-1 font-normal text-slate-400">{filteredOutputs.length}</span></h2>
+                    <button type="button" aria-label={sessionFileSearchOpen ? "关闭产物搜索" : "搜索产物"} title={sessionFileSearchOpen ? "关闭搜索" : "搜索产物"} onClick={() => {
                       if (sessionFileSearchOpen) {
                         setSessionFileSearchOpen(false);
                         setSessionFileQuery("");
@@ -896,7 +895,7 @@ export function PersonalConversationSidePanel({
                 {personalMode && showSessionFiles && sessionFileSearchOpen ? (
                   <label className="flex h-9 shrink-0 items-center gap-2 rounded-md border border-slate-200 px-2.5 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
                     <Search className="h-4 w-4 shrink-0 text-slate-400" />
-                    <input ref={sessionFileSearchRef} value={sessionFileQuery} onChange={(event) => setSessionFileQuery(event.target.value)} placeholder="搜索文件名称" className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-slate-400" />
+                    <input ref={sessionFileSearchRef} value={sessionFileQuery} onChange={(event) => setSessionFileQuery(event.target.value)} placeholder="搜索产物名称" className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-slate-400" />
                     {sessionFileQuery ? <button type="button" aria-label="清除搜索词" onClick={() => setSessionFileQuery("")} className="text-slate-400 hover:text-slate-700"><X className="h-3.5 w-3.5" /></button> : null}
                   </label>
                 ) : null}
@@ -1006,19 +1005,19 @@ export function PersonalConversationSidePanel({
                   </section>
                 ) : null}
 
-                {showSessionFiles && filteredOutputs.length === 0 && filteredMaterials.length === 0 ? (
-                  <p className="px-3 py-10 text-center text-sm text-slate-500">{normalizedSessionFileQuery ? "没有找到匹配的文件" : "这次对话上传、引用或生成的文件会出现在这里。"}</p>
+                {showSessionFiles && filteredOutputs.length === 0 && (personalMode || filteredMaterials.length === 0) ? (
+                  <p className="px-3 py-10 text-center text-sm text-slate-500">{normalizedSessionFileQuery ? "没有找到匹配的产物" : personalMode ? "当前会话暂无产物。" : "这次对话上传、引用或生成的文件会出现在这里。"}</p>
                 ) : null}
 
                 {showSessionFiles && filteredOutputs.length ? (
                   <section className="shrink-0">
-                    <div className="flex h-8 shrink-0 items-center gap-1">
+                    {!personalMode ? <div className="flex h-8 shrink-0 items-center gap-1">
                       <button type="button" aria-expanded={!collapsedSummarySections.outputs} onClick={() => setCollapsedSummarySections((current) => ({ ...current, outputs: !current.outputs }))} className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-1 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
                         {collapsedSummarySections.outputs ? <ChevronRight className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
                         <span className="flex-1 text-sm font-semibold text-slate-800">产物</span>
                         <span className="text-xs text-slate-400">{filteredOutputs.length}</span>
                       </button>
-                    </div>
+                    </div> : null}
                     {!collapsedSummarySections.outputs ? (
                       <div
                         className={cn("overflow-x-hidden", activeLayout.fallbackToPanelScroll ? "overflow-y-visible" : "overflow-y-auto")}
@@ -1064,7 +1063,7 @@ export function PersonalConversationSidePanel({
                   </section>
                 ) : null}
 
-                {showSessionFiles && filteredMaterials.length ? (
+                {!personalMode && showSessionFiles && filteredMaterials.length ? (
                   <section className="shrink-0">
                     <SummarySectionHeader
                       title="资料"
@@ -1127,8 +1126,8 @@ export function PersonalConversationSidePanel({
               </div>
             ) : (
               <div className="flex h-full min-h-48 flex-col px-5 text-center">
-                {personalMode ? <h2 className="-mx-1 h-8 shrink-0 text-left text-sm font-semibold leading-8 text-slate-800">{showExecution ? "进程" : "会话文件"}</h2> : null}
-                <p className="my-auto text-sm text-slate-500">{showExecution ? "本次会话暂无执行进度。" : "这次对话上传、引用或生成的文件会出现在这里。"}</p>
+                {personalMode ? <h2 className="-mx-1 h-8 shrink-0 text-left text-sm font-semibold leading-8 text-slate-800">{showExecution ? "进程" : "产物"}</h2> : null}
+                <p className="my-auto text-sm text-slate-500">{showExecution ? "本次会话暂无执行进度。" : "当前会话暂无产物。"}</p>
               </div>
             )}
           </div>

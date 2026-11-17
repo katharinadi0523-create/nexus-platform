@@ -524,6 +524,15 @@ export const MODEL_SCHEMAS: Record<string, ModelSchema> = {
 };
 
 export function getModelSchema(modelId: string): ModelSchema {
+  if (IMAGE_GENERATION_MODEL_IDS.includes(modelId as (typeof IMAGE_GENERATION_MODEL_IDS)[number])) {
+    return {
+      id: modelId,
+      displayName: modelId,
+      category: "preset",
+      supportedParams: [],
+      capabilities: { knowledge_base: 0, ontology: 0, terminology: 0, workflow: 0, plugins: 0, mcp: 0, memory: 0 },
+    };
+  }
   const base = MODEL_SCHEMAS[modelId] || MODEL_SCHEMAS["Qwen3-32B"];
 
   const normalizeToolDomain = (schema: ModelSchema): ModelSchema => {
@@ -601,4 +610,17 @@ export const PRESET_MODEL_IDS = Object.values(MODEL_SCHEMAS)
 export const EXCLUSIVE_MODEL_IDS = Object.values(MODEL_SCHEMAS)
   .filter((m) => m.category === "exclusive")
   .map((m) => m.id);
+
+/** Publicly available image generation models shown in the multimodal picker. */
+export const IMAGE_GENERATION_MODEL_IDS = [
+  "qwen-image-3.0-pro",
+  "qwen-image-3.0",
+  "wan2.7-image-pro",
+  "gpt-image-2.6-sunburst",
+  "gpt-image-2.6-flare",
+  "glm-image",
+] as const;
+
+/** Public image generation models available in the multimodal picker. */
+export const MULTIMODAL_MODEL_IDS = IMAGE_GENERATION_MODEL_IDS;
 

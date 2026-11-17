@@ -1,6 +1,9 @@
 "use client";
 
-import { DebugChatComposer } from "@/components/claw-hub-next/debug-chat-composer";
+import {
+  DebugChatComposer,
+  type ModelErrorDemoState,
+} from "@/components/claw-hub-next/debug-chat-composer";
 import type { ClawDetailData } from "@/lib/mock/claw-hub-next";
 import { AgentSelector } from "./agent-selector";
 
@@ -15,7 +18,9 @@ interface ComposerWithAgentsProps {
   isBusy?: boolean;
   onInterrupt?: () => void;
   queueHint?: string;
-  modelFallbackDemo?: boolean;
+  modelErrorDemo?: ModelErrorDemoState;
+  modelPickerOpen?: boolean;
+  onModelPickerOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -33,7 +38,9 @@ export function ComposerWithAgents({
   isBusy = false,
   onInterrupt,
   queueHint,
-  modelFallbackDemo = false,
+  modelErrorDemo,
+  modelPickerOpen,
+  onModelPickerOpenChange,
 }: ComposerWithAgentsProps) {
   return (
     <DebugChatComposer
@@ -48,7 +55,9 @@ export function ComposerWithAgents({
       isBusy={isBusy}
       onInterrupt={onInterrupt}
       queueHint={queueHint}
-      modelFallbackDemo={modelFallbackDemo}
+      modelErrorDemo={modelErrorDemo}
+      modelPickerOpen={modelPickerOpen}
+      onModelPickerOpenChange={onModelPickerOpenChange}
       footerLeadingExtra={<AgentSelector />}
     />
   );
