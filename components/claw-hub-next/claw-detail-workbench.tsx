@@ -20,6 +20,7 @@ import {
   GripVertical,
   Loader2,
   MessageSquareText,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -39,6 +40,14 @@ import {
 import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
 import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
+import { OntologyBindingDialog } from "@/components/ontology/ontology-binding-dialog";
+import { OntologyBindingPanel } from "@/components/ontology/ontology-binding-panel";
+import {
+  DEMO_CLAW_ONTOLOGY_BINDINGS,
+  removeShelvedOntologyAgent,
+  upsertShelvedOntologyAgent,
+  type OntologyBinding,
+} from "@/lib/mock/ontology-binding";
 import { AgentBomBadge } from "@/components/claw-hub-next/agent-bom-badge";
 import { buildAgentBomTreeFromDetail } from "@/components/claw-hub-next/agent-bom-tree";
 import { ClawKnowledgeAssetsSection } from "@/components/claw-hub-next/detail/claw-knowledge-assets-section";
@@ -192,6 +201,7 @@ const CLAW_DETAIL_NAV_GROUPS: Array<{
     items: [
       { value: "skills", label: "技能", icon: Sparkles },
       { value: "tools", label: "插件", icon: Wrench },
+      { value: "ontology", label: "本体", icon: Network },
       { value: "knowledge", label: "知识", icon: FileStack },
       { value: "agents", label: "智能体", icon: Bot },
     ],
@@ -579,6 +589,7 @@ export function ClawDetailWorkbench({
       "channels",
       "skills",
       "tools",
+      "ontology",
       "knowledge",
       "agents",
     ]);
@@ -639,6 +650,10 @@ export function ClawDetailWorkbench({
       : "未上架"
   );
   const [shelfDialogOpen, setShelfDialogOpen] = useState(false);
+  const [ontologyBinding, setOntologyBinding] = useState<OntologyBinding | null>(
+    () => DEMO_CLAW_ONTOLOGY_BINDINGS[detail.overview.id] ?? null
+  );
+  const [ontologyDialog, setOntologyDialog] = useState({ open: false, key: 0 });
   const [shelfReleaseMode, setShelfReleaseMode] = useState<ClawReleaseMode>("公开发布");
   const [shelfAgentTypes, setShelfAgentTypes] = useState<string[]>([]);
   const [chatSessions, setChatSessions] = useState(detail.chatSessions);
@@ -1454,6 +1469,7 @@ export function ClawDetailWorkbench({
 
     setPlazaStatus("未上架");
     setApprovalStatus("none");
+    removeShelvedOntologyAgent(`shelved-${detail.overview.id}`);
     toast.success("已从智能体广场下架。");
   }
 
@@ -1537,6 +1553,17 @@ export function ClawDetailWorkbench({
     setPlazaStatus("已上架");
     setShelfDialogOpen(false);
     setApprovalStatus("none");
+    if (ontologyBinding) {
+      upsertShelvedOntologyAgent({
+        id: `shelved-${detail.overview.id}`,
+        name: entityName.trim() || detail.overview.name,
+        description: entityDescription.trim() || detail.overview.summary,
+        ontologySceneName: ontologyBinding.sceneName,
+        sceneDescription: ontologyBinding.sceneDescription,
+        shelvedAt: new Date().toISOString(),
+        agentTypes: shelfAgentTypes,
+      });
+    }
     toast.success(
       `已上架到智能体广场：${shelfReleaseMode} / ${shelfAgentTypes.join("、")}`
     );
@@ -2350,6 +2377,24 @@ export function ClawDetailWorkbench({
               onToggleSkill={handleToggleSkill}
               onDeleteSkill={handleDeleteSkill}
             />
+          </TabsContent>
+
+          <TabsContent value="ontology" className="mt-0">
+            <SectionCard
+              title="本体"
+              description="用本体构建与运营平台的 API Key 绑定一个本体场景。一个 Claw 最多绑定一个场景。"
+            >
+              <OntologyBindingPanel
+                binding={ontologyBinding}
+                scope="project"
+                onBind={() => setOntologyDialog((d) => ({ open: true, key: d.key + 1 }))}
+                onEdit={() => setOntologyDialog((d) => ({ open: true, key: d.key + 1 }))}
+                onUnbind={() => {
+                  setOntologyBinding(null);
+                  toast.success("已解除本体绑定，重新发布后生效。");
+                }}
+              />
+            </SectionCard>
           </TabsContent>
 
           <TabsContent value="knowledge" className="mt-0">
@@ -3645,6 +3690,15 @@ export function ClawDetailWorkbench({
             </div>
           </div>
 
+          {ontologyBinding ? (
+            <div className="mx-6 mb-5 flex items-start gap-2.5 rounded-md border border-[#fde3cf] bg-[#fff8f2] px-3.5 py-3 text-[13px] leading-6 text-slate-700">
+              <Network className="mt-1 h-4 w-4 shrink-0 text-[#ea580c]" />
+              <div>
+                广场卡片会带上本体标记“本体 · {ontologyBinding.sceneName}”。使用者召唤后，通过这个 Claw 配置的 API Key 访问本体，无需自己填写。
+              </div>
+            </div>
+          ) : null}
+
           <DialogFooter className="border-t border-slate-100 bg-white px-6 py-4">
             <Button
               type="button"
@@ -3819,6 +3873,26 @@ export function ClawDetailWorkbench({
         defaultCreatedBy={detail.overview.creator}
         onCreated={({ item }) => setAutomatedTasks((rows) => [item, ...rows])}
       />
+      {ontologyDialog.open ? (
+        <OntologyBindingDialog
+          key={ontologyDialog.key}
+          open={ontologyDialog.open}
+          onOpenChange={(open) => setOntologyDialog((d) => ({ ...d, open }))}
+          scope="project"
+          initial={ontologyBinding}
+          onConfirm={(binding) => {
+            const replaced = ontologyBinding && ontologyBinding.sceneId !== binding.sceneId;
+            setOntologyBinding(binding);
+            setOntologyDialog((d) => ({ ...d, open: false }));
+            toast.success(
+              replaced
+                ? `已更换为「${binding.sceneName}」，重新发布后生效。`
+                : `已绑定本体「${binding.sceneName}」。`
+            );
+          }}
+        />
+      ) : null}
+
       <ClawPublishValidationDialog
         open={publishValidationOpen}
         onOpenChange={setPublishValidationOpen}

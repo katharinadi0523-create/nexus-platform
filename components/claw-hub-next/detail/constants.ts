@@ -27,6 +27,7 @@ export type DetailSectionKey =
   | "core"
   | "model"
   | "tools"
+  | "ontology"
   | "skills"
   | "knowledge"
   | "agents"

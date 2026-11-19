@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { MyClawOntologyPage } from "@/components/claw-client/ontology-page";
 import { AgentsPlaza } from "@/components/my-claw/agents/agents-plaza";
 import { MyClawPluginsHub } from "@/components/my-claw/plugins/plugins-hub";
 import { MyClawSkillsHub } from "@/components/my-claw/skills/skills-hub";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type CapabilityType = "agents" | "skills" | "plugins";
+type CapabilityType = "agents" | "skills" | "plugins" | "ontology";
 
 export function MyClawCapabilitiesPage({
   initialType = "agents",
@@ -41,6 +42,12 @@ export function MyClawCapabilitiesPage({
           >
             插件
           </TabsTrigger>
+          <TabsTrigger
+            value="ontology"
+            className="h-full rounded-none border-b-2 border-transparent px-4 text-sm font-medium text-[#5a6779] shadow-none data-[state=active]:border-[#2773ff] data-[state=active]:bg-transparent data-[state=active]:text-[#2773ff] data-[state=active]:shadow-none"
+          >
+            本体
+          </TabsTrigger>
         </TabsList>
       </div>
 
@@ -59,6 +66,9 @@ export function MyClawCapabilitiesPage({
           personalWorkspace
           capabilityWorkspace
         />
+      </TabsContent>
+      <TabsContent value="ontology" className="mt-0 min-h-0 flex-1 overflow-hidden">
+        <MyClawOntologyPage />
       </TabsContent>
     </Tabs>
   );

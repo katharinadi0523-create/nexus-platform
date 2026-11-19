@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AF 接入本体 OF</title>
+<style>
+/* 蓝色 = 管控端（AF 平台），赭色 = 使用端（Claw / 广场），绿色 = OF 侧 */
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --fg: #1b1f27; --muted: #5a6271; --line: #dde1e8;
+  --org: #2c55c7; --org-soft: #e9effc;
+  --own: #a8580c; --own-soft: #fbf0e2;
+  --of: #1d744a; --of-soft: #e4f4ec;
+  --ok: #1d744a; --ok-soft: #e4f4ec;
+  --sug: #2c55c7; --sug-soft: #e9effc;
+  --todo: #8d6200; --todo-soft: #fbf3dc;
+  --risk: #b42318; --risk-soft: #fdecea;
+  --font-body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --surface: #1a1e26; --fg: #e5e8ee; --muted: #9aa2b1; --line: #2c323d;
+    --org: #86a5ff; --org-soft: #1c2640; --own: #f0a65e; --own-soft: #33261a;
+    --of: #62c795; --of-soft: #14291f;
+    --ok: #62c795; --ok-soft: #14291f; --sug: #86a5ff; --sug-soft: #1c2640; --todo: #e2b450; --todo-soft: #2e2612;
+    --risk: #ff8a80; --risk-soft: #3a1a18;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151b; --surface: #1a1e26; --fg: #e5e8ee; --muted: #9aa2b1; --line: #2c323d;
+  --org: #86a5ff; --org-soft: #1c2640; --own: #f0a65e; --own-soft: #33261a;
+  --of: #62c795; --of-soft: #14291f;
+  --ok: #62c795; --ok-soft: #14291f; --sug: #86a5ff; --sug-soft: #1c2640; --todo: #e2b450; --todo-soft: #2e2612;
+  --risk: #ff8a80; --risk-soft: #3a1a18;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.75; }
+.page { max-width: 920px; margin: 0 auto; padding-block: 48px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 48px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.35; }
+h1 { font-size: 30px; font-weight: 650; }
+h2 { font-size: 20px; font-weight: 650; }
+h3 { font-size: 16px; font-weight: 650; }
+p { margin: 0; }
+code { font-family: var(--font-mono); font-size: 0.88em; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; word-break: break-all; }
+.muted { color: var(--muted); }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; color: var(--muted); }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.prose { max-width: 70ch; display: flex; flex-direction: column; gap: 10px; }
+header { display: flex; flex-direction: column; gap: 14px; }
+.lede { font-size: 16px; max-width: 64ch; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--muted); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+nav.toc a { color: var(--muted); text-decoration: none; border-bottom: 1px dashed var(--line); }
+nav.toc a:hover { color: var(--fg); }
+
+.tag { display: inline-block; font-size: 12px; line-height: 1.6; padding: 0 8px; border-radius: 4px; font-weight: 600; white-space: nowrap; vertical-align: 1px; }
+.tag.ok { color: var(--ok); background: var(--ok-soft); }
+.tag.sug { color: var(--sug); background: var(--sug-soft); }
+.tag.todo { color: var(--todo); background: var(--todo-soft); }
+.tag.risk { color: var(--risk); background: var(--risk-soft); }
+.side { font-weight: 650; }
+.side.org { color: var(--org); }
+.side.own { color: var(--own); }
+.side.of { color: var(--of); }
+
+.thesis { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px; }
+.thesis ul, .panel ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.panel ul { color: var(--muted); }
+
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.duo > *, .trio > * { min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
+.panel.org { border-top: 3px solid var(--org); }
+.panel.own { border-top: 3px solid var(--own); }
+.panel.of { border-top: 3px solid var(--of); }
+.panel.pick { border: 2px solid var(--org); }
+.panel p { color: var(--muted); }
+
+.flow { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; counter-reset: step; }
+.flow li { counter-increment: step; display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; }
+.flow li::before { content: counter(step); font-family: var(--font-mono); font-size: 12px; width: 22px; height: 22px; margin-top: 3px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; background: var(--bg); color: var(--muted); }
+.panel.org .flow li::before { background: var(--org-soft); color: var(--org); }
+.panel.own .flow li::before { background: var(--own-soft); color: var(--own); }
+.panel.of .flow li::before { background: var(--of-soft); color: var(--of); }
+.flow small { display: block; color: var(--muted); font-size: 13px; }
+.fit { font-size: 13px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 10px; }
+
+/* 链路图 */
+.chain { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; align-items: stretch; }
+.node { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 14px; display: flex; flex-direction: column; gap: 4px; position: relative; margin-right: 22px; }
+.node:last-child { margin-right: 0; }
+.node:not(:last-child)::after { content: "→"; position: absolute; right: -19px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 16px; }
+.node .who { font-size: 12px; font-family: var(--font-mono); letter-spacing: 0.04em; }
+.node b { font-size: 15px; }
+.node span.d { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.node.of { border-top: 3px solid var(--of); } .node.of .who { color: var(--of); }
+.node.org { border-top: 3px solid var(--org); } .node.org .who { color: var(--org); }
+.node.own { border-top: 3px solid var(--own); } .node.own .who { color: var(--own); }
+
+/* 对象模型 */
+.obj { font-family: var(--font-mono); font-size: 13px; line-height: 1.7; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; white-space: pre; }
+
+/* mock */
+.mock { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; font-size: 14px; }
+.mock .mt { font-weight: 650; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 12px; color: var(--muted); }
+.field .in { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--bg); color: var(--muted); font-family: var(--font-mono); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opt { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.opt.on { border-color: var(--org); background: var(--org-soft); }
+.opt .s { font-size: 12px; color: var(--muted); }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 3px 12px; color: var(--muted); }
+.btn.p { background: var(--org); border-color: var(--org); color: #fff; }
+.hint { font-size: 12px; color: var(--muted); }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 600px; font-size: 14px; line-height: 1.65; }
+th, td { text-align: left; vertical-align: top; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+tr:last-child td, tr:last-child th { border-bottom: 0; }
+thead th { font-size: 13px; color: var(--muted); font-weight: 600; background: var(--bg); }
+tbody th { font-weight: 600; white-space: nowrap; }
+th.org { color: var(--org); } th.own { color: var(--own); }
+td.org { background: color-mix(in srgb, var(--org-soft) 45%, transparent); }
+td.own { background: color-mix(in srgb, var(--own-soft) 45%, transparent); }
+td.pick { background: color-mix(in srgb, var(--ok-soft) 60%, transparent); }
+
+.items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.items li { padding: 14px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.items .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-weight: 650; }
+.items p { color: var(--muted); max-width: 72ch; }
+
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+
+@media (max-width: 760px) {
+  .page { padding-block: 32px 56px; gap: 40px; }
+  h1 { font-size: 25px; }
+  .duo, .trio { grid-template-columns: 1fr; }
+  .chain { grid-template-columns: 1fr; gap: 22px; }
+  .node { margin-right: 0; }
+  .node:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -21px; transform: translateX(-50%); }
+}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <div class="eyebrow">讨论稿 · 2026-11-19</div>
+    <h1>AF 智能体接入本体 OF：产品链路</h1>
+    <p class="lede">智能体平台 AF 通过 OF 的 API Key 接入本体场景。本文给出 Key 怎么配、场景怎么选、管控端和使用端各走哪条链路、发布后谁的权限生效，以及调用 OF 用子智能体还是直接挂工具。</p>
+    <div class="legend">
+      <span><span class="side org">管控端</span> AF 平台（有项目 / 工作空间归属）</span>
+      <span><span class="side own">使用端</span> Claw 与广场（无工作空间归属）</span>
+      <span><span class="side of">OF</span> 本体平台</span>
+    </div>
+    <div class="legend">
+      <span><span class="tag ok">依据</span> OF 接口文档原文</span>
+      <span><span class="tag sug">建议</span> 方案提议</span>
+      <span><span class="tag todo">待确认</span> 需拍板或找 OF 核实</span>
+      <span><span class="tag risk">冲突</span> 和已有前提或决定对不上</span>
+    </div>
+    <nav class="toc">
+      <a href="#s1">先核对前提</a><a href="#s2">核心主张</a><a href="#s3">整体链路</a><a href="#s4">对象模型</a>
+      <a href="#s5">管控端流程</a><a href="#s6">发布与广场</a><a href="#s7">Claw 绑定</a><a href="#s8">子智能体还是挂工具</a>
+      <a href="#s9">异常与边界</a><a href="#s10">操作手册大纲</a><a href="#s11">待确认</a>
+    </nav>
+  </header>
+
+  <!-- 1 前提核对 -->
+  <section id="s1">
+    <div class="eyebrow">01 · 先核对前提</div>
+    <h2>OF 文档里有三处和“只要有 Key 就行”对不上</h2>
+    <div class="prose">
+      <p>依据是开发环境 API 目录（2026-11-14 快照，106 个接口），只读了页面文档，没有实际调用。下面三条决定了“用户填 Key”方案能不能做到完全不依赖 OF 改造。</p>
+    </div>
+    <ul class="items">
+      <li>
+        <div class="head"><span>Key 的范围可能是“一个场景”，不是“整个工作空间”</span><span class="tag risk">冲突</span><span class="tag ok">依据</span></div>
+        <p>OF 调用流程第一步是“应用注册：注册调用方应用并绑定本体场景”，鉴权说明写“每个应用绑定一个本体场景，只能访问该场景内已授权能力”，Key 还能按能力包（查询 / 写入 / 链接 / 行为执行）开通。这和“一个 Key 能调用对应工作空间的所有场景”不一致。</p>
+        <p><strong>影响：</strong>如果 Key 只绑一个场景，“填 Key 后列出场景库让用户选”这一步会退化成“填 Key 后显示它绑定的那个场景”。流程反而更简单，但界面文案和校验逻辑不同，要先问清楚。</p>
+      </li>
+      <li>
+        <div class="head"><span>只有 Key 不够，每个请求还要带 Workspace Id 等三个头</span><span class="tag risk">冲突</span><span class="tag ok">依据</span></div>
+        <p>鉴权说明要求每个接口除了 <code>Authorization: Bearer {API_KEY}</code>，还要带 <code>X-Ceai-User-Id</code>、<code>X-Ceai-Tenant-Id</code>、<code>X-Ceai-Workspace-Id</code>，原文是“Workspace Id 不填时页面看不到数据”。列场景的接口 <code>HttpListOntologyModel</code>（API011）请求体里 <code>workspace_id</code> 也是必填。示例 curl 里还有 <code>x-regionid</code>。</p>
+        <p><strong>影响：</strong>使用端“不能自己带上 workspace id”的问题依然存在，只是换了个来源：不是 AF 带，而是用户从 OF 抄过来和 Key 一起填。这样仍然不需要 OF 改造，代价是表单多一个字段。User Id 填谁（Key 创建者？AF 当前用户？）文档没说，见待确认。</p>
+      </li>
+      <li>
+        <div class="head"><span>OF 自己提供了“本体 MCP 服务”和开放问答接口</span><span class="tag ok">依据</span></div>
+        <p>文档说“讲 MCP 协议的智能体优先走「本体 MCP 服务」”，与 API 共用同一套鉴权。另有 <code>HttpStreamCopilotMessage</code> / <code>HttpGetCopilotConversationDetail</code>（API105/106）：OF 侧的问答智能体，异步提问 + 轮询结果，带交互卡片。这两点直接影响第 08 节“子智能体怎么实现”。本次快照里没有 MCP 服务的工具清单。</p>
+      </li>
+    </ul>
+  </section>
+
+  <!-- 2 核心主张 -->
+  <section id="s2">
+    <div class="eyebrow">02 · 核心主张</div>
+    <h2>同意“两端都让用户自己填 Key”，再补三条规则</h2>
+    <div class="thesis">
+      <ul>
+        <li><strong>一套绑定流程，两端共用。</strong>不管在<span class="side org">管控端</span>还是<span class="side own">Claw</span>，都是：填 OF 凭证（Key + Workspace Id）→ AF 调 OF 校验并列出可用场景 → 选一个场景 → 绑到智能体上。AF 不需要知道 OF 的工作空间结构，也不需要 OF 改造。</li>
+        <li><strong>凭证和绑定分开存。</strong>凭证叫“OF 连接”，是一份可复用资源：<span class="side org">管控端</span>归项目，<span class="side own">Claw</span>归个人。智能体只引用“连接 + 场景 ID”，不复制 Key。Key 过期或轮换时只改一处。</li>
+        <li><strong>发布出去用的是发布者的 Key。</strong>广场上任何人调用这个智能体，访问 OF 的身份和权限都是那把 Key 的，不是调用者自己的。发布时要明确提示，并建议 Key 只开查询能力包。</li>
+        <li><strong>个人 Key 不随发布带出。</strong>Claw 里个人绑定的 OF 连接只给本人用，和《预置付费插件怎么放》的规则保持一致。</li>
+        <li><strong>OF 调用放进子智能体。</strong>主智能体只看到一个“问本体”的入口；子智能体里只装运行时需要的十来个接口，建模、仿真、连接器、自动化规则这些管理类接口一律不暴露。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 3 整体链路 -->
+  <section id="s3">
+    <div class="eyebrow">03 · 整体链路</div>
+    <h2>从 OF 建 Key 到广场上被调用</h2>
+    <div class="chain">
+      <div class="node of"><span class="who">OF · 用户自己</span><b>建应用和 Key</b><span class="d">应用注册（绑场景）→ API Key 管理 → 勾选能力包 → 复制 Key 和 Workspace Id</span></div>
+      <div class="node org"><span class="who">AF 管控端</span><b>建连接、绑场景</b><span class="d">项目资源里新建 OF 连接；智能体能力配置里选连接、选一个场景</span></div>
+      <div class="node org"><span class="who">AF 管控端</span><b>调试、发布</b><span class="d">调试面板看子智能体调用轨迹；发布前校验连接可用、确认 Key 权限</span></div>
+      <div class="node own"><span class="who">使用端</span><b>广场 / Claw 调用</b><span class="d">召唤已发布智能体，走发布者的连接；或在 Claw 绑定个人连接</span></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th class="org">管控端智能体</th><th class="own">广场上的已发布智能体</th><th class="own">Claw 个人绑定</th></tr></thead>
+        <tbody>
+          <tr><th>谁填 Key</th><td class="org">项目里有配置权限的人</td><td class="own">不用填，沿用发布者的</td><td class="own">本人</td></tr>
+          <tr><th>连接归属</th><td class="org">项目</td><td class="own">项目（发布者那边）</td><td class="own">个人</td></tr>
+          <tr><th>访问 OF 的身份</th><td class="org">Key 的权限</td><td class="own">发布者 Key 的权限，所有调用者相同</td><td class="own">本人 Key 的权限</td></tr>
+          <tr><th>能不能带出去</th><td class="org">发布时随智能体生效（引用，不复制）</td><td class="own">—</td><td class="own">不能 <span class="tag sug">建议</span></td></tr>
+          <tr><th>Workspace Id 从哪来</th><td class="org" colspan="3">都由填 Key 的人在“OF 连接”里填写，AF 不从自己的项目或工作空间推断</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 4 对象模型 -->
+  <section id="s4">
+    <div class="eyebrow">04 · 对象模型</div>
+    <h2>两个新对象：OF 连接、本体绑定</h2>
+    <div class="duo">
+      <div class="obj">OF 连接  OntologyConnection
+├ id, name             # 如“供应链本体·生产”
+├ ownerScope           # project | personal
+├ ownerId              # 项目 ID 或用户 ID
+├ apiKey               # 加密存储，界面只显示后 4 位
+├ workspaceId          # 用户从 OF 抄
+├ tenantId / userId    # 待确认，见 01
+├ status               # 可用 | 失效 | 未校验
+├ lastVerifiedAt
+└ createdBy</div>
+      <div class="obj">本体绑定  AgentOntologyBinding
+├ agentId              # 一个智能体最多一条
+├ connectionId
+├ ontologyModelId      # 即 OF 的场景 ID
+├ sceneNameSnapshot    # 绑定时的名称，场景删了也能提示
+├ capabilities         # 查询 | 执行行为（默认只查询）
+└ catalogDigest        # 语义目录摘要，供子智能体提示词</div>
+    </div>
+    <div class="prose">
+      <p><strong>为什么连接要独立成资源：</strong>一个项目里多个智能体可能用同一个 OF 工作空间；Key 轮换、失效排查都只看一处。<span class="tag sug">建议</span>管控端把它放进项目“资源 / 凭证”一类，和预置付费插件的组织 Key 放在同一个地方。</p>
+      <p><strong>“最多绑一个场景”落在 <code>AgentOntologyBinding.agentId</code> 唯一。</strong>多个场景的需求用“多个智能体各绑一个，再由上层智能体召唤”解决，不放开这个限制。</p>
+    </div>
+  </section>
+
+  <!-- 5 管控端 -->
+  <section id="s5">
+    <div class="eyebrow">05 · 管控端流程</div>
+    <h2>在智能体编辑页绑定本体</h2>
+    <div class="duo">
+      <div class="panel org">
+        <h3>绑定步骤</h3>
+        <ol class="flow">
+          <li><span>智能体编辑页 → 能力配置 → “本体”区块，点“绑定本体”<small>区块只允许一项，已绑定时按钮变成“更换”</small></span></li>
+          <li><span>选择 OF 连接：列出本项目已有连接；没有就“新建连接”<small>新建表单：名称、API Key、Workspace Id；附“如何在 OF 创建 Key”手册链接</small></span></li>
+          <li><span>AF 校验连接：调 <code>HttpListOntologyModel</code><small>成功 = 返回列表能读到；不能只看 HTTP 200 或 statusCode 0，要看 result 是否非空、字段是否完整</small></span></li>
+          <li><span>选择场景：列表展示名称、描述、对象类型 / 链接 / 行为 / 函数数量<small>数据来自 API011 返回的 counts 字段</small></span></li>
+          <li><span>预览场景：调 <code>HttpGetSemanticCatalog</code> 展示对象、关系、指标<small>同时生成子智能体用的目录摘要（见 08）</small></span></li>
+          <li><span>选择允许的能力：默认“只查询”；“执行行为”需单独勾选并二次确认</span></li>
+          <li><span>保存。调试面板里可以展开子智能体每一步调用了哪个接口、入参和返回</span></li>
+        </ol>
+      </div>
+      <div class="mock">
+        <div class="mt"><span>绑定本体</span><span class="hint">一个智能体最多绑定一个场景</span></div>
+        <div class="field"><label>OF 连接</label><div class="in">供应链本体 · 生产（Key ••••a3f9 · 可用）</div></div>
+        <div class="hint">＋ 新建连接　·　如何在 OF 获取 Key 和 Workspace Id</div>
+        <div class="field"><label>选择场景（共 3 个）</label></div>
+        <div class="opt on"><span>订单履约</span><span class="s">对象 12 · 关系 18 · 行为 4 · 函数 2</span></div>
+        <div class="opt"><span>库存与仓储</span><span class="s">对象 8 · 关系 9 · 行为 2</span></div>
+        <div class="opt"><span>供应商评估</span><span class="s">对象 5 · 关系 6</span></div>
+        <div class="field"><label>允许的能力</label><div class="in">☑ 查询　☐ 执行行为（会改动 OF 数据）</div></div>
+        <div class="btns"><span class="btn">取消</span><span class="btn p">绑定</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 发布 -->
+  <section id="s6">
+    <div class="eyebrow">06 · 发布与广场</div>
+    <h2>发布出去的智能体用谁的权限</h2>
+    <div class="duo">
+      <div class="panel org">
+        <h3>发布时</h3>
+        <ol class="flow">
+          <li><span>发布检查：连接状态可用、绑定的场景仍存在（API009 读详情）</span></li>
+          <li><span>弹出确认：“发布后，所有使用者都会以连接 <b>供应链本体·生产</b> 的权限访问 OF 数据，看到的数据范围相同。”</span></li>
+          <li><span>发布快照里存 <code>connectionId + ontologyModelId</code>，不复制 Key</span></li>
+        </ol>
+      </div>
+      <div class="panel own">
+        <h3>广场调用时</h3>
+        <ol class="flow">
+          <li><span>使用者不需要任何 OF 账号或 Key，直接用</span></li>
+          <li><span>调用记录标注“经由项目连接 xxx 访问 OF”，便于追查</span></li>
+          <li><span>连接失效时，智能体回答“本体服务暂不可用，请联系发布者”，并通知项目管理员</span></li>
+        </ol>
+      </div>
+    </div>
+    <ul class="items">
+      <li>
+        <div class="head"><span>数据权限不跟使用者走</span><span class="tag risk">风险</span></div>
+        <p>OF 文档里身份头 <code>X-Ceai-User-Id</code> 的语义不清楚。如果 OF 按 User Id 做行级权限，可以考虑把调用者身份透传过去；如果只认 Key，那广场上所有人看到的数据一样。一期按“只认 Key”设计，并把它写进发布确认。</p>
+      </li>
+      <li>
+        <div class="head"><span>Key 轮换不用重新发布</span><span class="tag sug">建议</span></div>
+        <p>因为发布快照只引用连接，项目管理员在连接里换 Key 后立即生效。换成另一个 Workspace Id 时要重新选场景，按“更换绑定”处理，需要重新发布。</p>
+      </li>
+    </ul>
+  </section>
+
+  <!-- 7 Claw -->
+  <section id="s7">
+    <div class="eyebrow">07 · Claw 绑定</div>
+    <h2>Claw 有两条路，先确认走哪条</h2>
+    <div class="prose">
+      <p><span class="tag risk">冲突</span> 2026-10-21 定过“Claw 能力库只放已发布资源；知识库、数据库、本体检索没有发布逻辑，要先在 AF 配给智能体并发布，再在 Claw 里召唤”。按这条，Claw 不直接绑 OF。你这次提到“在 Claw 绑定 OF”，两条路都写出来：</p>
+    </div>
+    <div class="duo">
+      <div class="panel own">
+        <h3>路径 A · 召唤已发布的本体智能体 <span class="tag ok">符合现有决定</span></h3>
+        <ol class="flow">
+          <li><span>能力库 → 智能体 → 发现，找到绑了本体的已发布智能体（卡片上带“本体：订单履约”标记）</span></li>
+          <li><span>添加到我的 Claw</span></li>
+          <li><span>对话中 @ 它或由 Claw 自动召唤，走发布者的连接</span></li>
+        </ol>
+        <div class="fit">不需要新概念。缺点：用户只能用别人发布过的场景，自己在 OF 有权限的场景用不上。</div>
+      </div>
+      <div class="panel own">
+        <h3>路径 B · 个人 OF 连接 <span class="tag sug">建议放到 v2.0.1</span></h3>
+        <ol class="flow">
+          <li><span>能力库 → 插件 → 我的 → “连接本体”（和个人注册 MCP 放在同一处）</span></li>
+          <li><span>填 Key + Workspace Id → 校验 → 选一个场景，流程和管控端完全一样</span></li>
+          <li><span>生成一个个人的“本体助手”子智能体，只有本人可用</span></li>
+          <li><span>Claw 主智能体通过它访问 OF；Claw 本身最多绑一个场景，换场景就是更换绑定</span></li>
+        </ol>
+        <div class="fit">正好对上 v2.0.1 “个人资源：使用端直接注册、归个人所有、不走发布审核”的方向。个人连接不能被任何发布带出。</div>
+      </div>
+    </div>
+    <div class="prose">
+      <p><span class="tag sug">建议</span> 一期做 A（零新增概念，管控端做完就能用），B 和个人 MCP 一起放进 v2.0.1。如果业务上强烈需要 Claw 直接连 OF，B 的流程和管控端共用一套组件，额外成本主要是“个人资源”这个归属模型。</p>
+    </div>
+  </section>
+
+  <!-- 8 子智能体 -->
+  <section id="s8">
+    <div class="eyebrow">08 · 子智能体还是挂工具</div>
+    <h2>倾向子智能体，同意；内部优先用 OF 的高层语义接口</h2>
+    <div class="trio">
+      <div class="panel">
+        <h3>A · 工具直接挂在主智能体</h3>
+        <ul>
+          <li>主智能体上下文里多出几十个接口定义，挤占其他工具的选择</li>
+          <li>OF 接口的参数很重（API001、API004、API012 请求字段都在 360 行以上），容易填错</li>
+          <li>没有场景知识，主智能体不知道有哪些对象、编码是什么</li>
+        </ul>
+        <div class="fit">不推荐。</div>
+      </div>
+      <div class="panel pick">
+        <h3>B · AF 子智能体 + 精选工具 <span class="tag sug">推荐</span></h3>
+        <ul>
+          <li>主智能体只看到一个入口：<code>ask_ontology(问题)</code>，描述里写场景名和一句话简介</li>
+          <li>子智能体的系统提示里放场景语义目录摘要（绑定时由 API103 生成），相当于自动生成的“本体 skill”</li>
+          <li>子智能体只装运行时接口，分组见下表</li>
+          <li>返回结构化结果：结论、用到的数据、口径、datasetID，主智能体可以继续引用</li>
+        </ul>
+        <div class="fit">质量和可追溯性都在 AF 手里；代价是多一层调用的延迟和 token。</div>
+      </div>
+      <div class="panel">
+        <h3>C · 直接转给 OF 问答</h3>
+        <ul>
+          <li>子智能体内部只调 API105 提问 + API106 轮询，OF 自己的问答负责理解和查询</li>
+          <li>接入最快，两个接口就够</li>
+          <li>答案质量、口径解释在 OF 手里；交互卡片（RESPOND）要转给用户，体验割裂</li>
+        </ul>
+        <div class="fit">可作为 B 里的一个工具或一期兜底，不建议作为唯一形态。</div>
+      </div>
+    </div>
+
+    <h3>子智能体里放哪些接口</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>分组</th><th>接口</th><th>用途</th><th>是否放入</th></tr></thead>
+        <tbody>
+          <tr><th>理解场景</th><td>API103 语义目录、API009 模型详情、API018 schema 遍历、API064 搜索本体元素、API021 对象类型详情</td><td>先搞清楚有哪些对象、关系、指标、编码</td><td class="pick">放入</td></tr>
+          <tr><th>结构化查询</th><td>API104 语义查询、API004 查询实例、API012 多表关联、API037 按条件查实例</td><td>回答“多少、哪些、按什么分组”</td><td class="pick">放入，优先 API104</td></tr>
+          <tr><th>关系与检索</th><td>API007 实例图遍历、API068–070 关系查询 / 下钻 / 路径分析、API017 向量检索、API067 语义查询实例</td><td>找关联、找相似、模糊定位实例</td><td class="pick">放入</td></tr>
+          <tr><th>开放问答</th><td>API105 / API106</td><td>复杂问题交给 OF 问答兜底</td><td class="pick">可选</td></tr>
+          <tr><th>行为执行</th><td>API010 执行行为、API016 / API045 行为列表</td><td>改动 OF 数据</td><td>仅在绑定时勾选“执行行为”才放入；每次执行前向用户确认</td></tr>
+          <tr><th>写实例</th><td>API001–003、API005–006</td><td>增删改对象和链接实例</td><td>一期不放</td></tr>
+          <tr><th>建模与运维</th><td>对象 / 链接类型、属性、函数、行为 CRUD，自动化规则、数据源连接器、仿真、执行测试、文件上传（API014、API019–063、API071–102 等）</td><td>OF 的管理后台能力</td><td>不放，这些在 OF 里做</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <p><span class="tag todo">待确认</span> 如果 OF 的“本体 MCP 服务”已经提供了上面这组运行时工具，子智能体直接挂 OF MCP 即可，AF 不必自己封装 HTTP，只做“精选 + 目录摘要 + 鉴权注入”。需要拿到 MCP 服务的工具清单再定。</p>
+    </div>
+  </section>
+
+  <!-- 9 异常 -->
+  <section id="s9">
+    <div class="eyebrow">09 · 异常与边界</div>
+    <h2>需要设计的状态</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>情况</th><th>何时发现</th><th>界面表现</th></tr></thead>
+        <tbody>
+          <tr><th>Key 无效 / 过期</th><td>新建连接校验、运行时</td><td>连接标“失效”；绑定页提示更换 Key；运行时见 06</td></tr>
+          <tr><th>Key 有效但列不出场景</th><td>新建连接校验</td><td>“这个 Key 在该 Workspace 下没有可用场景”，提示检查 Workspace Id 或 OF 应用是否绑了场景</td></tr>
+          <tr><th>Workspace Id 填错</th><td>新建连接校验</td><td>同上。文档说 Workspace Id 不对时“看不到数据”，可能不报错只返回空，所以不能把空列表当成功</td></tr>
+          <tr><th>场景在 OF 被删除</th><td>发布检查、运行时</td><td>绑定卡片显示快照名 + “场景已不存在”，阻止发布</td></tr>
+          <tr><th>能力包不含某类能力</th><td>运行时</td><td>子智能体如实告诉主智能体“当前 Key 无此权限”，不重试</td></tr>
+          <tr><th>行为执行</th><td>运行时</td><td>执行前确认卡片：行为名、对象、参数；执行后按主键读回确认结果，不以 statusCode 0 判成功</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 10 手册 -->
+  <section id="s10">
+    <div class="eyebrow">10 · 操作手册大纲</div>
+    <h2>“如何在 OF 获取 Key”手册要写的内容</h2>
+    <div class="panel of">
+      <ol class="flow">
+        <li><span>登录 OF，进入目标工作空间，记下 Workspace Id（截图标出位置）</span></li>
+        <li><span>应用注册：新建调用方应用，绑定要给智能体用的本体场景</span></li>
+        <li><span>API Key 管理：为该应用创建 Key；能力包建议只勾“查询”，需要执行行为再加</span></li>
+        <li><span>复制 Key（只显示一次的话要提醒保存）</span></li>
+        <li><span>回到 AF：新建 OF 连接，粘贴 Key 和 Workspace Id，点“校验”</span></li>
+        <li><span>常见问题：列不出场景、提示无权限、Key 轮换后要做什么、发布后别人用的是谁的权限</span></li>
+      </ol>
+      <div class="fit">截图和字段位置要按 OF 当前页面实拍，本稿没有 OF 的“应用注册”“API Key 管理”页面快照。</div>
+    </div>
+  </section>
+
+  <!-- 11 待确认 -->
+  <section id="s11">
+    <div class="eyebrow">11 · 待确认</div>
+    <h2>要找 OF 核实或需要你拍板的</h2>
+    <ul class="items">
+      <li><div class="head"><span>Key 的范围：整个工作空间，还是一个应用绑定的一个场景？</span><span class="tag todo">找 OF</span></div><p>决定绑定页是“列出场景让选”还是“显示 Key 对应的场景”。</p></li>
+      <li><div class="head"><span>三个身份头怎么填</span><span class="tag todo">找 OF</span></div><p>Workspace Id 能否由 Key 反查（能的话表单少一个字段，但这算 OF 改造）；User Id 填 Key 创建者、AF 调用者还是固定值；Tenant Id 和 x-regionid 是否 AF 平台级配置即可；OF 是否按 User Id 做数据权限。</p></li>
+      <li><div class="head"><span>失败时的错误码</span><span class="tag todo">找 OF</span></div><p>Key 无效、无权限、Workspace 不匹配分别返回什么。文档只有成功示例，校验逻辑要靠这个区分。</p></li>
+      <li><div class="head"><span>网络与地址</span><span class="tag todo">找 OF</span></div><p>接口路径是 <code>/http_rest_api/internal/v1/...</code>，端口 9080，标的是 internal；AF 生产环境能否访问、是否有对外网关地址。</p></li>
+      <li><div class="head"><span>本体 MCP 服务的工具清单和鉴权</span><span class="tag todo">找 OF</span></div><p>如果已有，子智能体直接挂 MCP，第 08 节的接口表就是筛选清单。</p></li>
+      <li><div class="head"><span>Claw 走路径 A 还是 B</span><span class="tag todo">你拍板</span></div><p>B 会推翻 10-21 “Claw 不直接选本体”的决定，建议随 v2.0.1 个人资源一起做。</p></li>
+      <li><div class="head"><span>谁能在项目里新建 OF 连接</span><span class="tag todo">你拍板</span></div><p>只限项目管理员，还是有智能体编辑权限的人都可以。Key 背后是数据权限，建议只限管理员。</p></li>
+      <li><div class="head"><span>“执行行为”一期做不做</span><span class="tag todo">你拍板</span></div><p>建议一期只读，行为执行等确认流程和读回校验设计好再放开。</p></li>
+    </ul>
+  </section>
+
+  <footer>讨论稿。OF 接口信息来自开发环境 API 页面 2026-11-14 快照，未做业务调用验证；标“建议”“待确认”的内容需讨论后再定。</footer>
+</main>
+</body>
+</html>

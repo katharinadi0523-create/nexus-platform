@@ -93,7 +93,7 @@ const ACCOUNT_NAV: Array<{
 ];
 
 function normalizeTab(tab: string | null): ClientTab {
-  if (tab === "agents" || tab === "skills" || tab === "plugins") {
+  if (tab === "agents" || tab === "skills" || tab === "plugins" || tab === "ontology") {
     return "capabilities";
   }
   if (tab === "files") return "workspace";
@@ -400,7 +400,7 @@ export function ClawClientWorkbench({ tab: rawTab, sessionId, messageId }: { tab
   else if (tab === "workspace") content = <ClawClientWorkspacePage />;
   else if (tab === "capabilities") {
     const initialType =
-      rawTab === "skills" || rawTab === "plugins" ? rawTab : "agents";
+      rawTab === "skills" || rawTab === "plugins" || rawTab === "ontology" ? rawTab : "agents";
     content = <MyClawCapabilitiesPage initialType={initialType} />;
   }
   else if (tab === "automation") content = <MyClawAutomationWorkbench chatBasePath="/claw-client" />;

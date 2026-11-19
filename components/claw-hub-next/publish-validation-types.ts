@@ -32,6 +32,11 @@ export const INTEGRITY_VALIDATION_ITEMS: PublishValidationItem[] = [
     description: "校验 MCP Server 端点、工具清单与传输层签名",
   },
   {
+    id: "ontology",
+    label: "本体",
+    description: "校验 OF 连接可用、绑定的场景仍存在，并生成本体助手的场景目录",
+  },
+  {
     id: "knowledge",
     label: "知识库",
     description: "校验知识库挂载清单、切片索引与来源元数据",
@@ -75,7 +80,7 @@ export const PUBLISH_VALIDATION_PHASES: PublishValidationPhase[] = [
   {
     key: "integrity",
     title: "资源完整性校验",
-    subtitle: "对工具、Skills、MCP、知识库、Agent 配置等资源做签名与完整性校验，确认资源未被篡改。",
+    subtitle: "对工具、Skills、MCP、本体、知识库、Agent 配置等资源做签名与完整性校验，确认资源未被篡改。",
     items: INTEGRITY_VALIDATION_ITEMS,
   },
   {

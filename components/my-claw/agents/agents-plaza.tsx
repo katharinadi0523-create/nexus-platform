@@ -16,6 +16,7 @@ import {
   type EnterpriseAgentSort,
   type EnterpriseAgentSourceScope,
 } from "@/lib/mock/my-claw/agents";
+import { useIsClient } from "@/lib/mock/ontology-binding";
 import { cn } from "@/lib/utils";
 
 export function AgentsPlaza() {
@@ -32,6 +33,7 @@ export function AgentsPlaza() {
     useState<EnterpriseAgentSourceScope>("all");
   const [category, setCategory] = useState("all");
   const [sort, setSort] = useState<EnterpriseAgentSort>("latest");
+  const mounted = useIsClient();
 
   const agents = useMemo(
     () =>
@@ -41,8 +43,9 @@ export function AgentsPlaza() {
         sourceScope,
         sort,
         favoriteOverrides,
+        includeShelved: mounted,
       }),
-    [query, category, sourceScope, sort, favoriteOverrides]
+    [query, category, sourceScope, sort, favoriteOverrides, mounted]
   );
 
   const handleToggleFavorite = (agentId: string) => {
@@ -61,7 +64,9 @@ export function AgentsPlaza() {
     toast.success(
       agent.researchMultiAgent || agent.id === "research-claw"
         ? `已调用「${agent.name}」，会话已由其接管`
-        : `已调用「${agent.name}」`
+        : agent.ontologySceneName
+          ? `已调用「${agent.name}」，它会通过本体助手查询「${agent.ontologySceneName}」`
+          : `已调用「${agent.name}」`
     );
   };
 
