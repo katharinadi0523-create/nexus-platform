@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>预置付费插件怎么放</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: 单栏讨论稿，蓝色 = 管控端/组织，赭色 = 使用端/个人，全文一致 */
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --fg: #1b1f27;
+  --muted: #5a6271;
+  --line: #dde1e8;
+  --org: #2c55c7;
+  --org-soft: #e9effc;
+  --own: #a8580c;
+  --own-soft: #fbf0e2;
+  --ok: #1d744a;
+  --ok-soft: #e4f4ec;
+  --sug: #2c55c7;
+  --sug-soft: #e9effc;
+  --todo: #8d6200;
+  --todo-soft: #fbf3dc;
+  --font-body: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b; --surface: #1a1e26; --fg: #e5e8ee; --muted: #9aa2b1; --line: #2c323d;
+    --org: #86a5ff; --org-soft: #1c2640; --own: #f0a65e; --own-soft: #33261a;
+    --ok: #62c795; --ok-soft: #14291f; --sug: #86a5ff; --sug-soft: #1c2640; --todo: #e2b450; --todo-soft: #2e2612;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151b; --surface: #1a1e26; --fg: #e5e8ee; --muted: #9aa2b1; --line: #2c323d;
+  --org: #86a5ff; --org-soft: #1c2640; --own: #f0a65e; --own-soft: #33261a;
+  --ok: #62c795; --ok-soft: #14291f; --sug: #86a5ff; --sug-soft: #1c2640; --todo: #e2b450; --todo-soft: #2e2612;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.75;
+}
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding-block: 48px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 44px;
+}
+h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.35; }
+h1 { font-size: 30px; font-weight: 650; letter-spacing: 0.01em; }
+h2 { font-size: 20px; font-weight: 650; }
+h3 { font-size: 16px; font-weight: 650; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.prose { max-width: 66ch; display: flex; flex-direction: column; gap: 10px; }
+
+/* header */
+header { display: flex; flex-direction: column; gap: 14px; }
+.lede { font-size: 16px; max-width: 62ch; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 13px; color: var(--muted); }
+
+/* tags */
+.tag {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.tag.ok { color: var(--ok); background: var(--ok-soft); }
+.tag.sug { color: var(--sug); background: var(--sug-soft); }
+.tag.todo { color: var(--todo); background: var(--todo-soft); }
+.side { font-weight: 650; }
+.side.org { color: var(--org); }
+.side.own { color: var(--own); }
+
+/* thesis */
+.thesis {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.thesis ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+
+/* two-up grid */
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.duo > * { min-width: 0; }
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.panel.org { border-top: 3px solid var(--org); }
+.panel.own { border-top: 3px solid var(--own); }
+.panel p { color: var(--muted); }
+
+/* flow */
+.flow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  counter-reset: step;
+}
+.flow li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+.flow li::before {
+  content: counter(step);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  width: 22px;
+  height: 22px;
+  margin-top: 3px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 600;
+}
+.panel.org .flow li::before { background: var(--org-soft); color: var(--org); }
+.panel.own .flow li::before { background: var(--own-soft); color: var(--own); }
+.fit { font-size: 13px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 10px; }
+
+/* tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; line-height: 1.65; }
+th, td { text-align: left; vertical-align: top; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+thead th { font-size: 13px; color: var(--muted); font-weight: 600; background: var(--bg); }
+tbody th { font-weight: 600; white-space: nowrap; }
+th.org { color: var(--org); }
+th.own { color: var(--own); }
+td.org { background: color-mix(in srgb, var(--org-soft) 45%, transparent); }
+td.own { background: color-mix(in srgb, var(--own-soft) 45%, transparent); }
+
+/* lists of rules / questions */
+.items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.items li { padding: 14px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.items .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-weight: 650; }
+.items p { color: var(--muted); max-width: 70ch; }
+
+.why { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.why > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.why ul { margin: 0; padding-left: 1.2em; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+
+footer { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+
+@media (max-width: 680px) {
+  .page { padding-block: 32px 56px; gap: 36px; }
+  h1 { font-size: 25px; }
+  .duo, .why { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <div class="eyebrow">讨论稿 · 2026-11-12</div>
+    <h1>预置付费插件怎么放</h1>
+    <p class="lede">在线检索、多模态理解这类能力要接第三方付费服务。本文讨论预置这类插件时：接在哪一端、Key 在哪里配、成本由谁承担、能给谁用。</p>
+    <div class="legend">
+      <span><span class="tag ok">已对齐</span> 已有共识</span>
+      <span><span class="tag sug">建议</span> 提出来讨论</span>
+      <span><span class="tag todo">待确认</span> 需要拍板或研发核实</span>
+    </div>
+  </header>
+
+  <div class="thesis">
+    <h3>核心主张</h3>
+    <ul>
+      <li>同一个预置插件，<span class="side org">管控端</span>和<span class="side own">使用端</span>的广场都上架。</li>
+      <li><span class="side org">管控端</span>：添加到项目，填组织 Key，项目里的人共用，组织承担成本。发布出去的智能体带组织标记，使用组织 Key。</li>
+      <li><span class="side own">使用端</span>：添加到自己的 Claw，填个人 Key，只给自己用，个人承担成本。</li>
+    </ul>
+  </div>
+
+  <section>
+    <div class="eyebrow">背景</div>
+    <h2>为什么要做预置付费插件</h2>
+    <div class="prose">
+      <p><strong>大背景。</strong>平台上的智能体缺少在线检索这类关键能力。这类能力依赖第三方付费服务，免费或开源软件提供不了，必须有人提供 API Key 并承担调用费用。</p>
+      <p><strong>小背景。</strong>现在有两类用户，对付费能力的诉求不一样：</p>
+    </div>
+    <div class="duo">
+      <div class="panel">
+        <h3>真实用户</h3>
+        <p>企业里的员工。所在企业可能已经统一采购了服务、有公共的 Key；也可能基础设施不健全，没有人负责配置。</p>
+      </div>
+      <div class="panel">
+        <h3>内部用户</h3>
+        <p>我们自己的演示环境和测试环境。比如销售给客户演示时，只想给自己的智能体配上 Key，用自己的额度。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">问题</div>
+    <h2>要讨论的问题？</h2>
+    <div class="prose">
+      <p>接入方式：平台预置，放在广场上</p>
+      <p>待讨论问题：放在哪个广场上？</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>要点</th><th>要回答的问题</th></tr></thead>
+        <tbody>
+          <tr><th>在哪里配</th><td>Key 在哪个端、哪一步填写，由谁填写</td></tr>
+          <tr><th>谁承担成本</th><td>调用费用记在组织头上还是个人头上</td></tr>
+          <tr><th>给谁用</th><td>配好之后哪些人、哪些智能体能用，能不能被带出去</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">我的想法和方案建议</div>
+    <h2>两端都上架，各走一条链路</h2>
+    <div class="duo">
+      <div class="panel org">
+        <h3><span class="side org">管控端</span> · 组织 Key</h3>
+        <ol class="flow">
+          <li><span>在广场找到预置插件，点“添加到项目”</span></li>
+          <li><span>选择项目（进入该项目的 Workspace）</span></li>
+          <li><span>填写组织的 Key</span></li>
+          <li><span>项目里的人和智能体共用；发布出去的智能体带组织标记，使用组织 Key</span></li>
+        </ol>
+        <div class="fit">适合：企业有统一采购或公共资源。</div>
+      </div>
+      <div class="panel own">
+        <h3><span class="side own">使用端</span> · 个人 Key</h3>
+        <ol class="flow">
+          <li><span>在广场找到预置插件，点“添加”</span></li>
+          <li><span>直接配给自己的 Claw，不选项目</span></li>
+          <li><span>填写自己的 Key</span></li>
+          <li><span>只有自己能用，其他人看不到也用不了</span></li>
+        </ol>
+        <div class="fit">适合：演示、测试环境；企业没有统一配置、个人有需求。</div>
+      </div>
+    </div>
+
+    <h3>三个要点对照</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>要点</th><th class="org">管控端</th><th class="own">使用端</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>在哪里配</th>
+            <td class="org">管控端广场，“添加到项目”时填写</td>
+            <td class="own">使用端广场，添加到自己的 Claw 时填写</td>
+          </tr>
+          <tr>
+            <th>谁来配</th>
+            <td class="org">有项目配置权限的人（是否只限管理员）</td>
+            <td class="own">本人</td>
+          </tr>
+          <tr>
+            <th>谁承担成本</th>
+            <td class="org">组织</td>
+            <td class="own">个人</td>
+          </tr>
+          <tr>
+            <th>给谁用</th>
+            <td class="org">项目里的人和智能体</td>
+            <td class="own">只有本人的 Claw</td>
+          </tr>
+          <tr>
+            <th>发布后</th>
+            <td class="org">发布出去的智能体带组织标记，使用组织 Key</td>
+            <td class="own">个人 Key 不随任何发布带出 <span class="tag sug">建议</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">理由</div>
+    <h2>为什么两端都需要</h2>
+    <div class="prose">
+      <p>付费能力是智能体开箱即用的前提。只放一端，总有一类场景走不通。</p>
+    </div>
+    <div class="why">
+      <div>
+        <h3>只放<span class="side org">管控端</span>会怎样</h3>
+        <ul>
+          <li>演示、测试环境和没人配置的企业，个人用不上。</li>
+          <li>个人为自己的需求配 Key，会变成整个项目共用：个人花钱，别人在用。</li>
+        </ul>
+      </div>
+      <div>
+        <h3>只放<span class="side own">使用端</span>会怎样</h3>
+        <ul>
+          <li>企业统一采购的资源没法统一下发，每个人各配一遍。</li>
+          <li>发布出去的智能体没有组织 Key 可用。</li>
+          <li>员工各自用 Key，管理和合规都难控。</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>场景走查</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>场景</th><th>走哪端</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>企业统一采购了检索服务</td><td class="org"><span class="side org">管控端</span></td><td>在项目里配一次，项目内共用</td></tr>
+          <tr><td>发布给大家用的智能体</td><td class="org"><span class="side org">管控端</span></td><td>带组织标记，使用组织 Key</td></tr>
+          <tr><td>销售给客户演示</td><td class="own"><span class="side own">使用端</span></td><td>只给自己的智能体配，花自己的额度</td></tr>
+          <tr><td>测试环境</td><td class="own"><span class="side own">使用端</span></td><td>各自配置，互不影响</td></tr>
+          <tr><td>企业没人配置，个人有需求</td><td class="own"><span class="side own">使用端</span></td><td>自己付费，只给自己用</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">边界</div>
+    <h2>需要守住的规则</h2>
+    <ul class="items">
+      <li>
+        <div class="head"><span>发布出去的智能体使用组织 Key</span><span class="tag ok">已对齐</span></div>
+        <p>智能体发布时带组织标记，调用付费插件时用组织 Key，成本记在组织头上。</p>
+      </li>
+      <li>
+        <div class="head"><span>个人 Key 不随发布带出</span><span class="tag sug">建议</span></div>
+        <p>个人配的 Key 只作用于本人的 Claw。如果被发布的智能体带出去，所有召唤者都在花这个人的钱，Key 也等于暴露给了别人。</p>
+      </li>
+      <li>
+        <div class="head"><span>Key 不明文展示给他人</span><span class="tag sug">建议</span></div>
+        <p>项目成员能用组织 Key，但看不到明文；个人 Key 只有本人可见。</p>
+      </li>
+      <li>
+        <div class="head"><span>调用记录标出 Key 的来源</span><span class="tag sug">建议</span></div>
+        <p>每次调用标明用的是组织 Key 还是个人 Key，出了费用问题有据可查。</p>
+      </li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="eyebrow">待讨论</div>
+    <h2>还没定的问题</h2>
+    <ul class="items">
+      <li>
+        <div class="head"><span>是否两端都预置</span><span class="tag todo">待确认</span></div>
+        <p>管控端和使用端是否都预置同一个付费插件，还是只放在其中一端？</p>
+      </li>
+      <li>
+        <div class="head"><span>个人 Claw 能不能直接用项目里配好的插件</span><span class="tag todo">待确认</span></div>
+        <p>按现在的能力库规则，个人 Claw 只选已发布资源、不选项目。项目里配好的付费插件，个人只能通过召唤已发布的智能体来用。是否需要例外？</p>
+      </li>
+      <li>
+        <div class="head"><span>管控端要不要“允许成员使用个人 Key”的开关</span><span class="tag todo">待确认</span></div>
+        <p>部分企业出于数据合规，不希望员工用个人 Key 把企业数据发给第三方服务。可以先默认打开，由企业自行关闭。</p>
+      </li>
+      <li>
+        <div class="head"><span>首批预置哪些插件</span><span class="tag todo">待确认</span></div>
+        <p>目前提到的是在线检索、多模态理解两个例子，供应商和计费方式还没定。</p>
+      </li>
+    </ul>
+  </section>
+
+  <footer>讨论稿，不是定稿。标为“建议”和“待确认”的内容需要讨论后再定。</footer>
+</main>
+</body>
+</html>

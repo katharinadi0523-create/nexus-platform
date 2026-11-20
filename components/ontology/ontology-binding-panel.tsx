@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowRight, Bot, KeyRound, Network, PencilLine, Plus, Unlink } from "lucide-react";
+import { Network, PencilLine, Plus, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { OntologySceneIcon, OntologyStatGrid } from "@/components/ontology/ontology-binding-dialog";
+import { OntologyAbilitySummary, OntologySceneIcon, OntologyStatGrid } from "@/components/ontology/ontology-binding-dialog";
 import {
   getSceneById,
   maskKey,
@@ -10,35 +10,6 @@ import {
   type OntologyBinding,
   type OntologyBindingScope,
 } from "@/lib/mock/ontology-binding";
-
-export function OntologySubAgentFlow({ sceneName }: { sceneName: string }) {
-  const nodes = [
-    { label: "Claw 主智能体", hint: "只看到“本体助手”和场景描述", icon: Bot },
-    { label: "本体助手", hint: "子智能体，装载场景目录与查询工具", icon: Network },
-    { label: `本体 · ${sceneName}`, hint: "通过 API Key 访问", icon: KeyRound },
-  ];
-  return (
-    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_16px_minmax(0,1fr)_16px_minmax(0,1fr)] sm:items-stretch">
-      {nodes.map((node, index) => {
-        const Icon = node.icon;
-        return (
-          <div key={node.label} className="contents">
-            <div className="flex min-w-0 items-start gap-2.5 rounded-lg bg-[#f6f8fb] px-3 py-2.5">
-              <Icon className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
-              <div className="min-w-0">
-                <div className="truncate text-[13px] font-medium text-slate-800">{node.label}</div>
-                <div className="text-[12px] leading-5 text-slate-500">{node.hint}</div>
-              </div>
-            </div>
-            {index < nodes.length - 1 ? (
-              <ArrowRight className="hidden h-4 w-4 self-center text-slate-300 sm:block" />
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export interface OntologyBindingPanelProps {
   binding: OntologyBinding | null;
@@ -58,8 +29,8 @@ export function OntologyBindingPanel({ binding, scope, onBind, onEdit, onUnbind 
         <div className="mt-3 text-[15px] font-medium text-slate-900">还没有绑定本体</div>
         <p className="mx-auto mt-1 max-w-[460px] text-[13px] leading-6 text-slate-500">
           {scope === "personal"
-            ? `填入${ONTOLOGY_PLATFORM_NAME}的 API Key，从本体场景库中绑定一个场景。Claw 会通过“本体助手”子智能体调用本体。`
-            : `填入${ONTOLOGY_PLATFORM_NAME}的 API Key，从本体场景库中绑定一个场景。Claw 会通过“本体助手”子智能体调用本体，发布后使用者无需自己配置。`}
+            ? `填入${ONTOLOGY_PLATFORM_NAME}的 API Key，从本体场景库中绑定一个场景。主智能体会通过“本体助手”子智能体调用本体。`
+            : `填入${ONTOLOGY_PLATFORM_NAME}的 API Key，从本体场景库中绑定一个场景。主智能体会通过“本体助手”子智能体调用本体，发布后使用者无需自己配置。`}
         </p>
         <Button size="sm" className="mt-4" onClick={onBind}>
           <Plus className="mr-1 h-3.5 w-3.5" />
@@ -69,7 +40,8 @@ export function OntologyBindingPanel({ binding, scope, onBind, onEdit, onUnbind 
     );
   }
 
-  const tone = getSceneById(binding.sceneId)?.tone ?? "blue";
+  const scene = getSceneById(binding.sceneId);
+  const tone = scene?.tone ?? "blue";
 
   return (
     <div className="space-y-4">
@@ -103,9 +75,20 @@ export function OntologyBindingPanel({ binding, scope, onBind, onEdit, onUnbind 
           <OntologyStatGrid counts={binding.sceneCounts} />
         </div>
 
-        <div className="mt-5 space-y-1.5">
-          <div className="text-[13px] font-medium text-slate-700">场景描述</div>
-          <p className="rounded-lg bg-[#f6f8fb] px-3.5 py-3 text-[13px] leading-6 text-slate-700">{binding.sceneDescription}</p>
+        {scene ? (
+          <div className="mt-5 space-y-1.5">
+            <div className="text-[13px] font-medium text-slate-700">本体能力</div>
+            <OntologyAbilitySummary scene={scene} />
+          </div>
+        ) : null}
+
+        <div className="mt-4 space-y-1.5">
+          <div className="text-[13px] font-medium text-slate-700">补充说明</div>
+          {binding.sceneDescription ? (
+            <p className="rounded-lg bg-[#f6f8fb] px-3.5 py-3 text-[13px] leading-6 text-slate-700">{binding.sceneDescription}</p>
+          ) : (
+            <p className="text-[13px] text-slate-400">未填写，可在「编辑」中添加使用范围或注意事项</p>
+          )}
         </div>
 
         <dl className="mt-5 grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
@@ -118,21 +101,6 @@ export function OntologyBindingPanel({ binding, scope, onBind, onEdit, onUnbind 
             <dd className="text-slate-800">{binding.boundAt}</dd>
           </div>
         </dl>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="text-[13px] font-medium text-slate-700">运行方式</div>
-        <p className="mt-1 text-[12px] leading-5 text-slate-500">
-          本体接口不直接挂在主智能体上。主智能体依据场景描述判断需要调用本体时，召唤“本体助手”，由它在子智能体里完成检索、行为或函数执行，再把结论交回主智能体。
-        </p>
-        <div className="mt-3">
-          <OntologySubAgentFlow sceneName={binding.sceneName} />
-        </div>
-        <p className="mt-3 text-[12px] leading-5 text-slate-500">
-          {scope === "project"
-            ? "发布后，广场上的使用者都通过这把 API Key 访问本体，无需自己填写。"
-            : "这把 API Key 只给你自己的 Claw 用，不会被任何发布带出。"}
-        </p>
       </div>
     </div>
   );

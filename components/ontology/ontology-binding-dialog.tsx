@@ -12,6 +12,7 @@ import {
   Loader2,
   Lock,
   Package,
+  Plus,
   Search,
   ShoppingCart,
   Truck,
@@ -31,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   buildBinding,
+  demoIssueFromKey,
   maskKey,
   mockFetchSceneLibrary,
   MOCK_ONTOLOGY_SCENES,
@@ -71,6 +73,66 @@ export function OntologySceneIcon({ scene, size = "md" }: { scene: Pick<Ontology
     >
       <Icon className={size === "lg" ? "h-6 w-6" : "h-5 w-5"} strokeWidth={1.8} />
     </div>
+  );
+}
+
+const LIST_MAX_LINES = 2;
+
+/** 名称全量列出；超过 LIST_MAX_LINES 行时收起，可展开。 */
+function ClampedNames({ names, empty }: { names: string[]; empty: string }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [overflow, setOverflow] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 24;
+      setOverflow(el.scrollHeight > lineHeight * LIST_MAX_LINES + 1);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [names]);
+  if (!names.length) return <span className="text-slate-400">{empty}</span>;
+  return (
+    <div>
+      <div
+        ref={ref}
+        className="overflow-hidden"
+        style={expanded ? undefined : { maxHeight: `${LIST_MAX_LINES * 1.5}rem` }}
+      >
+        {names.join("、")}
+      </div>
+      {overflow ? (
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="text-[12px] text-[#2773ff] hover:underline">
+          {expanded ? "收起" : `展开全部 ${names.length} 个`}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** 本体能力：本体描述、对象类型、行为，只读。AF 不调用函数（OF 无执行函数接口），不展示函数。 */
+export function OntologyAbilitySummary({ scene }: { scene: Pick<OntologyScene, "description" | "objectNames" | "actionNames"> }) {
+  return (
+    <dl className="space-y-2 rounded-lg border border-slate-200 bg-[#f8fafc] px-3.5 py-3 text-[13px] leading-6">
+      <div className="flex gap-3">
+        <dt className="w-16 shrink-0 text-slate-500">本体描述</dt>
+        <dd className="min-w-0 flex-1 text-slate-700">
+          {scene.description || <span className="text-slate-400">本体平台未填写</span>}
+          <span className="ml-1.5 text-[12px] text-slate-400">来自{ONTOLOGY_PLATFORM_NAME}</span>
+        </dd>
+      </div>
+      {[
+        { label: "对象类型", names: scene.objectNames },
+        { label: "行为", names: scene.actionNames },
+      ].map((row) => (
+        <div key={row.label} className="flex gap-3">
+          <dt className="w-16 shrink-0 text-slate-500">{row.label}</dt>
+          <dd className="min-w-0 flex-1 text-slate-700"><ClampedNames names={row.names} empty="无" /></dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -130,6 +192,7 @@ export interface OntologyBindingDialogProps {
 export function OntologyBindingDialog({ open, onOpenChange, scope, initial, onConfirm }: OntologyBindingDialogProps) {
   const [keyInput, setKeyInput] = useState("");
   const [keyTail, setKeyTail] = useState<string | null>(initial?.keyTail ?? null);
+  const [demoIssue, setDemoIssue] = useState(initial?.demoIssue);
   const [scenes, setScenes] = useState<OntologyScene[]>(initial ? MOCK_ONTOLOGY_SCENES : []);
   const [verifying, setVerifying] = useState(false);
   const [keyError, setKeyError] = useState<string | null>(null);
@@ -137,6 +200,7 @@ export function OntologyBindingDialog({ open, onOpenChange, scope, initial, onCo
   const [sceneId, setSceneId] = useState<string | null>(initial?.sceneId ?? null);
   const [description, setDescription] = useState(initial?.sceneDescription ?? "");
   const describeRef = useRef<HTMLDivElement | null>(null);
+  const [noteOpen, setNoteOpen] = useState(Boolean(initial?.sceneDescription));
 
   const isPersonal = scope === "personal";
   const scene = scenes.find((item) => item.id === sceneId) ?? null;
@@ -161,6 +225,7 @@ export function OntologyBindingDialog({ open, onOpenChange, scope, initial, onCo
       return;
     }
     setKeyTail(value.slice(-4));
+    setDemoIssue(demoIssueFromKey(value));
     setKeyInput("");
     setScenes(result.scenes);
     setSceneId(null);
@@ -175,11 +240,11 @@ export function OntologyBindingDialog({ open, onOpenChange, scope, initial, onCo
   }
 
   function handleConfirm() {
-    if (!keyTail || !scene || !description.trim()) return;
-    onConfirm(buildBinding(keyTail, scene, description.trim()));
+    if (!keyTail || !scene) return;
+    onConfirm({ ...buildBinding(keyTail, scene, description.trim()), demoIssue });
   }
 
-  const canConfirm = Boolean(keyTail && scene && description.trim());
+  const canConfirm = Boolean(keyTail && scene);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -251,7 +316,7 @@ export function OntologyBindingDialog({ open, onOpenChange, scope, initial, onCo
                     {isPersonal
                       ? "Key 加密保存，填入后以密文显示，只用于你自己的 Claw。"
                       : "Key 加密保存，填入后以密文显示，只用于这个 Claw，不会给其他 Claw 复用。"}
-                    能调用哪些行为和函数，由创建 Key 时开通的能力决定。
+                    能执行哪些行为，由创建 Key 时开通的能力决定。
                   </p>
                 )}
               </div>
@@ -302,7 +367,16 @@ export function OntologyBindingDialog({ open, onOpenChange, scope, initial, onCo
                             已绑定
                           </span>
                         ) : (
-                          <Button size="sm" variant="outline" className="h-7 shrink-0 px-3 text-[12px]" onClick={() => setSceneId(item.id)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 shrink-0 px-3 text-[12px]"
+                            disabled={Boolean(initial)}
+                            title={initial ? "换绑场景请先解除当前绑定" : undefined}
+                            onClick={() => {
+                              setSceneId(item.id);
+                            }}
+                          >
                             绑定
                           </Button>
                         )}
@@ -323,30 +397,44 @@ export function OntologyBindingDialog({ open, onOpenChange, scope, initial, onCo
             )}
           </section>
 
-          {/* 3. 场景描述 */}
+          {/* 3. 能做什么 + 补充说明（选填） */}
           <section ref={describeRef} className="space-y-3">
-            <SectionTitle index={3} title="场景描述" done={Boolean(scene && description.trim())}>
+            <SectionTitle index={3} title="本体能力" done={Boolean(scene)}>
               {scene ? <span className="text-[12px] text-slate-500">已选：{scene.name}</span> : null}
             </SectionTitle>
             {!scene ? (
               <div className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center text-[13px] text-slate-400">
-                绑定一个本体场景后填写
+                绑定一个本体场景后显示
               </div>
             ) : (
-              <div className="space-y-1.5">
-                <Textarea
-                  value={description}
-                  maxLength={300}
-                  onChange={(event) => setDescription(event.target.value)}
-                  rows={4}
-                  aria-label="场景描述"
-                  className="text-[13px] leading-6"
-                  placeholder={`如：${scene.name}本体涉及客户、联系人、商机、报价、合同及其之间的关系。`}
-                />
-                <div className="flex items-start justify-between gap-3 text-[12px] leading-5">
-                  <span className="text-slate-500">Claw 将依据该描述调用本体，完成检索或行为与函数的执行。</span>
-                  <span className="shrink-0 text-slate-400">{description.length} / 300</span>
-                </div>
+              <div className="space-y-3">
+                <OntologyAbilitySummary scene={scene} />
+                {noteOpen ? (
+                  <div className="space-y-1.5">
+                    <div className="text-[13px] font-medium text-slate-700">
+                      补充说明<span className="ml-1 font-normal text-slate-400">（选填）</span>
+                    </div>
+                    <Textarea
+                      value={description}
+                      maxLength={300}
+                      onChange={(event) => setDescription(event.target.value)}
+                      rows={3}
+                      aria-label="补充说明"
+                      className="text-[13px] leading-6"
+                      placeholder="如：只用于查询回款；报价金额以合同为准"
+                    />
+                    <div className="text-right text-[12px] leading-5 text-slate-400">{description.length} / 300</div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setNoteOpen(true)}
+                    className="inline-flex items-center gap-1 text-[13px] text-[#2773ff] hover:underline"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    添加补充说明（选填）
+                  </button>
+                )}
               </div>
             )}
           </section>

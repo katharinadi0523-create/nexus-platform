@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   Bot,
   Brain,
+  Wrench,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -81,6 +82,8 @@ export type ConversationPanelTask = {
   recordContent?: string;
   prompt?: string;
   traceEvents?: SubagentTraceEvent[];
+  /** 同一个子会话被多次调用时，按调用顺序展示每次的任务与过程。 */
+  rounds?: Array<{ id: string; label: string; prompt: string; traceEvents: SubagentTraceEvent[] }>;
   durationLabel?: string;
   updatedAt?: string | number;
 };
@@ -88,7 +91,7 @@ export type ConversationPanelTask = {
 type SummarySectionKey = "tasks" | "taskList" | "subagents" | "outputs" | "materials";
 type SubagentTraceEvent = {
   id: string;
-  kind: "thought" | "skill" | "plugin";
+  kind: "thought" | "skill" | "plugin" | "tool";
   title: string;
   content?: string;
   duration?: string;
@@ -273,15 +276,31 @@ function SubagentRecordPreview({ task }: { task: ConversationPanelTask }) {
           <span className={cn("shrink-0 text-xs", task.status === "running" ? "text-blue-600" : task.status === "failed" ? "text-rose-600" : "text-slate-400")}>{statusLabel}</span>
         </header>
         <div className="space-y-4 p-4">
+          {task.rounds?.length ? task.rounds.map((round) => (
+            <div key={round.id} className="space-y-3">
+              <div className="flex items-center gap-2 text-[11px] text-slate-400"><span className="h-px flex-1 bg-slate-100" />{round.label}<span className="h-px flex-1 bg-slate-100" /></div>
+              <div className="ml-auto max-w-[84%] rounded-lg bg-blue-50 px-3 py-2.5 text-[13px] leading-5 text-slate-700">{round.prompt}</div>
+              {renderEvents(round.traceEvents)}
+            </div>
+          )) : <>
           <div className="ml-auto max-w-[84%] rounded-lg bg-blue-50 px-3 py-2.5 text-[13px] leading-5 text-slate-700">{task.prompt ?? "查看该子智能体收到的任务内容与执行过程。"}</div>
           {task.agentRole ? <p className="ml-auto max-w-[84%] text-right text-[11px] leading-4 text-slate-400">长期职责：{task.agentRole}</p> : null}
+          {renderEvents(events)}
+          </>}
+        </div>
+      </article>
+    </div>
+  );
+
+  function renderEvents(events: SubagentTraceEvent[]) {
+    return (
           <div className="ml-1 border-l border-slate-200 pl-4">
             {events.length === 0 ? <p className="py-2 text-[13px] text-slate-400">本轮尚未调用该智能体。</p> : events.map((event, index) => {
               const isExpanded = expandedEvents[event.id] ?? Boolean(event.expandedByDefault);
-              const EventIcon = event.kind === "thought" ? Brain : event.kind === "skill" ? Sparkles : PlugZap;
+              const EventIcon = event.kind === "thought" ? Brain : event.kind === "skill" ? Sparkles : event.kind === "tool" ? Wrench : PlugZap;
               const eventLabel = event.kind === "thought"
                 ? `${event.title}${event.duration ? `，用时 ${event.duration}` : ""}`
-                : `${event.title} ${event.kind === "skill" ? "技能" : "插件"}调用${event.status === "running" ? "中..." : event.status === "failed" ? "失败" : "完成"}`;
+                : `${event.title} ${event.kind === "skill" ? "技能" : event.kind === "tool" ? "工具" : "插件"}调用${event.status === "running" ? "中..." : event.status === "failed" ? "失败" : "完成"}`;
               return (
                 <div key={event.id} className="relative pb-3 last:pb-0">
                   <span className="absolute -left-[21px] top-1 flex h-3.5 w-3.5 items-center justify-center bg-white">
@@ -297,10 +316,8 @@ function SubagentRecordPreview({ task }: { task: ConversationPanelTask }) {
               );
             })}
           </div>
-        </div>
-      </article>
-    </div>
-  );
+    );
+  }
 }
 
 function FilePreview({ file }: { file: WorkspaceFile }) {

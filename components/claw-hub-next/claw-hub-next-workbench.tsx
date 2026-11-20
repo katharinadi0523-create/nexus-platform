@@ -6,7 +6,6 @@ import { ArrowUpRight, Bot, Plus, RefreshCw, Search, Sparkles } from "lucide-rea
 import { toast } from "sonner";
 import { AgentBomBadge } from "@/components/claw-hub-next/agent-bom-badge";
 import { buildAgentBomTreeFromListItem } from "@/components/claw-hub-next/agent-bom-tree";
-import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -132,8 +131,6 @@ export function ClawHubNextWorkbench() {
   const [keyword, setKeyword] = useState("");
   const [claws, setClaws] = useState<ClawHubListItem[]>(clawHubList);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [publishValidationOpen, setPublishValidationOpen] = useState(false);
-  const [publishTarget, setPublishTarget] = useState<ClawHubListItem | null>(null);
   const [createDraft, setCreateDraft] = useState<CreateClawDraft>(EMPTY_CREATE_DRAFT);
   const deferredKeyword = useDeferredValue(keyword);
 
@@ -185,16 +182,11 @@ export function ClawHubNextWorkbench() {
       return;
     }
 
-    setPublishTarget(item);
-    setPublishValidationOpen(true);
+    publishClaw(item);
   }
 
-  function handlePublishValidationPassed() {
-    if (!publishTarget) {
-      return;
-    }
-
-    const target = publishTarget;
+  /** 发布前校验在后台完成，不单独展示校验过程；失败时用 Toast 提示。 */
+  function publishClaw(target: ClawHubListItem) {
 
     if (isHighSecurityLevel(target.securityLevel)) {
       setClaws((current) =>
@@ -210,7 +202,6 @@ export function ClawHubNextWorkbench() {
         )
       );
       toast.success(`已提交发布审批：${target.name}，审批通过后方可生效。`);
-      setPublishTarget(null);
       return;
     }
 
@@ -229,7 +220,6 @@ export function ClawHubNextWorkbench() {
       )
     );
     toast.success(`已发布：${target.name}`);
-    setPublishTarget(null);
   }
 
   function handleDelete(item: ClawHubListItem) {
@@ -598,17 +588,6 @@ export function ClawHubNextWorkbench() {
         </DialogContent>
       </Dialog>
 
-      <ClawPublishValidationDialog
-        open={publishValidationOpen}
-        onOpenChange={(open) => {
-          setPublishValidationOpen(open);
-          if (!open) {
-            setPublishTarget(null);
-          }
-        }}
-        agentName={publishTarget?.name ?? ""}
-        onValidationPassed={handlePublishValidationPassed}
-      />
     </div>
   );
 }

@@ -109,6 +109,8 @@ export interface CapabilityAgentItem {
     skills: CapabilitySkillItem[];
     tools: CapabilityToolItem[];
     knowledge: CapabilityKnowledgeItem[];
+    /** 多智能体：每个子智能体最多绑定一个本体场景 */
+    ontology?: import("@/lib/mock/ontology-binding").OntologyBinding | null;
   };
 }
 

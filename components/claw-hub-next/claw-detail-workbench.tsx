@@ -39,13 +39,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
-import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
 import { OntologyBindingDialog } from "@/components/ontology/ontology-binding-dialog";
 import { OntologyBindingPanel } from "@/components/ontology/ontology-binding-panel";
+import { showOntologyPublishFailure } from "@/components/ontology/ontology-publish-failure-toast";
 import {
   DEMO_CLAW_ONTOLOGY_BINDINGS,
   removeShelvedOntologyAgent,
   upsertShelvedOntologyAgent,
+  checkOntologyForPublish,
   type OntologyBinding,
 } from "@/lib/mock/ontology-binding";
 import { AgentBomBadge } from "@/components/claw-hub-next/agent-bom-badge";
@@ -201,8 +202,8 @@ const CLAW_DETAIL_NAV_GROUPS: Array<{
     items: [
       { value: "skills", label: "技能", icon: Sparkles },
       { value: "tools", label: "插件", icon: Wrench },
-      { value: "ontology", label: "本体", icon: Network },
       { value: "knowledge", label: "知识", icon: FileStack },
+      { value: "ontology", label: "本体", icon: Network },
       { value: "agents", label: "智能体", icon: Bot },
     ],
   },
@@ -580,7 +581,7 @@ export function ClawDetailWorkbench({
     targetLevel: (detail.overview.securityLevel ?? "公开") as ClawSecurityLevel,
     reason: "",
   });
-  const [subAgentConfigEnabled] = useState(
+  const [subAgentConfigEnabled, setSubAgentConfigEnabled] = useState(
     () => isMultiAgentMode || detail.capabilityConfig.agents.claw.length > 0
   );
 
@@ -642,7 +643,6 @@ export function ClawDetailWorkbench({
   const [activeLogPanel] = useState<LogPanelKey>("conversation");
   const [publishStatus, setPublishStatus] = useState(detail.overview.publishStatus);
   const [publishPanelOpen, setPublishPanelOpen] = useState(false);
-  const [publishValidationOpen, setPublishValidationOpen] = useState(false);
   const [apiPublishEffective, setApiPublishEffective] = useState(detail.overview.publishStatus === "已发布");
   const [plazaStatus, setPlazaStatus] = useState<ClawPlazaStatus>(() =>
     isMultiAgentMode && getShelvedMultiAgentById(detail.overview.id)
@@ -1349,25 +1349,52 @@ export function ClawDetailWorkbench({
     toast.success("已删除。");
   }
 
-  function handlePublish() {
+  async function handlePublish() {
     if (approvalAction.publishLocked) {
       toast.info(approvalAction.publishTitle ?? "审批中，暂不可发布。");
       return;
     }
     setPublishPanelOpen(false);
-    window.setTimeout(() => {
-      setPublishValidationOpen(true);
-    }, 120);
+    // 发布前校验在后台完成，前台不展示校验过程，只在失败时提示。
+    // 存在跨 Workspace 的情况，无法确定该跳到哪里，所以失败提示不带跳转链接。
+    const toastId = toast.loading(`正在发布${entityLabel}…`);
+    if (isMultiAgentMode) {
+      // 多智能体：本体挂在各个子智能体的资源上，逐个校验
+      const boundAgents = capabilityConfig.agents.claw.filter((agent) => agent.resources?.ontology);
+      if (boundAgents.length === 0) await checkOntologyForPublish(null);
+      for (const agent of boundAgents) {
+        const check = await checkOntologyForPublish(agent.resources?.ontology ?? null, agent.name);
+        if (!check.ok) {
+          showOntologyPublishFailure({
+            id: toastId,
+            title: check.title,
+            description: check.description,
+          });
+          return;
+        }
+      }
+    } else {
+      const check = await checkOntologyForPublish(ontologyBinding);
+      if (!check.ok) {
+        showOntologyPublishFailure({
+          id: toastId,
+          title: check.title,
+          description: check.description,
+        });
+        return;
+      }
+    }
+    toast.dismiss(toastId);
+    completePublish();
   }
 
-  function handlePublishValidationPassed() {
+  function completePublish() {
     const wasPublished = publishStatus === "已发布";
     const publishedName = entityName.trim() || detail.overview.name;
 
     if (isMultiAgentMode) {
       if (isHighSecurityLevel(securityLevel)) {
         setApprovalStatus("publish");
-        setPublishValidationOpen(false);
         upsertPublishedMultiAgent({
           id: detail.overview.id || `multi-agent-${Date.now()}`,
           name: publishedName,
@@ -1397,7 +1424,6 @@ export function ClawDetailWorkbench({
       setPublishStatus("已发布");
       setApiPublishEffective(true);
       setApprovalStatus("none");
-      setPublishValidationOpen(false);
       toast.success(`已发布：${publishedName}`);
       router.push("/multi-agent");
       return;
@@ -1405,7 +1431,6 @@ export function ClawDetailWorkbench({
 
     if (isHighSecurityLevel(securityLevel)) {
       setApprovalStatus("publish");
-      setPublishValidationOpen(false);
       toast.success(
         wasPublished
           ? `已提交发布审批：${publishedName}，审批通过前仍按当前已发布版本运行。`
@@ -3690,15 +3715,6 @@ export function ClawDetailWorkbench({
             </div>
           </div>
 
-          {ontologyBinding ? (
-            <div className="mx-6 mb-5 flex items-start gap-2.5 rounded-md border border-[#fde3cf] bg-[#fff8f2] px-3.5 py-3 text-[13px] leading-6 text-slate-700">
-              <Network className="mt-1 h-4 w-4 shrink-0 text-[#ea580c]" />
-              <div>
-                广场卡片会带上本体标记“本体 · {ontologyBinding.sceneName}”。使用者召唤后，通过这个 Claw 配置的 API Key 访问本体，无需自己填写。
-              </div>
-            </div>
-          ) : null}
-
           <DialogFooter className="border-t border-slate-100 bg-white px-6 py-4">
             <Button
               type="button"
@@ -3893,13 +3909,6 @@ export function ClawDetailWorkbench({
         />
       ) : null}
 
-      <ClawPublishValidationDialog
-        open={publishValidationOpen}
-        onOpenChange={setPublishValidationOpen}
-        agentName={entityName.trim() || detail.overview.name}
-        confirmLabel={isPublished ? "确认生效" : "确认发布"}
-        onValidationPassed={handlePublishValidationPassed}
-      />
     </div>
     </WorkbenchEntityProvider>
   );

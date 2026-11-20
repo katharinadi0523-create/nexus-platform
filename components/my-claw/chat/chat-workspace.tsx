@@ -24,6 +24,7 @@ import { ComposerWithAgents } from "./composer-with-agents";
 import { EnterpriseSessionPanel } from "./enterprise-session-panel";
 import { ExpenseChatPanel } from "./expense-chat-panel";
 import { ResearchWorkspace } from "./research-workspace";
+import { OntologyChatPanel } from "./ontology-chat-panel";
 
 interface ChatWorkspaceProps {
   sessionId?: string | null;
@@ -297,6 +298,8 @@ export function ChatWorkspace({ sessionId, messageId, personalMode = false, mode
     );
   } else if (session.kind === "expense") {
     content = <ExpenseChatPanel sessionId={sessionId!} conversationTitle={session.title} highlightedMessageId={messageId} personalMode={personalMode} workspacePanelOpen={workspacePanelOpen} workspaceView={workspaceView} workspacePanelWidth={workspacePanelWidth} onWorkspacePanelWidthChange={setWorkspacePanelWidth} onWorkspaceViewChange={changePanelView} onOpenWorkspace={() => changePanelView("workspace")} onCloseWorkspace={() => setPanelOpenOverride(false)} />;
+  } else if (session.kind === "ontology_demo") {
+    content = <OntologyChatPanel session={session} workspacePanelOpen={workspacePanelOpen} workspaceView={workspaceView} workspacePanelWidth={workspacePanelWidth} onWorkspacePanelWidthChange={setWorkspacePanelWidth} onWorkspaceViewChange={changePanelView} onOpenWorkspace={() => changePanelView("workspace")} onCloseWorkspace={() => setPanelOpenOverride(false)} />;
   } else if (session.kind === "research_multi_agent") {
     content = <ResearchWorkspace sessionId={sessionId!} conversationTitle={session.title} highlightedMessageId={messageId} personalMode={personalMode} workspacePanelOpen={workspacePanelOpen} workspaceView={workspaceView} workspacePanelWidth={workspacePanelWidth} onWorkspacePanelWidthChange={setWorkspacePanelWidth} onWorkspaceViewChange={changePanelView} onOpenWorkspace={() => changePanelView("workspace")} onCloseWorkspace={() => setPanelOpenOverride(false)} />;
   } else {

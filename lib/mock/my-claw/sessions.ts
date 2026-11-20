@@ -3,6 +3,7 @@ import type { MyClawSessionListItem } from "./types";
 
 /** 执行过程（事件链）展示优化的演示会话，按点击推进。 */
 export const CLAW_CLIENT_PROCESS_DEMO_SESSIONS: MyClawSessionListItem[] = [
+  { id: "ontology-demo", title: "华东商机查询（本体演示）", kind: "ontology_demo", pinned: true, updatedAt: "2026-11-19T00:00:00.000Z", preview: "主智能体两次召唤本体助手，第二轮延续同一子会话。" },
   { id: "process-demo-dashboard", title: "执行过程展示（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "表格转网页看板：从开头的思考到交付。" },
   { id: "process-demo-clarify-stop", title: "确认卡片与停止（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "澄清卡片切段、计时暂停，用户中途停止。" },
   { id: "process-demo-automation-interrupt", title: "定时任务与中断（演示）", kind: "process_demo", pinned: true, updatedAt: "2026-11-03T00:00:00.000Z", preview: "设置类交付的结果卡；运行中被系统中断。" },
