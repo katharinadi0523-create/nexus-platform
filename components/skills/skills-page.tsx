@@ -1687,7 +1687,9 @@ export interface SkillsPageProps {
   capabilityWorkspace?: boolean;
   viewSwitcher?: ReactNode;
   onPersonalImportSkill?: () => void;
+  onCreatePersonalSkill?: () => void;
   onOpenManagement?: () => void;
+  managementCount?: number;
 }
 
 /** Embeddable skills hub/management UI. Route entry is the default export below. */
@@ -1697,7 +1699,9 @@ export function SkillsPage({
   capabilityWorkspace = false,
   viewSwitcher,
   onPersonalImportSkill,
+  onCreatePersonalSkill,
   onOpenManagement,
+  managementCount,
 }: SkillsPageProps) {
   const [activeTab, setActiveTab] = useState<SkillsTab>(
     moduleView === "management" ? "mine" : "marketplace"
@@ -3403,7 +3407,7 @@ source_url: "${parsedUrl.toString()}"
         <Button type="button" size="sm" disabled={alreadyAdded} onClick={() => handleAddTemplateToMine(skill)}>{alreadyAdded ? "已添加" : "添加到我的技能"}</Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button type="button" variant="outline" size="icon" className="size-9 shrink-0" aria-label="更多操作" title="更多操作"><Ellipsis className="size-4" /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="bottom" className="z-[110] w-40"><DropdownMenuItem onSelect={() => { void handleDownloadTemplate(skill); }}><Download className="size-4" />下载 Skill</DropdownMenuItem></DropdownMenuContent>
+          <DropdownMenuContent align="start" side="bottom" className="z-[110] w-40"><DropdownMenuItem onSelect={() => { void handleDownloadTemplate(skill); }}><Download className="size-4" />下载</DropdownMenuItem></DropdownMenuContent>
         </DropdownMenu>
       </>}
       byline={<><span className="font-medium text-slate-700">{getMarketplaceSourceText(skill)}</span><span className="mx-2 text-slate-300">|</span>更新于 {skill.publishedAt}</>}
@@ -3685,13 +3689,21 @@ source_url: "${parsedUrl.toString()}"
                 </div>
                 {capabilityWorkspace && onOpenManagement ? (
                   <Button type="button" variant="outline" className="order-2 h-9 shrink-0 rounded-md border-slate-200 bg-white px-3 text-[13px] lg:order-none" onClick={onOpenManagement}>
-                    <SlidersHorizontal className="mr-1.5 size-4" />技能管理
+                    <SlidersHorizontal className="mr-1.5 size-4" />我的技能（{managementCount ?? 0}）
                   </Button>
                 ) : null}
                 {capabilityWorkspace && onPersonalImportSkill ? (
-                  <Button type="button" className="order-3 h-9 shrink-0 rounded-md bg-[#2773ff] px-3 text-[13px] text-white hover:bg-blue-700 lg:order-none" onClick={onPersonalImportSkill}>
-                    <Plus className="mr-1 size-4" />导入 Skill
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" className="order-3 h-9 shrink-0 rounded-md bg-[#2773ff] px-3 text-[13px] text-white hover:bg-blue-700 lg:order-none">
+                        <Plus className="mr-1 size-4" />自定义技能<ChevronDown className="ml-1 size-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuItem onSelect={onCreatePersonalSkill}>创建技能</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={onPersonalImportSkill}>导入技能</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 ) : null}
               </div>
             </div>
@@ -3927,42 +3939,6 @@ source_url: "${parsedUrl.toString()}"
                             </span>
                             <span className="ml-1">下载</span>
                           </div>
-                          {skill.declaredDependencies?.length ? (
-                            <TooltipProvider delayDuration={120}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    onClick={(event) => event.stopPropagation()}
-                                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#dbe7f4] bg-[#f8f9fb] px-2.5 py-1 text-[11px] font-medium text-[#2f5fbf] transition-colors hover:border-[#2773ff]/25 hover:bg-white"
-                                  >
-                                    <Boxes className="h-3 w-3" />
-                                    依赖声明
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  align="start"
-                                  className="max-w-[260px] rounded-2xl border-[#dbe7f4] bg-white px-3 py-3 text-[#5a6779] shadow-[0_20px_48px_-32px_rgba(39,115,255,0.18)]"
-                                >
-                                  <div className="space-y-2">
-                                    <div className="text-[11px] font-semibold tracking-[0.14em] text-[#5a6779] uppercase">
-                                      依赖工具
-                                    </div>
-                                    <div className="grid gap-1">
-                                      {skill.declaredDependencies.map((dependency) => (
-                                        <div
-                                          key={`${skill.id}-${dependency.id}`}
-                                          className="rounded-xl bg-[#f8f9fb] px-2.5 py-1.5 text-[12px] text-[#000000]/80"
-                                        >
-                                          {dependency.name}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          ) : null}
                           <div className="ml-auto flex items-center gap-1.5">
                             <button
                               type="button"

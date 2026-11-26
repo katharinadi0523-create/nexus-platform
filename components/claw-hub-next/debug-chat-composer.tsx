@@ -3,11 +3,13 @@
 import { useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import {
   ArrowUp,
+  AlertTriangle,
   BookOpen,
   Check,
   ChevronDown,
   FileText,
   FolderOpen,
+  Hammer,
   Info,
   Mic,
   Plus,
@@ -33,6 +35,7 @@ import { useChatModelPreference } from "@/components/my-claw/chat/use-chat-model
 import { openPersonalModelSettings, usePersonalModelConnections } from "@/components/claw-client/personal-model-demo-store";
 import { cn } from "@/lib/utils";
 import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
+import { getImageInputCapability } from "@/components/claw-client/model-image-capabilities";
 
 export type ModelErrorDemoState = "unavailable" | "retired";
 
@@ -54,6 +57,7 @@ type DebugChatComposerProps = {
   modelErrorDemo?: ModelErrorDemoState;
   modelPickerOpen?: boolean;
   onModelPickerOpenChange?: (open: boolean) => void;
+  skillEditReferences?: string[];
 };
 
 type ComposerAttachment = {
@@ -78,7 +82,9 @@ const DEMO_UNAVAILABLE_MODEL_IDS = [DEMO_ORIGINAL_MODEL_ID] as const;
 const DEMO_RETIRED_MODEL_OPTIONS = PRESET_MODEL_IDS.filter(
   (modelId) => modelId !== DEMO_ORIGINAL_MODEL_ID && modelId !== "NeoRoleplay-7B-Instruct"
 );
-const PERSONAL_VISIBLE_MODEL_OPTIONS = PRESET_MODEL_IDS.filter((modelId) => modelId !== "NeoRoleplay-7B-Instruct");
+const PERSONAL_VISIBLE_MODEL_OPTIONS = PRESET_MODEL_IDS
+  .filter((modelId) => modelId !== "NeoRoleplay-7B-Instruct" && modelId !== "qwen3.8-max")
+  .map((modelId) => modelId === "Qwen3-8B" ? "qwen3.8-max" : modelId);
 
 function flattenWorkspaceFiles(folder: typeof CLAW_CLIENT_WORKSPACE_ROOT, parentPath = ""): FlatWorkspaceFile[] {
   return folder.children.flatMap((entry) => {
@@ -108,6 +114,7 @@ export function DebugChatComposer({
   modelErrorDemo,
   modelPickerOpen,
   onModelPickerOpenChange,
+  skillEditReferences = [],
 }: DebugChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -124,8 +131,7 @@ export function DebugChatComposer({
   const { model, params, ready, selectModel, updateParams } =
     useChatModelPreference(modelScopeKey);
   const personalModelConnections = usePersonalModelConnections();
-  const personalModelOptions = personalModelConnections.flatMap((connection) => connection.models.filter((item) => item.type === "chat").map((item) => ({ id: item.id, name: item.name, providerName: connection.providerName, enabled: item.enabled, type: item.type })));
-  const imageGenerationModelOptions = personalModelConnections.flatMap((connection) => connection.models.filter((item) => item.type === "image-generation").map((item) => ({ id: item.id, name: item.name, providerName: connection.providerName, enabled: item.enabled, type: item.type })));
+  const personalModelOptions = personalModelConnections.flatMap((connection) => connection.models.filter((item) => item.type === "chat").map((item) => ({ id: item.id, name: item.name, providerName: connection.providerName, providerId: connection.providerId, modelId: item.modelId, imageInput: item.imageInput, enabled: item.enabled, type: item.type })));
   const displayedModel = modelErrorDemo && !demoModelReplaced
     ? DEMO_ORIGINAL_MODEL_ID
     : model;
@@ -154,6 +160,9 @@ export function DebugChatComposer({
   const visibleAttachments = personalMode
     ? personalChat?.attachments ?? []
     : attachments;
+  const selectedPersonalModel = personalModelOptions.find((item) => item.id === displayedModel);
+  const selectedImageCapability = getImageInputCapability(selectedPersonalModel?.providerId, selectedPersonalModel?.modelId ?? displayedModel);
+  const hasImageAttachment = visibleAttachments.some((item) => item.file?.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|heic|tiff?)$/i.test(item.name));
   function syncSlashPicker(text: string, cursor: number) {
     setSlashPicker(detectSkillSlashCommand(text, cursor));
     setActiveIndex(0);
@@ -342,6 +351,13 @@ export function DebugChatComposer({
         </div>
       ) : null}
 
+      {personalMode && hasImageAttachment && selectedImageCapability !== "supported" ? (
+        <div role="status" className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <span>{selectedPersonalModel?.imageInput ? "已开启图片输入，但平台未确认该模型支持图片理解，实际识别效果取决于模型服务。" : selectedPersonalModel ? "当前模型未开启图片输入，图片不会发送给模型。可在模型管理的高级设置中开启。" : "当前模型尚未确认支持图片理解，图片可能无法识别。可以更换为标有「图片理解」的模型。"}</span>
+        </div>
+      ) : null}
+
       {personalMode && selectedSkill ? (
         <div className="mb-2 flex">
           <span className="inline-flex items-center gap-1.5 rounded-md border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
@@ -351,6 +367,17 @@ export function DebugChatComposer({
               <X className="h-3 w-3" />
             </button>
           </span>
+        </div>
+      ) : null}
+
+      {personalMode && skillEditReferences.length > 0 ? (
+        <div className="mb-2 flex flex-wrap gap-2" aria-label="Skill 编辑引用">
+          {skillEditReferences.map((reference, index) => (
+            <span key={`${reference}-${index}`} className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-800">
+              <Hammer className="size-4 shrink-0 text-slate-700" />
+              <span className="truncate">{reference}</span>
+            </span>
+          ))}
         </div>
       ) : null}
 
@@ -490,12 +517,10 @@ export function DebugChatComposer({
                 unavailableModelIds={modelErrorDemo === "unavailable" ? DEMO_UNAVAILABLE_MODEL_IDS : undefined}
                 presetModelOptions={modelErrorDemo === "retired" ? DEMO_RETIRED_MODEL_OPTIONS : PERSONAL_VISIBLE_MODEL_OPTIONS}
                 presetOnly
+                hideMultimodalModels
                 personalModelOptions={personalModelOptions}
-                imageGenerationModelOptions={imageGenerationModelOptions}
                 onAddPersonalModel={() => openPersonalModelSettings("add", "chat")}
                 onManagePersonalModels={() => openPersonalModelSettings("list", "chat")}
-                onAddImageGenerationModel={() => openPersonalModelSettings("add", "image-generation")}
-                onManageImageGenerationModels={() => openPersonalModelSettings("list", "image-generation")}
                 separateParamsPopover
                 hiddenParamKeys={["context_turns", "sp_anti_leak"]}
                 triggerClassName="h-9 max-w-[200px] rounded-full border border-slate-300 bg-white px-3 text-xs hover:bg-slate-50"

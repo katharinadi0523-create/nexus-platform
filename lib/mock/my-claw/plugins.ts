@@ -8,6 +8,10 @@ export type PluginMarketSourceFilter = "all" | "organization" | "third_party";
 export type PluginMarketOrganizationScope = "all" | "mine";
 export type PluginMarketCategory =
   | "all"
+  | "search"
+  | "data"
+  | "content_creation"
+  | "data_collection"
   | "office"
   | "enterprise"
   | "efficiency"
@@ -70,12 +74,29 @@ export interface PluginMarketplaceItem {
   name: string;
   author: string;
   description: string;
+  publishedAt?: string;
   category: Exclude<PluginMarketCategory, "all">;
   kind: "mcp" | "plugin";
   icon: string;
+  logoUrl?: string;
   tone: PluginMarketTone;
   source?: "organization" | "third_party";
   organizationId?: string;
+  /** A platform-preset third-party connection that asks the user for personal credentials. */
+  personalCredentialMode?: "api_key" | "mcp_credential";
+  oauthPermissions?: string[];
+  presetEndpoint?: string;
+  endpointDisplay?: string;
+  connectionMethod?: string;
+  connectionSummary?: string;
+  customEndpointRequired?: boolean;
+  endpointInputLabel?: string;
+  docsUrl?: string;
+  connectionLabel?: string;
+  connectionNote?: string;
+  credentialLabel?: string;
+  credentialHelp?: string;
+  presetTools?: Array<{ name: string; description: string }>;
 }
 
 export interface PluginKindMeta {
@@ -133,6 +154,10 @@ export const PLUGIN_MARKETPLACE_CATEGORY_FILTERS: Array<{
   label: string;
 }> = [
   { value: "all", label: "全部类型" },
+  { value: "search", label: "搜索" },
+  { value: "data", label: "数据" },
+  { value: "content_creation", label: "内容创作" },
+  { value: "data_collection", label: "数据采集" },
   { value: "office", label: "办公人事" },
   { value: "enterprise", label: "企业服务" },
   { value: "efficiency", label: "效率工具" },
@@ -425,105 +450,232 @@ export const INITIAL_MINE_PLUGINS: MinePluginItem[] = [
 
 export const PLUGIN_MARKETPLACE_ITEMS: PluginMarketplaceItem[] = [
   {
-    id: "market-baidu-baike",
-    name: "百度百科",
+    id: "market-bocha-search",
+    name: "博查搜索",
     author: "@平台认证",
-    description: "查询水务相关词条名或者词条ID去百度百科查询跟该词条相关的内容",
-    category: "other",
+    publishedAt: "2026-06-05 10:24:00",
+    description: "搜索全网网页、新闻、天气和百科，返回标题、摘要与来源链接。",
+    category: "search",
     kind: "mcp",
-    icon: "tool",
-    tone: "orange",
+    icon: "globe",
+    logoUrl: "/logos/third-party-plugins/bocha.ico",
+    tone: "blue",
     source: "third_party",
+    personalCredentialMode: "api_key",
+    endpointDisplay: "官方 MCP 示例为本地 stdio 部署，未核实到托管 MCP 地址",
+    connectionMethod: "官方 MCP Server · stdio · API Key",
+    connectionSummary: "官方 MCP 示例需在服务端运行；本 Demo 用于展示接入信息，实际接入需由平台托管 MCP 或改用官方搜索 API。",
+    docsUrl: "https://github.com/BochaAI/bocha-search-mcp",
+    credentialLabel: "API Key",
+    credentialHelp: "在博查 AI 开放平台获取 API Key。",
+    connectionLabel: "MCP · stdio",
+    connectionNote: "MCP 示例通过本地启动并读取 BOCHA_API_KEY。Claw 需评估由后端托管 MCP，或改为直接调用官方 Web Search API。",
+    presetTools: [
+      { name: "Bocha Web Search", description: "搜索全网网页并返回标题、链接、摘要等信息。" },
+      { name: "Bocha AI Search", description: "在网页搜索基础上返回天气、日历、百科等结构化信息。" },
+    ],
   },
   {
-    id: "market-pathogen-mcp",
-    name: "病原实时鉴定MCPServer1",
+    id: "market-qichacha",
+    name: "企查查",
     author: "@平台认证",
-    description: "",
-    category: "other",
+    publishedAt: "2026-06-12 14:30:00",
+    description: "查询企业工商、经营、法律风险和知识产权信息，辅助尽调与供应商筛查。",
+    category: "data",
     kind: "mcp",
     icon: "boxes",
+    logoUrl: "/logos/third-party-plugins/qichacha.ico",
+    tone: "cyan",
+    source: "third_party",
+    personalCredentialMode: "mcp_credential",
+    endpointDisplay: "由企查查按账号及所选数据 Server 生成",
+    customEndpointRequired: true,
+    endpointInputLabel: "企查查 MCP 接入 URL",
+    connectionMethod: "官方云端 MCP · API Key + 对应接入 URL",
+    docsUrl: "https://agent.qcc.com/guide",
+    credentialLabel: "企查查 API Key",
+    credentialHelp: "在企查查智能体数据平台获取 API Key；调用消耗服务商积分。",
+    connectionLabel: "MCP · API Key",
+    connectionNote: "平台包含多个数据 Server，接入地址依账号和所选服务生成，不固定写死。调用消耗企查查积分；历史存档等能力另有开通条件。",
+    presetTools: [
+      { name: "企业信息查询", description: "查询企业基本信息、股东及主要人员等数据。" },
+      { name: "企业风险查询", description: "查询企业经营、司法等风险信息。" },
+    ],
+  },
+  {
+    id: "market-gamma",
+    name: "Gamma",
+    author: "@平台认证",
+    publishedAt: "2026-06-18 09:15:00",
+    description: "根据自然语言生成演示文稿、文档、网页或社交内容，并支持导出。",
+    category: "content_creation",
+    kind: "mcp",
+    icon: "spark",
+    logoUrl: "/logos/third-party-plugins/gamma.ico",
+    tone: "violet",
+    source: "third_party",
+    presetEndpoint: "https://mcp.gamma.app/mcp",
+    oauthPermissions: ["创建演示文稿、文档、网页或社交内容", "访问你有权限使用的 Gamma 工作区内容"],
+    connectionLabel: "MCP · OAuth",
+    connectionMethod: "官方托管 MCP · OAuth 2.0 + PKCE + DCR",
+    docsUrl: "https://developers.gamma.app/mcp/gamma-mcp-server.md",
+    connectionNote: "Claw 需支持动态客户端注册（DCR），并预先向 Gamma 登记 OAuth 回调地址。生成、编辑和图片会消耗工作区额度。",
+    presetTools: [
+      { name: "生成内容", description: "创建演示文稿、文档、网页或社交内容，可使用工作区模板。" },
+      { name: "管理内容", description: "读取、搜索、编辑、复制和导出有权限访问的 Gamma 内容。" },
+    ],
+  },
+  {
+    id: "market-jinshuju",
+    name: "金数据",
+    author: "@平台认证",
+    publishedAt: "2026-06-21 11:40:00",
+    description: "通过对话查询表单和提交数据，也可创建表单、管理数据记录。",
+    category: "data",
+    kind: "mcp",
+    icon: "chart-bars",
+    logoUrl: "/logos/third-party-plugins/jinshuju.ico",
+    tone: "cyan",
+    source: "third_party",
+    presetEndpoint: "https://jinshuju.net/mcp",
+    oauthPermissions: ["读取你有权访问的表单和提交数据", "按授权范围创建或修改表单及数据"],
+    connectionLabel: "MCP · OAuth 授权",
+    connectionMethod: "官方托管 MCP · OAuth 或 Access Token",
+    docsUrl: "https://open.jinshuju.net/mcp/configuration/",
+    connectionNote: "官方推荐 OAuth；也支持手动填写 Access Token，个人 Token 仅访问本人及已共享的数据。",
+    presetTools: [
+      { name: "查询表单与提交", description: "读取表单结构、查询提交数据并整理结果。" },
+      { name: "管理表单与数据", description: "按授权范围创建或修改表单及提交记录。" },
+    ],
+  },
+  {
+    id: "market-hengsheng-juyuan",
+    name: "恒生聚源金融问数",
+    author: "@平台认证",
+    publishedAt: "2026-07-02 16:05:00",
+    description: "用自然语言查询股票、基金、行情、财务、宏观和研报等专业金融数据。",
+    category: "data",
+    kind: "mcp",
+    icon: "chart-bars",
+    logoUrl: "/logos/third-party-plugins/hengsheng.png",
+    tone: "indigo",
+    source: "third_party",
+    personalCredentialMode: "mcp_credential",
+    endpointDisplay: "订阅后取得专属 MCP URL 和凭证",
+    customEndpointRequired: true,
+    endpointInputLabel: "MCP 服务 URL",
+    credentialLabel: "服务凭证",
+    credentialHelp: "请按订阅后获得的服务配置填写鉴权凭证。",
+    connectionLabel: "MCP · 订阅接入",
+    connectionMethod: "订阅后获取专属 MCP URL 与鉴权信息",
+    docsUrl: "https://market.aliyun.com/detail/cmapi00075042?innerSource=search",
+    connectionNote: "服务地址、鉴权参数、可用工具及计费以实际订阅配置为准，公开资料未确认统一的固定地址和鉴权格式。",
+    presetTools: [
+      { name: "金融综合问数", description: "用自然语言查询股票、基金、债券及宏观行业数据。" },
+      { name: "研究与筛选", description: "查询研报信息，并按条件筛选金融标的。" },
+    ],
+  },
+  {
+    id: "market-octoparse",
+    name: "八爪鱼采集器",
+    author: "@平台认证",
+    publishedAt: "2026-07-08 13:20:00",
+    description: "将采集需求转成云端任务，搜索模板、查看任务状态并导出结构化数据。",
+    category: "data_collection",
+    kind: "mcp",
+    icon: "globe",
+    logoUrl: "/logos/third-party-plugins/bazhuayu.ico",
     tone: "orange",
     source: "third_party",
-  },
-  {
-    id: "market-mcp-admin",
-    name: "测试mcp管理",
-    author: "@个人发布",
-    description: "",
-    category: "office",
-    kind: "mcp",
-    icon: "tool",
-    tone: "orange",
-  },
-  {
-    id: "market-audio-parser",
-    name: "音频解析",
-    author: "@官方发布",
-    description: "音频解析工具，输出长字符串，支持MP3/M4A/WAV/PCM/AMR/OGG类别。",
-    category: "office",
-    kind: "plugin",
-    icon: "chart-bars",
-    tone: "cyan",
+    presetEndpoint: "https://mcp.bazhuayu.com",
+    oauthPermissions: ["查找采集模板并读取任务信息", "按授权范围运行云端任务并导出结果"],
+    connectionLabel: "MCP · OAuth / API Key",
+    connectionMethod: "官方托管 Streamable HTTP MCP · OAuth 或 x-api-key",
+    docsUrl: "https://github.com/bazhuayu-team/bazhuayu-mcp",
+    connectionNote: "API Key 通过 x-api-key 请求头传递。只有支持云端执行的模板可由 MCP 启动；任务权限和额度受账号套餐限制。",
+    presetTools: [
+      { name: "查找采集模板", description: "按网站或数据需求查找可用模板。" },
+      { name: "运行与导出", description: "运行支持云端执行的任务并导出 CSV 或 JSON。" },
+    ],
   },
   {
     id: "market-writing-template",
     name: "写作模板",
-    author: "@官方发布",
-    description:
-      "插件可在公文写作、行业研究报告、商业分析报告、邮件撰写、周报撰写五大内置模板中自动挑选最契合的写作提示。它先解析输入主题与篇幅要求，再生成结构化提纲。",
+    author: "中电云应用创新中心",
+    publishedAt: "2026-06-01 09:00:00",
+    description: "覆盖公文、行业研究、商业分析、邮件和周报等写作场景，按主题生成结构化提纲。",
     category: "office",
     kind: "mcp",
     icon: "book",
     tone: "indigo",
     source: "organization",
     organizationId: "current-org",
-  },
-  {
-    id: "market-jwt-encode",
-    name: "JWT编码",
-    author: "@官方发布",
-    description:
-      "JWT编码器是一项将结构化声明快速封装、签名并序列化为 RFC7519 标准JSON Web Token 的核心能力，自动完成 Header 构造与 Payload 校验。",
-    category: "other",
-    kind: "plugin",
-    icon: "code",
-    tone: "cyan",
-  },
-  {
-    id: "market-user-agent",
-    name: "随机生成User-Agent",
-    author: "@官方发布",
-    description:
-      "专门用于随机生成或自动轮换用户标识字符串，为每一次请求动态赋予全新的用户代理。用户代理模拟器本质上是浏览器或爬虫请求中的身份生成工具。",
-    category: "other",
-    kind: "plugin",
-    icon: "spark",
-    tone: "violet",
-  },
-  {
-    id: "market-language-detect",
-    name: "语言检测",
-    author: "@官方发布",
-    description:
-      "语言检测是一项智能文本识别能力，能够自动判断输入内容所属的语言类型及其国家或地区。例如，系统可精准识别中文、英文、日文等常见语言。",
-    category: "enterprise",
-    kind: "plugin",
-    icon: "globe",
-    tone: "blue",
+    presetTools: [
+      { name: "generate_outline", description: "" },
+      { name: "draft_content", description: "" },
+    ],
   },
   {
     id: "market-timezone-convert",
     name: "时区转换",
-    author: "@官方发布",
-    description:
-      "时区转换是一项实用的时间管理工具，能够根据用户输入的时间和原始时区，自动换算为目标时区的对应时间。该功能支持全球主要时区。",
+    author: "中电云运维管理部",
+    publishedAt: "2026-05-28 15:20:00",
+    description: "根据原始时间及时区，换算目标时区的对应时间。",
     category: "efficiency",
     kind: "plugin",
     icon: "clock",
     tone: "indigo",
     source: "organization",
     organizationId: "other-org",
+    presetTools: [{ name: "convert_timezone", description: "" }],
+  },
+  {
+    id: "market-meeting-notes",
+    name: "会议纪要助手",
+    author: "中电云综合管理部",
+    publishedAt: "2026-06-03 10:15:00",
+    description: "整理会议录音与要点，生成结论、待办事项和责任人清单。",
+    category: "office",
+    kind: "plugin",
+    icon: "book",
+    tone: "blue",
+    source: "organization",
+    organizationId: "current-org",
+    presetTools: [
+      { name: "summarize_meeting", description: "" },
+      { name: "extract_action_items", description: "" },
+    ],
+  },
+  {
+    id: "market-procurement-check",
+    name: "采购合规查询",
+    author: "中电云采购管理中心",
+    publishedAt: "2026-06-10 13:45:00",
+    description: "查询采购制度、供应商准入要求和采购流程中的合规要点。",
+    category: "enterprise",
+    kind: "mcp",
+    icon: "boxes",
+    tone: "cyan",
+    source: "organization",
+    organizationId: "other-org",
+    presetTools: [{ name: "search_procurement_policy", description: "" }],
+  },
+  {
+    id: "market-project-weekly",
+    name: "项目周报助手",
+    author: "中电云项目管理办公室",
+    publishedAt: "2026-06-14 08:50:00",
+    description: "汇总项目进度、风险和待协调事项，生成结构化周报。",
+    category: "efficiency",
+    kind: "plugin",
+    icon: "chart-bars",
+    tone: "indigo",
+    source: "organization",
+    organizationId: "other-org",
+    presetTools: [
+      { name: "collect_project_updates", description: "" },
+      { name: "generate_weekly_report", description: "" },
+    ],
   },
 ];
 

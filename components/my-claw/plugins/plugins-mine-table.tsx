@@ -323,7 +323,7 @@ export function PluginsMineTable({
 
       {capabilityWorkspace && viewMode === "grid" ? <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {pageRows.map((plugin) => <article key={plugin.id} className="rounded-md border border-slate-200 bg-white p-4">
-          <div className="flex items-start justify-between gap-3"><div><h3 className="flex items-center gap-2 font-medium text-slate-900">{plugin.name}{plugin.origin === "builtin" ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">系统</span> : null}</h3><p className="mt-1 text-xs text-slate-400">{plugin.creator}</p></div><Switch checked={plugin.enabled} onCheckedChange={(checked) => handleToggle(plugin.id, checked)} aria-label={`${plugin.name} 启用开关`} /></div>
+          <div className="flex items-start justify-between gap-3"><div><h3 className="flex items-center gap-2 font-medium text-slate-900">{plugin.name}</h3><p className="mt-1 text-xs text-slate-400">{plugin.creator}</p></div><Switch checked={plugin.enabled} onCheckedChange={(checked) => handleToggle(plugin.id, checked)} aria-label={`${plugin.name} 启用开关`} /></div>
           <p className="mt-3 line-clamp-3 min-h-[60px] text-sm leading-5 text-slate-600">{plugin.description}</p>
           <div className="mt-4 flex gap-3 border-t border-slate-100 pt-3"><button type="button" onClick={() => toast.info(plugin.description)} className="text-sm font-medium text-blue-600">查看</button>{plugin.origin === "claw" ? <button type="button" onClick={() => handleDelete(plugin)} className="text-sm font-medium text-blue-600">移除</button> : null}</div>
         </article>)}
@@ -386,11 +386,6 @@ export function PluginsMineTable({
                     <TableCell className="px-4 py-3 align-middle text-sm font-medium text-slate-900">
                       <span className="inline-flex items-center gap-2">
                         {plugin.name}
-                        {personalWorkspace && plugin.origin === "builtin" ? (
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
-                            系统
-                          </span>
-                        ) : null}
                       </span>
                     </TableCell>
                     {!personalWorkspace ? (

@@ -41,6 +41,7 @@ import {
   type ModelParamValues,
 } from "@/lib/model-schemas";
 import type { PersonalModelType } from "@/components/claw-client/personal-model-demo-store";
+import { isPlatformConfirmedImageModel, isPlatformConfirmedPresetImageModel } from "@/components/claw-client/model-image-capabilities";
 
 // 模型参数值接口
 export type ModelParams = ModelParamValues;
@@ -64,12 +65,11 @@ export interface ModelSelectorProps {
    */
   presetOnly?: boolean;
   /** Personal model entries shown in the personal conversation picker. */
-  personalModelOptions?: readonly { id: string; name: string; providerName: string; enabled: boolean; type?: PersonalModelType }[];
-  imageGenerationModelOptions?: readonly { id: string; name: string; providerName: string; enabled: boolean; type?: PersonalModelType }[];
+  personalModelOptions?: readonly { id: string; name: string; providerName: string; providerId?: string; modelId?: string; thinkingStrength?: "low" | "medium" | "high"; imageInput?: boolean; enabled: boolean; type?: PersonalModelType }[];
+  /** Hide image-generation models in product scopes that do not include them. */
+  hideMultimodalModels?: boolean;
   onAddPersonalModel?: () => void;
   onManagePersonalModels?: () => void;
-  onAddImageGenerationModel?: () => void;
-  onManageImageGenerationModels?: () => void;
   /** Render model parameters in a separate popover beside the model selector. */
   separateParamsPopover?: boolean;
   /**
@@ -80,12 +80,13 @@ export interface ModelSelectorProps {
 
 const exclusiveModels = EXCLUSIVE_MODEL_IDS;
 
-type ChatThinkingStrength = "low" | "medium" | "high";
+type ChatThinkingStrength = "default" | "low" | "medium" | "high";
 type ChatModelUiConfig = {
   thinkingStrength: ChatThinkingStrength;
 };
 
 const CHAT_THINKING_STRENGTHS: Array<{ value: ChatThinkingStrength; label: string }> = [
+  { value: "default", label: "默认" },
   { value: "low", label: "低" },
   { value: "medium", label: "中" },
   { value: "high", label: "高" },
@@ -116,7 +117,8 @@ const TOOLTIP_CONTENT: Partial<Record<ModelParamKey, string>> = {
 
 // 获取模型图标
 const getModelIcon = (modelName: string) => {
-  if (modelName.includes("DeepSeek")) {
+  const normalizedName = modelName.toLowerCase();
+  if (normalizedName.includes("deepseek")) {
     return (
       <Image
         src="/icons/deepseek.png"
@@ -127,7 +129,7 @@ const getModelIcon = (modelName: string) => {
       />
     );
   }
-  if (modelName.includes("Qwen")) {
+  if (normalizedName.includes("qwen")) {
     return (
       <Image
         src="/icons/qwen.png"
@@ -152,9 +154,7 @@ export function ModelSelector({
   personalModelOptions = [],
   onAddPersonalModel,
   onManagePersonalModels,
-  imageGenerationModelOptions = [],
-  onAddImageGenerationModel,
-  onManageImageGenerationModels,
+  hideMultimodalModels = true,
   separateParamsPopover = false,
   hiddenParamKeys,
   presetModelOptions,
@@ -163,7 +163,7 @@ export function ModelSelector({
   onOpenChange,
 }: ModelSelectorProps) {
   const presetModels = presetModelOptions ?? PRESET_MODEL_IDS;
-  const multimodalModels: readonly string[] = presetOnly ? MULTIMODAL_MODEL_IDS : [];
+  const multimodalModels: readonly string[] = presetOnly && !hideMultimodalModels ? MULTIMODAL_MODEL_IDS : [];
   const languageModels = presetModels.filter((model) => !multimodalModels.includes(model));
   const unavailableModelIdSet = useMemo(
     () => new Set(unavailableModelIds),
@@ -186,11 +186,14 @@ export function ModelSelector({
     exclusiveModels.includes(initialModel) ? "exclusive" : "preset"
   );
   const [presetModelType, setPresetModelType] = useState<"language" | "multimodal">(
-    MULTIMODAL_MODEL_IDS.includes(initialModel as (typeof MULTIMODAL_MODEL_IDS)[number]) ? "multimodal" : "language"
+    !hideMultimodalModels && MULTIMODAL_MODEL_IDS.includes(initialModel as (typeof MULTIMODAL_MODEL_IDS)[number]) ? "multimodal" : "language"
   );
   const [uncontrolledModel, setUncontrolledModel] = useState(initialModel);
   const currentModel = isModelControlled ? selectedModel : uncontrolledModel;
-  const currentPersonalModel = [...personalModelOptions, ...imageGenerationModelOptions].find((item) => item.id === currentModel);
+  const currentPersonalModel = personalModelOptions.find((item) => item.id === currentModel);
+  const currentImageConfirmed = currentPersonalModel
+    ? isPlatformConfirmedImageModel(currentPersonalModel.providerId, currentPersonalModel.modelId)
+    : isPlatformConfirmedPresetImageModel(currentModel);
   const currentModelUnavailable = unavailableModelIdSet.has(currentModel);
   const currentModelRetired = presetOnly && !presetModels.includes(currentModel) && !multimodalModels.includes(currentModel) && (!currentPersonalModel || !currentPersonalModel.enabled);
   const currentModelBlocked = currentModelUnavailable || currentModelRetired;
@@ -272,8 +275,7 @@ export function ModelSelector({
         setActiveTab("preset");
       }
     } else {
-      const personalOption = [...personalModelOptions, ...imageGenerationModelOptions].find((item) => item.id === model);
-      setPresetModelType(multimodalModels.includes(model) || personalOption?.type === "image-generation" ? "multimodal" : "language");
+      setPresetModelType(multimodalModels.includes(model) ? "multimodal" : "language");
     }
   };
 
@@ -397,7 +399,10 @@ export function ModelSelector({
   };
 
   const renderChatModelConfigPanel = (model: string) => {
-    const modelConfig = chatModelUiConfig[model] ?? DEFAULT_CHAT_MODEL_UI_CONFIG;
+    const selectedPersonalOption = personalModelOptions.find((item) => item.id === model);
+    const modelConfig = chatModelUiConfig[model] ?? (selectedPersonalOption
+      ? { thinkingStrength: selectedPersonalOption.thinkingStrength ?? "default" }
+      : DEFAULT_CHAT_MODEL_UI_CONFIG);
     return (
     <div className="w-full p-4">
       <h3 className="mb-3 text-[13px] font-semibold text-slate-900">模型配置</h3>
@@ -444,6 +449,8 @@ export function ModelSelector({
 
   const renderModelOption = (model: string, withIcon = true) => {
     const unavailable = unavailableModelIdSet.has(model);
+    const imageConfirmed = isPlatformConfirmedPresetImageModel(model);
+    const modelLabel = getModelSchema(model).displayName;
     const row = (
       <div
         role={unavailable ? undefined : "button"}
@@ -469,9 +476,10 @@ export function ModelSelector({
       >
         <div className="flex min-w-0 items-center gap-2">
           {withIcon ? <span className={unavailable ? "opacity-50" : undefined}>{getModelIcon(model)}</span> : null}
-          <span className={cn("truncate text-sm", unavailable ? "text-slate-500" : "text-slate-900")}>{model}</span>
+          <span className={cn("truncate text-sm", unavailable ? "text-slate-500" : "text-slate-900")}>{modelLabel}</span>
         </div>
         <span className="flex shrink-0 items-center gap-2">
+          {imageConfirmed ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700" title="平台已确认支持图片理解">图片理解</span> : null}
           {unavailable ? (
             <span className="group relative inline-flex cursor-help items-center text-amber-500">
               <span role="img" aria-label="模型服务异常，请先选择可用模型" tabIndex={0}>
@@ -536,9 +544,10 @@ export function ModelSelector({
             <span className={currentModelBlocked ? "opacity-45 grayscale" : undefined}>
               {getModelIcon(currentModel)}
             </span>
-            <span className="truncate font-medium">{currentPersonalModel?.name ?? currentModel}</span>
+            <span className="truncate font-medium">{currentPersonalModel?.name ?? getModelSchema(currentModel).displayName}</span>
           </span>
           <span className="flex shrink-0 items-center gap-1.5">
+            {currentImageConfirmed ? <span className="max-w-[82px] truncate rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] leading-4 text-emerald-700" title="平台已确认支持图片理解">图片理解</span> : null}
             {currentModelBlocked ? <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> : null}
             <ChevronDown className={cn("h-4 w-4", currentModelBlocked ? "text-slate-400" : "text-slate-500")} />
           </span>
@@ -562,20 +571,10 @@ export function ModelSelector({
               <div>
                 {multimodalModels.length ? <div className="mb-2 grid grid-cols-2 rounded-lg bg-slate-100 p-1"><button type="button" onClick={() => setPresetModelType("language")} className={cn("rounded-md px-2 py-1.5 text-xs", presetModelType === "language" ? "bg-white font-medium text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>语言模型</button><button type="button" onClick={() => setPresetModelType("multimodal")} className={cn("rounded-md px-2 py-1.5 text-xs", presetModelType === "multimodal" ? "bg-white font-medium text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>图片生成模型</button></div> : null}
                 <div className="space-y-1">{(presetModelType === "multimodal" ? multimodalModels : languageModels).map((model) => renderModelOption(model))}</div>
-                {presetModelType === "multimodal" && (imageGenerationModelOptions.length || onAddImageGenerationModel || onManageImageGenerationModels) ? (
-                  <div className="mt-3 border-t border-slate-100 pt-3">
-                    <div className="mb-1.5 px-2 text-xs font-medium text-slate-700">自定义</div>
-                    {imageGenerationModelOptions.length ? <div className="space-y-0.5">{imageGenerationModelOptions.map((item) => <button key={item.id} type="button" disabled={!item.enabled} onClick={() => { handleModelSelect(item.id); setInternalOpen(false); onOpenChange?.(false); }} className={cn("flex w-full items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-left text-sm", item.enabled ? "text-slate-900 hover:bg-slate-50" : "cursor-not-allowed text-slate-400", currentModel === item.id && "bg-blue-50")}><span className="flex min-w-0 items-baseline gap-1.5"><span className="truncate">{item.name}</span><span className="shrink-0 truncate text-[11px] text-slate-400">{item.providerName}{item.enabled ? "" : " · 已停用"}</span></span>{currentModel === item.id ? <Check className="h-4 w-4 shrink-0 text-blue-600" /> : null}</button>)}</div> : <p className="px-3 py-2 text-xs text-slate-400">暂无自定义图片生成模型</p>}
-                    <div className="mt-1 flex items-center gap-1 border-t border-slate-100 pt-2">
-                      {onAddImageGenerationModel ? <button type="button" onClick={() => { setInternalOpen(false); onOpenChange?.(false); onAddImageGenerationModel(); }} className="flex min-h-9 flex-1 items-center gap-1.5 rounded-md px-3 py-2 text-left text-xs text-blue-600 hover:bg-blue-50"><Plus className="h-3.5 w-3.5" />自定义模型</button> : null}
-                      {onManageImageGenerationModels ? <button type="button" aria-label="管理图片生成模型" title="管理图片生成模型" onClick={() => { setInternalOpen(false); onOpenChange?.(false); onManageImageGenerationModels(); }} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"><Settings2 className="h-4 w-4" /></button> : null}
-                    </div>
-                  </div>
-                ) : null}
                 {presetModelType === "language" && (onAddPersonalModel || onManagePersonalModels) ? (
                   <div className="mt-3 border-t border-slate-100 pt-3">
                     <div className="mb-1.5 px-2 text-xs font-medium text-slate-700">自定义</div>
-                    {personalModelOptions.length ? <div className="space-y-0.5">{personalModelOptions.map((item) => <button key={item.id} type="button" disabled={!item.enabled} onClick={() => { handleModelSelect(item.id); setInternalOpen(false); onOpenChange?.(false); }} className={cn("flex w-full items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-left text-sm", item.enabled ? "text-slate-900 hover:bg-slate-50" : "cursor-not-allowed text-slate-400", currentModel === item.id && "bg-blue-50")}><span className="flex min-w-0 items-baseline gap-1.5"><span className="truncate">{item.name}</span><span className="shrink-0 truncate text-[11px] text-slate-400">{item.providerName}{item.enabled ? "" : " · 已停用"}</span></span>{currentModel === item.id ? <Check className="h-4 w-4 shrink-0 text-blue-600" /> : null}</button>)}</div> : <p className="px-3 py-2 text-xs text-slate-400">暂无自定义模型</p>}
+                    {personalModelOptions.length ? <div className="space-y-0.5">{personalModelOptions.map((item) => { const platformConfirmed = isPlatformConfirmedImageModel(item.providerId, item.modelId); return <button key={item.id} type="button" disabled={!item.enabled} onClick={() => { handleModelSelect(item.id); setInternalOpen(false); onOpenChange?.(false); }} className={cn("flex w-full items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-left text-sm", item.enabled ? "text-slate-900 hover:bg-slate-50" : "cursor-not-allowed text-slate-400", currentModel === item.id && "bg-blue-50")}><span className="flex min-w-0 items-baseline gap-1.5"><span className="truncate">{item.name}</span><span className="shrink-0 truncate text-[11px] text-slate-400">{item.providerName}{item.enabled ? "" : " · 已停用"}</span></span><span className="flex shrink-0 items-center gap-1.5">{platformConfirmed ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700" title="平台已确认支持图片理解">图片理解</span> : null}{currentModel === item.id ? <Check className="h-4 w-4 text-blue-600" /> : null}</span></button>; })}</div> : <p className="px-3 py-2 text-xs text-slate-400">暂无自定义模型</p>}
                     <div className="mt-1 flex items-center gap-1 border-t border-slate-100 pt-2">
                       {onAddPersonalModel ? <button type="button" onClick={() => { setInternalOpen(false); onOpenChange?.(false); onAddPersonalModel(); }} className="flex flex-1 items-center gap-1.5 rounded-md px-3 py-2 text-left text-xs text-blue-600 hover:bg-blue-50"><Plus className="h-3.5 w-3.5" />自定义模型</button> : null}
                       {onManagePersonalModels ? <button type="button" aria-label="管理模型" title="管理模型" onClick={() => { setInternalOpen(false); onOpenChange?.(false); onManagePersonalModels(); }} className="rounded-md p-2 text-slate-500 hover:bg-slate-100"><Settings2 className="h-4 w-4" /></button> : null}

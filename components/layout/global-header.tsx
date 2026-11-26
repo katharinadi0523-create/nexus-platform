@@ -20,10 +20,10 @@ interface PlatformNavItem {
 }
 
 const platformNavItems: PlatformNavItem[] = [
+  { key: "app-dev", label: "应用开发", href: "/" },
   { key: "ai-assets", label: "AI资产库", href: "/ai-assets" },
   { key: "procurement", label: "采购管理", href: "/procurement" },
   { key: "vision", label: "多模态视觉", href: "/vision" },
-  { key: "app-dev", label: "应用开发", href: "/" },
   { key: "model-dev", label: "模型开发", href: "/model-dev/online-services" },
   { key: "data-gov", label: "多模态数据治理", href: "https://mdp.mydemo.top/", external: true },
   { key: "platform-mgmt", label: "平台管理", href: "https://aibase.andywork.top/organization", external: true },

@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/ComingSoon";
+import { MCPManagementWorkbench } from "@/components/mcp-management/mcp-management-workbench";
 
 export default function MCPManagementPage() {
-  return <ComingSoon title="MCP管理正在集成中" message="该功能正在集成中，敬请期待" />;
+  return <MCPManagementWorkbench activeTab="external" />;
 }

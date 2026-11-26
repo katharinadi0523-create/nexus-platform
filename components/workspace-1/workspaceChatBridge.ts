@@ -1,7 +1,21 @@
-let pending: { sessionId: string; text: string } | null = null;
+export type SkillEditChatContext = {
+  mode: "promote" | "update";
+  skillId: string;
+  name: string;
+  description: string;
+  scene?: string;
+  skillMdContent: string;
+  files: string[];
+  packageFiles?: Array<{ path: string; content: string }>;
+  version?: string;
+};
 
-export function queueWorkspaceChatBootstrap(sessionId: string, text: string) {
-  pending = { sessionId, text };
+export type SkillCreateChatContext = { examplePrompt: string };
+
+let pending: { sessionId: string; text: string; skillEdit?: SkillEditChatContext; skillCreate?: SkillCreateChatContext } | null = null;
+
+export function queueWorkspaceChatBootstrap(sessionId: string, text: string, skillEdit?: SkillEditChatContext, skillCreate?: SkillCreateChatContext) {
+  pending = { sessionId, text, skillEdit, skillCreate };
 }
 
 export function takeWorkspaceChatBootstrap() {

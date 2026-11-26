@@ -21,6 +21,7 @@ interface ComposerWithAgentsProps {
   modelErrorDemo?: ModelErrorDemoState;
   modelPickerOpen?: boolean;
   onModelPickerOpenChange?: (open: boolean) => void;
+  skillEditReferences?: string[];
 }
 
 /**
@@ -41,6 +42,7 @@ export function ComposerWithAgents({
   modelErrorDemo,
   modelPickerOpen,
   onModelPickerOpenChange,
+  skillEditReferences,
 }: ComposerWithAgentsProps) {
   return (
     <DebugChatComposer
@@ -58,6 +60,7 @@ export function ComposerWithAgents({
       modelErrorDemo={modelErrorDemo}
       modelPickerOpen={modelPickerOpen}
       onModelPickerOpenChange={onModelPickerOpenChange}
+      skillEditReferences={skillEditReferences}
       footerLeadingExtra={<AgentSelector />}
     />
   );
