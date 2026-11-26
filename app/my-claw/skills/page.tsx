@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import { MyClawSkillsHub } from "@/components/my-claw/skills/skills-hub";
 
 export default function MyClawSkillsPage() {
-  return <MyClawSkillsHub />;
+  return (
+    <Suspense fallback={null}>
+      <MyClawSkillsHub />
+    </Suspense>
+  );
 }
