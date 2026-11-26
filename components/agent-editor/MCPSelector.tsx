@@ -25,6 +25,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { ontologyActionsData, type OntologyAction } from "@/lib/mock/mock-mcp-actions";
+import { Link2 } from "lucide-react";
+import Link from "next/link";
+import {
+  EXTERNAL_SERVICE_CATALOG,
+  useExternalServicesDemo,
+} from "@/lib/external-services-demo";
 
 export interface MCP {
   id: string;
@@ -107,7 +113,7 @@ export function MCPSelector({
   selectedMCPs = [],
   singleSelect = false,
 }: MCPSelectorProps) {
-  const [activeTab, setActiveTab] = useState<"preset" | "my" | "ontology">("ontology");
+  const [activeTab, setActiveTab] = useState<"preset" | "my" | "ontology" | "enterprise">("ontology");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>(
     selectedMCPs.map((m) => m.id)
@@ -130,7 +136,19 @@ export function MCPSelector({
     new Set(["TransitEvent"]) // 默认展开第一个
   );
 
-  const currentMCPs = activeTab === "preset" ? presetMCPs : myMCPs;
+  const { state: externalServicesState, activeWorkspaceId } = useExternalServicesDemo();
+  const workspaceExternalMCPs: MCP[] = externalServicesState.connections
+    .filter((connection) => connection.enabled && (connection.ownerScope === "personal" || connection.workspaceId === activeWorkspaceId))
+    .flatMap((connection) => {
+      const service = EXTERNAL_SERVICE_CATALOG.find((item) => item.id === connection.serviceId);
+      return service ? [{
+        id: `external-${service.id}`,
+        name: service.name,
+        description: `${connection.ownerScope === "personal" ? "个人服务" : "当前工作空间服务"} · ${service.description}`,
+        icon: <Link2 className="h-5 w-5" />,
+      }] : [];
+    })
+  const currentMCPs = activeTab === "preset" ? presetMCPs : activeTab === "enterprise" ? workspaceExternalMCPs : myMCPs;
 
   const filteredMCPs = currentMCPs.filter((mcp) =>
     mcp.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -239,7 +257,7 @@ export function MCPSelector({
         }));
       onSelect(selectedActionMCPs);
     } else {
-      const allMCPs = [...presetMCPs, ...myMCPs];
+      const allMCPs = [...presetMCPs, ...myMCPs, ...workspaceExternalMCPs];
       const selected = allMCPs.filter((m) => selectedIds.includes(m.id));
       onSelect(selected);
     }
@@ -270,7 +288,7 @@ export function MCPSelector({
               placeholder={
                 activeTab === "ontology"
                   ? "搜索对象类型或行动名称"
-                  : "搜索MCP名称"
+                : "搜索MCP名称"
               }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -282,14 +300,15 @@ export function MCPSelector({
           <Tabs
             value={activeTab}
             onValueChange={(v) => {
-              setActiveTab(v as "preset" | "my" | "ontology");
+              setActiveTab(v as "preset" | "my" | "ontology" | "enterprise");
               setSearchQuery("");
             }}
             className="w-full flex-1 flex flex-col min-h-0"
           >
-            <TabsList className="grid w-full grid-cols-3 shrink-0">
+            <TabsList className="grid w-full grid-cols-4 shrink-0">
               <TabsTrigger value="preset">预置组件</TabsTrigger>
               <TabsTrigger value="my">我的组件</TabsTrigger>
+              <TabsTrigger value="enterprise">企业服务</TabsTrigger>
               <TabsTrigger value="ontology">本体·行动</TabsTrigger>
             </TabsList>
 
@@ -302,7 +321,7 @@ export function MCPSelector({
                 <div className="space-y-2">
                   {filteredMCPs.length === 0 ? (
                     <div className="p-8 text-center text-slate-500">
-                      暂无MCP
+                      {activeTab === "enterprise" ? <><div>当前 workspace 暂无已接入的外部服务</div><Link href="/mcp-management" className="mt-2 inline-block font-medium text-blue-600 hover:text-blue-700">查看外部服务</Link></> : "暂无MCP"}
                     </div>
                   ) : (
                     filteredMCPs.map((mcp) => {

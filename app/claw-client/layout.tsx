@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { Toaster } from "sonner";
 import { ClarifyRuntimeProvider } from "@/components/claw-client/clarify/clarify-runtime";
 import { MyClawProvider } from "@/components/my-claw/provider";
 import { WorkspaceCatalogProvider } from "@/components/workspace-1/workspaceCatalog";
@@ -11,12 +12,15 @@ export default function ClawClientLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <MyClawProvider navigationBasePath="/claw-client">
-      <WorkspaceCatalogProvider>
-        <Suspense fallback={null}>
-          <ClarifyRuntimeProvider>{children}</ClarifyRuntimeProvider>
-        </Suspense>
-      </WorkspaceCatalogProvider>
-    </MyClawProvider>
+    <>
+      <MyClawProvider navigationBasePath="/claw-client">
+        <WorkspaceCatalogProvider>
+          <Suspense fallback={null}>
+            <ClarifyRuntimeProvider>{children}</ClarifyRuntimeProvider>
+          </Suspense>
+        </WorkspaceCatalogProvider>
+      </MyClawProvider>
+      <Toaster position="top-center" />
+    </>
   );
 }

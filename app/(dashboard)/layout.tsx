@@ -285,6 +285,7 @@ export default function DashboardLayout({
     pathname.startsWith("/skills-hub") || pathname === "/skills";
   const isSkillsManagementPage = pathname.startsWith("/skills-management");
   const isOpenApiManagementPage = pathname.startsWith("/openapi-management");
+  const isMCPManagementPage = pathname.startsWith("/mcp-management") || pathname.startsWith("/external-services");
   if (isClawDetailPage || isMultiAgentCreatePage) {
     return (
       <>
@@ -302,7 +303,7 @@ export default function DashboardLayout({
           "flex h-screen overflow-hidden pt-[60px]",
           isSkillsPlazaPage
             ? "bg-[#e8f0fb]"
-            : isSkillsManagementPage || isOpenApiManagementPage || isSpaceOperationsPage
+            : isSkillsManagementPage || isOpenApiManagementPage || isSpaceOperationsPage || isMCPManagementPage
               ? "bg-white"
               : "bg-slate-50"
         )}
@@ -321,6 +322,7 @@ export default function DashboardLayout({
             (isSkillsManagementPage ||
               isOpenApiManagementPage ||
               isSpaceOperationsPage ||
+                isMCPManagementPage ||
               isAppMarketplaceUsagePage) &&
               "bg-white"
           )}
@@ -333,12 +335,15 @@ export default function DashboardLayout({
                 ? "px-6 pt-6 pb-0"
                 : isAppMarketplaceUsagePage
                   ? "min-h-0 overflow-hidden p-0"
+                  : isMCPManagementPage
+                    ? "p-0"
                   : "p-6",
               isSkillsPlazaPage &&
                 "bg-[linear-gradient(180deg,#f2f7fd_0%,#e8f0fb_38%,#e4edf8_100%)]",
               (isSkillsManagementPage ||
                 isOpenApiManagementPage ||
                 isSpaceOperationsPage ||
+                isMCPManagementPage ||
                 isAppMarketplaceUsagePage) &&
                 "bg-white",
               isClawDetailPage ||

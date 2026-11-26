@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-export type PersonalModelType = "chat" | "image-generation";
+export type PersonalModelType = "chat";
 
 export type PersonalModel = {
   id: string;
@@ -10,6 +10,10 @@ export type PersonalModel = {
   name: string;
   enabled: boolean;
   type: PersonalModelType;
+  toolCalling?: boolean;
+  imageInput?: boolean;
+  contextWindowTokens?: number;
+  outputLimitTokens?: number;
 };
 
 export type PersonalModelConnection = {
@@ -82,6 +86,10 @@ export function addPersonalModelConnection(input: {
   modelId: string;
   name: string;
   modelType?: PersonalModelType;
+  toolCalling?: boolean;
+  imageInput?: boolean;
+  contextWindowTokens?: number;
+  outputLimitTokens?: number;
 }) {
   const connectionId = crypto.randomUUID();
   const modelId = `personal:${crypto.randomUUID()}`;
@@ -95,16 +103,16 @@ export function addPersonalModelConnection(input: {
       apiKey: input.apiKey,
       keyHint: input.keyHint,
       checkedAt: new Date().toISOString(),
-      models: [{ id: modelId, modelId: input.modelId, name: input.name, enabled: true, type: input.modelType ?? "chat" }],
+      models: [{ id: modelId, modelId: input.modelId, name: input.name, enabled: true, type: input.modelType ?? "chat", toolCalling: input.toolCalling, imageInput: input.imageInput, contextWindowTokens: input.contextWindowTokens, outputLimitTokens: input.outputLimitTokens }],
     },
   ]);
   return modelId;
 }
 
-export function addModelToConnection(connectionId: string, modelId: string, name: string, modelType: PersonalModelType = "chat") {
+export function addModelToConnection(connectionId: string, modelId: string, name: string, modelType: PersonalModelType = "chat", settings?: Pick<PersonalModel, "toolCalling" | "imageInput" | "contextWindowTokens" | "outputLimitTokens">) {
   const id = `personal:${crypto.randomUUID()}`;
   publish(connections.map((connection) => connection.id === connectionId
-    ? { ...connection, models: [...connection.models, { id, modelId, name, enabled: true, type: modelType }] }
+    ? { ...connection, models: [...connection.models, { id, modelId, name, enabled: true, type: modelType, ...settings }] }
     : connection));
   return id;
 }
@@ -140,11 +148,11 @@ export function setPersonalModelEnabled(modelId: string, enabled: boolean) {
   })));
 }
 
-export function updatePersonalModel(modelId: string, nextModelId: string, name: string) {
+export function updatePersonalModel(modelId: string, nextModelId: string, name: string, settings?: Pick<PersonalModel, "toolCalling" | "imageInput" | "contextWindowTokens" | "outputLimitTokens">) {
   publish(connections.map((connection) => ({
     ...connection,
     models: connection.models.map((model) => model.id === modelId
-      ? { ...model, modelId: nextModelId, name }
+      ? { ...model, modelId: nextModelId, name, ...settings }
       : model),
   })));
 }

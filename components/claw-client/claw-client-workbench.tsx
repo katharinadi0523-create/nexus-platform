@@ -376,7 +376,7 @@ export function ClawClientWorkbench({ tab: rawTab, sessionId, messageId }: { tab
     function openModelSettings(event: Event) {
       const detail = (event as CustomEvent<{ view?: "list" | "add"; modelType?: PersonalModelType }>).detail;
       const view = detail?.view === "add" ? "add" : "list";
-      const modelType = detail?.modelType === "image-generation" ? "image-generation" : "chat";
+      const modelType = detail?.modelType ?? "chat";
       setSettingsEntry((current) => ({ id: current.id + 1, section: "模型", modelView: view, modelType }));
       setSettingsOpen(true);
     }

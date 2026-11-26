@@ -523,6 +523,18 @@ export const MODEL_SCHEMAS: Record<string, ModelSchema> = {
   },
 };
 
+const qwen38MaxBaseSchema = MODEL_SCHEMAS["Qwen3-32B"];
+MODEL_SCHEMAS["qwen3.8-max"] = {
+  ...qwen38MaxBaseSchema,
+  id: "qwen3.8-max",
+  displayName: "Qwen3.8-Max",
+  supportedParams: qwen38MaxBaseSchema.supportedParams.map((param) =>
+    param.key === "max_tokens" && param.type === "number"
+      ? { ...param, defaultValue: 8192, max: 131072 }
+      : { ...param },
+  ),
+};
+
 export function getModelSchema(modelId: string): ModelSchema {
   if (IMAGE_GENERATION_MODEL_IDS.includes(modelId as (typeof IMAGE_GENERATION_MODEL_IDS)[number])) {
     return {

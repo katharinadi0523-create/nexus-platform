@@ -44,7 +44,7 @@ export function MyClawPluginsHub({
       ];
   const [plugins, setPlugins] = useState<MinePluginItem[]>(() =>
     INITIAL_MINE_PLUGINS.filter(
-      (plugin) => !visibleKinds || visibleKinds.includes(plugin.kind),
+      (plugin) => plugin.publisherScope !== "system" && (!visibleKinds || visibleKinds.includes(plugin.kind)),
     ),
   );
   const [marketAddSequence, setMarketAddSequence] = useState(0);
@@ -117,11 +117,10 @@ export function MyClawPluginsHub({
       personalConfig: draft.config,
     };
     setPlugins((current) => existing ? current.map((plugin) => plugin.id === target.id ? target : plugin) : [target, ...current]);
-    toast.success(existing ? `已更新「${draft.name}」，正在检测连接` : `已添加「${draft.name}」，正在检测连接`);
+    toast.success(existing ? "更新成功" : "添加成功", {
+      action: { label: "查看", onClick: () => changeActiveTab("mine") },
+    });
     void checkPluginConnection(target).then((outcome) => {
-      if (outcome === "timeout") toast.error("状态检测超时，请稍后重试");
-      else if (outcome === "failed") toast.error(`「${draft.name}」连接失败`);
-      else toast.success(`「${draft.name}」连接正常`);
       setPlugins((current) => current.map((plugin) => plugin.id !== target.id ? plugin : outcome === "timeout" ? {
         ...plugin,
         connectionStatus: plugin.lastValidConnectionStatus,
@@ -137,7 +136,6 @@ export function MyClawPluginsHub({
     });
     setEditingPlugin(null);
     setOpenApiDialogOpen(false);
-    changeActiveTab("mine");
   };
   const viewSwitcher = personalWorkspace && !hideViewTabs && !capabilityWorkspace ? (
     <ResourceViewSwitch
@@ -215,6 +213,7 @@ export function MyClawPluginsHub({
             personalWorkspace={personalWorkspace}
             capabilityWorkspace={capabilityWorkspace}
             viewSwitcher={viewSwitcher}
+            managementCount={plugins.length}
             onOpenManagement={() => changeActiveTab("mine")}
             onCreateCustom={openCustom}
           />
