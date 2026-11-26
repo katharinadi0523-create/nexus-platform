@@ -22,6 +22,7 @@ import {
   History,
   Loader2,
   MessageSquareText,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
@@ -40,13 +41,22 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
-import { ClawPublishValidationDialog } from "@/components/claw-hub-next/claw-publish-validation-dialog";
 import { AgentAvailabilityControl } from "@/components/agent/agent-availability-control";
 import { AgentVersionPublishDialog } from "@/components/agent/agent-version-publish-dialog";
 import {
   AgentVersionHistoryDrawer,
   type RestoredAgentDraft,
 } from "@/components/agent/agent-version-history-drawer";
+import { OntologyBindingDialog } from "@/components/ontology/ontology-binding-dialog";
+import { OntologyBindingPanel } from "@/components/ontology/ontology-binding-panel";
+import { showOntologyPublishFailure } from "@/components/ontology/ontology-publish-failure-toast";
+import {
+  DEMO_CLAW_ONTOLOGY_BINDINGS,
+  removeShelvedOntologyAgent,
+  upsertShelvedOntologyAgent,
+  checkOntologyForPublish,
+  type OntologyBinding,
+} from "@/lib/mock/ontology-binding";
 import { ClawKnowledgeAssetsSection } from "@/components/claw-hub-next/detail/claw-knowledge-assets-section";
 import { ClawAgentResourceSection } from "@/components/claw-hub-next/detail/agent-resource-section";
 import { ClawCoreConfigSection } from "@/components/claw-hub-next/detail/core-config-section";
@@ -234,6 +244,7 @@ const CLAW_DETAIL_NAV_GROUPS: Array<{
       { value: "skills", label: "技能", icon: Sparkles },
       { value: "tools", label: "插件", icon: Wrench },
       { value: "knowledge", label: "知识", icon: FileStack },
+      { value: "ontology", label: "本体", icon: Network },
       { value: "agents", label: "智能体", icon: Bot },
     ],
   },
@@ -648,6 +659,7 @@ export function ClawDetailWorkbench({
       "channels",
       "skills",
       "tools",
+      "ontology",
       "knowledge",
       "agents",
     ]);
@@ -702,7 +714,6 @@ export function ClawDetailWorkbench({
   const [activeLogPanel] = useState<LogPanelKey>("conversation");
   const [publishStatus, setPublishStatus] = useState(detail.overview.publishStatus);
   const [publishPanelOpen, setPublishPanelOpen] = useState(false);
-  const [publishValidationOpen, setPublishValidationOpen] = useState(false);
   const [apiPublishEffective, setApiPublishEffective] = useState(detail.overview.publishStatus === "已发布");
   const [plazaStatus, setPlazaStatus] = useState<ClawPlazaStatus>(() =>
     isMultiAgentMode && getShelvedMultiAgentById(detail.overview.id)
@@ -710,6 +721,10 @@ export function ClawDetailWorkbench({
       : "未上架"
   );
   const [shelfDialogOpen, setShelfDialogOpen] = useState(false);
+  const [ontologyBinding, setOntologyBinding] = useState<OntologyBinding | null>(
+    () => DEMO_CLAW_ONTOLOGY_BINDINGS[detail.overview.id] ?? null
+  );
+  const [ontologyDialog, setOntologyDialog] = useState({ open: false, key: 0 });
   const [shelfReleaseMode, setShelfReleaseMode] = useState<ClawReleaseMode>("公开发布");
   const [shelfAgentTypes, setShelfAgentTypes] = useState<string[]>([]);
   const [chatSessions, setChatSessions] = useState(detail.chatSessions);
@@ -1457,20 +1472,43 @@ export function ClawDetailWorkbench({
     );
     toast.success(`${target?.label ?? "版本"} 已${status === "停用" ? "停用" : "重新启用"}`);
   }
-  function handlePublish() {
+  async function handlePublish() {
     if (approvalAction.publishLocked) {
       toast.info(approvalAction.publishTitle ?? "审批中，暂不可发布。");
       return;
     }
     setPublishPanelOpen(false);
-    window.setTimeout(() => {
-      setPublishValidationOpen(true);
-    }, 120);
-  }
-
-  function handlePublishValidationPassed() {
-    setPublishValidationOpen(false);
-    window.setTimeout(() => setVersionPublishOpen(true), 120);
+    // 发布前校验在后台完成，前台不展示校验过程，只在失败时提示。
+    // 存在跨 Workspace 的情况，无法确定该跳到哪里，所以失败提示不带跳转链接。
+    const toastId = toast.loading(`正在发布${entityLabel}…`);
+    if (isMultiAgentMode) {
+      // 多智能体：本体挂在各个子智能体的资源上，逐个校验
+      const boundAgents = capabilityConfig.agents.claw.filter((agent) => agent.resources?.ontology);
+      if (boundAgents.length === 0) await checkOntologyForPublish(null);
+      for (const agent of boundAgents) {
+        const check = await checkOntologyForPublish(agent.resources?.ontology ?? null, agent.name);
+        if (!check.ok) {
+          showOntologyPublishFailure({
+            id: toastId,
+            title: check.title,
+            description: check.description,
+          });
+          return;
+        }
+      }
+    } else {
+      const check = await checkOntologyForPublish(ontologyBinding);
+      if (!check.ok) {
+        showOntologyPublishFailure({
+          id: toastId,
+          title: check.title,
+          description: check.description,
+        });
+        return;
+      }
+    }
+    toast.dismiss(toastId);
+    setVersionPublishOpen(true);
   }
 
   function handleVersionPublishConfirm() {
@@ -1628,6 +1666,7 @@ export function ClawDetailWorkbench({
 
     setPlazaStatus("未上架");
     setApprovalStatus("none");
+    removeShelvedOntologyAgent(`shelved-${detail.overview.id}`);
     toast.success("已从智能体广场下架。");
   }
 
@@ -1711,6 +1750,17 @@ export function ClawDetailWorkbench({
     setPlazaStatus("已上架");
     setShelfDialogOpen(false);
     setApprovalStatus("none");
+    if (ontologyBinding) {
+      upsertShelvedOntologyAgent({
+        id: `shelved-${detail.overview.id}`,
+        name: entityName.trim() || detail.overview.name,
+        description: entityDescription.trim() || detail.overview.summary,
+        ontologySceneName: ontologyBinding.sceneName,
+        sceneDescription: ontologyBinding.sceneDescription,
+        shelvedAt: new Date().toISOString(),
+        agentTypes: shelfAgentTypes,
+      });
+    }
     toast.success(
       `已上架到智能体广场：${shelfReleaseMode} / ${shelfAgentTypes.join("、")}`
     );
@@ -2690,6 +2740,24 @@ export function ClawDetailWorkbench({
               onToggleSkill={handleToggleSkill}
               onDeleteSkill={handleDeleteSkill}
             />
+          </TabsContent>
+
+          <TabsContent value="ontology" className="mt-0">
+            <SectionCard
+              title="本体"
+              description="用本体构建与运营平台的 API Key 绑定一个本体场景。一个 Claw 最多绑定一个场景。"
+            >
+              <OntologyBindingPanel
+                binding={ontologyBinding}
+                scope="project"
+                onBind={() => setOntologyDialog((d) => ({ open: true, key: d.key + 1 }))}
+                onEdit={() => setOntologyDialog((d) => ({ open: true, key: d.key + 1 }))}
+                onUnbind={() => {
+                  setOntologyBinding(null);
+                  toast.success("已解除本体绑定，重新发布后生效。");
+                }}
+              />
+            </SectionCard>
           </TabsContent>
 
           <TabsContent value="knowledge" className="mt-0">
@@ -4314,13 +4382,26 @@ export function ClawDetailWorkbench({
         onApprovalReasonChange={setPublishApprovalReason}
         onConfirm={handleVersionPublishConfirm}
       />
-      <ClawPublishValidationDialog
-        open={publishValidationOpen}
-        onOpenChange={setPublishValidationOpen}
-        agentName={entityName.trim() || detail.overview.name}
-        confirmLabel="继续发布"
-        onValidationPassed={handlePublishValidationPassed}
-      />
+      {ontologyDialog.open ? (
+        <OntologyBindingDialog
+          key={ontologyDialog.key}
+          open={ontologyDialog.open}
+          onOpenChange={(open) => setOntologyDialog((d) => ({ ...d, open }))}
+          scope="project"
+          initial={ontologyBinding}
+          onConfirm={(binding) => {
+            const replaced = ontologyBinding && ontologyBinding.sceneId !== binding.sceneId;
+            setOntologyBinding(binding);
+            setOntologyDialog((d) => ({ ...d, open: false }));
+            toast.success(
+              replaced
+                ? `已更换为「${binding.sceneName}」，重新发布后生效。`
+                : `已绑定本体「${binding.sceneName}」。`
+            );
+          }}
+        />
+      ) : null}
+
     </div>
     </WorkbenchEntityProvider>
   );

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import { PanelRightOpen } from "lucide-react";
+import { CircleAlert, PanelRightOpen } from "lucide-react";
 import { useMyClaw } from "@/components/my-claw/provider";
 import {
   PersonalChatContext,
@@ -19,19 +19,24 @@ import {
 import { getPersonalClawDetail } from "@/lib/mock/my-claw/personal-claw";
 import { getMyClawSession } from "@/lib/mock/my-claw/sessions";
 import { takeWorkspaceChatBootstrap } from "@/components/workspace-1/workspaceChatBridge";
+import type { ModelErrorDemoState } from "@/components/claw-hub-next/debug-chat-composer";
 import { ComposerWithAgents } from "./composer-with-agents";
 import { EnterpriseSessionPanel } from "./enterprise-session-panel";
 import { ExpenseChatPanel } from "./expense-chat-panel";
 import { ResearchWorkspace } from "./research-workspace";
+import { OntologyChatPanel } from "./ontology-chat-panel";
 
 interface ChatWorkspaceProps {
   sessionId?: string | null;
   messageId?: string | null;
   /** Enables personal-only conversation layout and model/workspace controls. */
   personalMode?: boolean;
-  /** Shows the model fallback notice in the new-session prototype. */
-  modelFallbackDemo?: boolean;
+  /** Shows a runtime model error in the new-session prototype. */
+  modelErrorDemo?: ModelErrorDemoState;
 }
+
+const MODEL_ERROR_DEMO_PROMPT = "请帮我整理这份项目复盘材料，提炼关键结论。";
+const MODEL_ERROR_DEMO_ORIGINAL_MODEL = "Qwen3-8B";
 
 function subscribeWideScreen(callback: () => void) {
   const query = window.matchMedia("(min-width: 1440px)");
@@ -52,7 +57,7 @@ function BlankChatPanel({
   onWorkspacePanelWidthChange,
   onOpenWorkspace,
   onCloseWorkspace,
-  modelFallbackDemo = false,
+  modelErrorDemo,
 }: {
   personalMode?: boolean;
   workspacePanelOpen?: boolean;
@@ -62,43 +67,94 @@ function BlankChatPanel({
   onWorkspacePanelWidthChange?: (width: number) => void;
   onOpenWorkspace?: () => void;
   onCloseWorkspace?: () => void;
-  modelFallbackDemo?: boolean;
+  modelErrorDemo?: ModelErrorDemoState;
 }) {
   const detail = useMemo(() => getPersonalClawDetail(), []);
   const chat = usePersonalChatContext();
   const [draft, setDraft] = useState("");
+  const [activeModelError, setActiveModelError] = useState<ModelErrorDemoState | null>(modelErrorDemo ?? null);
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const greeting = getMyClawOpeningGreeting(MY_CLAW_USER_DISPLAY_NAME);
 
   useEffect(() => {
     if (!chat?.incomingDraft) return;
-    const text = chat.consumeIncomingDraft();
-    if (text) setDraft((current) => current || text);
+    const syncTimer = window.setTimeout(() => {
+      const text = chat.consumeIncomingDraft();
+      if (text) setDraft((current) => current || text);
+    }, 0);
+    return () => window.clearTimeout(syncTimer);
   }, [chat]);
 
   return (
     <div className="flex h-full min-h-0">
       <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,rgba(251,253,255,0.98),rgba(244,248,255,0.98))]">
-        <div className="flex min-h-0 flex-1 items-center justify-center px-6">
-          <div className="flex max-w-lg flex-col items-center text-center">
-            <Image
-              src={MY_CLAW_BRAND_ICON_SRC}
-              alt={MY_CLAW_BRAND_NAME}
-              width={112}
-              height={112}
-              className="h-28 w-28 object-contain drop-shadow-sm"
-              priority
-            />
-            <p className="mt-6 text-[17px] font-medium leading-8 tracking-[-0.01em] text-slate-800">
-              {greeting}
-            </p>
-          </div>
+        <div className={modelErrorDemo ? "min-h-0 flex-1 overflow-y-auto px-6 py-10" : "flex min-h-0 flex-1 items-center justify-center px-6"}>
+          {modelErrorDemo ? (
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+              <div className="flex justify-end">
+                <div className="max-w-[78%] rounded-2xl rounded-tr-md bg-slate-200/80 px-4 py-3 text-sm leading-6 text-slate-800">
+                  {MODEL_ERROR_DEMO_PROMPT}
+                </div>
+              </div>
+              {activeModelError ? (
+                <div className="flex items-start gap-3" role="alert">
+                  <Image
+                    src={MY_CLAW_BRAND_ICON_SRC}
+                    alt={MY_CLAW_BRAND_NAME}
+                    width={36}
+                    height={36}
+                    className="h-9 w-9 shrink-0 rounded-lg object-contain"
+                  />
+                  <div className="flex min-w-0 flex-1 flex-col gap-3 rounded-2xl border border-red-100 bg-red-50/80 px-4 py-3.5 shadow-sm sm:flex-row sm:items-center">
+                    <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                      <p className="text-sm leading-6 text-slate-700">
+                        原模型 {MODEL_ERROR_DEMO_ORIGINAL_MODEL}
+                        <span className="font-semibold text-slate-900">
+                          {activeModelError === "unavailable" ? "不可用" : "已下架"}
+                        </span>
+                        ，请切换至其他模型后重新发送。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveModelError(null);
+                        setDraft(MODEL_ERROR_DEMO_PROMPT);
+                        setModelPickerOpen(true);
+                      }}
+                      className="h-8 shrink-0 rounded-md bg-blue-600 px-3 text-xs font-medium text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
+                    >
+                      更换模型
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex max-w-lg flex-col items-center text-center">
+              <Image
+                src={MY_CLAW_BRAND_ICON_SRC}
+                alt={MY_CLAW_BRAND_NAME}
+                width={112}
+                height={112}
+                className="h-28 w-28 object-contain drop-shadow-sm"
+                priority
+              />
+              <p className="mt-6 text-[17px] font-medium leading-8 tracking-[-0.01em] text-slate-800">
+                {greeting}
+              </p>
+            </div>
+          )}
         </div>
         <div className="shrink-0 px-4 py-4 lg:px-8 lg:py-5">
           <div className="mx-auto w-full max-w-4xl">
             <ComposerWithAgents
               detail={detail}
-              modelScopeKey={modelFallbackDemo ? "model-fallback-demo" : "new"}
-              modelFallbackDemo={modelFallbackDemo}
+              modelScopeKey={modelErrorDemo ? `model-${modelErrorDemo}-runtime-demo-v2` : "new"}
+              modelErrorDemo={modelErrorDemo}
+              modelPickerOpen={modelPickerOpen}
+              onModelPickerOpenChange={setModelPickerOpen}
               personalMode={personalMode}
               onOpenWorkspace={onOpenWorkspace}
               value={draft}
@@ -187,7 +243,7 @@ function PersonalChatContent({
   );
 }
 
-export function ChatWorkspace({ sessionId, messageId, personalMode = false, modelFallbackDemo = false }: ChatWorkspaceProps) {
+export function ChatWorkspace({ sessionId, messageId, personalMode = false, modelErrorDemo }: ChatWorkspaceProps) {
   const { setActiveSession } = useMyClaw();
   const isWideScreen = useSyncExternalStore(subscribeWideScreen, getWideScreenSnapshot, () => false);
   const sessionKey = sessionId ?? null;
@@ -230,7 +286,7 @@ export function ChatWorkspace({ sessionId, messageId, personalMode = false, mode
     content = (
       <BlankChatPanel
         personalMode={personalMode}
-        modelFallbackDemo={modelFallbackDemo}
+        modelErrorDemo={modelErrorDemo}
         workspacePanelOpen={workspacePanelOpen}
         workspaceView={workspaceView}
         workspacePanelWidth={workspacePanelWidth}
@@ -242,6 +298,8 @@ export function ChatWorkspace({ sessionId, messageId, personalMode = false, mode
     );
   } else if (session.kind === "expense") {
     content = <ExpenseChatPanel sessionId={sessionId!} conversationTitle={session.title} highlightedMessageId={messageId} personalMode={personalMode} workspacePanelOpen={workspacePanelOpen} workspaceView={workspaceView} workspacePanelWidth={workspacePanelWidth} onWorkspacePanelWidthChange={setWorkspacePanelWidth} onWorkspaceViewChange={changePanelView} onOpenWorkspace={() => changePanelView("workspace")} onCloseWorkspace={() => setPanelOpenOverride(false)} />;
+  } else if (session.kind === "ontology_demo") {
+    content = <OntologyChatPanel session={session} workspacePanelOpen={workspacePanelOpen} workspaceView={workspaceView} workspacePanelWidth={workspacePanelWidth} onWorkspacePanelWidthChange={setWorkspacePanelWidth} onWorkspaceViewChange={changePanelView} onOpenWorkspace={() => changePanelView("workspace")} onCloseWorkspace={() => setPanelOpenOverride(false)} />;
   } else if (session.kind === "research_multi_agent") {
     content = <ResearchWorkspace sessionId={sessionId!} conversationTitle={session.title} highlightedMessageId={messageId} personalMode={personalMode} workspacePanelOpen={workspacePanelOpen} workspaceView={workspaceView} workspacePanelWidth={workspacePanelWidth} onWorkspacePanelWidthChange={setWorkspacePanelWidth} onWorkspaceViewChange={changePanelView} onOpenWorkspace={() => changePanelView("workspace")} onCloseWorkspace={() => setPanelOpenOverride(false)} />;
   } else {

@@ -4,6 +4,8 @@
  * with catalog enrichment matching `app.js` seed rules.
  */
 
+import { readShelvedOntologyAgents } from "@/lib/mock/ontology-binding";
+
 export type EnterpriseAgentSourceScope = "all" | "favorite" | "org";
 export type EnterpriseAgentSourceType = "platform" | "org";
 export type EnterpriseAgentSort = "latest" | "hot";
@@ -32,6 +34,9 @@ export interface EnterpriseAgentRaw {
   isFavorite?: boolean;
   chatFlowKey?: string;
   suggestedPrompts?: string[];
+  /** 绑定的本体场景名（管控端绑定 OF 后发布上架） */
+  ontologySceneName?: string;
+  ontologySceneDescription?: string;
 }
 
 export interface EnterpriseAgent extends Required<
@@ -52,6 +57,8 @@ export interface EnterpriseAgent extends Required<
   researchMultiAgent?: boolean;
   chatFlowKey?: string;
   suggestedPrompts?: string[];
+  ontologySceneName?: string;
+  ontologySceneDescription?: string;
   /** Display tags derived from category / capabilities (cards). */
   tags: string[];
 }
@@ -78,6 +85,18 @@ export const ENTERPRISE_AGENT_CATEGORY_TABS: EnterpriseAgentCategoryTab[] = [
 
 /** Raw list from 会话交互/data.js `enterpriseAgents` (16 agents). */
 export const ENTERPRISE_AGENTS_RAW: EnterpriseAgentRaw[] = [
+  {
+    id: "order-fulfillment-claw",
+    name: "订单履约助手",
+    description: "查询订单、发货、承运商与客户的履约状态，定位延迟订单并给出跟进建议。",
+    category: "strategic_analysis",
+    publishedAt: "2026-11-18",
+    sourceType: "org",
+    ontologySceneName: "订单履约",
+    ontologySceneDescription:
+      "订单、发货单、承运商、客户之间的关系与履约状态。适合回答“哪些订单延迟”“某客户的在途订单”这类事实性问题。",
+    suggestedPrompts: ["本周有哪些订单发货延迟超过 2 天？按承运商分组。"],
+  },
   {
     id: "research-claw",
     name: "科研智能体",
@@ -269,10 +288,39 @@ export const ENTERPRISE_AGENT_CATALOG: EnterpriseAgent[] =
 /** Alias for callers that prefer a shorter catalog name. */
 export const ENTERPRISE_AGENTS = ENTERPRISE_AGENT_CATALOG;
 
+const LABEL_TO_CATEGORY = Object.fromEntries(
+  Object.entries(CATEGORY_LABEL_MAP).map(([id, label]) => [label, id])
+) as Record<string, string>;
+
+/** 管控端上架的、绑定了本体的 Claw（原型通过 localStorage 桥接）。仅在客户端可读。 */
+export function getShelvedOntologyAgents(): EnterpriseAgent[] {
+  return readShelvedOntologyAgents().map((item) => {
+    const category = LABEL_TO_CATEGORY[item.agentTypes[0] ?? ""] ?? "sales";
+    return {
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      category,
+      publishedAt: item.shelvedAt.slice(0, 10),
+      usageCount: 0,
+      favoriteCount: 0,
+      shareCount: 0,
+      sourceType: "org",
+      isFavorite: false,
+      ontologySceneName: item.ontologySceneName,
+      ontologySceneDescription: item.sceneDescription,
+      tags: item.agentTypes.length ? item.agentTypes : [CATEGORY_LABEL_MAP[category] ?? "销售"],
+    } satisfies EnterpriseAgent;
+  });
+}
+
 export function getEnterpriseAgentById(
   agentId: string
 ): EnterpriseAgent | undefined {
-  return ENTERPRISE_AGENT_CATALOG.find((agent) => agent.id === agentId);
+  return (
+    ENTERPRISE_AGENT_CATALOG.find((agent) => agent.id === agentId) ??
+    getShelvedOntologyAgents().find((agent) => agent.id === agentId)
+  );
 }
 
 /** Lightweight options for chat agent selector chips. */
@@ -311,6 +359,10 @@ export interface FilterEnterpriseAgentsOptions {
   sourceScope?: EnterpriseAgentSourceScope;
   sort?: EnterpriseAgentSort;
   favoriteOverrides?: Record<string, boolean>;
+  /** 只看绑定了本体的智能体 */
+  ontologyOnly?: boolean;
+  /** 合并管控端上架的本体智能体（客户端挂载后再传 true，避免水合不一致） */
+  includeShelved?: boolean;
 }
 
 export function isEnterpriseAgentFavorite(
@@ -333,7 +385,12 @@ export function filterEnterpriseAgentList(
   const sort = options.sort || "latest";
   const favoriteOverrides = options.favoriteOverrides;
 
-  let list = ENTERPRISE_AGENT_CATALOG.filter((agent) => {
+  const base = options.includeShelved
+    ? [...getShelvedOntologyAgents(), ...ENTERPRISE_AGENT_CATALOG]
+    : ENTERPRISE_AGENT_CATALOG;
+
+  let list = base.filter((agent) => {
+    if (options.ontologyOnly && !agent.ontologySceneName) return false;
     if (
       sourceScope === "favorite" &&
       !isEnterpriseAgentFavorite(agent, favoriteOverrides)

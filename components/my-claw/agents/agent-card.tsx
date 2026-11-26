@@ -1,6 +1,6 @@
 "use client";
 
-import { Star } from "lucide-react";
+import { Network, Star } from "lucide-react";
 import {
   formatEnterpriseMetric,
   getAgentAvatarInitial,
@@ -67,8 +67,17 @@ export function AgentCard({
         </div>
       </div>
 
-      {agent.tags.length > 0 ? (
+      {agent.tags.length > 0 || agent.ontologySceneName ? (
         <div className="mt-3 flex min-h-6 flex-wrap items-center gap-1.5">
+          {agent.ontologySceneName ? (
+            <span
+              className="inline-flex items-center gap-1 rounded bg-[#fff4ec] px-2 py-1 text-[11px] font-medium text-[#c2410c]"
+              title={agent.ontologySceneDescription}
+            >
+              <Network className="h-3 w-3" />
+              本体 · {agent.ontologySceneName}
+            </span>
+          ) : null}
           {agent.tags.map((tag) => (
             <span
               key={tag}

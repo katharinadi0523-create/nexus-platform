@@ -15,6 +15,7 @@ export type MyClawSessionKind =
   | "clarify_demo"
   | "queue_demo"
   | "process_demo"
+  | "ontology_demo"
   | "blank";
 
 export interface MyClawSessionListItem {

@@ -282,3 +282,12 @@
     animation: subagent-border-flow 2.4s linear infinite;
   }
 }
+
+#personal-model-id:-webkit-autofill,
+#personal-model-id:-webkit-autofill:hover,
+#personal-model-id:-webkit-autofill:focus,
+#personal-model-id:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px white inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a;
+}

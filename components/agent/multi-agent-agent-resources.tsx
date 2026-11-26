@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { ChevronRight, FileStack, Plus, Search, Sparkles, Wrench } from "lucide-react";
+import { ChevronRight, FileStack, Network, Plus, Search, Sparkles, Wrench } from "lucide-react";
+import { toast } from "sonner";
+import { OntologyBindingDialog } from "@/components/ontology/ontology-binding-dialog";
+import { OntologyBindingPanel } from "@/components/ontology/ontology-binding-panel";
+import type { OntologyBinding } from "@/lib/mock/ontology-binding";
 import { ClawCapabilitySection } from "@/components/claw-hub-next/detail/capability-section";
 import { SkillConfigDialog, type SkillConfigSelection } from "@/components/claw-hub-next/skill-config-dialog";
 import { ToolConfigDialog, type ToolConfigSelection } from "@/components/claw-hub-next/tool-config-dialog";
@@ -23,15 +27,18 @@ export type AgentScopedResources = {
   skills: CapabilitySkillItem[];
   tools: CapabilityToolItem[];
   knowledge: CapabilityKnowledgeItem[];
+  /** 每个子智能体最多绑定一个本体场景 */
+  ontology?: OntologyBinding | null;
 };
 
 export const EMPTY_AGENT_RESOURCES: AgentScopedResources = {
   skills: [],
   tools: [],
   knowledge: [],
+  ontology: null,
 };
 
-type ResourceAccordionKey = keyof AgentScopedResources;
+type ResourceAccordionKey = "skills" | "tools" | "knowledge" | "ontology";
 
 function ResourceAccordion({
   title,
@@ -227,7 +234,10 @@ export function MultiAgentAgentResources({ resources, onChange }: MultiAgentAgen
     skills: false,
     tools: false,
     knowledge: false,
+    ontology: false,
   });
+  const [ontologyDialog, setOntologyDialog] = useState({ open: false, key: 0 });
+  const openOntologyDialog = () => setOntologyDialog((d) => ({ open: true, key: d.key + 1 }));
   const [skillDialogOpen, setSkillDialogOpen] = useState(false);
   const [toolDialogOpen, setToolDialogOpen] = useState(false);
   const [knowledgeDialogOpen, setKnowledgeDialogOpen] = useState(false);
@@ -353,7 +363,39 @@ export function MultiAgentAgentResources({ resources, onChange }: MultiAgentAgen
             onOpenConfig={() => setKnowledgeDialogOpen(true)}
           />
         </ResourceAccordion>
+        <ResourceAccordion
+          title="本体"
+          icon={Network}
+          open={openResources.ontology}
+          onOpenChange={() => toggleResource("ontology")}
+        >
+          <OntologyBindingPanel
+            binding={current.ontology ?? null}
+            scope="project"
+            onBind={openOntologyDialog}
+            onEdit={openOntologyDialog}
+            onUnbind={() => {
+              onChange({ ...current, ontology: null });
+              toast.success("已解除本体绑定，重新发布后生效。");
+            }}
+          />
+        </ResourceAccordion>
       </div>
+
+      {ontologyDialog.open ? (
+        <OntologyBindingDialog
+          key={ontologyDialog.key}
+          open={ontologyDialog.open}
+          onOpenChange={(open) => setOntologyDialog((d) => ({ ...d, open }))}
+          scope="project"
+          initial={current.ontology ?? null}
+          onConfirm={(binding) => {
+            onChange({ ...current, ontology: binding });
+            setOntologyDialog((d) => ({ ...d, open: false }));
+            toast.success(`已为子智能体绑定本体「${binding.sceneName}」。`);
+          }}
+        />
+      ) : null}
 
       <SkillConfigDialog open={skillDialogOpen} onOpenChange={setSkillDialogOpen} onConfirm={mergeSkills} />
       <ToolConfigDialog open={toolDialogOpen} onOpenChange={setToolDialogOpen} onConfirm={mergeTools} />

@@ -19,6 +19,7 @@ export interface MarketplaceSkillDependency {
   id: string;
   name: string;
   type: MarketplaceDependencyToolType;
+  description?: string;
 }
 
 export interface MarketplaceSkillSeed {
@@ -42,6 +43,7 @@ export interface MarketplaceSkillSeed {
   tags: string[];
   declaredDependencies?: MarketplaceSkillDependency[];
   downloads: number;
+  favoriteCount?: number;
   boundToCEC: boolean;
   files: MarketplaceSkillFile[];
 }
@@ -74,24 +76,24 @@ function createSeedFile(path: string, content: string, prefix: string): Marketpl
 }
 
 export const MARKETPLACE_SKILL_DEPENDENCY_OPTIONS: MarketplaceSkillDependency[] = [
-  { id: "mcp-policy-center", name: "制度中心 MCP", type: "mcp" },
-  { id: "mcp-contract-review", name: "合同审阅 MCP", type: "mcp" },
-  { id: "mcp-mail-gateway", name: "邮件网关 MCP", type: "mcp" },
-  { id: "mcp-lanxin-message", name: "蓝信消息 MCP", type: "mcp" },
-  { id: "plugin-office-suite", name: "办公套件插件", type: "plugin" },
-  { id: "plugin-travel-expense", name: "差旅报销插件", type: "plugin" },
-  { id: "plugin-procurement-center", name: "招采协同插件", type: "plugin" },
-  { id: "plugin-public-opinion", name: "舆情监测插件", type: "plugin" },
-  { id: "mcp-erp-finance", name: "ERP MCP", type: "mcp" },
-  { id: "mcp-approval-workflow", name: "审批系统 MCP", type: "mcp" },
-  { id: "plugin-invoice-verification", name: "票据核验服务", type: "plugin" },
-  { id: "mcp-intelligence-ontology", name: "情报场景本体 MCP", type: "mcp" },
-  { id: "mcp-security-validation", name: "安全校验服务MCP", type: "mcp" },
+  { id: "mcp-policy-center", name: "制度中心 MCP", type: "mcp", description: "查询制度条款、版本记录和生效范围。" },
+  { id: "mcp-contract-review", name: "合同审阅 MCP", type: "mcp", description: "定位合同关键条款并辅助识别风险。" },
+  { id: "mcp-mail-gateway", name: "邮件网关 MCP", type: "mcp", description: "发送、抄送和归档业务邮件。" },
+  { id: "mcp-lanxin-message", name: "蓝信消息 MCP", type: "mcp", description: "向蓝信会话发送通知和消息。" },
+  { id: "plugin-office-suite", name: "办公套件插件", type: "plugin", description: "提供常用办公文档处理能力。" },
+  { id: "plugin-travel-expense", name: "差旅报销插件", type: "plugin", description: "处理差旅申请与报销材料。" },
+  { id: "plugin-procurement-center", name: "招采协同插件", type: "plugin", description: "支持采购申请及招采流程协同。" },
+  { id: "plugin-public-opinion", name: "舆情监测插件", type: "plugin", description: "检索并汇总公开舆情信息。" },
+  { id: "mcp-erp-finance", name: "ERP MCP", type: "mcp", description: "写入报销单草稿并同步审批状态。" },
+  { id: "mcp-approval-workflow", name: "审批系统 MCP", type: "mcp", description: "发起审批并查询流程状态。" },
+  { id: "plugin-invoice-verification", name: "票据核验服务", type: "plugin", description: "识别票据字段并核验票据状态。" },
+  { id: "mcp-intelligence-ontology", name: "情报场景本体 MCP", type: "mcp", description: "关联情报实体并校验业务关系。" },
+  { id: "mcp-security-validation", name: "安全校验服务MCP", type: "mcp", description: "检查输入内容中的安全与合规风险。" },
 ];
 
 const TRAVEL_REIMBURSEMENT_DEPENDENCIES: MarketplaceSkillDependency[] = [
-  { id: "workflow-invoice-verification", name: "验票工作流", type: "plugin" },
-  { id: "workflow-auto-form-fill", name: "自动填单工作流", type: "plugin" },
+  { id: "workflow-invoice-verification", name: "验票工作流", type: "plugin", description: "识别并校验差旅票据及附件完整性。" },
+  { id: "workflow-auto-form-fill", name: "自动填单工作流", type: "plugin", description: "根据申请信息填写差旅表单。" },
 ];
 
 export const MARKETPLACE_SKILL_SEEDS: MarketplaceSkillSeed[] = [
@@ -115,6 +117,7 @@ export const MARKETPLACE_SKILL_SEEDS: MarketplaceSkillSeed[] = [
       "输入你要办理的事项、当前场景和希望得到的结果，例如“我要发起采购审批，需要准备哪些材料？”系统会先说明适用制度和流程，再列出所需材料、审批节点和注意事项。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[0]],
     downloads: 4598,
+    favoriteCount: 68,
     boundToCEC: true,
     files: [
       createSeedFile(
@@ -159,6 +162,7 @@ description: "围绕制度、流程和审批规范回答业务问题。"
     isFavorite: true,
     tags: ["经营分析", "指标", "预算"],
     downloads: 4213,
+    favoriteCount: 42,
     boundToCEC: true,
     files: [
       createSeedFile(
@@ -206,6 +210,7 @@ description: "围绕经营指标、预算执行和项目进度形成结论说明
       "补充邮件对象、事项背景、希望对方配合的动作和时间要求，即可生成正式邮件。适合催办、汇报、提醒、请示等场景。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[4], MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[2]],
     downloads: 2984,
+    favoriteCount: 24,
     boundToCEC: false,
     files: [
       createSeedFile(
@@ -249,6 +254,7 @@ description: "生成正式、得体、行动清晰的业务邮件。"
     isFavorite: false,
     tags: ["蓝信", "通知", "通讯协同"],
     downloads: 2147,
+    favoriteCount: 15,
     boundToCEC: false,
     files: [
       createSeedFile(
@@ -292,6 +298,7 @@ description: "输出适合蓝信群聊和单聊发送的通知消息。"
       "上传机票、火车票、酒店发票、出租车票、电子行程单等图片或截图，并补充出差事由、时间、地点、预算和同行人员。技能会先生成差旅申请与审批说明，再整理报销所需材料、标记缺失项，并在需要时衔接验票工作流和自动填单工作流。",
     declaredDependencies: TRAVEL_REIMBURSEMENT_DEPENDENCIES,
     downloads: 2763,
+    favoriteCount: 21,
     boundToCEC: false,
     files: [
       createSeedFile(
@@ -372,6 +379,7 @@ description: "生成差旅申请说明、整理报销材料，并为后续验票
       "上传机票、火车票、酒店发票、出租车票、电子行程单、付款截图等报销材料图片，并补充出差事由、时间范围和审批单号。系统会先检查材料是否齐全，再执行验票工作流和自动填单工作流，生成 ERP 报销草稿，并在提交审批前返回确认结果或待补充项。",
     declaredDependencies: TRAVEL_REIMBURSEMENT_DEPENDENCIES,
     downloads: 3256,
+    favoriteCount: 0,
     boundToCEC: false,
     files: [
       createSeedFile(
@@ -448,6 +456,7 @@ description: "用于处理员工差旅报销申请，完成材料检查、验票
       "上传或整理班组产量、停机、质量和交付数据后，技能会自动汇总当日情况，标记异常波动，并输出适合报送的生产日报。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[4]],
     downloads: 3076,
+    favoriteCount: 19,
     boundToCEC: true,
     files: [
       createSeedFile(
@@ -511,6 +520,7 @@ description: "汇总生产、停机、质量和交付数据，形成生产日报
       "输入你关注的主题、时间范围和期望结果，例如“搜集本周竞品动态和行业政策变化，输出一份符合公司规范的情报简报”。系统会自动汇集相关情报，完成筛选、校验、研判和结构化整理，并输出带来源依据的结果。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[11], MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[12]],
     downloads: 2874,
+    favoriteCount: 36,
     boundToCEC: false,
     files: [
       createSeedFile(
@@ -555,6 +565,7 @@ description: "用于汇集竞品动态、行业政策等多源情报，并完成
     isFavorite: false,
     tags: ["需求", "项目管理", "系统建设"],
     downloads: 2107,
+    favoriteCount: 11,
     boundToCEC: false,
     files: [
       createSeedFile(
@@ -607,6 +618,7 @@ description: "整理业务调研结论，形成系统建设需求说明。"
     isFavorite: true,
     tags: ["纪要", "会议", "待办"],
     downloads: 3382,
+    favoriteCount: 29,
     boundToCEC: false,
     files: [
       createSeedFile(
@@ -652,6 +664,7 @@ description: "整理会议记录并形成正式纪要。"
       "输入合同正文或关键条款片段，说明当前业务场景和关注点，技能会识别履约、付款、违约等重点风险，并生成审阅意见。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[1]],
     downloads: 1934,
+    favoriteCount: 17,
     boundToCEC: false,
     files: [
       createSeedFile(
@@ -696,6 +709,7 @@ description: "识别合同关键风险并形成审阅意见。"
       "导入巡检记录、缺陷照片说明和处理意见后，技能会自动整理缺陷台账、整改清单和复查建议，便于现场闭环。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[4]],
     downloads: 2415,
+    favoriteCount: 13,
     boundToCEC: true,
     files: [
       createSeedFile(
@@ -741,6 +755,7 @@ description: "整理巡检记录并形成设备缺陷台账。"
       "输入本次投标项目的材料目录或上传拟递交文件，技能会逐项检查资质、授权、盖章、报价说明等是否齐套，并输出缺漏清单。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[6]],
     downloads: 1862,
+    favoriteCount: 8,
     boundToCEC: false,
     files: [
       createSeedFile(
@@ -785,6 +800,7 @@ description: "检查投标材料是否齐套、合规、可递交。"
       "输入事项背景、报送对象、希望生成的公文类型，以及关键事实和请示点，技能会输出结构规范、语气正式的公文初稿。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[0], MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[4]],
     downloads: 4826,
+    favoriteCount: 57,
     boundToCEC: true,
     files: [
       createSeedFile(
@@ -827,6 +843,7 @@ description: "生成正式、规范、可报送的公文内容。"
     isFavorite: false,
     tags: ["运输", "物流", "日报"],
     downloads: 1725,
+    favoriteCount: 9,
     boundToCEC: false,
     files: [
       createSeedFile(
@@ -871,6 +888,7 @@ description: "汇总运输执行情况并形成日报。"
       "输入目标企业名称、关注时间范围和研判目的，技能会汇总公开资料并输出舆情摘要、风险提示和待核实事项。",
     declaredDependencies: [MARKETPLACE_SKILL_DEPENDENCY_OPTIONS[7]],
     downloads: 2286,
+    favoriteCount: 16,
     boundToCEC: true,
     files: [
       createSeedFile(
@@ -912,6 +930,7 @@ description: "整理企业公开信息并输出舆情摘要和风险提示。"
     isFavorite: false,
     tags: ["运行", "电力", "值班"],
     downloads: 1848,
+    favoriteCount: 7,
     boundToCEC: false,
     files: [
       createSeedFile(

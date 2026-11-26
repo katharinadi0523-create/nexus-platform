@@ -171,10 +171,12 @@ function EnterpriseNodeView({
   node,
   expanded,
   onToggle,
+  onViewAllArtifacts,
 }: {
   node: EnterpriseRenderNode;
   expanded: boolean;
   onToggle: () => void;
+  onViewAllArtifacts?: () => void;
 }) {
   if (node.type === "user") {
     return <ClawUserMessage item={node.timeline} />;
@@ -211,6 +213,7 @@ function EnterpriseNodeView({
   if (node.type === "artifacts") {
     return (
       <ClawAgentOutput
+        onViewAllArtifacts={onViewAllArtifacts}
         item={{
           key: node.key,
           type: "output",
@@ -462,6 +465,7 @@ export function EnterpriseSessionPanel({
                   <EnterpriseNodeView
                     node={node}
                     expanded={Boolean(expanded[node.key])}
+                    onViewAllArtifacts={personalMode ? () => onWorkspaceViewChange?.("files") : undefined}
                     onToggle={() =>
                       setExpanded((current) => ({
                         ...current,

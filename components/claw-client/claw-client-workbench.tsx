@@ -22,6 +22,8 @@ import { MyClawCapabilitiesPage } from "@/components/claw-client/capabilities-pa
 import { MyClawAutomationWorkbench } from "@/components/my-claw/automation/automation-workbench";
 import { ClawClientSettingsPage } from "@/components/claw-client/settings-page";
 import { ClawClientSettingsDialog } from "@/components/claw-client/settings-dialog";
+import { OPEN_PERSONAL_MODEL_SETTINGS_EVENT } from "@/components/claw-client/personal-model-demo-store";
+import type { PersonalModelType } from "@/components/claw-client/personal-model-demo-store";
 import { ClawClientWorkspacePage } from "@/components/claw-client/workspace-page";
 import { useMyClaw } from "@/components/my-claw/provider";
 import { ClawClientKnowledgePage } from "@/components/claw-client/knowledge-page";
@@ -91,7 +93,7 @@ const ACCOUNT_NAV: Array<{
 ];
 
 function normalizeTab(tab: string | null): ClientTab {
-  if (tab === "agents" || tab === "skills" || tab === "plugins") {
+  if (tab === "agents" || tab === "skills" || tab === "plugins" || tab === "ontology") {
     return "capabilities";
   }
   if (tab === "files") return "workspace";
@@ -368,18 +370,37 @@ function ClientSidebar({ tab, sessionId, onOpenSettings, onLogout }: { tab: Clie
 export function ClawClientWorkbench({ tab: rawTab, sessionId, messageId }: { tab: string | null; sessionId?: string | null; messageId?: string | null }) {
   const router = useRouter();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsEntry, setSettingsEntry] = useState<{ id: number; section: "设定" | "模型"; modelView: "list" | "add"; modelType: PersonalModelType }>({ id: 0, section: "设定", modelView: "list", modelType: "chat" });
   const [loggingOut, setLoggingOut] = useState(false);
+  useEffect(() => {
+    function openModelSettings(event: Event) {
+      const detail = (event as CustomEvent<{ view?: "list" | "add"; modelType?: PersonalModelType }>).detail;
+      const view = detail?.view === "add" ? "add" : "list";
+      const modelType = detail?.modelType === "image-generation" ? "image-generation" : "chat";
+      setSettingsEntry((current) => ({ id: current.id + 1, section: "模型", modelView: view, modelType }));
+      setSettingsOpen(true);
+    }
+    window.addEventListener(OPEN_PERSONAL_MODEL_SETTINGS_EVENT, openModelSettings);
+    return () => window.removeEventListener(OPEN_PERSONAL_MODEL_SETTINGS_EVENT, openModelSettings);
+  }, []);
   const tab = normalizeTab(rawTab);
   let content: React.ReactNode;
   const chatSession = tab === "chat" && sessionId ? getMyClawSession(sessionId) : undefined;
   if (chatSession?.kind === "clarify_demo") content = <ClarifyDemoSessionPanel key={chatSession.id} session={chatSession} />;
   else if (chatSession?.kind === "queue_demo") content = <QueueDemoSessionPanel key={chatSession.id} session={chatSession} />;
   else if (chatSession?.kind === "process_demo") content = <ProcessDemoSessionPanel key={chatSession.id} session={chatSession} />;
-  else if (tab === "chat") content = <ChatWorkspace sessionId={sessionId} messageId={messageId} personalMode modelFallbackDemo={sessionId === "model-fallback-demo"} />;
+  else if (tab === "chat") content = (
+    <ChatWorkspace
+      sessionId={sessionId}
+      messageId={messageId}
+      personalMode
+      modelErrorDemo={sessionId === "model-fallback-demo" ? "unavailable" : sessionId === "model-retired-demo" ? "retired" : undefined}
+    />
+  );
   else if (tab === "workspace") content = <ClawClientWorkspacePage />;
   else if (tab === "capabilities") {
     const initialType =
-      rawTab === "skills" || rawTab === "plugins" ? rawTab : "agents";
+      rawTab === "skills" || rawTab === "plugins" || rawTab === "ontology" ? rawTab : "agents";
     content = <MyClawCapabilitiesPage initialType={initialType} />;
   }
   else if (tab === "automation") content = <MyClawAutomationWorkbench chatBasePath="/claw-client" />;
@@ -390,13 +411,13 @@ export function ClawClientWorkbench({ tab: rawTab, sessionId, messageId }: { tab
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f7f8fa]">
-      <ClientSidebar tab={tab} sessionId={sessionId} onOpenSettings={() => setSettingsOpen(true)} onLogout={() => {
+      <ClientSidebar tab={tab} sessionId={sessionId} onOpenSettings={() => { setSettingsEntry((current) => ({ id: current.id + 1, section: "设定", modelView: "list", modelType: "chat" })); setSettingsOpen(true); }} onLogout={() => {
         if (loggingOut) return;
         setLoggingOut(true);
         void fetch("/api/auth/logout", { method: "POST" }).finally(() => { router.replace("/login"); router.refresh(); setLoggingOut(false); });
       }} />
       <main className="min-w-0 flex-1 overflow-hidden">{content}</main>
-      <ClawClientSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <ClawClientSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} entryId={settingsEntry.id} initialSection={settingsEntry.section} initialModelView={settingsEntry.modelView} initialModelType={settingsEntry.modelType} />
     </div>
   );
 }

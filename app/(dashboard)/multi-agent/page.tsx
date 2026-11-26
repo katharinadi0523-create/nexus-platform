@@ -35,6 +35,7 @@ import { ResourceDeleteApprovalDialog } from "@/components/security/resource-del
 import {
   getPublishedMultiAgents,
   removePublishedMultiAgent,
+  upsertPublishedMultiAgent,
   type PublishedMultiAgentItem,
 } from "@/lib/published-multi-agents";
 import {

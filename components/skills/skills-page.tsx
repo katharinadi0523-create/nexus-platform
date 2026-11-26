@@ -35,11 +35,15 @@ import {
   LoaderCircle,
   Mail,
   MessagesSquare,
+  Ellipsis,
   Plus,
+  PlugZap,
   Rocket,
   RefreshCw,
   Save,
+  Server,
   Search,
+  SlidersHorizontal,
   ShieldCheck,
   ScrollText,
   Sparkles,
@@ -52,6 +56,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
+import { SkillDetailDialogShell } from "@/components/skills/skill-detail-dialog-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -108,6 +113,12 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { MARKETPLACE_SKILL_DEPENDENCY_OPTIONS as DEPENDENCY_TOOL_OPTIONS, MARKETPLACE_SKILL_SEEDS as marketplaceSeeds } from "@/lib/mock/skills-marketplace";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+function getSkillMarkdownBody(content: string) {
+  return content.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, "").trim();
+}
 
 type SkillSource = "template" | "blank" | "imported";
 type SkillStatus = "draft" | "reviewing" | "published" | "reviewFailed";
@@ -159,6 +170,7 @@ interface SkillTemplate {
   tags: string[];
   declaredDependencies?: SkillDependency[];
   downloads: number;
+  favoriteCount?: number;
   references?: number;
   referencedAgents?: string[];
   boundToCEC: boolean;
@@ -1674,6 +1686,8 @@ export interface SkillsPageProps {
   /** 个人工作台能力页的独立标题与紧凑筛选布局 */
   capabilityWorkspace?: boolean;
   viewSwitcher?: ReactNode;
+  onPersonalImportSkill?: () => void;
+  onOpenManagement?: () => void;
 }
 
 /** Embeddable skills hub/management UI. Route entry is the default export below. */
@@ -1682,6 +1696,8 @@ export function SkillsPage({
   embedded = false,
   capabilityWorkspace = false,
   viewSwitcher,
+  onPersonalImportSkill,
+  onOpenManagement,
 }: SkillsPageProps) {
   const [activeTab, setActiveTab] = useState<SkillsTab>(
     moduleView === "management" ? "mine" : "marketplace"
@@ -2170,6 +2186,7 @@ export function SkillsPage({
         tags: skillToPublish.tags,
         declaredDependencies: skillToPublish.declaredDependencies,
         downloads: existingTemplate?.downloads ?? 0,
+        favoriteCount: existingTemplate?.favoriteCount ?? 0,
         references: existingTemplate?.references ?? 0,
         referencedAgents: existingTemplate?.referencedAgents ?? [],
         boundToCEC: false,
@@ -2478,6 +2495,7 @@ export function SkillsPage({
         files: template.files,
       });
 
+      setMarketplaceSkills((current) => current.map((skill) => skill.id === template.id ? { ...skill, downloads: skill.downloads + 1 } : skill));
       toast.success(`已下载技能：${template.name}`);
     } catch {
       toast.error("导出失败，请稍后重试");
@@ -2513,6 +2531,9 @@ export function SkillsPage({
     toast.success(`已添加「${template.name}」到我的技能`);
   };
 
+  const isTemplateAdded = (template: SkillTemplate) =>
+    mySkills.some((skill) => skill.publishedTemplateId === template.id || skill.id === `market-${template.id}`);
+
   const handleToggleFavorite = (templateId: string) => {
     let nextFavorite = false;
 
@@ -2527,6 +2548,7 @@ export function SkillsPage({
         return {
           ...skill,
           isFavorite: nextFavorite,
+          favoriteCount: Math.max(0, (skill.favoriteCount ?? 0) + (nextFavorite ? 1 : -1)),
         };
       })
     );
@@ -3166,32 +3188,28 @@ source_url: "${parsedUrl.toString()}"
     [mySkills]
   );
 
-  const renderMarketplaceDetailPage = (skill: SkillTemplate) => {
+  const renderMarketplaceDetailPage = (skill: SkillTemplate, showBackButton = true) => {
     const audienceMeta = AUDIENCE_VISUAL_META[skill.audienceCategory];
     const SkillIcon = getMarketplaceSkillIcon(skill);
     const dependencyCount = skill.declaredDependencies?.length ?? 0;
-    const shouldShowReleaseNotes =
-      compareVersions(skill.version ?? "1.0", "1.0") > 0 && Boolean(skill.releaseNotes?.trim());
     const shouldShowScenarioBlock = Boolean(
       skill.scene?.trim() || skill.inputExample?.trim() || skill.outputExample?.trim()
     );
+    const skillMdContent = skill.files.find((file) => file.path.replace(/^\.\//, "") === "SKILL.md")?.content;
+    const alreadyAdded = isTemplateAdded(skill);
 
     return (
-      <section className="relative overflow-hidden rounded-[24px] border-0 bg-white shadow-[0_28px_72px_-44px_rgba(39,115,255,0.16)]">
-        <div aria-hidden className="absolute inset-0">
-          <div className="skills-ambient-orb absolute left-[-3rem] top-0 h-28 w-28 rounded-full bg-[#4fd6ff]/18 blur-3xl" />
-          <div className="skills-ambient-orb skills-ambient-orb-delay absolute right-[-2rem] top-8 h-32 w-32 rounded-full bg-[#dbe7f4]/80 blur-3xl" />
-        </div>
+      <section className="relative overflow-hidden rounded-2xl border-0 bg-white shadow-none">
 
         <div className="relative space-y-6 px-5 py-6 md:px-8 md:py-8">
-          <Button
+          {showBackButton ? <Button
             variant="ghost"
             className="h-9 w-fit rounded-full px-3 text-[#5a6779] hover:bg-[#f8f9fb] hover:text-[#2773ff]"
             onClick={closeMarketplaceDetail}
           >
             <ArrowLeft className="h-4 w-4" />
             返回 技能广场
-          </Button>
+          </Button> : null}
 
           <div className="space-y-6">
             <div className="rounded-[24px] border border-[#dbe7f4]/80 bg-[#f8f9fb] p-6 shadow-[0_18px_48px_-36px_rgba(11,16,32,0.08)] md:p-7">
@@ -3229,16 +3247,13 @@ source_url: "${parsedUrl.toString()}"
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-col gap-3 border-t border-[#dbe7f4]/80 pt-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="mt-6 grid grid-cols-3 overflow-hidden rounded-xl border border-[#dbe7f4] bg-white">
+                <div className="flex flex-col items-center gap-1 border-r border-[#dbe7f4] px-3 py-3 text-center text-sm text-[#5a6779]"><FileText className="mb-1 h-4 w-4 text-slate-600" /><span className="font-semibold text-[#000000]">{formatSkillVersion(skill.version)}</span><span className="text-xs">版本</span></div>
+                <div className="flex flex-col items-center gap-1 border-r border-[#dbe7f4] px-3 py-3 text-center text-sm text-[#5a6779]"><Download className="mb-1 h-4 w-4 text-slate-600" /><span className="font-semibold text-[#000000]">{skill.downloads.toLocaleString()}</span><span className="text-xs">次下载</span></div>
+                <div className="flex flex-col items-center gap-1 px-3 py-3 text-center text-sm text-[#5a6779]"><Star className="mb-1 h-4 w-4 text-slate-600" /><span className="font-semibold text-[#000000]">{(skill.favoriteCount ?? 0).toLocaleString()}</span><span className="text-xs">人收藏</span></div>
+              </div>
+              <div className="mt-4 flex flex-col gap-3 border-t border-[#dbe7f4]/80 pt-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-[#dbe7f4] bg-white px-3 py-1.5 text-sm text-[#5a6779]">
-                    <span className="font-semibold text-[#000000]">{formatSkillVersion(skill.version)}</span>
-                    <span>版本</span>
-                  </div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-[#dbe7f4] bg-white px-3 py-1.5 text-sm text-[#5a6779]">
-                    <span className="font-semibold text-[#000000]">{skill.downloads.toLocaleString()}</span>
-                    <span>下载</span>
-                  </div>
                   {dependencyCount ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium text-[#5a6779]">依赖声明</span>
@@ -3254,6 +3269,15 @@ source_url: "${parsedUrl.toString()}"
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 rounded-full px-4"
+                    onClick={() => { void handleDownloadTemplate(skill); }}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    下载
+                  </Button>
                   <button
                     type="button"
                     className={cn(
@@ -3275,28 +3299,56 @@ source_url: "${parsedUrl.toString()}"
                     />
                   </button>
                   <Button
-                    className="h-11 rounded-full border-0 bg-[#2773ff] px-5 text-white shadow-[0_14px_32px_-14px_rgba(39,115,255,0.55)] hover:bg-[#1f5fe0]"
-                    onClick={() => handleDownloadTemplate(skill)}
+                    disabled={alreadyAdded}
+                    className={cn(
+                      "h-11 rounded-full border-0 px-5 shadow-none",
+                      alreadyAdded
+                        ? "cursor-default bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
+                        : "bg-[#2773ff] text-white shadow-[0_14px_32px_-14px_rgba(39,115,255,0.55)] hover:bg-[#1f5fe0]"
+                    )}
+                    onClick={() => handleAddTemplateToMine(skill)}
                   >
-                    <Download className="h-4 w-4" />
-                    导出 .zip
+                    {!alreadyAdded ? <Plus className="h-4 w-4" /> : null}
+                    {alreadyAdded ? "已添加" : "添加到我的技能"}
                   </Button>
                 </div>
               </div>
             </div>
 
             <div className="rounded-[24px] border border-[#dbe7f4]/70 bg-white p-6 shadow-[0_18px_48px_-40px_rgba(39,115,255,0.1)] md:p-7">
-              {shouldShowReleaseNotes ? (
-                <div className="mb-6 rounded-[18px] border border-[#dbe7f4]/80 bg-[#f8f9fb] px-4 py-4">
-                  <div className="text-base font-semibold text-[#000000]">更新说明</div>
-                  <div className="mt-3 text-sm leading-7 text-[#5a6779]">{skill.releaseNotes}</div>
+              <div className="mb-6 rounded-[18px] border border-[#dbe7f4]/80 bg-[#f8f9fb] p-4 md:p-5">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h2 className="text-base font-semibold text-slate-900">SKILL.md</h2>
+                  <span className="text-xs text-slate-500">技能指令</span>
                 </div>
-              ) : null}
-
-              <div className="text-base font-semibold text-[#000000]">使用说明</div>
-              <div className="mt-4 rounded-[18px] border border-[#dbe7f4]/80 bg-[#f8f9fb] px-4 py-4 text-sm leading-7 text-[#5a6779]">
-                {skill.usageInstructions?.trim() || "暂未填写使用说明"}
+                <div className="max-h-[420px] overflow-y-auto rounded-xl border border-[#dbe7f4]/80 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
+                  {skillMdContent && getSkillMarkdownBody(skillMdContent) ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                    h1: ({ children }) => <h3 className="mb-3 mt-1 text-lg font-semibold text-slate-900">{children}</h3>,
+                    h2: ({ children }) => <h4 className="mb-2 mt-4 text-base font-semibold text-slate-900">{children}</h4>,
+                    h3: ({ children }) => <h5 className="mb-2 mt-3 font-semibold text-slate-900">{children}</h5>,
+                    p: ({ children }) => <p className="my-2 whitespace-pre-wrap">{children}</p>,
+                    ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+                    ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+                    li: ({ children }) => <li className="pl-1">{children}</li>,
+                    code: ({ children }) => <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[12px]">{children}</code>,
+                    blockquote: ({ children }) => <blockquote className="my-2 border-l-2 border-blue-300 pl-3 text-slate-600">{children}</blockquote>,
+                    hr: () => <hr className="my-3 border-slate-200" />,
+                  }}>{getSkillMarkdownBody(skillMdContent)}</ReactMarkdown> : <p className="py-4 text-slate-400">该 Skill 暂未提供 SKILL.md 正文内容。</p>}
+                </div>
               </div>
+              {skill.usageInstructions?.trim() ? <>
+                <div className="text-base font-semibold text-[#000000]">使用说明</div>
+                <div className="mt-4 rounded-[18px] border border-[#dbe7f4]/80 bg-[#f8f9fb] px-4 py-4 text-sm leading-7 text-[#5a6779]">
+                  {skill.usageInstructions.trim()}
+                </div>
+              </> : null}
+
+              <div className="mt-6 text-base font-semibold text-[#000000]">版本历史</div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[18px] border border-[#dbe7f4]/80 bg-[#f8f9fb] px-4 py-4 text-sm">
+                <div className="flex items-center gap-2"><span className="size-2 rounded-full bg-[#2773ff]" /><span className="font-medium text-[#1e293b]">{formatSkillVersion(skill.version)} · 当前发布版本</span></div>
+                <span className="text-xs text-[#7a8797]">{skill.publishedAt}</span>
+              </div>
+              {skill.releaseNotes?.trim() ? <p className="mt-2 pl-4 text-sm leading-6 text-[#5a6779]">{skill.releaseNotes}</p> : null}
 
               {shouldShowScenarioBlock ? (
                 <div className="mt-6 grid gap-4 sm:grid-cols-3">
@@ -3331,6 +3383,50 @@ source_url: "${parsedUrl.toString()}"
         </div>
       </section>
     );
+  };
+
+  const renderMarketplaceDetailDialog = (skill: SkillTemplate) => {
+    const SkillIcon = getMarketplaceSkillIcon(skill);
+    const audienceMeta = AUDIENCE_VISUAL_META[skill.audienceCategory];
+    const skillMdContent = skill.files.find((file) => file.path.replace(/^\.\//, "") === "SKILL.md")?.content;
+    const alreadyAdded = isTemplateAdded(skill);
+
+    return <SkillDetailDialogShell
+      open
+      onOpenChange={(open) => { if (!open) closeMarketplaceDetail(); }}
+      name={skill.name}
+      description={skill.detailDescription ?? skill.description}
+      icon={<SkillIcon className="size-6" />}
+      badge={<span className={cn("rounded px-2 py-0.5 text-xs font-medium", audienceMeta.badgeClass)}>{skill.category || audienceMeta.label}</span>}
+      titleActions={<>
+        <Button type="button" variant="outline" size="sm" onClick={() => handleToggleFavorite(skill.id)}><Star className={cn("mr-2 size-4", skill.isFavorite && "fill-amber-100 text-amber-600")} />{skill.isFavorite ? "已收藏" : "收藏"}</Button>
+        <Button type="button" size="sm" disabled={alreadyAdded} onClick={() => handleAddTemplateToMine(skill)}>{alreadyAdded ? "已添加" : "添加到我的技能"}</Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild><Button type="button" variant="outline" size="icon" className="size-9 shrink-0" aria-label="更多操作" title="更多操作"><Ellipsis className="size-4" /></Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="bottom" className="z-[110] w-40"><DropdownMenuItem onSelect={() => { void handleDownloadTemplate(skill); }}><Download className="size-4" />下载 Skill</DropdownMenuItem></DropdownMenuContent>
+        </DropdownMenu>
+      </>}
+      byline={<><span className="font-medium text-slate-700">{getMarketplaceSourceText(skill)}</span><span className="mx-2 text-slate-300">|</span>更新于 {skill.publishedAt}</>}
+      stats={[
+        { label: formatSkillVersion(skill.version), icon: <BadgeCheck className="size-4" /> },
+        { label: `${skill.downloads.toLocaleString()}次下载`, icon: <Download className="size-4" /> },
+        { label: `${(skill.favoriteCount ?? 0).toLocaleString()}人收藏`, icon: <Star className="size-4" /> },
+      ]}
+      metadata={[]}
+    >
+      <div className="text-sm leading-6 text-slate-700">
+        {skillMdContent && getSkillMarkdownBody(skillMdContent) ? <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+          h1: ({ children }) => <h4 className="mb-3 mt-1 text-lg font-semibold text-slate-900">{children}</h4>,
+          h2: ({ children }) => <h5 className="mb-2 mt-4 text-base font-semibold text-slate-900">{children}</h5>,
+          h3: ({ children }) => <h6 className="mb-2 mt-3 font-semibold text-slate-900">{children}</h6>,
+          p: ({ children }) => <p className="my-2 whitespace-pre-wrap">{children}</p>,
+          ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+          ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+          li: ({ children }) => <li className="pl-1">{children}</li>,
+          code: ({ children }) => <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[12px]">{children}</code>,
+        }}>{getSkillMarkdownBody(skillMdContent)}</ReactMarkdown> : <p className="py-4 text-slate-400">该 Skill 暂未提供 SKILL.md 正文内容。</p>}
+      </div>
+    </SkillDetailDialogShell>;
   };
 
   const renderMySkillDetailPage = (skill: MySkill) => {
@@ -3542,7 +3638,7 @@ source_url: "${parsedUrl.toString()}"
       >
         {isHubModule ? (
           <TabsContent value="marketplace" className="mt-0 space-y-0">
-          {selectedMarketplaceDetail ? renderMarketplaceDetailPage(selectedMarketplaceDetail) : (
+          {selectedMarketplaceDetail && !embedded ? renderMarketplaceDetailPage(selectedMarketplaceDetail) : (
             <>
           <div
             className={cn(
@@ -3569,13 +3665,13 @@ source_url: "${parsedUrl.toString()}"
                 </span>
                 <p className="mt-1 max-w-xl text-[13px] leading-5 text-[#6e7b8d]">
                   {capabilityWorkspace
-                    ? "浏览已发布技能，按类别筛选并下载。"
+                    ? "查看已发布技能的说明，添加所需技能并在我的技能中管理。"
                     : "发现、筛选并复用组织内外的标准化技能资产，沉淀为可治理、可扩展的智能体能力。"}
                 </p>
               </div>
               ) : null}
               <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 lg:w-auto lg:flex-nowrap">
-                <div className="relative w-full min-w-0 shrink-0 lg:w-[min(320px,100%)]">
+                <div className="relative order-1 w-full min-w-0 shrink-0 lg:order-none lg:w-[min(320px,100%)]">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6e7b8d]" />
                   <Input
                     value={marketSearch}
@@ -3587,17 +3683,15 @@ source_url: "${parsedUrl.toString()}"
                     )}
                   />
                 </div>
-                {capabilityWorkspace ? (
-                  <Select
-                    ariaLabel="技能排序方式"
-                    value={marketSortMode}
-                    onValueChange={(value) => setMarketSortMode(value as MarketplaceSortMode)}
-                    options={[
-                      { value: "updatedAt", label: "最新发布" },
-                      { value: "downloads", label: "下载量" },
-                    ]}
-                    className="h-9 w-[132px] shrink-0 rounded-md border-slate-200 bg-white px-2.5 text-[13px] shadow-none"
-                  />
+                {capabilityWorkspace && onOpenManagement ? (
+                  <Button type="button" variant="outline" className="order-2 h-9 shrink-0 rounded-md border-slate-200 bg-white px-3 text-[13px] lg:order-none" onClick={onOpenManagement}>
+                    <SlidersHorizontal className="mr-1.5 size-4" />技能管理
+                  </Button>
+                ) : null}
+                {capabilityWorkspace && onPersonalImportSkill ? (
+                  <Button type="button" className="order-3 h-9 shrink-0 rounded-md bg-[#2773ff] px-3 text-[13px] text-white hover:bg-blue-700 lg:order-none" onClick={onPersonalImportSkill}>
+                    <Plus className="mr-1 size-4" />导入 Skill
+                  </Button>
                 ) : null}
               </div>
             </div>
@@ -3623,25 +3717,37 @@ source_url: "${parsedUrl.toString()}"
                     </button>
                   ))}
                 </nav>
-                <nav className="flex flex-wrap items-center gap-0.5" aria-label="技能类别筛选">
-                  {USER_CATEGORY_FILTERS.map((filter) => (
-                    <button
-                      key={filter.value}
-                      type="button"
-                      aria-pressed={audienceCategoryFilter === filter.value}
-                      onClick={() => setAudienceCategoryFilter(filter.value)}
-                      className={cn(
-                        "shrink-0",
-                        getAudienceFilterClass(
-                          filter.value,
-                          audienceCategoryFilter === filter.value
-                        )
-                      )}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                </nav>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <nav className="flex flex-wrap items-center gap-0.5" aria-label="技能类别筛选">
+                    {USER_CATEGORY_FILTERS.map((filter) => (
+                      <button
+                        key={filter.value}
+                        type="button"
+                        aria-pressed={audienceCategoryFilter === filter.value}
+                        onClick={() => setAudienceCategoryFilter(filter.value)}
+                        className={cn(
+                          "shrink-0",
+                          getAudienceFilterClass(
+                            filter.value,
+                            audienceCategoryFilter === filter.value
+                          )
+                        )}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </nav>
+                  <Select
+                    ariaLabel="技能排序方式"
+                    value={marketSortMode}
+                    onValueChange={(value) => setMarketSortMode(value as MarketplaceSortMode)}
+                    options={[
+                      { value: "updatedAt", label: "最新发布" },
+                      { value: "downloads", label: "下载量" },
+                    ]}
+                    className="h-8 w-[132px] rounded-md border-slate-200 bg-white px-2.5 text-[13px] shadow-none"
+                  />
+                </div>
               </div>
             ) : (
             <div className="mt-4 space-y-2">
@@ -3877,19 +3983,6 @@ source_url: "${parsedUrl.toString()}"
                               {!inMine ? <Plus className="h-3.5 w-3.5" /> : null}
                               {inMine ? "已添加" : "添加"}
                             </button>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-9 w-9 rounded-full border border-[#dbe7f4] bg-white text-[#2773ff] shadow-none hover:border-[#2773ff]/35 hover:bg-[#2773ff]/6"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleDownloadTemplate(skill);
-                              }}
-                              aria-label="下载"
-                              title="下载"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
                           </div>
                         </div>
                       </div>
@@ -3908,6 +4001,8 @@ source_url: "${parsedUrl.toString()}"
           )}
           </TabsContent>
         ) : null}
+
+        {embedded && selectedMarketplaceDetail ? renderMarketplaceDetailDialog(selectedMarketplaceDetail) : null}
 
         {isManagementModule ? (
           <TabsContent

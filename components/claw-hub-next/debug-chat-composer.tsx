@@ -30,7 +30,11 @@ import type { ClawDetailData } from "@/lib/mock/claw-hub-next";
 import { usePersonalChatContext } from "@/components/claw-client/personal-chat-context";
 import { CLAW_CLIENT_WORKSPACE_ROOT } from "@/components/claw-client/personal-workspace-data";
 import { useChatModelPreference } from "@/components/my-claw/chat/use-chat-model-preference";
+import { openPersonalModelSettings, usePersonalModelConnections } from "@/components/claw-client/personal-model-demo-store";
 import { cn } from "@/lib/utils";
+import { PRESET_MODEL_IDS } from "@/lib/model-schemas";
+
+export type ModelErrorDemoState = "unavailable" | "retired";
 
 type DebugChatComposerProps = {
   detail: ClawDetailData;
@@ -47,7 +51,9 @@ type DebugChatComposerProps = {
   isBusy?: boolean;
   onInterrupt?: () => void;
   queueHint?: string;
-  modelFallbackDemo?: boolean;
+  modelErrorDemo?: ModelErrorDemoState;
+  modelPickerOpen?: boolean;
+  onModelPickerOpenChange?: (open: boolean) => void;
 };
 
 type ComposerAttachment = {
@@ -67,8 +73,12 @@ type FlatWorkspaceFile = {
   updatedAt?: string;
 };
 
-// Static demo state: this model remains in the catalog but its service is unavailable.
-const DEMO_UNAVAILABLE_MODEL_IDS = ["Qwen3-8B"] as const;
+const DEMO_ORIGINAL_MODEL_ID = "Qwen3-8B";
+const DEMO_UNAVAILABLE_MODEL_IDS = [DEMO_ORIGINAL_MODEL_ID] as const;
+const DEMO_RETIRED_MODEL_OPTIONS = PRESET_MODEL_IDS.filter(
+  (modelId) => modelId !== DEMO_ORIGINAL_MODEL_ID && modelId !== "NeoRoleplay-7B-Instruct"
+);
+const PERSONAL_VISIBLE_MODEL_OPTIONS = PRESET_MODEL_IDS.filter((modelId) => modelId !== "NeoRoleplay-7B-Instruct");
 
 function flattenWorkspaceFiles(folder: typeof CLAW_CLIENT_WORKSPACE_ROOT, parentPath = ""): FlatWorkspaceFile[] {
   return folder.children.flatMap((entry) => {
@@ -95,7 +105,9 @@ export function DebugChatComposer({
   isBusy = false,
   onInterrupt,
   queueHint,
-  modelFallbackDemo = false,
+  modelErrorDemo,
+  modelPickerOpen,
+  onModelPickerOpenChange,
 }: DebugChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -107,18 +119,23 @@ export function DebugChatComposer({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [slashPicker, setSlashPicker] = useState<{ query: string; startIndex: number } | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [modelPickerOpen, setModelPickerOpen] = useState(false);
-  const [showModelFallbackNotice, setShowModelFallbackNotice] = useState(modelFallbackDemo);
+  const [demoModelReplaced, setDemoModelReplaced] = useState(false);
   const personalChat = usePersonalChatContext();
   const { model, params, ready, selectModel, updateParams } =
     useChatModelPreference(modelScopeKey);
+  const personalModelConnections = usePersonalModelConnections();
+  const personalModelOptions = personalModelConnections.flatMap((connection) => connection.models.filter((item) => item.type === "chat").map((item) => ({ id: item.id, name: item.name, providerName: connection.providerName, enabled: item.enabled, type: item.type })));
+  const imageGenerationModelOptions = personalModelConnections.flatMap((connection) => connection.models.filter((item) => item.type === "image-generation").map((item) => ({ id: item.id, name: item.name, providerName: connection.providerName, enabled: item.enabled, type: item.type })));
+  const displayedModel = modelErrorDemo && !demoModelReplaced
+    ? DEMO_ORIGINAL_MODEL_ID
+    : model;
   const handleModelChange = (nextModel: string) => {
+    setDemoModelReplaced(true);
     selectModel(nextModel);
-    setShowModelFallbackNotice(false);
   };
   // This Demo has no runtime token-usage feed yet; use an illustrative value for existing sessions.
   const contextLimitTokens = 176_000;
-  const contextUsedTokens = modelScopeKey === "new" || modelScopeKey === "model-fallback-demo" ? 0 : 116_000;
+  const contextUsedTokens = modelScopeKey === "new" || modelErrorDemo ? 0 : 116_000;
   const contextUsagePercent = Math.round((contextUsedTokens / contextLimitTokens) * 1000) / 10;
   const contextUsageLabel = `已使用上下文 ${contextUsagePercent}% · ${(contextUsedTokens / 1000).toFixed(1)}K / ${(contextLimitTokens / 1000).toFixed(1)}K`;
 
@@ -254,22 +271,22 @@ export function DebugChatComposer({
 
   return (
     <div
-      className={cn(
-        "relative rounded-2xl border bg-white px-4 pb-3 pt-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors focus-within:border-blue-300",
-        isDropTarget ? "border-blue-500 bg-blue-50/40" : "border-slate-300"
-      )}
-      onDragEnter={personalMode ? (event) => {
-        event.preventDefault();
-        setIsDropTarget(true);
-      } : undefined}
-      onDragOver={personalMode ? (event) => event.preventDefault() : undefined}
-      onDragLeave={personalMode ? (event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setIsDropTarget(false);
-        }
-      } : undefined}
-      onDrop={personalMode ? handleDrop : undefined}
-    >
+        className={cn(
+          "relative rounded-2xl border bg-white px-4 pb-3 pt-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors focus-within:border-blue-300",
+          isDropTarget ? "border-blue-500 bg-blue-50/40" : "border-slate-300"
+        )}
+        onDragEnter={personalMode ? (event) => {
+          event.preventDefault();
+          setIsDropTarget(true);
+        } : undefined}
+        onDragOver={personalMode ? (event) => event.preventDefault() : undefined}
+        onDragLeave={personalMode ? (event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setIsDropTarget(false);
+          }
+        } : undefined}
+        onDrop={personalMode ? handleDrop : undefined}
+      >
       {slashPicker ? (
         <div className="absolute bottom-full left-0 right-0 z-30 mb-2">
           <SkillSlashPicker
@@ -338,26 +355,6 @@ export function DebugChatComposer({
       ) : null}
 
       <div className="relative">
-        {personalMode && showModelFallbackNotice ? (
-          <div className="mb-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-slate-700">
-            <span className="min-w-0 flex-1">你选择的模型当前不可用，已切换至 {model}。</span>
-            <button
-              type="button"
-              onClick={() => setModelPickerOpen(true)}
-              className="shrink-0 font-medium text-blue-700 hover:text-blue-800"
-            >
-              更换模型
-            </button>
-            <button
-              type="button"
-              aria-label="关闭模型切换提示"
-              onClick={() => setShowModelFallbackNotice(false)}
-              className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-amber-100 hover:text-slate-700"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ) : null}
         {queueHint ? <p className="mb-1 text-[11px] leading-4 text-slate-400">{queueHint}</p> : null}
         {isDropTarget ? (
           <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md border border-dashed border-blue-400 bg-blue-50/80 text-sm font-medium text-blue-700">
@@ -485,13 +482,20 @@ export function DebugChatComposer({
               </TooltipProvider>
               <ModelSelector
                 open={modelPickerOpen}
-                onOpenChange={setModelPickerOpen}
-                selectedModel={model}
+                onOpenChange={onModelPickerOpenChange}
+                selectedModel={displayedModel}
                 modelParams={params}
                 onModelChange={handleModelChange}
                 onParamsChange={updateParams}
-                unavailableModelIds={DEMO_UNAVAILABLE_MODEL_IDS}
+                unavailableModelIds={modelErrorDemo === "unavailable" ? DEMO_UNAVAILABLE_MODEL_IDS : undefined}
+                presetModelOptions={modelErrorDemo === "retired" ? DEMO_RETIRED_MODEL_OPTIONS : PERSONAL_VISIBLE_MODEL_OPTIONS}
                 presetOnly
+                personalModelOptions={personalModelOptions}
+                imageGenerationModelOptions={imageGenerationModelOptions}
+                onAddPersonalModel={() => openPersonalModelSettings("add", "chat")}
+                onManagePersonalModels={() => openPersonalModelSettings("list", "chat")}
+                onAddImageGenerationModel={() => openPersonalModelSettings("add", "image-generation")}
+                onManageImageGenerationModels={() => openPersonalModelSettings("list", "image-generation")}
                 separateParamsPopover
                 hiddenParamKeys={["context_turns", "sp_anti_leak"]}
                 triggerClassName="h-9 max-w-[200px] rounded-full border border-slate-300 bg-white px-3 text-xs hover:bg-slate-50"
