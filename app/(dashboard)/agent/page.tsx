@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Search,
   Sparkles,
+  Plug,
   Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -49,17 +50,29 @@ import {
 } from "@/lib/security-level";
 import { cn } from "@/lib/utils";
 import { ImportConfigurationButton } from "@/components/import-export/import-configuration-dialog";
-import { ExportConfigurationButton } from "@/components/import-export/export-configuration-button";
+import {
+  ThirdPartyAgentCreateDialog,
+  type CreatedThirdPartyAgent,
+} from "@/components/third-party-agent/third-party-agent-create-dialog";
+import { ThirdPartyAgentDeregisterDialog } from "@/components/third-party-agent/third-party-agent-deregister-dialog";
+import {
+  THIRD_PARTY_AGENTS,
+  type ThirdPartyAgentRecord,
+} from "@/lib/mock/third-party-agents";
 
 interface Agent {
   id: string;
   name: string;
   type: string;
   status: string;
+  shelfStatus: string;
   desc: string;
+  creator: string;
   updatedAt: string;
   securityLevel: SecurityLevel;
   approvalStatus: ApprovalStatus;
+  source: "native" | "third-party";
+  thirdPartyRecord?: ThirdPartyAgentRecord;
 }
 
 function convertAgentProfileToAgent(profile: AgentProfile): Agent {
@@ -68,10 +81,13 @@ function convertAgentProfileToAgent(profile: AgentProfile): Agent {
     name: profile.name,
     type: profile.type === "autonomous" ? "自主规划智能体" : "工作流智能体",
     status: profile.publishStatus ?? "未发布",
+    shelfStatus: profile.publishStatus === "已发布" ? "已上架" : "未上架",
     desc: profile.description,
+    creator: "示例用户",
     updatedAt: profile.updatedAt,
     securityLevel: profile.securityLevel ?? "公开",
     approvalStatus: profile.approvalStatus ?? "none",
+    source: "native",
   };
 }
 
@@ -89,13 +105,28 @@ const ALL_VERSIONS_DISABLED_AGENT_IDS = new Set(["code-02"]);
 const ITEMS_PER_PAGE = 20;
 
 function buildDemoAgents() {
-  return getAllAgents().map((profile) => {
+  const nativeAgents = getAllAgents().map((profile) => {
     const agent = convertAgentProfileToAgent(profile);
     if (AGENTS_STATUS_MAP[agent.id]) {
       agent.status = AGENTS_STATUS_MAP[agent.id];
     }
     return agent;
   });
+  const thirdPartyAgents: Agent[] = THIRD_PARTY_AGENTS.map((agent) => ({
+    id: agent.id,
+    name: agent.name,
+    type: "第三方",
+    status: "-",
+    shelfStatus: "-",
+    desc: agent.description,
+    creator: agent.owner,
+    updatedAt: agent.updatedAt,
+    securityLevel: agent.securityLevel,
+    approvalStatus: "none",
+    source: "third-party",
+    thirdPartyRecord: agent,
+  }));
+  return [...thirdPartyAgents, ...nativeAgents];
 }
 
 export default function AgentPage() {
@@ -109,11 +140,14 @@ export default function AgentPage() {
   const [deleteApprovalOpen, setDeleteApprovalOpen] = useState(false);
   const [deleteReason, setDeleteReason] = useState("");
   const [agents, setAgents] = useState<Agent[]>(buildDemoAgents);
+  const [createThirdPartyOpen, setCreateThirdPartyOpen] = useState(false);
+  const [deregisterTarget, setDeregisterTarget] = useState<Agent | null>(null);
 
   const filteredAgents = agents.filter(
     (agent) =>
       agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       agent.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      agent.creator.toLowerCase().includes(searchQuery.toLowerCase()) ||
       agent.securityLevel.includes(searchQuery)
   );
 
@@ -131,12 +165,63 @@ export default function AgentPage() {
   };
 
   const handleOpenEdit = (agent: Agent) => {
+    if (agent.source === "third-party") {
+      router.push(`/third-party-agent/${agent.id}`);
+      return;
+    }
     const action = getApprovalActionState(agent.approvalStatus);
     if (action.configLocked) {
       toast.info(action.configTitle ?? "审批中，暂无法进入配置。");
       return;
     }
     router.push(`/agent/${agent.id}`);
+  };
+
+  const handleThirdPartyCreated = (created: CreatedThirdPartyAgent) => {
+    const now = new Date().toLocaleString("zh-CN", { hour12: false });
+    const record: ThirdPartyAgentRecord = {
+      id: `external-${Date.now()}`,
+      name: created.name,
+      description: created.description,
+      protocol: "OpenAI API",
+      interfaceSpec: created.interfaceSpec,
+      modelIdentifier: created.modelIdentifier,
+      botId: created.botId,
+      status: "已启用",
+      connectionStatus: "正常",
+      securityLevel: created.securityLevel,
+      owner: "当前用户",
+      endpoint: created.endpoint,
+      authMode: created.authMode,
+      authConfig: created.authConfig,
+      referenceCount: 0,
+      updatedAt: now,
+      lastCheckedAt: now,
+      usePermission: true,
+      references: [],
+      callRecords: [],
+    };
+    setAgents((current) => [{
+      id: record.id,
+      name: record.name,
+      type: "第三方",
+      status: "-",
+      shelfStatus: "-",
+      desc: record.description,
+      creator: record.owner,
+      updatedAt: record.updatedAt,
+      securityLevel: record.securityLevel,
+      approvalStatus: "none",
+      source: "third-party",
+      thirdPartyRecord: record,
+    }, ...current]);
+  };
+
+  const confirmDeregister = () => {
+    if (!deregisterTarget?.thirdPartyRecord) return;
+    setAgents((current) => current.filter((row) => row.id !== deregisterTarget.id));
+    toast.success(`已注销平台登记：${deregisterTarget.name}。外部服务未受影响。`);
+    setDeregisterTarget(null);
   };
 
   const handleDelete = (agent: Agent) => {
@@ -246,10 +331,13 @@ export default function AgentPage() {
                     name: preview.objectName,
                     type: preview.objectTypeLabel,
                     status: "未发布",
+                    shelfStatus: "未上架",
                     desc: preview.description,
+                    creator: "当前用户",
                     updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
                     securityLevel: preview.securityLevel ?? "公开",
                     approvalStatus: "none",
+                    source: "native",
                   },
                   ...current,
                 ]);
@@ -291,6 +379,16 @@ export default function AgentPage() {
                     <div className="mt-0.5 text-xs text-slate-500">从空白编排开始创建</div>
                   </div>
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setCreateThirdPartyOpen(true)}
+                  className="rounded-[4px] px-3 py-2"
+                >
+                  <Plug className="h-4 w-4 text-violet-600" />
+                  <div>
+                    <div className="text-sm font-medium">登记第三方 Agent</div>
+                    <div className="mt-0.5 text-xs text-slate-500">通过平台支持的 API 接口接入</div>
+                  </div>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -298,14 +396,16 @@ export default function AgentPage() {
       </div>
 
       <section className="overflow-hidden rounded-[6px] border border-slate-200 bg-white">
-        <Table className="min-w-[1180px]">
+        <Table className="min-w-[1460px]">
           <TableHeader className="bg-slate-50">
             <TableRow className="border-slate-200 hover:bg-slate-50">
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">名称</TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">类型</TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">密级</TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">发布状态</TableHead>
+              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">上架状态</TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">描述</TableHead>
+              <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">创建人</TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">更新时间</TableHead>
               <TableHead className="h-10 px-4 text-sm font-medium text-slate-700">操作</TableHead>
             </TableRow>
@@ -313,7 +413,7 @@ export default function AgentPage() {
           <TableBody>
             {paginatedAgents.length === 0 ? (
               <TableRow className="border-0 hover:bg-transparent">
-                <TableCell colSpan={7} className="px-6 py-16 text-center">
+                <TableCell colSpan={9} className="px-6 py-16 text-center">
                   <div className="mx-auto max-w-md space-y-3">
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[6px] border border-slate-200 bg-slate-50 text-slate-500">
                       <Search className="h-5 w-5" />
@@ -330,6 +430,7 @@ export default function AgentPage() {
             ) : (
               paginatedAgents.map((agent) => {
                 const isAutonomous = agent.type === "自主规划智能体";
+                const isThirdParty = agent.source === "third-party";
                 const isPublished = agent.status === "已发布";
                 const areAllVersionsDisabled = ALL_VERSIONS_DISABLED_AGENT_IDS.has(agent.id);
                 const action = getApprovalActionState(agent.approvalStatus);
@@ -340,7 +441,7 @@ export default function AgentPage() {
                       <div className="flex items-center gap-4">
                         <div
                           className={`flex h-10 w-10 items-center justify-center rounded-[8px] ${
-                            isAutonomous ? "bg-indigo-500 text-white" : "bg-blue-500 text-white"
+                            isThirdParty ? "bg-violet-500 text-white" : isAutonomous ? "bg-indigo-500 text-white" : "bg-blue-500 text-white"
                           }`}
                         >
                           <Bot className="h-4 w-4" />
@@ -367,12 +468,16 @@ export default function AgentPage() {
                     <TableCell className="px-4 py-3 align-middle">
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-[4px] px-2 py-1 text-xs font-medium ${
-                          isAutonomous
+                          isThirdParty
+                            ? "bg-violet-50 text-violet-700"
+                            : isAutonomous
                             ? "bg-indigo-50 text-indigo-600"
                             : "bg-blue-50 text-blue-600"
                         }`}
                       >
-                        {isAutonomous ? (
+                        {isThirdParty ? (
+                          <Plug className="h-3 w-3" />
+                        ) : isAutonomous ? (
                           <Sparkles className="h-3 w-3" />
                         ) : (
                           <Workflow className="h-3 w-3" />
@@ -386,7 +491,7 @@ export default function AgentPage() {
                     </TableCell>
 
                     <TableCell className="px-4 py-3 align-middle">
-                      <div className="flex flex-wrap items-center gap-1.5">
+                      {isThirdParty ? <span className="text-sm text-slate-500">-</span> : <div className="flex flex-wrap items-center gap-1.5">
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-[4px] px-2 py-1 text-xs font-medium ${
                             isPublished ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"
@@ -408,11 +513,19 @@ export default function AgentPage() {
                             {action.configTitle}
                           </span>
                         ) : null}
-                      </div>
+                      </div>}
+                    </TableCell>
+
+                    <TableCell className="px-4 py-3 align-middle text-sm text-slate-500">
+                      {agent.shelfStatus}
                     </TableCell>
 
                     <TableCell className="max-w-[360px] whitespace-normal px-4 py-3 align-middle text-sm leading-6 text-slate-600">
                       {agent.desc}
+                    </TableCell>
+
+                    <TableCell className="px-4 py-3 align-middle text-sm text-slate-700">
+                      {agent.creator}
                     </TableCell>
 
                     <TableCell className="px-4 py-3 align-middle text-sm text-slate-700">
@@ -421,7 +534,22 @@ export default function AgentPage() {
 
                     <TableCell className="px-4 py-3 align-middle">
                       <div className="flex items-center gap-4 text-sm">
+                        {isThirdParty ? <>
                         <button
+                          type="button"
+                          onClick={() => handleOpenEdit(agent)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          编辑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeregisterTarget(agent)}
+                          className="text-rose-600 hover:text-rose-700"
+                        >
+                          注销
+                        </button>
+                        </> : <><button
                           type="button"
                           onClick={() => handleCopy(agent)}
                           className="text-blue-600 hover:text-blue-700"
@@ -454,15 +582,7 @@ export default function AgentPage() {
                         >
                           删除
                         </button>
-                        {isPublished ? (
-                          <ExportConfigurationButton
-                            objectType={isAutonomous ? "autonomous_agent" : "workflow_agent"}
-                            objectName={agent.name}
-                            sourceType="published"
-                            display="table-action"
-                            securityLevel={agent.securityLevel}
-                          />
-                        ) : null}
+                        </>}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -608,6 +728,17 @@ export default function AgentPage() {
         }}
         onReasonChange={setDeleteReason}
         onSubmit={submitDeleteApproval}
+      />
+      <ThirdPartyAgentCreateDialog
+        open={createThirdPartyOpen}
+        onOpenChange={setCreateThirdPartyOpen}
+        onCreated={handleThirdPartyCreated}
+      />
+      <ThirdPartyAgentDeregisterDialog
+        open={Boolean(deregisterTarget)}
+        onOpenChange={(open) => { if (!open) setDeregisterTarget(null); }}
+        agentName={deregisterTarget?.name ?? ""}
+        onConfirm={confirmDeregister}
       />
     </div>
   );

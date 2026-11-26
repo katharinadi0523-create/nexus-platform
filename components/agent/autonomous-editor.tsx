@@ -1,8 +1,9 @@
 "use client";
 
+import { AgentPreviewPanel } from "@/components/agent/agent-preview-panel";
+
 import { useState, useEffect, useRef, isValidElement } from "react";
 import {
-  Send,
   Check,
   ChevronDown,
   ChevronUp,
@@ -2457,25 +2458,28 @@ export function AutonomousEditor({
           </div>
         </div>
 
-        <div className="min-h-0 overflow-hidden bg-[linear-gradient(180deg,#f6f8fc_0%,#f3f7ff_52%,#eef3fb_100%)]">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden p-5 xl:min-h-[30rem] xl:p-6">
-            <div className="flex h-full min-h-0 flex-col overflow-hidden">
-              <div className="border-b border-slate-100/80 px-5 py-4">
-                <div className="group flex items-center gap-2">
-                  <h2 className="text-xl font-semibold tracking-tight text-slate-950">
-                    预览与调试
-                  </h2>
-                  <HoverHint
-                    content="实时测试智能体的响应效果，检查提示词、知识与工具配置是否协同生效。"
-                    className="group-hover:opacity-65 group-focus-within:opacity-65"
-                  />
-                </div>
-              </div>
-
-              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="pointer-events-none absolute inset-x-12 top-8 h-40 rounded-full bg-[radial-gradient(circle,_rgba(96,165,250,0.14)_0%,_rgba(255,255,255,0)_72%)] blur-3xl" />
-                <div className="relative flex min-h-0 flex-1 flex-col">
-                  <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
+        <div className="min-h-0 overflow-hidden p-5 xl:p-6">
+          <AgentPreviewPanel
+            onSend={handleSendMessage}
+            titleExtra={<HoverHint content="实时测试智能体的响应效果，检查提示词、知识与工具配置是否协同生效。" className="group-hover:opacity-65 group-focus-within:opacity-65" />}
+            footerExtras={<>                    {showSuggestedChips &&
+                      suggestedQuestions.filter((q) => q.trim()).length > 0 &&
+                      chatHistory.length <= 1 && (
+                        <div className="mb-3 flex flex-wrap gap-2">
+                          {suggestedQuestions
+                            .filter((q) => q.trim())
+                            .map((question, index) => (
+                              <button
+                                key={index}
+                                onClick={() => handleSuggestedQuestionClick(question)}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm transition-colors hover:bg-slate-100"
+                              >
+                                {question}
+                              </button>
+                            ))}
+                        </div>
+                      )}</>}
+          >
                     {chatHistory.length === 0 && openingStatement.trim() === "" ? (
                       <div className="flex h-full flex-col items-center justify-center px-8 text-center">
                         <AgentAvatarTile presetId={selectedAvatarPresetId} size="lg" className="h-20 w-20 rounded-[28px]" />
@@ -2543,58 +2547,7 @@ export function AutonomousEditor({
                         ))}
                       </div>
                     )}
-                  </div>
-
-                  <div className="border-t border-slate-100/80 bg-white/55 px-5 py-4 backdrop-blur-sm">
-                    {showSuggestedChips &&
-                      suggestedQuestions.filter((q) => q.trim()).length > 0 &&
-                      chatHistory.length <= 1 && (
-                        <div className="mb-3 flex flex-wrap gap-2">
-                          {suggestedQuestions
-                            .filter((q) => q.trim())
-                            .map((question, index) => (
-                              <button
-                                key={index}
-                                onClick={() => handleSuggestedQuestionClick(question)}
-                                className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm transition-colors hover:bg-slate-100"
-                              >
-                                {question}
-                              </button>
-                            ))}
-                        </div>
-                      )}
-                    <div className="flex gap-3">
-                      <input
-                        type="text"
-                        placeholder="输入消息..."
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            handleSendMessage(e.currentTarget.value);
-                            e.currentTarget.value = "";
-                          }
-                        }}
-                        className="flex-1 rounded-[20px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-inner outline-none transition focus:border-slate-300 focus:ring-2 focus:ring-slate-200 placeholder:text-slate-400"
-                      />
-                      <button
-                        onClick={(e) => {
-                          const input = e.currentTarget
-                            .previousElementSibling as HTMLInputElement;
-                          handleSendMessage(input.value);
-                          input.value = "";
-                        }}
-                        className="inline-flex h-12 w-12 items-center justify-center rounded-[18px] bg-slate-900 text-white shadow-[0_18px_40px_-26px_rgba(15,23,42,0.8)] transition-colors hover:bg-slate-800"
-                      >
-                        <Send className="h-5 w-5" />
-                      </button>
-                    </div>
-                    <p className="mt-3 text-center text-xs text-slate-400">
-                      内容由智能生成，仅供参考
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          </AgentPreviewPanel>
         </div>
       </div>
 

@@ -467,11 +467,13 @@ export function ClawInteractiveChatPanel({
   session,
   run,
   inspectorMode = "auto",
+  simpleChat = false,
 }: {
   detail: ClawDetailData;
   session?: ChatSessionItem;
   run?: ConversationRunItem;
   inspectorMode?: "auto" | "open" | "closed";
+  simpleChat?: boolean;
 }) {
   const { entityLabel } = useWorkbenchEntity();
   const template = useMemo(
@@ -485,6 +487,7 @@ export function ClawInteractiveChatPanel({
     [detail, run, session, entityLabel]
   );
   const configuredSkills = useMemo<ConfiguredSkillOption[]>(() => {
+    if (simpleChat) return [];
     const scopes = ["platform", "tenant", "claw"] as const;
 
     return scopes.flatMap((scope) =>
@@ -492,7 +495,7 @@ export function ClawInteractiveChatPanel({
         .filter((item) => item.enabled)
         .map((item) => ({ ...item, scope }))
     );
-  }, [detail.capabilityConfig.skills]);
+  }, [detail.capabilityConfig.skills, simpleChat]);
   const skillOptions = useMemo(
     () => Array.from(new Set(configuredSkills.map((item) => item.name))),
     [configuredSkills]
@@ -506,7 +509,7 @@ export function ClawInteractiveChatPanel({
     [template.steps]
   );
 
-  const [draftMessage, setDraftMessage] = useState(template.defaultQuery);
+  const [draftMessage, setDraftMessage] = useState(simpleChat ? "" : template.defaultQuery);
   const [queuedFiles, setQueuedFiles] = useState<string[]>(template.defaultAttachments);
   const [selectedSkill, setSelectedSkill] = useState(skillOptions[0] ?? "");
   const [runtime, setRuntime] = useState<RuntimeState>({
@@ -717,7 +720,7 @@ export function ClawInteractiveChatPanel({
   const isLocked = runtime.stage !== "history" && runtime.stage !== "complete";
 
   function syncSkillPicker(text: string, cursor: number) {
-    if (isLocked) {
+    if (isLocked || simpleChat) {
       setSkillPicker(null);
       return;
     }
@@ -916,13 +919,13 @@ export function ClawInteractiveChatPanel({
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
           <div className="mx-auto w-full max-w-4xl">
             {runtime.stage === "history" ? (
-              template.historyItems.length > 0 ? (
+              !simpleChat && template.historyItems.length > 0 ? (
                 <div className="space-y-4">
                   <ClawConversationTimeline items={template.historyItems} />
                 </div>
               ) : (
                 <div className="flex min-h-[240px] items-center justify-center px-6 text-center text-sm leading-6 text-slate-400">
-                  输入任务内容，开始新的调试会话
+                  {simpleChat ? "输入消息，开始调试" : "输入任务内容，开始新的调试会话"}
                 </div>
               )
             ) : (
@@ -948,6 +951,7 @@ export function ClawInteractiveChatPanel({
 
                 <div className="space-y-4">
                   {visibleSequenceItems.map((item) => {
+                    if (simpleChat && item.type !== "output") return null;
                     if (item.type === "thinking") {
                       return (
                         <ClawAgentThinking
@@ -1118,13 +1122,13 @@ export function ClawInteractiveChatPanel({
                   }
                   disabled={isLocked}
                   className="min-h-[56px] resize-none border-0 bg-transparent px-0 py-0 text-[15px] leading-7 text-slate-700 shadow-none placeholder:text-slate-400 focus-visible:ring-0 disabled:cursor-not-allowed disabled:text-slate-500"
-                  placeholder="请输入任务，输入 / 可快速选择技能"
+                  placeholder={simpleChat ? "输入测试消息…" : "请输入任务，输入 / 可快速选择技能"}
                 />
               </div>
 
               <div className="mt-2.5 flex flex-wrap items-center gap-2.5 sm:flex-nowrap">
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5 sm:flex-nowrap">
-                  <div className="relative min-w-0 flex-1">
+                  {!simpleChat ? <div className="relative min-w-0 flex-1">
                     <Wrench className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                     <select
                       value={selectedSkill}
@@ -1140,9 +1144,9 @@ export function ClawInteractiveChatPanel({
                       ))}
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  </div>
+                  </div> : null}
 
-                  <label
+                  {!simpleChat ? <label
                     title="上传附件"
                     className={cn(
                       "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-white text-blue-600 transition hover:border-blue-300",
@@ -1158,7 +1162,7 @@ export function ClawInteractiveChatPanel({
                       onChange={handleAttachFiles}
                       disabled={isLocked}
                     />
-                  </label>
+                  </label> : null}
                 </div>
 
                 <button

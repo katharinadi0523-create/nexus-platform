@@ -1,0 +1,10 @@
+.git
+.next
+node_modules
+.env*
+.cursor
+tmp
+output_docs
+docs
+.codex-*.png
+*.tsbuildinfo

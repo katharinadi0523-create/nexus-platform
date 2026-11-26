@@ -162,6 +162,38 @@ const DEBUG_SPLIT_COLLAPSE_WIDTH =
 const DEBUG_INSPECTOR_AUTO_MIN_WIDTH = 900;
 const DEBUG_INSPECTOR_FORCE_MIN_WIDTH = 760;
 
+type ReferenceSubAgentCandidate = {
+  id: string;
+  name: string;
+  description: string;
+  target: string;
+  primaryModel: string;
+  source: "platform" | "third-party";
+  securityLevel: ClawSecurityLevel;
+  protocolLabel?: string;
+};
+
+const NATIVE_SUB_AGENT_CANDIDATES: ReferenceSubAgentCandidate[] = [
+  {
+    id: "ref-data-analysis",
+    name: "数据分析智能体",
+    description: "对结构化科研数据进行统计分析并解释结果。",
+    target: "智能体广场",
+    primaryModel: "Qwen3-32B",
+    source: "platform",
+    securityLevel: "内部",
+  },
+  {
+    id: "ref-experiment-design",
+    name: "实验设计智能体",
+    description: "辅助设计实验变量、对照组与验证流程。",
+    target: "组织智能体库",
+    primaryModel: "Qwen3-32B",
+    source: "platform",
+    securityLevel: "内部",
+  },
+];
+
 type AutomatedTaskPanelKey = "task-list" | "execution-history";
 type AutomatedTaskExecutionScope = "all" | "specified";
 type AutomatedTaskExecutionStatusFilter = "all" | ClawAutomatedTaskExecutionStatus;
@@ -655,8 +687,8 @@ export function ClawDetailWorkbench({
   const [selectedOrchestrationNodeId, setSelectedOrchestrationNodeId] =
     useState(MULTI_AGENT_ROOT_NODE_ID);
   const [addSubAgentDialogOpen, setAddSubAgentDialogOpen] = useState(false);
-  const [addSubAgentMode, setAddSubAgentMode] = useState<"create" | "third-party">("create");
-  const [selectedThirdPartyAgentId, setSelectedThirdPartyAgentId] = useState("");
+  const [addSubAgentMode, setAddSubAgentMode] = useState<"create" | "existing">("create");
+  const [selectedReferenceAgentId, setSelectedReferenceAgentId] = useState("");
   const [mainAgentName, setMainAgentName] = useState("主智能体");
   const [mainAgentPrompt, setMainAgentPrompt] = useState(
     () => detail.coreFiles.find((file) => file.key === "agent")?.content ?? ""
@@ -692,14 +724,31 @@ export function ClawDetailWorkbench({
   const [capabilityConfig, setCapabilityConfig] = useState(detail.capabilityConfig);
   const eligibleThirdPartySubAgents = useMemo(
     () => THIRD_PARTY_AGENTS.filter((agent) =>
-      agent.status === "已启用"
-      && agent.usePermission
+      agent.usePermission
       && getSecurityLevelRank(agent.securityLevel) <= getSecurityLevelRank(securityLevel)
     ),
     [securityLevel]
   );
-  const selectedThirdPartyAlreadyAdded = capabilityConfig.agents.claw.some(
-    (agent) => agent.id === `third-party:${selectedThirdPartyAgentId}`
+  const eligibleReferenceSubAgents = useMemo<ReferenceSubAgentCandidate[]>(
+    () => [
+      ...NATIVE_SUB_AGENT_CANDIDATES.filter(
+        (agent) => getSecurityLevelRank(agent.securityLevel) <= getSecurityLevelRank(securityLevel)
+      ),
+      ...eligibleThirdPartySubAgents.map((agent) => ({
+        id: `third-party:${agent.id}`,
+        name: agent.name,
+        description: agent.description,
+        target: "第三方 Agent · API",
+        primaryModel: agent.interfaceSpec,
+        source: "third-party" as const,
+        securityLevel: agent.securityLevel,
+        protocolLabel: agent.interfaceSpec,
+      })),
+    ],
+    [eligibleThirdPartySubAgents, securityLevel]
+  );
+  const selectedReferenceAlreadyAdded = capabilityConfig.agents.claw.some(
+    (agent) => agent.id === selectedReferenceAgentId
   );
   const [clawPrimaryModel, setClawPrimaryModel] = useState("Qwen3-32B");
   const [clawPrimaryModelParams, setClawPrimaryModelParams] = useState<ModelParams>(() =>
@@ -1748,10 +1797,10 @@ export function ClawDetailWorkbench({
 
   function openAddOrchestrationSubAgentDialog() {
     setAddSubAgentMode("create");
-    const firstAvailable = eligibleThirdPartySubAgents.find(
-      (agent) => !capabilityConfig.agents.claw.some((item) => item.id === `third-party:${agent.id}`)
+    const firstAvailable = eligibleReferenceSubAgents.find(
+      (agent) => !capabilityConfig.agents.claw.some((item) => item.id === agent.id)
     );
-    setSelectedThirdPartyAgentId(firstAvailable?.id ?? "");
+    setSelectedReferenceAgentId(firstAvailable?.id ?? "");
     setAddSubAgentDialogOpen(true);
   }
 
@@ -1789,15 +1838,15 @@ export function ClawDetailWorkbench({
     toast.success("已添加子智能体");
   }
 
-  function handleReferenceThirdPartySubAgent() {
-    const source = eligibleThirdPartySubAgents.find((agent) => agent.id === selectedThirdPartyAgentId);
+  function handleReferenceSubAgent() {
+    const source = eligibleReferenceSubAgents.find((agent) => agent.id === selectedReferenceAgentId);
     if (!source) {
-      toast.error("请选择第三方 Agent。");
+      toast.error("请选择智能体。");
       return;
     }
-    const nextAgentId = `third-party:${source.id}`;
+    const nextAgentId = source.id;
     if (capabilityConfig.agents.claw.some((agent) => agent.id === nextAgentId)) {
-      toast.info("该第三方 Agent 已添加为子智能体。");
+      toast.info("该智能体已添加为子智能体。");
       return;
     }
     setCapabilityConfig((current) => ({
@@ -1811,12 +1860,12 @@ export function ClawDetailWorkbench({
             name: source.name,
             description: source.description,
             enabled: true,
-            target: `第三方 Agent · ${source.protocol === "A2A" ? "A2A" : "API"}`,
-            primaryModel: source.protocol === "A2A"
-              ? `A2A ${source.a2aDeclaration?.protocolVersion ?? ""}`.trim()
-              : source.interfaceSpec,
-            fallbackModel: "平台协议适配",
-            prompt: "由外部服务维护，平台按照已登记协议发起调用。",
+            target: source.target,
+            primaryModel: source.primaryModel,
+            fallbackModel: source.source === "third-party" ? "平台协议适配" : pickDefaultFallbackModel(source.primaryModel),
+            prompt: source.source === "third-party"
+              ? "由外部服务维护，平台按照已登记协议发起调用。"
+              : "使用平台智能体的已发布能力处理分配任务。",
             sourceType: "referenced",
             resources: { skills: [], tools: [], knowledge: [] },
           },
@@ -1826,7 +1875,7 @@ export function ClawDetailWorkbench({
     setSubAgentConfigEnabled(true);
     setSelectedOrchestrationNodeId(nextAgentId);
     setAddSubAgentDialogOpen(false);
-    toast.success(`已引用第三方 Agent：${source.name}`);
+    toast.success(`已引用智能体：${source.name}`);
   }
 
   function handleRemoveOrchestrationSubAgent(agentId: string) {
@@ -4144,7 +4193,7 @@ export function ClawDetailWorkbench({
         <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="border-b border-slate-200 px-6 py-5 text-left">
             <DialogTitle>添加子智能体</DialogTitle>
-            <p className="mt-1 text-sm text-slate-500">选择创建平台内子智能体，或引用已纳管的第三方 Agent。</p>
+            <p className="mt-1 text-sm text-slate-500">可以新建子智能体，也可以从现有平台智能体和第三方 Agent 中选择。</p>
           </DialogHeader>
           <div className="space-y-5 px-6 py-5">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -4161,35 +4210,34 @@ export function ClawDetailWorkbench({
               </button>
               <button
                 type="button"
-                onClick={() => setAddSubAgentMode("third-party")}
+                onClick={() => setAddSubAgentMode("existing")}
                 className={cn(
                   "rounded-lg border p-4 text-left transition-colors",
-                  addSubAgentMode === "third-party" ? "border-violet-500 bg-violet-50" : "border-slate-200 hover:border-violet-200"
+                  addSubAgentMode === "existing" ? "border-violet-500 bg-violet-50" : "border-slate-200 hover:border-violet-200"
                 )}
               >
-                <div className="flex items-center gap-2 font-medium text-slate-900"><Bot className="h-4 w-4 text-violet-600" />引用第三方 Agent</div>
-                <p className="mt-2 text-xs leading-5 text-slate-500">支持 A2A 与 API；选择后继承已纳管的协议和接入配置，无需重复填写。</p>
+                <div className="flex items-center gap-2 font-medium text-slate-900"><Bot className="h-4 w-4 text-violet-600" />选择现有智能体</div>
+                <p className="mt-2 text-xs leading-5 text-slate-500">平台原生与 API 第三方 Agent 统一展示；第三方 Agent 自动继承接入配置，并支持独立调试。</p>
               </button>
             </div>
 
-            {addSubAgentMode === "third-party" ? (
+            {addSubAgentMode === "existing" ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-slate-900">选择第三方 Agent</div>
-                  <span className="text-xs text-slate-500">协议随资产自动继承</span>
+                  <div className="text-sm font-medium text-slate-900">选择智能体</div>
+                  <span className="text-xs text-slate-500">第三方接入配置自动继承</span>
                 </div>
                 <ScrollArea className="max-h-[320px] rounded-lg border border-slate-200">
                   <div className="space-y-2 p-3">
-                    {eligibleThirdPartySubAgents.length ? eligibleThirdPartySubAgents.map((agent) => {
-                      const candidateId = `third-party:${agent.id}`;
-                      const alreadyAdded = capabilityConfig.agents.claw.some((item) => item.id === candidateId);
-                      const selected = selectedThirdPartyAgentId === agent.id;
+                    {eligibleReferenceSubAgents.length ? eligibleReferenceSubAgents.map((agent) => {
+                      const alreadyAdded = capabilityConfig.agents.claw.some((item) => item.id === agent.id);
+                      const selected = selectedReferenceAgentId === agent.id;
                       return (
                         <button
                           key={agent.id}
                           type="button"
                           disabled={alreadyAdded}
-                          onClick={() => setSelectedThirdPartyAgentId(agent.id)}
+                          onClick={() => setSelectedReferenceAgentId(agent.id)}
                           className={cn(
                             "flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors",
                             selected && !alreadyAdded ? "border-violet-400 bg-violet-50" : "border-slate-200 hover:bg-slate-50",
@@ -4200,11 +4248,8 @@ export function ClawDetailWorkbench({
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-medium text-slate-900">{agent.name}</span>
-                              <span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
-                                {agent.protocol === "A2A"
-                                  ? `A2A${agent.a2aDeclaration?.protocolVersion ? ` · v${agent.a2aDeclaration.protocolVersion}` : ""}`
-                                  : `API · ${agent.interfaceSpec}`}
-                              </span>
+                              {agent.source === "third-party" ? <span className="rounded bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">第三方</span> : null}
+                              {agent.protocolLabel ? <span className="rounded bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{agent.protocolLabel}</span> : null}
                               <Badge variant="outline" className="text-xs">{agent.securityLevel}</Badge>
                               {alreadyAdded ? <span className="text-xs text-slate-400">已添加</span> : null}
                             </div>
@@ -4212,7 +4257,7 @@ export function ClawDetailWorkbench({
                           </div>
                         </button>
                       );
-                    }) : <div className="py-10 text-center text-sm text-slate-500">暂无符合权限和密级要求的第三方 Agent</div>}
+                    }) : <div className="py-10 text-center text-sm text-slate-500">暂无符合权限和密级要求的智能体</div>}
                   </div>
                 </ScrollArea>
               </div>
@@ -4223,10 +4268,10 @@ export function ClawDetailWorkbench({
             <Button
               type="button"
               className="bg-blue-600 text-white hover:bg-blue-700"
-              disabled={addSubAgentMode === "third-party" && (!selectedThirdPartyAgentId || selectedThirdPartyAlreadyAdded)}
-              onClick={addSubAgentMode === "create" ? handleAddOrchestrationSubAgent : handleReferenceThirdPartySubAgent}
+              disabled={addSubAgentMode === "existing" && (!selectedReferenceAgentId || selectedReferenceAlreadyAdded)}
+              onClick={addSubAgentMode === "create" ? handleAddOrchestrationSubAgent : handleReferenceSubAgent}
             >
-              {addSubAgentMode === "create" ? "创建并添加" : "确认引用"}
+              {addSubAgentMode === "create" ? "创建并添加" : "确认选择"}
             </Button>
           </DialogFooter>
         </DialogContent>

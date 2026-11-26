@@ -53,15 +53,14 @@ export function ClawAgentResourceSection({ agents, clawDetail, compact = false, 
   const [selectedReferenceId, setSelectedReferenceId] = useState(NATIVE_REFERENCE_CANDIDATES[0].id);
   const thirdPartyReferenceCandidates = useMemo(() => THIRD_PARTY_AGENTS
     .filter((item) => item.usePermission
-      && item.status === "已启用"
       && getSecurityLevelRank(item.securityLevel) <= getSecurityLevelRank(clawDetail.overview.securityLevel))
     .map<CapabilityAgentItem>((item) => ({
       id: `third-party:${item.id}`,
       name: item.name,
       description: item.description,
       enabled: true,
-      target: `第三方 Agent · ${item.protocol === "A2A" ? "A2A" : "API"}`,
-      primaryModel: item.protocol === "A2A" ? "A2A" : item.interfaceSpec,
+      target: "第三方 Agent · API",
+      primaryModel: item.interfaceSpec,
       fallbackModel: "平台协议适配",
       prompt: "由外部服务维护，平台按照已登记协议发起调用。",
       sourceType: "referenced",
@@ -171,10 +170,10 @@ export function ClawAgentResourceSection({ agents, clawDetail, compact = false, 
               {filtered.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell className="px-4"><div className="flex items-center gap-2"><span className="font-medium text-slate-900">{item.name}</span>{item.target.startsWith("第三方 Agent") ? <span className="rounded bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">第三方</span> : null}</div></TableCell>
-                  <TableCell className="px-4"><div className="flex items-center gap-2"><Switch className="data-[state=checked]:bg-blue-600" checked={item.enabled} onCheckedChange={(enabled) => onChange(agents.map((row) => row.id === item.id ? { ...row, enabled } : row))} /><span className="text-sm text-slate-600">{item.enabled ? "已启用" : "未启用"}</span></div></TableCell>
+                  <TableCell className="px-4">{item.target.startsWith("第三方 Agent") ? <span className="text-sm text-slate-600">已引用</span> : <div className="flex items-center gap-2"><Switch className="data-[state=checked]:bg-blue-600" checked={item.enabled} onCheckedChange={(enabled) => onChange(agents.map((row) => row.id === item.id ? { ...row, enabled } : row))} /><span className="text-sm text-slate-600">{item.enabled ? "已启用" : "未启用"}</span></div>}</TableCell>
                   <TableCell className="max-w-[520px] px-4 text-sm text-slate-500">{item.description}</TableCell>
                   <TableCell className="px-4"><AgentResourceSummary resources={item.resources} /></TableCell>
-                  <TableCell className="px-4"><div className="flex gap-1"><Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700" disabled={!item.enabled} title={item.enabled ? `调试 ${item.name}` : "请先启用智能体"} onClick={() => setDebugAgent(item)}><CirclePlay className="h-4 w-4" />调试</Button><Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700" onClick={() => openEditor(item)}>{item.sourceType === "referenced" ? <Eye className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}{item.sourceType === "referenced" ? "查看" : "编辑"}</Button><Button variant="ghost" size="sm" className="text-slate-500 hover:text-red-600" onClick={() => { onChange(agents.filter((row) => row.id !== item.id)); toast.success(`已删除：${item.name}`); }}><Trash2 className="h-4 w-4" />删除</Button></div></TableCell>
+                  <TableCell className="px-4"><div className="flex gap-1"><Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700" disabled={item.sourceType !== "referenced" && !item.enabled} title={item.sourceType === "referenced" ? `独立调试 ${item.name}` : item.enabled ? `调试 ${item.name}` : "请先启用智能体"} onClick={() => setDebugAgent(item)}><CirclePlay className="h-4 w-4" />{item.sourceType === "referenced" ? "独立调试" : "调试"}</Button><Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700" onClick={() => openEditor(item)}>{item.sourceType === "referenced" ? <Eye className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}{item.sourceType === "referenced" ? "查看" : "编辑"}</Button><Button variant="ghost" size="sm" className="text-slate-500 hover:text-red-600" onClick={() => { onChange(agents.filter((row) => row.id !== item.id)); toast.success(`已删除：${item.name}`); }}><Trash2 className="h-4 w-4" />删除</Button></div></TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -190,7 +189,7 @@ export function ClawAgentResourceSection({ agents, clawDetail, compact = false, 
             <div className="max-h-[calc(90vh-126px)] overflow-y-auto px-6 py-5">
               <div className="grid gap-5 sm:grid-cols-2">
                 <div><Label>智能体名称</Label><Input disabled={draft.sourceType === "referenced"} className="mt-2" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></div>
-                <div><Label>状态</Label><div className="mt-2 flex h-10 items-center gap-3 rounded-md border border-slate-200 px-3"><Switch className="data-[state=checked]:bg-blue-600" disabled={draft.sourceType === "referenced"} checked={draft.enabled} onCheckedChange={(enabled) => setDraft({ ...draft, enabled })} /><span className="text-sm text-slate-600">{draft.enabled ? "已启用" : "未启用"}</span></div></div>
+                <div><Label>{draft.sourceType === "referenced" ? "引用状态" : "状态"}</Label><div className="mt-2 flex h-10 items-center gap-3 rounded-md border border-slate-200 px-3">{draft.sourceType === "referenced" ? <span className="text-sm text-slate-600">已引用，不提供启停操作</span> : <><Switch className="data-[state=checked]:bg-blue-600" checked={draft.enabled} onCheckedChange={(enabled) => setDraft({ ...draft, enabled })} /><span className="text-sm text-slate-600">{draft.enabled ? "已启用" : "未启用"}</span></>}</div></div>
                 <div className="sm:col-span-2"><Label>描述</Label><Textarea disabled={draft.sourceType === "referenced"} className="mt-2 min-h-24 resize-none" maxLength={200} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /><div className="mt-1 text-right text-xs text-slate-400">{draft.description.length} / 200</div></div>
               </div>
               <div className="my-5 border-t border-slate-200" />

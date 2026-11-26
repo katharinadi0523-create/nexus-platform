@@ -37,36 +37,40 @@ export function MultiAgentSubAgentConfig({
 }: MultiAgentSubAgentConfigProps) {
   const [debugOpen, setDebugOpen] = useState(false);
   const isEnabled = agent.enabled !== false;
-  const canDebug = isEnabled;
   const isReferenced = agent.sourceType === "referenced";
+  const canDebug = isReferenced || isEnabled;
 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-end gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-600">{isEnabled ? "已启用" : "已停用"}</span>
-          <Switch
-            checked={isEnabled}
-            onCheckedChange={(checked) => {
-              onChange({ enabled: checked });
-              toast.success(checked ? "已启用子智能体" : "已停用子智能体");
-            }}
-            aria-label={`${isEnabled ? "停用" : "启用"} ${agent.name}`}
-            title={isEnabled ? "停用子智能体" : "启用子智能体"}
-            className="data-[state=checked]:bg-blue-600"
-          />
-        </div>
+        {isReferenced ? (
+          <span className="rounded bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">第三方子智能体</span>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-600">{isEnabled ? "已启用" : "已停用"}</span>
+            <Switch
+              checked={isEnabled}
+              onCheckedChange={(checked) => {
+                onChange({ enabled: checked });
+                toast.success(checked ? "已启用子智能体" : "已停用子智能体");
+              }}
+              aria-label={`${isEnabled ? "停用" : "启用"} ${agent.name}`}
+              title={isEnabled ? "停用子智能体" : "启用子智能体"}
+              className="data-[state=checked]:bg-blue-600"
+            />
+          </div>
+        )}
         <Button
           type="button"
           variant="outline"
           size="sm"
           className="h-8 rounded-md border-slate-200 bg-white text-blue-600 shadow-none hover:bg-blue-50 hover:text-blue-700"
           disabled={!canDebug}
-          title={canDebug ? `调试 ${agent.name}` : "请先启用智能体"}
+          title={canDebug ? `${isReferenced ? "独立调试" : "调试"} ${agent.name}` : "请先启用智能体"}
           onClick={() => setDebugOpen(true)}
         >
           <CirclePlay className="h-4 w-4" />
-          调试
+          {isReferenced ? "独立调试" : "调试"}
         </Button>
       </div>
 
@@ -85,7 +89,7 @@ export function MultiAgentSubAgentConfig({
             <div><div className="text-xs text-slate-500">来源</div><div className="mt-1 text-sm text-slate-900">{agent.target}</div></div>
             <div><div className="text-xs text-slate-500">接口 / 协议</div><div className="mt-1 text-sm text-slate-900">{agent.primaryModel || "—"}</div></div>
           </div>
-          <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">名称、能力与接入配置来自第三方 Agent 纳管信息；如需调整，请前往对应第三方 Agent 的接入配置中修改。</p>
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">名称、能力与 API 接入配置来自第三方 Agent 登记信息；此处只建立子智能体引用，可直接独立调试，不提供接入配置修改或启停操作。</p>
         </div>
       ) : (
       <>

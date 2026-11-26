@@ -29,7 +29,6 @@ export function ThirdPartyAgentSelector({
     const keyword = query.trim().toLowerCase();
     return THIRD_PARTY_AGENTS.filter((item) =>
       item.usePermission
-      && item.status === "已启用"
       && getSecurityLevelRank(item.securityLevel) <= getSecurityLevelRank(callerSecurityLevel)
       && (!keyword || `${item.name}${item.description}${item.protocol}${item.interfaceSpec}`.toLowerCase().includes(keyword))
     );
@@ -48,7 +47,7 @@ export function ThirdPartyAgentSelector({
       <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-[720px]">
         <DialogHeader>
           <DialogTitle>引用第三方 Agent</DialogTitle>
-          <DialogDescription>仅展示当前对象有使用权限、符合密级要求且已启用的资源。</DialogDescription>
+          <DialogDescription>仅展示当前对象有使用权限且符合密级要求的已登记资源。</DialogDescription>
         </DialogHeader>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -76,8 +75,8 @@ export function ThirdPartyAgentSelector({
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-slate-900">{item.name}</span>
                       <span className="rounded bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">第三方</span>
-                      <span className="rounded bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">{item.protocol === "A2A" ? "A2A" : "API"}</span>
-                      {item.protocol !== "A2A" ? <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{formatInterfaceSpec(item.interfaceSpec)}</span> : null}
+                      <span className="rounded bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">API</span>
+                      <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{formatInterfaceSpec(item.interfaceSpec)}</span>
                       <SecurityLevelBadge level={item.securityLevel} />
                       {alreadySelected ? <span className="text-xs text-slate-400">已引用</span> : null}
                     </div>

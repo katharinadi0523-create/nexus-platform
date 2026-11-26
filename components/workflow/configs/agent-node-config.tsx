@@ -105,7 +105,7 @@ const PUBLISHED_AGENTS: Agent[] = [
 ];
 
 const THIRD_PARTY_AGENT_OPTIONS: Agent[] = THIRD_PARTY_AGENTS
-  .filter((agent) => agent.status === "已启用" && agent.usePermission)
+  .filter((agent) => agent.usePermission)
   .map((agent) => ({
     id: `third-party:${agent.id}`,
     name: agent.name,
@@ -115,7 +115,7 @@ const THIRD_PARTY_AGENT_OPTIONS: Agent[] = THIRD_PARTY_AGENTS
     updatedAt: agent.updatedAt,
     securityLevel: agent.securityLevel,
     source: "third-party",
-    protocolLabel: agent.protocol === "A2A" ? "A2A" : agent.interfaceSpec,
+    protocolLabel: agent.interfaceSpec,
   }));
 
 export function AgentNodeConfig({
@@ -434,7 +434,7 @@ export function AgentNodeConfig({
                 <DialogTitle>选择智能体</DialogTitle>
               </DialogHeader>
               <div className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                平台智能体与已纳管的第三方 Agent 在同一入口选择。当前工作流智能体密级为「{callerSecurityLevel}」，仅展示密级不高于当前资源的可用对象。
+                平台智能体与已登记的 API 第三方 Agent 在同一入口选择，并通过「第三方」标识区分。当前工作流智能体密级为「{callerSecurityLevel}」，仅展示密级不高于当前资源的可用对象。
               </div>
               <div className="mt-4 space-y-2 max-h-[400px] overflow-y-auto">
                 {[
