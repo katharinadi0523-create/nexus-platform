@@ -101,7 +101,7 @@ import { SkillImportPage } from "@/components/skills/skill-import-page";
 import {
   SkillHubV2Workbench,
   type SkillHubV2Seed,
-} from "@/components/skillhub-v2/skillhub-v2-workbench";
+} from "@/components/skill-ai-edit/skillhub-v2-workbench";
 import { WorkOrderList } from "@/components/skillhub-v2/work-order-list";
 import { INITIAL_WORK_ORDERS } from "@/components/skillhub-v2/mock-data";
 import type { SkillHubScreen } from "@/components/skillhub-v2/types";
@@ -3589,11 +3589,11 @@ source_url: "${parsedUrl.toString()}"
         "skills-page relative",
         embedded
           ? "space-y-0 bg-transparent pb-0"
-          : skillHubV2Screen?.kind === "workspace" || importDialogOpen
+          : Boolean(skillHubV2Screen) || importDialogOpen
             ? "pb-0"
             : "pb-4",
         !embedded &&
-          (skillHubV2Screen?.kind === "workspace" || importDialogOpen
+          (Boolean(skillHubV2Screen) || importDialogOpen
             ? "space-y-0"
             : isManagementModule
               ? "space-y-4"
@@ -3604,10 +3604,10 @@ source_url: "${parsedUrl.toString()}"
         isManagementModule &&
           !isHubModule &&
           !embedded &&
-          skillHubV2Screen?.kind !== "workspace" &&
+          !skillHubV2Screen &&
           !importDialogOpen &&
           "min-h-[calc(100dvh-5rem)]",
-        (skillHubV2Screen?.kind === "workspace" || importDialogOpen) &&
+        (Boolean(skillHubV2Screen) || importDialogOpen) &&
           !embedded &&
           "h-[calc(100dvh-108px)] min-h-0 overflow-hidden"
       )}
@@ -3633,7 +3633,7 @@ source_url: "${parsedUrl.toString()}"
         value={activeTab}
         onValueChange={setActiveTab}
         className={cn(
-          skillHubV2Screen?.kind === "workspace" || importDialogOpen
+          Boolean(skillHubV2Screen) || importDialogOpen
             ? "h-full min-h-0 gap-0 space-y-0"
             : isManagementModule
               ? "space-y-4"
@@ -3984,7 +3984,7 @@ source_url: "${parsedUrl.toString()}"
           <TabsContent
             value="mine"
             className={
-              skillHubV2Screen?.kind === "workspace" || importDialogOpen
+              Boolean(skillHubV2Screen) || importDialogOpen
                 ? "mt-0 h-full min-h-0 space-y-0 overflow-hidden"
                 : "space-y-4"
             }
@@ -4052,11 +4052,13 @@ source_url: "${parsedUrl.toString()}"
               />
             ) : skillHubV2Screen ? (
               <SkillHubV2Workbench
-                key={`${skillHubV2Screen.kind}-${selectedMySkillDetailId || "new"}`}
+                key={selectedMySkillDetailId || "new"}
                 initialScreen={skillHubV2Screen}
                 seedSkill={skillHubV2Seed}
                 onExit={closeMySkillDetail}
                 onRequestImportUpdate={openImportUpdate}
+                enableAiEdit
+                onScreenChange={setSkillHubV2Screen}
                 onSkillCreated={(created) => {
                   setMySkills((current) => {
                     if (current.some((skill) => skill.id === created.id)) {
@@ -4078,7 +4080,7 @@ source_url: "${parsedUrl.toString()}"
                           "AI 创建首版：本地无 GFF Skill，按本体 Object Type「GeneAnnotation」装配解析器。",
                         createdBy: "邸若楠",
                         updatedBy: "邸若楠",
-                        files: created.files,
+                        files: created.files.map((file) => ({ ...file, id: file.path })),
                       }),
                       ...current,
                     ];
